@@ -1,0 +1,6 @@
+﻿{
+    "marker":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "status":  "skipped",
+    "detail":  "Native Windows verification did not run the C oracle producer because gcc was not found. This is not C/Rust equivalence evidence.",
+    "timestamp_utc":  "2026-06-23T17:16:42Z"
+}

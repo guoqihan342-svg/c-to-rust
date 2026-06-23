@@ -1,0 +1,51 @@
+name: flashDB Rust CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/**"
+      - "flashDB_rust/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "flashDB_rust/**"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Ubuntu Rust verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    defaults:
+      run:
+        working-directory: flashDB_rust
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup component add rustfmt
+
+      - name: Show optional C toolchain
+        run: |
+          if command -v gcc >/dev/null 2>&1; then
+            gcc --version
+          else
+            echo "gcc not found; C oracle producer will record skip evidence"
+          fi
+
+      - name: Run CI verification
+        run: bash scripts/verify-ci.sh
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashdb-rust-verification
+          path: flashDB_rust/target/verification/**
+          if-no-files-found: warn

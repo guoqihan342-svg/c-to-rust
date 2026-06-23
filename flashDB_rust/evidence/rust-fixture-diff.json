@@ -1,0 +1,1 @@
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"target/verification/rust-fixture-replay.json","oracle_report":"fixtures/ci-smoke.expected.json","rust_report_hash":"22b55418","oracle_report_hash":"22b55418","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

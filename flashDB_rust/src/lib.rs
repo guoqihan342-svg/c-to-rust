@@ -4,6 +4,7 @@ pub mod ffi;
 pub mod flash;
 pub mod format;
 pub mod kvdb;
+pub mod replay;
 pub mod tsdb;
 pub mod types;
 

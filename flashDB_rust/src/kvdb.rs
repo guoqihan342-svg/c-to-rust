@@ -98,8 +98,12 @@ impl<D: FlashDevice> KvDb<D> {
     }
 
     pub fn image_hash(&mut self) -> Result<String> {
-        let image = self.flash.image()?;
+        let image = self.image()?;
         Ok(image_hash(&image))
+    }
+
+    pub fn image(&mut self) -> Result<Vec<u8>> {
+        self.flash.image()
     }
 
     pub fn bytes_used(&self) -> Result<usize> {

@@ -1,0 +1,15 @@
+{
+  "name": "tsdb-basic",
+  "operations": [
+    {"id":"ts-basic-001","op":"ts.append","timestamp":1,"value":"a"},
+    {"id":"ts-basic-002","op":"ts.append","timestamp":2,"value":"b"},
+    {"id":"ts-basic-003","op":"ts.set_status","entry_id":2,"status":"user2"},
+    {"id":"ts-basic-004","op":"ts.query","from":1,"to":2},
+    {"id":"ts-basic-005","op":"ts.count_status","from":1,"to":2,"status":"user2"},
+    {"id":"ts-basic-006","op":"ts.reopen"},
+    {"id":"ts-basic-007","op":"ts.query","from":2,"to":1}
+  ],
+  "accepted_differences": [
+    {"id":"seed-layout-vs-flashdb-c","reason":"Behavior fixture before byte layout migration.","fields":"image_hash"}
+  ]
+}

@@ -55,6 +55,23 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Error::InvalidKey => "INVALID_KEY",
+            Error::KeyTooLong { .. } => "KEY_TOO_LONG",
+            Error::InvalidRange(_) => "INVALID_RANGE",
+            Error::OutOfBounds { .. } => "OUT_OF_BOUNDS",
+            Error::CapacityExceeded { .. } => "CAPACITY_EXCEEDED",
+            Error::CrcMismatch { .. } => "CRC_MISMATCH",
+            Error::CorruptRecord(_) => "CORRUPT_RECORD",
+            Error::Io(_) => "IO",
+            Error::Parse(_) => "PARSE",
+            Error::Cli(_) => "CLI",
+        }
+    }
+}
+
 impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {

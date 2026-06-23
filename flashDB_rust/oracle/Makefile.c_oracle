@@ -1,0 +1,30 @@
+CC ?= gcc
+FLASHDB_DIR ?= $(CURDIR)/FlashDB
+ORACLE_DIR ?= $(CURDIR)
+BUILD_DIR ?= $(CURDIR)/build
+
+TARGET := $(BUILD_DIR)/flashdb_c_oracle
+
+FDB_SRCS := \
+	$(FLASHDB_DIR)/src/fdb.c \
+	$(FLASHDB_DIR)/src/fdb_file.c \
+	$(FLASHDB_DIR)/src/fdb_kvdb.c \
+	$(FLASHDB_DIR)/src/fdb_tsdb.c \
+	$(FLASHDB_DIR)/src/fdb_utils.c
+
+CFLAGS ?= -std=c99 -O0 -g3 -Wall -Wextra -Wno-format
+CPPFLAGS += -I$(ORACLE_DIR) -I$(FLASHDB_DIR)/inc
+LDLIBS += -lpthread
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(ORACLE_DIR)/flashdb_c_oracle.c $(FDB_SRCS) | $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+$(BUILD_DIR):
+	mkdir -p $@
+
+clean:
+	rm -rf $(BUILD_DIR)

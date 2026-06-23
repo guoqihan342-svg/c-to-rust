@@ -1,0 +1,12 @@
+{
+  "name": "abnormal",
+  "operations": [
+    {"id":"abn-001","op":"kv.get","key":"missing"},
+    {"id":"abn-002","op":"kv.set","key":"","value":"bad"},
+    {"id":"abn-003","op":"kv.set","key":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","value":"bad"},
+    {"id":"abn-004","op":"ts.set_status","entry_id":99,"status":"deleted"}
+  ],
+  "accepted_differences": [
+    {"id":"error-code-mapping-first-pass","reason":"Error-code mapping is behavior-level until C errno/FDB status mapping is generated.","fields":"code"}
+  ]
+}

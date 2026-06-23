@@ -1,0 +1,17 @@
+{
+  "name": "kvdb-main",
+  "operations": [
+    {"id":"kv-main-001","op":"kv.set","key":"mode","value":"prod"},
+    {"id":"kv-main-002","op":"kv.get","key":"mode"},
+    {"id":"kv-main-003","op":"kv.set","key":"mode","value":"safe"},
+    {"id":"kv-main-004","op":"kv.entries"},
+    {"id":"kv-main-005","op":"kv.compact"},
+    {"id":"kv-main-006","op":"kv.reopen"},
+    {"id":"kv-main-007","op":"kv.get","key":"mode"},
+    {"id":"kv-main-008","op":"kv.delete","key":"mode"},
+    {"id":"kv-main-009","op":"kv.get","key":"mode"}
+  ],
+  "accepted_differences": [
+    {"id":"seed-layout-vs-flashdb-c","reason":"Behavior fixture before byte layout migration.","fields":"image_hash"}
+  ]
+}

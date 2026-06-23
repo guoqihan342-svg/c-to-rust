@@ -1,0 +1,27 @@
+{
+  "name": "ci-smoke",
+  "operations": [
+    {"id":"kv-001","op":"kv.set","key":"alpha","value":"one"},
+    {"id":"kv-002","op":"kv.get","key":"alpha"},
+    {"id":"kv-003","op":"kv.delete","key":"alpha"},
+    {"id":"kv-004","op":"kv.get","key":"alpha"},
+    {"id":"kv-005","op":"kv.set","key":"beta","value":"two"},
+    {"id":"kv-006","op":"kv.entries"},
+    {"id":"kv-007","op":"kv.compact"},
+    {"id":"kv-008","op":"kv.reopen"},
+    {"id":"kv-009","op":"kv.get","key":"beta"},
+    {"id":"kv-010","op":"kv.set","key":"","value":"bad"},
+    {"id":"kv-011","op":"kv.set","key":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","value":"bad"},
+    {"id":"ts-001","op":"ts.append","timestamp":100,"value":"boot"},
+    {"id":"ts-002","op":"ts.append","timestamp":110,"value":"run"},
+    {"id":"ts-003","op":"ts.query","from":100,"to":120},
+    {"id":"ts-004","op":"ts.set_status","entry_id":1,"status":"user1"},
+    {"id":"ts-005","op":"ts.count_status","from":100,"to":120,"status":"user1"},
+    {"id":"ts-006","op":"ts.query","from":120,"to":100},
+    {"id":"ts-007","op":"ts.reopen"},
+    {"id":"ts-008","op":"ts.query","from":100,"to":120}
+  ],
+  "accepted_differences": [
+    {"id":"seed-layout-vs-flashdb-c","reason":"Rust seed image layout is not yet byte-for-byte FlashDB C sector layout; compare behavior fields first.","fields":"image_hash"}
+  ]
+}

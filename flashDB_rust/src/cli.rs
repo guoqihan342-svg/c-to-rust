@@ -2,6 +2,7 @@ use crate::config::DEFAULT_FLASH_SIZE;
 use crate::flash::{FileFlash, FlashCounters, FlashDevice, MemoryFlash};
 use crate::format::{decode_record, encode_record, image_hash, RecordKind};
 use crate::kvdb::KvDb;
+use crate::replay;
 use crate::tsdb::TsDb;
 use crate::types::{Error, Result, TsStatus};
 use std::collections::BTreeMap;
@@ -18,6 +19,9 @@ struct Options {
     scenario: String,
     report: Option<PathBuf>,
     image: Option<PathBuf>,
+    fixture: Option<PathBuf>,
+    rust_report: Option<PathBuf>,
+    oracle_report: Option<PathBuf>,
     size: usize,
 }
 
@@ -31,6 +35,9 @@ impl Default for Options {
             scenario: "all".to_string(),
             report: None,
             image: None,
+            fixture: None,
+            rust_report: None,
+            oracle_report: None,
             size: DEFAULT_FLASH_SIZE,
         }
     }
@@ -68,6 +75,25 @@ where
             ..options
         }),
         "stress" => run_stress(options),
+        "replay" | "fixture-replay" => replay::run_replay(
+            options
+                .fixture
+                .as_deref()
+                .ok_or_else(|| Error::Cli("replay requires --fixture".to_string()))?,
+            options.report.as_deref(),
+            &options.backend,
+            options.size,
+        ),
+        "diff" | "diff-report" => replay::run_diff(
+            options
+                .rust_report
+                .as_deref()
+                .ok_or_else(|| Error::Cli("diff requires --rust-report or --actual".to_string()))?,
+            options.oracle_report.as_deref().ok_or_else(|| {
+                Error::Cli("diff requires --oracle-report or --expected".to_string())
+            })?,
+            options.report.as_deref(),
+        ),
         "inspect-image" => inspect_image(options),
         "unsafe-scan" => unsafe_scan(Path::new("src")),
         other => Err(Error::Cli(format!("unknown command {other}"))),
@@ -120,6 +146,18 @@ where
             }
             "--path" => {
                 options.image = Some(PathBuf::from(value(i, &args)?));
+                i += 2;
+            }
+            "--fixture" => {
+                options.fixture = Some(PathBuf::from(value(i, &args)?));
+                i += 2;
+            }
+            "--rust-report" | "--actual" => {
+                options.rust_report = Some(PathBuf::from(value(i, &args)?));
+                i += 2;
+            }
+            "--oracle-report" | "--expected" => {
+                options.oracle_report = Some(PathBuf::from(value(i, &args)?));
                 i += 2;
             }
             "--size" => {
@@ -528,6 +566,10 @@ fn help() -> String {
         "flashdb-rust commands:",
         "  smoke [--backend memory|file] [--report path]",
         "  stress --loops N [--seed N] [--backend memory|file] [--scenario all|production|abnormal|reliability] [--report path]",
+        "  replay --fixture file [--backend memory|file] [--report path]",
+        "  diff --rust-report file --oracle-report file [--report path]",
+        "  fixture-replay --fixture file [--report path]  # CI-compatible alias",
+        "  diff-report --actual file --expected file [--report path]  # CI-compatible alias",
         "  inspect-image --path file",
         "  unsafe-scan",
         "",
