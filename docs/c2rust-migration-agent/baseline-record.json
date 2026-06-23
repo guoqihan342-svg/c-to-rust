@@ -1,0 +1,78 @@
+{
+  "record_version": 1,
+  "captured_at": "2026-06-24T00:00:00+08:00",
+  "change": "design-c2rust-migration-agent",
+  "agent": {
+    "name": "c2rust-migration-agent",
+    "draft_version": "0.1.0",
+    "context_schema_version": "0.1.0",
+    "patch_plan_schema_version": "0.1.0",
+    "output_crate": "flashDB_rust",
+    "output_crate_initial_version": "0.1.0"
+  },
+  "toolchain": {
+    "openspec": "1.4.1",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)",
+    "git": "2.53.0.windows.3",
+    "node": "v22.22.0",
+    "npm": "11.14.1"
+  },
+  "optional_native_tools_on_path": {
+    "cmake": "NOT_FOUND",
+    "clang": "NOT_FOUND",
+    "bear": "NOT_FOUND",
+    "intercept-build": "NOT_FOUND",
+    "c2rust": "NOT_FOUND",
+    "cargo-nextest": "NOT_FOUND",
+    "cargo-llvm-cov": "NOT_FOUND",
+    "cargo-fuzz": "NOT_FOUND",
+    "cargo-geiger": "NOT_FOUND"
+  },
+  "flashdb_source": {
+    "clone_url": "https://gitcode.com/xwxf/FlashDB.git",
+    "local_path": "sources/FlashDB",
+    "head_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "feature_matrix": {
+      "FDB_USING_KVDB": true,
+      "FDB_USING_TSDB": true,
+      "FDB_USING_FILE_POSIX_MODE": true,
+      "FDB_WRITE_GRAN": 1
+    },
+    "file_hashes_sha256": {
+      "tests/Makefile": "4E868EE8AE8BF6CB5DB3523863C21BDBC7FCDE0374AEA3C597D9B0864D0C3C8E",
+      "tests/fdb_cfg.h": "A760C37D024F5404C675C68EC544626AA7CED703867014D3D8AE9036724EF460",
+      "inc/flashdb.h": "A500C4748ED5FC15246A4F7BD0A35D291839BB207C396BEF7D07A210150BAE52",
+      "inc/fdb_def.h": "2A7E753EBC364BE1523B2ACCB1E0DAD9C4E5D4566FC63BEB6E100A20FA95D320"
+    }
+  },
+  "c2rust_reference": {
+    "local_path": "F:\\agent\\c2rust-master",
+    "is_git_repo": false,
+    "workspace_package_version": "0.22.1",
+    "rust_version": "1.67",
+    "rust_toolchain_channel": "nightly-2022-11-03",
+    "rust_toolchain_components": [
+      "rustfmt",
+      "rustc-dev",
+      "rust-src",
+      "miri",
+      "rust-analyzer"
+    ],
+    "file_hashes_sha256": {
+      "Cargo.toml": "75F9B1319B1E22B43AF5853F8D2790868A7ABD008BFDE0E543A58A449AC036E0",
+      "Cargo.lock": "4B1860E95CB7D29D5E4506759E8DD8F3A0B7EC52E6E3D1DA7FC7578B4E6DB83C",
+      "README.md": "66E2266363B15D18B1084277B7A67549F7E99D8D63B7C1F20C22E376E5E0CE12",
+      "c2rust/Cargo.toml": "E0F603B06F713E4AFE1AC75C09FBBD00CCAAB79ED6DF7B358306157B21663636",
+      "c2rust-transpile/Cargo.toml": "143837D7B350360DCAA34654008AD8A61BF8B93682B996E54BC2A14A3134D862",
+      "rust-toolchain.toml": "3B5881323963B17B9238928532754C23FC7E93BD0D6E69F02B013553211B670B"
+    }
+  },
+  "baseline_generation": {
+    "preferred_environment": "WSL or Linux with clang/libclang, bear or CMake compile_commands, and c2rust on PATH",
+    "native_windows_status": "blocked_by_missing_tools",
+    "c2rust_command_template": "c2rust transpile --emit-build-files path/to/compile_commands.json",
+    "c2rust_output_hashes": null,
+    "fallback_oracle": "original C FlashDB implementation"
+  }
+}

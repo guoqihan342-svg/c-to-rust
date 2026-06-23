@@ -1,0 +1,1 @@
+{"command":"stress","backend":"memory","loops":20,"seed":1,"scenario":"all","scenario_counts":{"abnormal":20,"production":20,"reliability":20},"duration_ms":839,"counters":{"read_ops":2,"write_ops":56,"erase_ops":4,"flush_ops":51,"bytes_read":8388608,"bytes_written":3395,"bytes_erased":8389447},"bytes_processed":2616,"image_hashes":["1b2a2a4e","44edf113","a7bd790d","6e5d08fa"]}

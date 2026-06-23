@@ -1,0 +1,16 @@
+[package]
+name = "flashdb_rust"
+version = "0.1.0"
+edition = "2021"
+description = "Host-verifiable Rust skeleton for FlashDB migration"
+license = "Apache-2.0"
+
+[lib]
+name = "flashdb_rust"
+path = "src/lib.rs"
+
+[[bin]]
+name = "flashdb-rust"
+path = "src/main.rs"
+
+[dependencies]
