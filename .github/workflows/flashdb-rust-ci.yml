@@ -40,6 +40,8 @@ jobs:
           fi
 
       - name: Run CI verification
+        env:
+          FLASHDB_C_ORACLE_PRODUCER: ./oracle/generate_c_oracle.sh
         run: bash scripts/verify-ci.sh
 
       - name: Upload verification evidence

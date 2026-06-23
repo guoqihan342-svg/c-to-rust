@@ -114,6 +114,10 @@ run_c_oracle_producer() {
     fi
 
     if [ -z "${FLASHDB_C_ORACLE_PRODUCER:-}" ]; then
+        if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+            mark_failed "$evidence" "FAILED_C_ORACLE_PRODUCER_NOT_CONFIGURED" "GitHub Actions has gcc, but FLASHDB_C_ORACLE_PRODUCER is not configured."
+            return 1
+        fi
         write_evidence "$evidence" "SKIPPED_C_ORACLE_PRODUCER_NOT_CONFIGURED" "skipped" "gcc is available, but FLASHDB_C_ORACLE_PRODUCER is not configured. No C/Rust equivalence is claimed."
         return 0
     fi
@@ -150,7 +154,7 @@ run_release_stress() {
 
 run_rust_baseline || status=1
 run_rust_fixture_replay_diff || true
-run_c_oracle_producer || true
+run_c_oracle_producer || status=1
 run_release_stress || true
 
 if [ "$status" -ne 0 ]; then
