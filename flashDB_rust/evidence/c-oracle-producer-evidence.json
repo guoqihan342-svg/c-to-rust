@@ -1,6 +1,6 @@
 {
-  "marker": "C_ORACLE_PRODUCER_PASSED",
+  "marker": "C_RUST_DIFF_PASSED",
   "status": "passed",
-  "detail": "oracle_report_sha256=b1f9f73dbd7b58c3cb3c9302bbb62cdd17117ae93dbf13f9b95a7cfb64c61d4a",
-  "timestamp_utc": "2026-06-23T17:28:32Z"
+  "detail": "oracle_report_sha256=2a6e12f7f8294c4e9d64557fb43eadce05888343b51f7bf1ad0ca0f6a9d1842c rust_report_sha256=04798ce06d46da68777a2b25d3a89e727a43f0c49d96f8e895588f38f13d2efe diff_report_sha256=40aacd68a6a358897de1e94b08a80a4c7d72825f636730206840d7600e7c7f6b",
+  "timestamp_utc": "2026-06-23T21:34:32Z"
 }

@@ -78,6 +78,12 @@ if [ -n "$FIXTURE_FILE" ] && [ ! -f "$FIXTURE_FILE" ]; then
     exit 1
 fi
 
+if [ -z "$FIXTURE_FILE" ]; then
+    write_evidence "FAILED_C_ORACLE_FIXTURE_MISSING" "failed" "missing required --fixture <file>"
+    printf 'missing required --fixture <file>\n' >&2
+    exit 2
+fi
+
 mkdir -p "$WORK_DIR"
 
 if [ ! -d "$SRC_DIR/.git" ]; then
@@ -102,6 +108,6 @@ mkdir -p "$BUILD_DIR" "$RUN_DIR"
     CC="$CC" \
     all
 
-"$BUILD_DIR/flashdb_c_oracle" --work-dir "$RUN_DIR" > "$OUT_FILE"
+"$BUILD_DIR/flashdb_c_oracle" --fixture "$FIXTURE_FILE" --work-dir "$RUN_DIR" > "$OUT_FILE"
 write_evidence "C_ORACLE_GENERATED" "passed" "report=$OUT_FILE fixture=${FIXTURE_FILE:-none}"
 printf 'wrote %s\n' "$OUT_FILE"

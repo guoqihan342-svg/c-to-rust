@@ -1,0 +1,25 @@
+{
+  "name": "c-rust-smoke",
+  "operations": [
+    {"id":"kv-cr-001","op":"kv.set","key":"alpha","value":"one"},
+    {"id":"kv-cr-002","op":"kv.get","key":"alpha"},
+    {"id":"kv-cr-003","op":"kv.delete","key":"alpha"},
+    {"id":"kv-cr-004","op":"kv.get","key":"alpha"},
+    {"id":"kv-cr-005","op":"kv.set","key":"beta","value":"two"},
+    {"id":"kv-cr-006","op":"kv.reopen"},
+    {"id":"kv-cr-007","op":"kv.get","key":"beta"},
+    {"id":"kv-cr-008","op":"kv.set","key":"","value":"bad"},
+    {"id":"kv-cr-009","op":"kv.set","key":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","value":"bad"},
+    {"id":"ts-cr-001","op":"ts.append","timestamp":100,"value":"boot"},
+    {"id":"ts-cr-002","op":"ts.append","timestamp":110,"value":"run"},
+    {"id":"ts-cr-003","op":"ts.query","from":100,"to":120},
+    {"id":"ts-cr-004","op":"ts.set_status","entry_id":1,"status":"user1"},
+    {"id":"ts-cr-005","op":"ts.count_status","from":100,"to":120,"status":"user1"},
+    {"id":"ts-cr-006","op":"ts.query","from":100,"to":120},
+    {"id":"ts-cr-007","op":"ts.reopen"},
+    {"id":"ts-cr-008","op":"ts.query","from":100,"to":120}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration.","fields":"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

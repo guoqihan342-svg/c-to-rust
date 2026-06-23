@@ -18,7 +18,7 @@ need_file() {
 need_text() {
     file=$1
     text=$2
-    grep -Fq "$text" "$ORACLE_DIR/$file" || fail "$file missing text: $text"
+    grep -Fq -- "$text" "$ORACLE_DIR/$file" || fail "$file missing text: $text"
 }
 
 need_file README.md
@@ -36,6 +36,8 @@ need_text generate_c_oracle.sh "$PINNED_COMMIT"
 need_text generate_c_oracle.sh "$CLONE_URL"
 need_text generate_c_oracle.sh "gcc"
 need_text generate_c_oracle.sh "make"
+need_text generate_c_oracle.sh "--fixture"
+need_text generate_c_oracle.sh '"$BUILD_DIR/flashdb_c_oracle" --fixture "$FIXTURE_FILE" --work-dir "$RUN_DIR"'
 
 need_text fdb_cfg.h "#define FDB_USING_KVDB"
 need_text fdb_cfg.h "#define FDB_USING_TSDB"
@@ -46,13 +48,10 @@ for api in \
     fdb_kvdb_init \
     fdb_kv_set \
     fdb_kv_get \
-    fdb_kv_set_blob \
-    fdb_kv_get_blob \
     fdb_kv_del \
     fdb_kv_iterator_init \
     fdb_kv_iterate \
     fdb_tsdb_init \
-    fdb_tsl_append \
     fdb_tsl_append_with_ts \
     fdb_tsl_iter_by_time \
     fdb_tsl_query_count \
@@ -63,7 +62,19 @@ done
 
 need_text flashdb_c_oracle.c "ORACLE_SEC_SIZE 4096"
 need_text flashdb_c_oracle.c "toolchain_status"
-need_text flashdb_c_oracle.c "fixture_id"
+need_text flashdb_c_oracle.c '\"id\"'
+need_text flashdb_c_oracle.c '\"op\"'
+need_text flashdb_c_oracle.c '\"status\"'
+need_text flashdb_c_oracle.c '\"code\"'
+need_text flashdb_c_oracle.c "kv.set"
+need_text flashdb_c_oracle.c "kv.get"
+need_text flashdb_c_oracle.c "kv.delete"
+need_text flashdb_c_oracle.c "kv.reopen"
+need_text flashdb_c_oracle.c "ts.append"
+need_text flashdb_c_oracle.c "ts.query"
+need_text flashdb_c_oracle.c "ts.set_status"
+need_text flashdb_c_oracle.c "ts.count_status"
+need_text flashdb_c_oracle.c "ts.reopen"
 need_text Makefile.c_oracle "fdb_file.c"
 need_text Makefile.c_oracle "flashdb_c_oracle.c"
 

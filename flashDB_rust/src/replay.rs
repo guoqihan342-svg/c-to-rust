@@ -82,12 +82,17 @@ pub fn run_diff(
     let expected = fs::read_to_string(oracle_report)?;
     let actual_hash = image_hash(actual.as_bytes());
     let expected_hash = image_hash(expected.as_bytes());
-    let passed = actual == expected;
-    let mismatch = if passed {
-        None
-    } else {
-        Some(first_mismatch(&expected, &actual))
+    let mismatch = match compare_reports(&expected, &actual) {
+        Ok(value) => value,
+        Err(err) => Some(Mismatch {
+            byte_offset: 0,
+            step_id: "report".to_string(),
+            field_path: "report.parse".to_string(),
+            expected: err.to_string(),
+            actual: "parse failed".to_string(),
+        }),
     };
+    let passed = mismatch.is_none();
     let json = diff_report_json(
         rust_report,
         oracle_report,
@@ -514,43 +519,343 @@ struct Mismatch {
     actual: String,
 }
 
-fn first_mismatch(expected: &str, actual: &str) -> Mismatch {
-    let max = expected.len().min(actual.len());
-    let mut offset = max;
-    for i in 0..max {
-        if expected.as_bytes()[i] != actual.as_bytes()[i] {
-            offset = i;
+#[derive(Debug, Clone)]
+struct ParsedStep {
+    id: String,
+    fields: BTreeMap<String, String>,
+}
+
+fn compare_reports(expected: &str, actual: &str) -> Result<Option<Mismatch>> {
+    let ignored = ignored_fields(expected, actual);
+    let expected_steps = parse_report_steps(expected)?;
+    let actual_steps = parse_report_steps(actual)?;
+    if expected_steps.len() != actual_steps.len() {
+        return Ok(Some(Mismatch {
+            byte_offset: 0,
+            step_id: "steps".to_string(),
+            field_path: "steps.len".to_string(),
+            expected: expected_steps.len().to_string(),
+            actual: actual_steps.len().to_string(),
+        }));
+    }
+
+    let actual_by_id: BTreeMap<&str, &ParsedStep> = actual_steps
+        .iter()
+        .map(|step| (step.id.as_str(), step))
+        .collect();
+    for expected_step in &expected_steps {
+        let Some(actual_step) = actual_by_id.get(expected_step.id.as_str()) else {
+            return Ok(Some(Mismatch {
+                byte_offset: 0,
+                step_id: expected_step.id.clone(),
+                field_path: "steps.id".to_string(),
+                expected: expected_step.id.clone(),
+                actual: "missing".to_string(),
+            }));
+        };
+
+        let mut fields: Vec<String> = expected_step
+            .fields
+            .keys()
+            .chain(actual_step.fields.keys())
+            .filter(|name| !ignored.contains(name))
+            .cloned()
+            .collect();
+        fields.sort();
+        fields.dedup();
+        for field in fields {
+            let expected_value = expected_step.fields.get(&field);
+            let actual_value = actual_step.fields.get(&field);
+            if expected_value != actual_value {
+                return Ok(Some(Mismatch {
+                    byte_offset: 0,
+                    step_id: expected_step.id.clone(),
+                    field_path: format!("steps.{}.{}", expected_step.id, field),
+                    expected: expected_value
+                        .cloned()
+                        .unwrap_or_else(|| "missing".to_string()),
+                    actual: actual_value
+                        .cloned()
+                        .unwrap_or_else(|| "missing".to_string()),
+                }));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn ignored_fields(left: &str, right: &str) -> Vec<String> {
+    let mut out = ACCEPTED_DIFF_FIELD_ALLOWLIST
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<_>>();
+    collect_accepted_fields(left, &mut out);
+    collect_accepted_fields(right, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+const ACCEPTED_DIFF_FIELD_ALLOWLIST: &[&str] = &[
+    "image_hash",
+    "message",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path",
+];
+
+fn collect_accepted_fields(report: &str, out: &mut Vec<String>) {
+    let mut rest = report;
+    while let Some(index) = rest.find("\"fields\"") {
+        rest = &rest[index + "\"fields\"".len()..];
+        let Some(colon) = rest.find(':') else {
+            break;
+        };
+        let value = rest[colon + 1..].trim_start();
+        if !value.starts_with('"') {
+            continue;
+        }
+        let value = &value[1..];
+        let Some(end) = value.find('"') else {
+            break;
+        };
+        for field in value[..end].split(',') {
+            let field = field.trim();
+            if ACCEPTED_DIFF_FIELD_ALLOWLIST.contains(&field) {
+                out.push(field.to_string());
+            }
+        }
+        rest = &value[end + 1..];
+    }
+}
+
+fn parse_report_steps(report: &str) -> Result<Vec<ParsedStep>> {
+    let array = json_array(report, "steps")
+        .ok_or_else(|| Error::Parse("report missing steps array".to_string()))?;
+    let objects = top_level_objects(array)?;
+    let mut steps = Vec::new();
+    for object in objects {
+        let fields = top_level_fields(object)?;
+        let id = fields
+            .get("id")
+            .and_then(|value| unquote_json_string(value))
+            .ok_or_else(|| Error::Parse("step missing id".to_string()))?;
+        steps.push(ParsedStep { id, fields });
+    }
+    Ok(steps)
+}
+
+fn json_array<'a>(input: &'a str, name: &str) -> Option<&'a str> {
+    let marker = format!("\"{name}\"");
+    let start = input.find(&marker)? + marker.len();
+    let after_name = &input[start..];
+    let colon = after_name.find(':')?;
+    let after_colon = after_name[colon + 1..].trim_start();
+    if !after_colon.starts_with('[') {
+        return None;
+    }
+    let offset = input.len() - after_colon.len();
+    let end = matching_delimiter(input, offset, '[', ']')?;
+    Some(&input[offset + 1..end])
+}
+
+fn top_level_objects(input: &str) -> Result<Vec<&str>> {
+    let mut out = Vec::new();
+    let mut in_string = false;
+    let mut escape = false;
+    let mut depth = 0usize;
+    let mut start = None;
+    for (index, ch) in input.char_indices() {
+        if in_string {
+            if escape {
+                escape = false;
+            } else if ch == '\\' {
+                escape = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    start = Some(index);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or_else(|| Error::Parse("unbalanced report object".to_string()))?;
+                if depth == 0 {
+                    let start = start
+                        .take()
+                        .ok_or_else(|| Error::Parse("missing object start".to_string()))?;
+                    out.push(&input[start..=index]);
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return Err(Error::Parse("unclosed report object".to_string()));
+    }
+    Ok(out)
+}
+
+fn top_level_fields(object: &str) -> Result<BTreeMap<String, String>> {
+    let inner = object
+        .strip_prefix('{')
+        .and_then(|value| value.strip_suffix('}'))
+        .ok_or_else(|| Error::Parse("step object must be braced".to_string()))?;
+    let mut fields = BTreeMap::new();
+    let bytes = inner.as_bytes();
+    let mut index = 0usize;
+    while index < inner.len() {
+        skip_ws_and_commas(inner, &mut index);
+        if index >= inner.len() {
+            break;
+        }
+        if bytes[index] != b'"' {
+            return Err(Error::Parse("expected object field name".to_string()));
+        }
+        let (name, after_name) = read_json_string(inner, index)?;
+        index = after_name;
+        skip_ws(inner, &mut index);
+        if index >= inner.len() || bytes[index] != b':' {
+            return Err(Error::Parse(format!("field {name} missing colon")));
+        }
+        index += 1;
+        skip_ws(inner, &mut index);
+        let (raw, after_value) = read_json_value(inner, index)?;
+        fields.insert(name, raw.trim().to_string());
+        index = after_value;
+    }
+    Ok(fields)
+}
+
+fn read_json_value(input: &str, start: usize) -> Result<(&str, usize)> {
+    let bytes = input.as_bytes();
+    if start >= input.len() {
+        return Err(Error::Parse("missing json value".to_string()));
+    }
+    match bytes[start] {
+        b'"' => {
+            let (_, end) = read_json_string(input, start)?;
+            Ok((&input[start..end], end))
+        }
+        b'[' => {
+            let end = matching_delimiter(input, start, '[', ']')
+                .ok_or_else(|| Error::Parse("unclosed array value".to_string()))?;
+            Ok((&input[start..=end], end + 1))
+        }
+        b'{' => {
+            let end = matching_delimiter(input, start, '{', '}')
+                .ok_or_else(|| Error::Parse("unclosed object value".to_string()))?;
+            Ok((&input[start..=end], end + 1))
+        }
+        _ => {
+            let end = input[start..]
+                .find(',')
+                .map(|value| start + value)
+                .unwrap_or(input.len());
+            Ok((&input[start..end], end))
+        }
+    }
+}
+
+fn matching_delimiter(input: &str, start: usize, open: char, close: char) -> Option<usize> {
+    let mut in_string = false;
+    let mut escape = false;
+    let mut depth = 0usize;
+    for (index, ch) in input[start..].char_indices() {
+        let absolute = start + index;
+        if in_string {
+            if escape {
+                escape = false;
+            } else if ch == '\\' {
+                escape = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        if ch == '"' {
+            in_string = true;
+        } else if ch == open {
+            depth += 1;
+        } else if ch == close {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                return Some(absolute);
+            }
+        }
+    }
+    None
+}
+
+fn read_json_string(input: &str, start: usize) -> Result<(String, usize)> {
+    let bytes = input.as_bytes();
+    if bytes.get(start) != Some(&b'"') {
+        return Err(Error::Parse("expected string".to_string()));
+    }
+    let mut out = String::new();
+    let mut index = start + 1;
+    let mut escape = false;
+    while index < input.len() {
+        let ch = input[index..]
+            .chars()
+            .next()
+            .ok_or_else(|| Error::Parse("invalid string".to_string()))?;
+        index += ch.len_utf8();
+        if escape {
+            out.push(match ch {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                '"' => '"',
+                '\\' => '\\',
+                other => other,
+            });
+            escape = false;
+        } else if ch == '\\' {
+            escape = true;
+        } else if ch == '"' {
+            return Ok((out, index));
+        } else {
+            out.push(ch);
+        }
+    }
+    Err(Error::Parse("unterminated string".to_string()))
+}
+
+fn unquote_json_string(value: &str) -> Option<String> {
+    if !value.starts_with('"') {
+        return None;
+    }
+    read_json_string(value, 0).ok().map(|(value, _)| value)
+}
+
+fn skip_ws(input: &str, index: &mut usize) {
+    while *index < input.len() && input.as_bytes()[*index].is_ascii_whitespace() {
+        *index += 1;
+    }
+}
+
+fn skip_ws_and_commas(input: &str, index: &mut usize) {
+    while *index < input.len() {
+        let ch = input.as_bytes()[*index];
+        if ch.is_ascii_whitespace() || ch == b',' {
+            *index += 1;
+        } else {
             break;
         }
     }
-    Mismatch {
-        byte_offset: offset,
-        step_id: nearest_step_id(actual, offset)
-            .or_else(|| nearest_step_id(expected, offset))
-            .unwrap_or_else(|| "report".to_string()),
-        field_path: format!("report.byte_{offset}"),
-        expected: snippet(expected, offset),
-        actual: snippet(actual, offset),
-    }
-}
-
-fn nearest_step_id(text: &str, offset: usize) -> Option<String> {
-    let end = offset.min(text.len());
-    let prefix = &text[..end];
-    let marker = "\"id\":\"";
-    let start = prefix.rfind(marker)? + marker.len();
-    let rest = &prefix[start..];
-    let end = rest.find('"')?;
-    Some(rest[..end].to_string())
-}
-
-fn snippet(text: &str, offset: usize) -> String {
-    if text.is_empty() {
-        return String::new();
-    }
-    let start = offset.saturating_sub(16).min(text.len());
-    let end = (offset + 32).min(text.len());
-    text[start..end].to_string()
 }
 
 fn replay_report_json(

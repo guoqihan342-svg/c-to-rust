@@ -1,0 +1,1 @@
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"target/verification/ci/c-rust-replay.json","oracle_report":"target/verification/ci/c-oracle-report.json","rust_report_hash":"1d539192","oracle_report_hash":"d0085019","toolchain_status":"C_TOOLCHAIN_AVAILABLE","first_mismatch":null}

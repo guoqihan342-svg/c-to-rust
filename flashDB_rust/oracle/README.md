@@ -24,16 +24,21 @@ Do not treat this repository state as having generated or verified a real C orac
 From the repository root:
 
 ```sh
-sh flashDB_rust/oracle/generate_c_oracle.sh
+sh flashDB_rust/oracle/generate_c_oracle.sh \
+  --fixture fixtures/c-rust-smoke.json \
+  --report target/verification/ci/c-oracle-report.json \
+  --evidence target/verification/ci/c-oracle-producer-evidence.json
 ```
 
 Optional environment overrides:
 
 ```sh
-CC=clang OUT_FILE=/tmp/flashdb_c_oracle.json sh flashDB_rust/oracle/generate_c_oracle.sh
+CC=clang sh flashDB_rust/oracle/generate_c_oracle.sh \
+  --fixture fixtures/c-rust-smoke.json \
+  --report /tmp/flashdb_c_oracle.json
 ```
 
-The script clones FlashDB at the fixed commit, builds `flashdb_c_oracle.c` against the public FlashDB sources, runs it in a clean work directory, and writes deterministic JSON.
+The script clones FlashDB at the fixed commit, builds `flashdb_c_oracle.c` against the public FlashDB sources, runs it in a clean work directory, and writes deterministic replay-shaped JSON from the fixture operations.
 
 ## Covered Public APIs
 
@@ -42,8 +47,6 @@ KVDB coverage:
 - `fdb_kvdb_init`
 - `fdb_kv_set`
 - `fdb_kv_get`
-- `fdb_kv_set_blob`
-- `fdb_kv_get_blob`
 - `fdb_kv_del`
 - `fdb_kv_iterator_init`
 - `fdb_kv_iterate`
@@ -51,7 +54,6 @@ KVDB coverage:
 TSDB coverage:
 
 - `fdb_tsdb_init`
-- `fdb_tsl_append`
 - `fdb_tsl_append_with_ts`
 - `fdb_tsl_iter_by_time`
 - `fdb_tsl_query_count`

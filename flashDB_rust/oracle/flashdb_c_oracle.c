@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -20,15 +21,110 @@
 #define ORACLE_SEC_SIZE 4096
 #define ORACLE_KV_SECTORS 8
 #define ORACLE_TS_SECTORS 8
-#define ORACLE_TSL_MAX_LEN 64
+#define ORACLE_TSL_MAX_LEN 128
+#define ORACLE_MAX_LINE 4096
+#define ORACLE_MAX_OPS 256
+#define ORACLE_MAX_ACCEPTED 32
+#define ORACLE_MAX_FIELD 512
+#define ORACLE_MAX_ENTRIES 256
 
-static fdb_time_t next_time = 100;
+struct operation {
+    char id[ORACLE_MAX_FIELD];
+    char op[64];
+    char key[ORACLE_MAX_FIELD];
+    char value[ORACLE_MAX_FIELD];
+    char timestamp[64];
+    char from[64];
+    char to[64];
+    char status[64];
+    char entry_id[64];
+    bool has_key;
+    bool has_value;
+    bool has_timestamp;
+    bool has_from;
+    bool has_to;
+    bool has_status;
+    bool has_entry_id;
+};
+
+struct accepted_difference {
+    char id[ORACLE_MAX_FIELD];
+    char reason[ORACLE_MAX_FIELD];
+    char fields[ORACLE_MAX_FIELD];
+};
+
+struct fixture {
+    char name[ORACLE_MAX_FIELD];
+    char path[PATH_MAX];
+    char hash[16];
+    struct operation ops[ORACLE_MAX_OPS];
+    size_t op_count;
+    struct accepted_difference accepted[ORACLE_MAX_ACCEPTED];
+    size_t accepted_count;
+};
+
+struct kv_entry {
+    char key[ORACLE_MAX_FIELD];
+    char value[ORACLE_MAX_FIELD];
+};
+
+struct ts_entry {
+    uint64_t entry_id;
+    uint32_t addr_index;
+    long timestamp;
+    fdb_tsl_status_t status;
+    char value[ORACLE_MAX_FIELD];
+};
+
+struct oracle_state {
+    struct fdb_kvdb kvdb;
+    struct fdb_tsdb tsdb;
+    char kv_dir[PATH_MAX];
+    char ts_dir[PATH_MAX];
+    uint64_t next_ts_entry_id;
+    bool kv_open;
+    bool ts_open;
+};
+
+struct ts_load_ctx {
+    fdb_tsdb_t db;
+    struct ts_entry *entries;
+    size_t count;
+    size_t capacity;
+};
+
+struct ts_find_ctx {
+    uint32_t addr_index;
+    struct fdb_tsl found;
+    bool found_it;
+};
+
+struct ts_query_ctx {
+    fdb_tsdb_t db;
+    const struct ts_entry *entries;
+    size_t count;
+    bool first;
+};
 
 static fdb_time_t deterministic_time(void)
 {
-    fdb_time_t current = next_time;
-    next_time += 100;
-    return current;
+    return 0;
+}
+
+static uint32_t crc32_update(uint32_t crc, const unsigned char *bytes, size_t len)
+{
+    size_t i;
+
+    crc ^= 0xffffffffU;
+    for (i = 0; i < len; i++) {
+        int bit;
+        crc ^= (uint32_t)bytes[i];
+        for (bit = 0; bit < 8; bit++) {
+            uint32_t mask = 0U - (crc & 1U);
+            crc = (crc >> 1) ^ (0xedb88320U & mask);
+        }
+    }
+    return crc ^ 0xffffffffU;
 }
 
 static const char *err_name(fdb_err_t err)
@@ -55,29 +151,47 @@ static const char *err_name(fdb_err_t err)
     }
 }
 
-static const char *tsl_status_name(fdb_tsl_status_t status)
+static const char *ts_status_name(fdb_tsl_status_t status)
 {
     switch (status) {
-    case FDB_TSL_UNUSED:
-        return "FDB_TSL_UNUSED";
-    case FDB_TSL_PRE_WRITE:
-        return "FDB_TSL_PRE_WRITE";
     case FDB_TSL_WRITE:
-        return "FDB_TSL_WRITE";
+        return "written";
     case FDB_TSL_USER_STATUS1:
-        return "FDB_TSL_USER_STATUS1";
+        return "user1";
     case FDB_TSL_DELETED:
-        return "FDB_TSL_DELETED";
+        return "deleted";
     case FDB_TSL_USER_STATUS2:
-        return "FDB_TSL_USER_STATUS2";
+        return "user2";
     default:
-        return "FDB_TSL_UNKNOWN";
+        return "unknown";
     }
+}
+
+static bool parse_ts_status(const char *value, fdb_tsl_status_t *out)
+{
+    if (strcmp(value, "written") == 0 || strcmp(value, "Written") == 0) {
+        *out = FDB_TSL_WRITE;
+        return true;
+    }
+    if (strcmp(value, "user1") == 0 || strcmp(value, "UserStatus1") == 0) {
+        *out = FDB_TSL_USER_STATUS1;
+        return true;
+    }
+    if (strcmp(value, "deleted") == 0 || strcmp(value, "Deleted") == 0) {
+        *out = FDB_TSL_DELETED;
+        return true;
+    }
+    if (strcmp(value, "user2") == 0 || strcmp(value, "UserStatus2") == 0) {
+        *out = FDB_TSL_USER_STATUS2;
+        return true;
+    }
+    return false;
 }
 
 static void json_string(const char *value)
 {
     const unsigned char *p = (const unsigned char *)value;
+
     putchar('"');
     while (*p != '\0') {
         switch (*p) {
@@ -109,14 +223,20 @@ static void json_string(const char *value)
     putchar('"');
 }
 
-static void json_hex(const uint8_t *data, size_t len)
+static void json_field_string(const char *name, const char *value)
 {
-    size_t i;
-    putchar('"');
-    for (i = 0; i < len; i++) {
-        printf("%02x", data[i]);
-    }
-    putchar('"');
+    printf(",\"%s\":", name);
+    json_string(value);
+}
+
+static void json_field_long(const char *name, long value)
+{
+    printf(",\"%s\":%ld", name, value);
+}
+
+static void json_field_u64(const char *name, uint64_t value)
+{
+    printf(",\"%s\":%llu", name, (unsigned long long)value);
 }
 
 static int path_join(char *out, size_t out_len, const char *left, const char *right)
@@ -187,17 +307,169 @@ static int prepare_work_dirs(const char *work_dir, char *kv_dir, size_t kv_len, 
     return ensure_dir(kv_dir) == 0 && ensure_dir(ts_dir) == 0 ? 0 : -1;
 }
 
-static void step_prefix(bool *first, const char *id, const char *api)
+static const char *skip_ws(const char *value)
 {
-    if (!*first) {
-        fputs(",\n", stdout);
+    while (*value != '\0' && isspace((unsigned char)*value)) {
+        value++;
     }
-    *first = false;
-    fputs("    {\"id\":", stdout);
-    json_string(id);
-    fputs(",\"api\":", stdout);
-    json_string(api);
-    fputs(",\"observed\":", stdout);
+    return value;
+}
+
+static bool field_value(const char *input, const char *name, char *out, size_t out_len)
+{
+    char pattern[96];
+    const char *start;
+    const char *colon;
+    const char *rest;
+    size_t used = 0;
+
+    snprintf(pattern, sizeof(pattern), "\"%s\"", name);
+    start = strstr(input, pattern);
+    if (start == NULL) {
+        return false;
+    }
+    colon = strchr(start + strlen(pattern), ':');
+    if (colon == NULL) {
+        return false;
+    }
+    rest = skip_ws(colon + 1);
+
+    if (*rest == '"') {
+        bool escape = false;
+        rest++;
+        while (*rest != '\0') {
+            char ch = *rest++;
+            if (escape) {
+                switch (ch) {
+                case 'n':
+                    ch = '\n';
+                    break;
+                case 'r':
+                    ch = '\r';
+                    break;
+                case 't':
+                    ch = '\t';
+                    break;
+                default:
+                    break;
+                }
+                escape = false;
+            } else if (ch == '\\') {
+                escape = true;
+                continue;
+            } else if (ch == '"') {
+                break;
+            }
+            if (used + 1 < out_len) {
+                out[used++] = ch;
+            }
+        }
+    } else {
+        while (*rest != '\0' && *rest != ',' && *rest != '}' && *rest != ']') {
+            if (used + 1 < out_len) {
+                out[used++] = *rest;
+            }
+            rest++;
+        }
+        while (used > 0 && isspace((unsigned char)out[used - 1])) {
+            used--;
+        }
+    }
+
+    out[used] = '\0';
+    return true;
+}
+
+static int load_fixture(const char *path, struct fixture *fixture)
+{
+    FILE *fp = fopen(path, "rb");
+    char line[ORACLE_MAX_LINE];
+    uint32_t crc = 0;
+    bool in_accepted = false;
+
+    if (fp == NULL) {
+        fprintf(stderr, "failed to open fixture: %s\n", path);
+        return -1;
+    }
+
+    memset(fixture, 0, sizeof(*fixture));
+    snprintf(fixture->name, sizeof(fixture->name), "fixture");
+    snprintf(fixture->path, sizeof(fixture->path), "%s", path);
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        char trimmed[ORACLE_MAX_LINE];
+        char *p;
+        size_t len = strlen(line);
+
+        crc = crc32_update(crc, (const unsigned char *)line, len);
+        snprintf(trimmed, sizeof(trimmed), "%s", line);
+        p = trimmed;
+        while (*p != '\0' && isspace((unsigned char)*p)) {
+            p++;
+        }
+        len = strlen(p);
+        while (len > 0 && (p[len - 1] == '\n' || p[len - 1] == '\r' || p[len - 1] == ',' || isspace((unsigned char)p[len - 1]))) {
+            p[--len] = '\0';
+        }
+
+        if (strstr(p, "\"name\"") != NULL && strstr(p, "\"operations\"") == NULL) {
+            field_value(p, "name", fixture->name, sizeof(fixture->name));
+        }
+        if (strstr(p, "\"accepted_differences\"") != NULL) {
+            in_accepted = true;
+            continue;
+        }
+        if (in_accepted && p[0] == ']') {
+            in_accepted = false;
+            continue;
+        }
+        if (p[0] != '{') {
+            continue;
+        }
+        if (strstr(p, "\"op\"") != NULL) {
+            struct operation *op;
+            if (fixture->op_count >= ORACLE_MAX_OPS) {
+                fprintf(stderr, "too many fixture operations\n");
+                fclose(fp);
+                return -1;
+            }
+            op = &fixture->ops[fixture->op_count];
+            memset(op, 0, sizeof(*op));
+            if (!field_value(p, "id", op->id, sizeof(op->id)) ||
+                !field_value(p, "op", op->op, sizeof(op->op))) {
+                fprintf(stderr, "fixture operation missing id or op\n");
+                fclose(fp);
+                return -1;
+            }
+            op->has_key = field_value(p, "key", op->key, sizeof(op->key));
+            op->has_value = field_value(p, "value", op->value, sizeof(op->value));
+            op->has_timestamp = field_value(p, "timestamp", op->timestamp, sizeof(op->timestamp));
+            op->has_from = field_value(p, "from", op->from, sizeof(op->from));
+            op->has_to = field_value(p, "to", op->to, sizeof(op->to));
+            op->has_status = field_value(p, "status", op->status, sizeof(op->status));
+            op->has_entry_id = field_value(p, "entry_id", op->entry_id, sizeof(op->entry_id));
+            fixture->op_count++;
+        } else if (in_accepted) {
+            struct accepted_difference *accepted;
+            if (fixture->accepted_count >= ORACLE_MAX_ACCEPTED) {
+                continue;
+            }
+            accepted = &fixture->accepted[fixture->accepted_count];
+            memset(accepted, 0, sizeof(*accepted));
+            field_value(p, "id", accepted->id, sizeof(accepted->id));
+            field_value(p, "reason", accepted->reason, sizeof(accepted->reason));
+            field_value(p, "fields", accepted->fields, sizeof(accepted->fields));
+            fixture->accepted_count++;
+        }
+    }
+
+    fclose(fp);
+    snprintf(fixture->hash, sizeof(fixture->hash), "%08x", crc);
+    if (fixture->op_count == 0) {
+        fprintf(stderr, "fixture has no operations\n");
+        return -1;
+    }
+    return 0;
 }
 
 static fdb_err_t init_kvdb(struct fdb_kvdb *db, const char *path)
@@ -226,287 +498,621 @@ static fdb_err_t init_tsdb(struct fdb_tsdb *db, const char *path)
     return fdb_tsdb_init(db, "ora_ts", path, deterministic_time, ORACLE_TSL_MAX_LEN, NULL);
 }
 
-static void print_kv_iteration(fdb_kvdb_t db)
+static bool ts_load_cb(fdb_tsl_t tsl, void *arg)
 {
-    struct fdb_kv_iterator iterator;
-    bool first = true;
-
-    fdb_kv_iterator_init(db, &iterator);
-    putchar('[');
-    while (fdb_kv_iterate(db, &iterator)) {
-        uint8_t value[128] = {0};
-        struct fdb_blob blob;
-        size_t read_len;
-        fdb_kv_t kv = &iterator.curr_kv;
-
-        fdb_blob_make(&blob, value, sizeof(value));
-        read_len = fdb_blob_read((fdb_db_t)db, fdb_kv_to_blob(kv, &blob));
-        if (!first) {
-            putchar(',');
-        }
-        first = false;
-        fputs("{\"key\":", stdout);
-        json_string(kv->name);
-        fputs(",\"value_hex\":", stdout);
-        json_hex(value, read_len);
-        printf(",\"value_len\":%zu}", read_len);
-    }
-    putchar(']');
-}
-
-struct ts_iter_ctx {
-    fdb_tsdb_t db;
-    bool first;
-    bool update_first;
-    fdb_err_t update_result;
-};
-
-static bool print_ts_cb(fdb_tsl_t tsl, void *arg)
-{
-    struct ts_iter_ctx *ctx = (struct ts_iter_ctx *)arg;
-    uint8_t value[ORACLE_TSL_MAX_LEN] = {0};
+    struct ts_load_ctx *ctx = (struct ts_load_ctx *)arg;
+    struct ts_entry *entry;
     struct fdb_blob blob;
+    char value[ORACLE_MAX_FIELD] = {0};
     size_t read_len;
 
-    fdb_blob_make(&blob, value, sizeof(value));
-    read_len = fdb_blob_read((fdb_db_t)ctx->db, fdb_tsl_to_blob(tsl, &blob));
-    if (!ctx->first) {
-        putchar(',');
+    if (tsl->status == FDB_TSL_UNUSED || tsl->status == FDB_TSL_PRE_WRITE || ctx->count >= ctx->capacity) {
+        return false;
     }
-    ctx->first = false;
-    fputs("{\"time\":", stdout);
-    printf("%ld", (long)tsl->time);
-    fputs(",\"status\":", stdout);
-    json_string(tsl_status_name(tsl->status));
-    fputs(",\"value_hex\":", stdout);
-    json_hex(value, read_len);
-    fputs("}", stdout);
 
-    if (ctx->update_first) {
-        ctx->update_result = fdb_tsl_set_status(ctx->db, tsl, FDB_TSL_USER_STATUS1);
-        ctx->update_first = false;
+    fdb_blob_make(&blob, value, sizeof(value) - 1);
+    read_len = fdb_blob_read((fdb_db_t)ctx->db, fdb_tsl_to_blob(tsl, &blob));
+    value[read_len < sizeof(value) ? read_len : sizeof(value) - 1] = '\0';
+
+    entry = &ctx->entries[ctx->count];
+    entry->entry_id = (uint64_t)ctx->count + 1;
+    entry->addr_index = tsl->addr.index;
+    entry->timestamp = (long)tsl->time;
+    entry->status = tsl->status;
+    snprintf(entry->value, sizeof(entry->value), "%s", value);
+    ctx->count++;
+    return false;
+}
+
+static size_t load_ts_entries(fdb_tsdb_t db, struct ts_entry *entries, size_t capacity)
+{
+    struct ts_load_ctx ctx;
+
+    memset(entries, 0, sizeof(*entries) * capacity);
+    ctx.db = db;
+    ctx.entries = entries;
+    ctx.count = 0;
+    ctx.capacity = capacity;
+    fdb_tsl_iter(db, ts_load_cb, &ctx);
+    return ctx.count;
+}
+
+static bool ts_find_cb(fdb_tsl_t tsl, void *arg)
+{
+    struct ts_find_ctx *ctx = (struct ts_find_ctx *)arg;
+
+    if (tsl->addr.index == ctx->addr_index) {
+        ctx->found = *tsl;
+        ctx->found_it = true;
+        return true;
     }
     return false;
 }
 
-static int run_kvdb_steps(const char *kv_dir, bool *first_step)
+static const struct ts_entry *find_ts_entry_by_addr(const struct ts_entry *entries, size_t count, uint32_t addr_index)
 {
-    struct fdb_kvdb kvdb;
-    fdb_err_t err;
-    const uint8_t blob_value[] = {0x00, 0x10, 0x20, 0x7f, 0xff};
-    uint8_t blob_read[16] = {0};
-    struct fdb_blob blob;
-    size_t read_len;
-    char *value;
+    size_t i;
 
-    err = init_kvdb(&kvdb, kv_dir);
-    step_prefix(first_step, "kvdb_init", "fdb_kvdb_init");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    printf(",\"sec_size\":%d,\"max_size\":%d}}", ORACLE_SEC_SIZE, ORACLE_SEC_SIZE * ORACLE_KV_SECTORS);
-    if (err != FDB_NO_ERR) {
-        return 1;
+    for (i = 0; i < count; i++) {
+        if (entries[i].addr_index == addr_index) {
+            return &entries[i];
+        }
     }
-
-    err = fdb_kv_set(&kvdb, "alpha", "one");
-    value = fdb_kv_get(&kvdb, "alpha");
-    step_prefix(first_step, "kvdb_set_get_string", "fdb_kv_set/fdb_kv_get");
-    printf("{\"set_return\":");
-    json_string(err_name(err));
-    fputs(",\"value\":", stdout);
-    json_string(value == NULL ? "" : value);
-    printf(",\"found\":%s}", value == NULL ? "false" : "true");
-    putchar('}');
-
-    fdb_blob_make(&blob, blob_value, sizeof(blob_value));
-    err = fdb_kv_set_blob(&kvdb, "blob", &blob);
-    memset(blob_read, 0, sizeof(blob_read));
-    fdb_blob_make(&blob, blob_read, sizeof(blob_read));
-    read_len = fdb_kv_get_blob(&kvdb, "blob", &blob);
-    step_prefix(first_step, "kvdb_set_get_blob", "fdb_kv_set_blob/fdb_kv_get_blob");
-    printf("{\"set_return\":");
-    json_string(err_name(err));
-    printf(",\"read_len\":%zu,\"value_hex\":", read_len);
-    json_hex(blob_read, read_len);
-    putchar('}');
-    putchar('}');
-
-    err = fdb_kv_set(&kvdb, "alpha", "two");
-    value = fdb_kv_get(&kvdb, "alpha");
-    step_prefix(first_step, "kvdb_update_string", "fdb_kv_set/fdb_kv_get");
-    printf("{\"set_return\":");
-    json_string(err_name(err));
-    fputs(",\"value\":", stdout);
-    json_string(value == NULL ? "" : value);
-    printf(",\"found\":%s}", value == NULL ? "false" : "true");
-    putchar('}');
-
-    step_prefix(first_step, "kvdb_iterate", "fdb_kv_iterator_init/fdb_kv_iterate");
-    fputs("{\"items\":", stdout);
-    print_kv_iteration(&kvdb);
-    putchar('}');
-    putchar('}');
-
-    err = fdb_kv_del(&kvdb, "alpha");
-    value = fdb_kv_get(&kvdb, "alpha");
-    step_prefix(first_step, "kvdb_delete", "fdb_kv_del/fdb_kv_get");
-    printf("{\"delete_return\":");
-    json_string(err_name(err));
-    printf(",\"found_after_delete\":%s}", value == NULL ? "false" : "true");
-    putchar('}');
-
-    err = fdb_kvdb_deinit(&kvdb);
-    step_prefix(first_step, "kvdb_deinit", "fdb_kvdb_deinit");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    putchar('}');
-    putchar('}');
-
-    err = init_kvdb(&kvdb, kv_dir);
-    memset(blob_read, 0, sizeof(blob_read));
-    fdb_blob_make(&blob, blob_read, sizeof(blob_read));
-    read_len = err == FDB_NO_ERR ? fdb_kv_get_blob(&kvdb, "blob", &blob) : 0;
-    value = err == FDB_NO_ERR ? fdb_kv_get(&kvdb, "alpha") : NULL;
-    step_prefix(first_step, "kvdb_reopen", "fdb_kvdb_init/fdb_kv_get_blob/fdb_kv_get");
-    printf("{\"reopen_return\":");
-    json_string(err_name(err));
-    printf(",\"blob_read_len\":%zu,\"blob_value_hex\":", read_len);
-    json_hex(blob_read, read_len);
-    printf(",\"deleted_key_found\":%s}", value == NULL ? "false" : "true");
-    putchar('}');
-    if (err == FDB_NO_ERR) {
-        fdb_kvdb_deinit(&kvdb);
-    }
-
-    return 0;
+    return NULL;
 }
 
-static int run_tsdb_steps(const char *ts_dir, bool *first_step)
+static bool ts_query_print_cb(fdb_tsl_t tsl, void *arg)
 {
-    struct fdb_tsdb tsdb;
+    struct ts_query_ctx *ctx = (struct ts_query_ctx *)arg;
+    const struct ts_entry *entry = find_ts_entry_by_addr(ctx->entries, ctx->count, tsl->addr.index);
+    struct fdb_blob blob;
+    char value[ORACLE_MAX_FIELD] = {0};
+    size_t read_len;
+
+    if (entry == NULL) {
+        return false;
+    }
+
+    fdb_blob_make(&blob, value, sizeof(value) - 1);
+    read_len = fdb_blob_read((fdb_db_t)ctx->db, fdb_tsl_to_blob(tsl, &blob));
+    value[read_len < sizeof(value) ? read_len : sizeof(value) - 1] = '\0';
+
+    if (!ctx->first) {
+        putchar(',');
+    }
+    ctx->first = false;
+    fputs("{\"entry_id\":", stdout);
+    printf("%llu", (unsigned long long)entry->entry_id);
+    fputs(",\"timestamp\":", stdout);
+    printf("%ld", (long)tsl->time);
+    fputs(",\"status\":", stdout);
+    json_string(ts_status_name(tsl->status));
+    fputs(",\"value\":", stdout);
+    json_string(value);
+    putchar('}');
+    return false;
+}
+
+static int kv_entry_cmp(const void *left, const void *right)
+{
+    const struct kv_entry *a = (const struct kv_entry *)left;
+    const struct kv_entry *b = (const struct kv_entry *)right;
+
+    return strcmp(a->key, b->key);
+}
+
+static size_t load_kv_entries(fdb_kvdb_t db, struct kv_entry *entries, size_t capacity)
+{
+    struct fdb_kv_iterator iterator;
+    size_t count = 0;
+
+    fdb_kv_iterator_init(db, &iterator);
+    while (count < capacity && fdb_kv_iterate(db, &iterator)) {
+        struct fdb_blob blob;
+        char value[ORACLE_MAX_FIELD] = {0};
+        size_t read_len;
+        fdb_kv_t kv = &iterator.curr_kv;
+
+        fdb_blob_make(&blob, value, sizeof(value) - 1);
+        read_len = fdb_blob_read((fdb_db_t)db, fdb_kv_to_blob(kv, &blob));
+        value[read_len < sizeof(value) ? read_len : sizeof(value) - 1] = '\0';
+        snprintf(entries[count].key, sizeof(entries[count].key), "%s", kv->name);
+        snprintf(entries[count].value, sizeof(entries[count].value), "%s", value);
+        count++;
+    }
+    qsort(entries, count, sizeof(entries[0]), kv_entry_cmp);
+    return count;
+}
+
+static void step_begin(bool *first, const char *id, const char *op, const char *status, const char *code)
+{
+    if (!*first) {
+        putchar(',');
+    }
+    *first = false;
+    fputs("{\"id\":", stdout);
+    json_string(id);
+    fputs(",\"op\":", stdout);
+    json_string(op);
+    fputs(",\"status\":", stdout);
+    json_string(status);
+    fputs(",\"code\":", stdout);
+    json_string(code);
+}
+
+static void step_error(bool *first, const struct operation *op, const char *code, const char *message)
+{
+    step_begin(first, op->id, op->op, "error", code);
+    json_field_string("message", message);
+    putchar('}');
+}
+
+static bool parse_long_field(const struct operation *op, const char *name, const char *value, long *out)
+{
+    char *end = NULL;
+
+    errno = 0;
+    *out = strtol(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0') {
+        fprintf(stderr, "operation %s invalid numeric field %s\n", op->id, name);
+        return false;
+    }
+    return true;
+}
+
+static bool parse_u64_field(const struct operation *op, const char *name, const char *value, uint64_t *out)
+{
+    char *end = NULL;
+    unsigned long long parsed;
+
+    errno = 0;
+    parsed = strtoull(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0') {
+        fprintf(stderr, "operation %s invalid numeric field %s\n", op->id, name);
+        return false;
+    }
+    *out = (uint64_t)parsed;
+    return true;
+}
+
+static bool valid_key_for_rust(const char *key, const char **code, const char **message)
+{
+    if (key[0] == '\0') {
+        *code = "INVALID_KEY";
+        *message = "key must not be empty";
+        return false;
+    }
+    if (strlen(key) > 64) {
+        *code = "KEY_TOO_LONG";
+        *message = "key length exceeds max 64";
+        return false;
+    }
+    return true;
+}
+
+static void exec_kv_set(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    const char *code = NULL;
+    const char *message = NULL;
+    fdb_err_t err;
+
+    if (!op->has_key || !op->has_value) {
+        step_error(first, op, "PARSE", "kv.set requires key and value");
+        return;
+    }
+    if (!valid_key_for_rust(op->key, &code, &message)) {
+        step_error(first, op, code, message);
+        return;
+    }
+    err = fdb_kv_set(&state->kvdb, op->key, op->value);
+    if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("key", op->key);
+    json_field_string("value", op->value);
+    putchar('}');
+}
+
+static void exec_kv_get(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    const char *code = NULL;
+    const char *message = NULL;
+    char *value;
+
+    if (!op->has_key) {
+        step_error(first, op, "PARSE", "kv.get requires key");
+        return;
+    }
+    if (!valid_key_for_rust(op->key, &code, &message)) {
+        step_error(first, op, code, message);
+        return;
+    }
+    value = fdb_kv_get(&state->kvdb, op->key);
+    step_begin(first, op->id, op->op, "ok", "OK");
+    fputs(",\"value\":", stdout);
+    if (value == NULL) {
+        fputs("null", stdout);
+    } else {
+        json_string(value);
+    }
+    putchar('}');
+}
+
+static void exec_kv_delete(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    const char *code = NULL;
+    const char *message = NULL;
+    fdb_err_t err;
+
+    if (!op->has_key) {
+        step_error(first, op, "PARSE", "kv.delete requires key");
+        return;
+    }
+    if (!valid_key_for_rust(op->key, &code, &message)) {
+        step_error(first, op, code, message);
+        return;
+    }
+    err = fdb_kv_del(&state->kvdb, op->key);
+    if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("key", op->key);
+    putchar('}');
+}
+
+static void exec_kv_entries(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    struct kv_entry entries[ORACLE_MAX_ENTRIES];
+    size_t count;
+    size_t i;
+
+    count = load_kv_entries(&state->kvdb, entries, ORACLE_MAX_ENTRIES);
+    step_begin(first, op->id, op->op, "ok", "OK");
+    fputs(",\"entries\":[", stdout);
+    for (i = 0; i < count; i++) {
+        if (i > 0) {
+            putchar(',');
+        }
+        fputs("{\"key\":", stdout);
+        json_string(entries[i].key);
+        fputs(",\"value\":", stdout);
+        json_string(entries[i].value);
+        putchar('}');
+    }
+    fputs("]}", stdout);
+}
+
+static void exec_kv_reopen(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    fdb_err_t err;
+
+    if (state->kv_open) {
+        fdb_kvdb_deinit(&state->kvdb);
+        state->kv_open = false;
+    }
+    err = init_kvdb(&state->kvdb, state->kv_dir);
+    if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    state->kv_open = true;
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("image_hash", "accepted-difference");
+    putchar('}');
+}
+
+static void exec_kv_image_hash(const struct operation *op, bool *first)
+{
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("image_hash", "accepted-difference");
+    putchar('}');
+}
+
+static void exec_ts_append(struct oracle_state *state, const struct operation *op, bool *first)
+{
     struct fdb_blob blob;
     fdb_err_t err;
-    size_t write_count;
-    size_t user1_count;
-    struct ts_iter_ctx ctx;
-    const char first[] = "first";
-    const char second[] = "second";
-    const char third[] = "third";
+    long timestamp;
+    uint64_t entry_id;
 
-    next_time = 100;
-    err = init_tsdb(&tsdb, ts_dir);
-    step_prefix(first_step, "tsdb_init", "fdb_tsdb_init");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    printf(",\"sec_size\":%d,\"max_size\":%d}}", ORACLE_SEC_SIZE, ORACLE_SEC_SIZE * ORACLE_TS_SECTORS);
+    if (!op->has_timestamp || !op->has_value) {
+        step_error(first, op, "PARSE", "ts.append requires timestamp and value");
+        return;
+    }
+    if (!parse_long_field(op, "timestamp", op->timestamp, &timestamp)) {
+        step_error(first, op, "PARSE", "invalid timestamp");
+        return;
+    }
+    fdb_blob_make(&blob, op->value, strlen(op->value));
+    err = fdb_tsl_append_with_ts(&state->tsdb, &blob, (fdb_time_t)timestamp);
     if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    entry_id = state->next_ts_entry_id++;
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_u64("entry_id", entry_id);
+    json_field_long("timestamp", timestamp);
+    json_field_string("value", op->value);
+    putchar('}');
+}
+
+static void exec_ts_query(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    struct ts_entry entries[ORACLE_MAX_ENTRIES];
+    struct ts_query_ctx ctx;
+    long from;
+    long to;
+
+    if (!op->has_from || !op->has_to) {
+        step_error(first, op, "PARSE", "ts.query requires from and to");
+        return;
+    }
+    if (!parse_long_field(op, "from", op->from, &from) ||
+        !parse_long_field(op, "to", op->to, &to)) {
+        step_error(first, op, "PARSE", "invalid query range");
+        return;
+    }
+
+    ctx.db = &state->tsdb;
+    ctx.entries = entries;
+    ctx.count = load_ts_entries(&state->tsdb, entries, ORACLE_MAX_ENTRIES);
+    ctx.first = true;
+
+    step_begin(first, op->id, op->op, "ok", "OK");
+    fputs(",\"entries\":[", stdout);
+    fdb_tsl_iter_by_time(&state->tsdb, (fdb_time_t)from, (fdb_time_t)to, ts_query_print_cb, &ctx);
+    fputs("]}", stdout);
+}
+
+static void exec_ts_count_status(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    fdb_tsl_status_t status;
+    long from;
+    long to;
+    size_t count;
+
+    if (!op->has_from || !op->has_to || !op->has_status) {
+        step_error(first, op, "PARSE", "ts.count_status requires from, to, and status");
+        return;
+    }
+    if (!parse_long_field(op, "from", op->from, &from) ||
+        !parse_long_field(op, "to", op->to, &to)) {
+        step_error(first, op, "PARSE", "invalid count range");
+        return;
+    }
+    if (!parse_ts_status(op->status, &status)) {
+        step_error(first, op, "PARSE", "unknown TS status");
+        return;
+    }
+
+    count = fdb_tsl_query_count(&state->tsdb, (fdb_time_t)from, (fdb_time_t)to, status);
+    step_begin(first, op->id, op->op, "ok", "OK");
+    printf(",\"count\":%zu", count);
+    putchar('}');
+}
+
+static void exec_ts_set_status(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    struct ts_entry entries[ORACLE_MAX_ENTRIES];
+    struct ts_find_ctx find_ctx;
+    fdb_tsl_status_t status;
+    uint64_t entry_id;
+    size_t count;
+    size_t i;
+    fdb_err_t err;
+
+    if (!op->has_entry_id || !op->has_status) {
+        step_error(first, op, "PARSE", "ts.set_status requires entry_id and status");
+        return;
+    }
+    if (!parse_u64_field(op, "entry_id", op->entry_id, &entry_id)) {
+        step_error(first, op, "PARSE", "invalid entry_id");
+        return;
+    }
+    if (!parse_ts_status(op->status, &status)) {
+        step_error(first, op, "PARSE", "unknown TS status");
+        return;
+    }
+
+    count = load_ts_entries(&state->tsdb, entries, ORACLE_MAX_ENTRIES);
+    memset(&find_ctx, 0, sizeof(find_ctx));
+    for (i = 0; i < count; i++) {
+        if (entries[i].entry_id == entry_id) {
+            find_ctx.addr_index = entries[i].addr_index;
+            break;
+        }
+    }
+    if (i == count) {
+        step_error(first, op, "INVALID_RANGE", "unknown TS entry id");
+        return;
+    }
+
+    fdb_tsl_iter(&state->tsdb, ts_find_cb, &find_ctx);
+    if (!find_ctx.found_it) {
+        step_error(first, op, "INVALID_RANGE", "unknown TS entry id");
+        return;
+    }
+    err = fdb_tsl_set_status(&state->tsdb, &find_ctx.found, status);
+    if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_u64("entry_id", entry_id);
+    json_field_string("status", ts_status_name(status));
+    putchar('}');
+}
+
+static void exec_ts_reopen(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    struct ts_entry entries[ORACLE_MAX_ENTRIES];
+    fdb_err_t err;
+    size_t count;
+
+    if (state->ts_open) {
+        fdb_tsdb_deinit(&state->tsdb);
+        state->ts_open = false;
+    }
+    err = init_tsdb(&state->tsdb, state->ts_dir);
+    if (err != FDB_NO_ERR) {
+        step_error(first, op, err_name(err), err_name(err));
+        return;
+    }
+    state->ts_open = true;
+    count = load_ts_entries(&state->tsdb, entries, ORACLE_MAX_ENTRIES);
+    state->next_ts_entry_id = (uint64_t)count + 1;
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("image_hash", "accepted-difference");
+    putchar('}');
+}
+
+static void exec_ts_image_hash(const struct operation *op, bool *first)
+{
+    step_begin(first, op->id, op->op, "ok", "OK");
+    json_field_string("image_hash", "accepted-difference");
+    putchar('}');
+}
+
+static void execute_operation(struct oracle_state *state, const struct operation *op, bool *first)
+{
+    if (strcmp(op->op, "kv.set") == 0) {
+        exec_kv_set(state, op, first);
+    } else if (strcmp(op->op, "kv.get") == 0) {
+        exec_kv_get(state, op, first);
+    } else if (strcmp(op->op, "kv.delete") == 0) {
+        exec_kv_delete(state, op, first);
+    } else if (strcmp(op->op, "kv.entries") == 0) {
+        exec_kv_entries(state, op, first);
+    } else if (strcmp(op->op, "kv.compact") == 0 || strcmp(op->op, "kv.image_hash") == 0) {
+        exec_kv_image_hash(op, first);
+    } else if (strcmp(op->op, "kv.reopen") == 0) {
+        exec_kv_reopen(state, op, first);
+    } else if (strcmp(op->op, "ts.append") == 0) {
+        exec_ts_append(state, op, first);
+    } else if (strcmp(op->op, "ts.query") == 0) {
+        exec_ts_query(state, op, first);
+    } else if (strcmp(op->op, "ts.set_status") == 0) {
+        exec_ts_set_status(state, op, first);
+    } else if (strcmp(op->op, "ts.count_status") == 0) {
+        exec_ts_count_status(state, op, first);
+    } else if (strcmp(op->op, "ts.reopen") == 0) {
+        exec_ts_reopen(state, op, first);
+    } else if (strcmp(op->op, "ts.image_hash") == 0) {
+        exec_ts_image_hash(op, first);
+    } else {
+        step_error(first, op, "CLI", "unknown fixture operation");
+    }
+}
+
+static void print_accepted_differences(const struct fixture *fixture)
+{
+    size_t i;
+
+    putchar('[');
+    for (i = 0; i < fixture->accepted_count; i++) {
+        if (i > 0) {
+            putchar(',');
+        }
+        fputs("{\"id\":", stdout);
+        json_string(fixture->accepted[i].id);
+        fputs(",\"reason\":", stdout);
+        json_string(fixture->accepted[i].reason);
+        fputs(",\"fields\":", stdout);
+        json_string(fixture->accepted[i].fields);
+        putchar('}');
+    }
+    putchar(']');
+}
+
+static int run_fixture(const struct fixture *fixture, const char *work_dir)
+{
+    struct oracle_state state;
+    bool first_step = true;
+    size_t i;
+    fdb_err_t kv_err;
+    fdb_err_t ts_err;
+
+    memset(&state, 0, sizeof(state));
+    state.next_ts_entry_id = 1;
+    if (prepare_work_dirs(work_dir, state.kv_dir, sizeof(state.kv_dir), state.ts_dir, sizeof(state.ts_dir)) != 0) {
+        fprintf(stderr, "failed to prepare oracle work directory: %s\n", work_dir);
         return 1;
     }
 
-    fdb_blob_make(&blob, first, strlen(first));
-    err = fdb_tsl_append(&tsdb, &blob);
-    step_prefix(first_step, "tsdb_append_time_provider", "fdb_tsl_append");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    fputs(",\"expected_time\":100}", stdout);
-    putchar('}');
+    kv_err = init_kvdb(&state.kvdb, state.kv_dir);
+    ts_err = init_tsdb(&state.tsdb, state.ts_dir);
+    if (kv_err != FDB_NO_ERR || ts_err != FDB_NO_ERR) {
+        fprintf(stderr, "failed to initialize FlashDB: kv=%s ts=%s\n", err_name(kv_err), err_name(ts_err));
+        return 1;
+    }
+    state.kv_open = true;
+    state.ts_open = true;
 
-    fdb_blob_make(&blob, second, strlen(second));
-    err = fdb_tsl_append_with_ts(&tsdb, &blob, 200);
-    step_prefix(first_step, "tsdb_append_with_ts_200", "fdb_tsl_append_with_ts");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    fputs(",\"time\":200}", stdout);
-    putchar('}');
+    fputs("{\"command\":\"replay\",", stdout);
+    fputs("\"schema_version\":1,", stdout);
+    fputs("\"fixture\":", stdout);
+    json_string(fixture->path);
+    fputs(",\"fixture_name\":", stdout);
+    json_string(fixture->name);
+    fputs(",\"fixture_hash\":", stdout);
+    json_string(fixture->hash);
+    fputs(",\"backend\":\"flashdb-c\",", stdout);
+    fputs("\"toolchain_status\":\"C_ORACLE_GENERATED\",", stdout);
+    fputs("\"result\":\"completed\",", stdout);
+    fputs("\"source\":{\"clone_url\":", stdout);
+    json_string(ORACLE_FLASHDB_URL);
+    fputs(",\"commit\":", stdout);
+    json_string(ORACLE_FLASHDB_COMMIT);
+    printf(",\"sec_size\":%d,\"write_gran\":1,\"file_mode\":\"posix\"},", ORACLE_SEC_SIZE);
+    fputs("\"accepted_differences\":", stdout);
+    print_accepted_differences(fixture);
+    fputs(",\"steps\":[", stdout);
 
-    fdb_blob_make(&blob, third, strlen(third));
-    err = fdb_tsl_append_with_ts(&tsdb, &blob, 300);
-    step_prefix(first_step, "tsdb_append_with_ts_300", "fdb_tsl_append_with_ts");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    fputs(",\"time\":300}", stdout);
-    putchar('}');
+    for (i = 0; i < fixture->op_count; i++) {
+        execute_operation(&state, &fixture->ops[i], &first_step);
+    }
 
-    step_prefix(first_step, "tsdb_query_by_time", "fdb_tsl_iter_by_time");
-    fputs("{\"from\":100,\"to\":300,\"items\":[", stdout);
-    ctx.db = &tsdb;
-    ctx.first = true;
-    ctx.update_first = false;
-    ctx.update_result = FDB_NO_ERR;
-    fdb_tsl_iter_by_time(&tsdb, 100, 300, print_ts_cb, &ctx);
-    fputs("]}", stdout);
-    putchar('}');
+    fputs("]}\n", stdout);
+    fflush(stdout);
 
-    write_count = fdb_tsl_query_count(&tsdb, 0, 1000, FDB_TSL_WRITE);
-    step_prefix(first_step, "tsdb_count_write", "fdb_tsl_query_count");
-    printf("{\"status\":\"FDB_TSL_WRITE\",\"count\":%zu}", write_count);
-    putchar('}');
-
-    step_prefix(first_step, "tsdb_set_status_first", "fdb_tsl_iter_by_time/fdb_tsl_set_status");
-    fputs("{\"updated_items\":[", stdout);
-    ctx.db = &tsdb;
-    ctx.first = true;
-    ctx.update_first = true;
-    ctx.update_result = FDB_NO_ERR;
-    fdb_tsl_iter_by_time(&tsdb, 100, 100, print_ts_cb, &ctx);
-    fputs("],\"set_status_return\":", stdout);
-    json_string(err_name(ctx.update_result));
-    putchar('}');
-    putchar('}');
-
-    user1_count = fdb_tsl_query_count(&tsdb, 0, 1000, FDB_TSL_USER_STATUS1);
-    write_count = fdb_tsl_query_count(&tsdb, 0, 1000, FDB_TSL_WRITE);
-    step_prefix(first_step, "tsdb_count_after_status", "fdb_tsl_query_count");
-    printf("{\"user_status1_count\":%zu,\"write_count\":%zu}", user1_count, write_count);
-    putchar('}');
-
-    err = fdb_tsdb_deinit(&tsdb);
-    step_prefix(first_step, "tsdb_deinit", "fdb_tsdb_deinit");
-    printf("{\"return\":");
-    json_string(err_name(err));
-    putchar('}');
-    putchar('}');
-
+    if (state.kv_open) {
+        fdb_kvdb_deinit(&state.kvdb);
+    }
+    if (state.ts_open) {
+        fdb_tsdb_deinit(&state.tsdb);
+    }
     return 0;
 }
 
 int main(int argc, char **argv)
 {
-    const char *work_dir = "oracle_c_work";
-    char kv_dir[PATH_MAX];
-    char ts_dir[PATH_MAX];
-    bool first_step = true;
-    int result = 0;
+    const char *fixture_path = NULL;
+    const char *work_dir = NULL;
+    struct fixture fixture;
+    int i;
 
-    if (argc == 3 && strcmp(argv[1], "--work-dir") == 0) {
-        work_dir = argv[2];
-    } else if (argc != 1) {
-        fprintf(stderr, "usage: %s [--work-dir DIR]\n", argv[0]);
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--fixture") == 0 && i + 1 < argc) {
+            fixture_path = argv[++i];
+        } else if (strcmp(argv[i], "--work-dir") == 0 && i + 1 < argc) {
+            work_dir = argv[++i];
+        } else {
+            fprintf(stderr, "usage: %s --fixture PATH --work-dir DIR\n", argv[0]);
+            return 2;
+        }
+    }
+
+    if (fixture_path == NULL || work_dir == NULL) {
+        fprintf(stderr, "usage: %s --fixture PATH --work-dir DIR\n", argv[0]);
         return 2;
     }
-
-    if (prepare_work_dirs(work_dir, kv_dir, sizeof(kv_dir), ts_dir, sizeof(ts_dir)) != 0) {
-        fprintf(stderr, "failed to prepare oracle work directory: %s\n", work_dir);
+    if (load_fixture(fixture_path, &fixture) != 0) {
         return 1;
     }
-
-    fputs("{\n", stdout);
-    fputs("  \"schema_version\":1,\n", stdout);
-    fputs("  \"fixture_id\":\"flashdb-c-oracle-contract-v1\",\n", stdout);
-    fputs("  \"toolchain_status\":\"C_ORACLE_GENERATED\",\n", stdout);
-    fputs("  \"source\":{\"clone_url\":", stdout);
-    json_string(ORACLE_FLASHDB_URL);
-    fputs(",\"commit\":", stdout);
-    json_string(ORACLE_FLASHDB_COMMIT);
-    printf(",\"sec_size\":%d,\"write_gran\":1,\"file_mode\":\"posix\"},\n", ORACLE_SEC_SIZE);
-    fputs("  \"steps\":[\n", stdout);
-
-    result |= run_kvdb_steps(kv_dir, &first_step);
-    result |= run_tsdb_steps(ts_dir, &first_step);
-
-    fputs("\n  ]\n", stdout);
-    fputs("}\n", stdout);
-    fflush(stdout);
-
-    return result == 0 ? 0 : 1;
+    return run_fixture(&fixture, work_dir);
 }

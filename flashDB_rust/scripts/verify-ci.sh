@@ -104,11 +104,17 @@ run_rust_fixture_replay_diff() {
 }
 
 run_c_oracle_producer() {
-    local fixture="${FLASHDB_RUST_FIXTURE:-fixtures/ci-smoke.json}"
+    local fixture="${FLASHDB_C_RUST_FIXTURE:-fixtures/c-rust-smoke.json}"
     local oracle_report="${FLASHDB_C_ORACLE_REPORT:-$evidence_dir/c-oracle-report.json}"
+    local rust_report="${FLASHDB_C_RUST_REPLAY_REPORT:-$evidence_dir/c-rust-replay.json}"
+    local diff_report="${FLASHDB_C_RUST_DIFF_REPORT:-$evidence_dir/c-rust-diff.json}"
     local evidence="$evidence_dir/c-oracle-producer-evidence.json"
 
     if ! command -v gcc >/dev/null 2>&1; then
+        if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${FLASHDB_C_ORACLE_PRODUCER:-}" ]; then
+            mark_failed "$evidence" "FAILED_C_ORACLE_NO_GCC" "gcc was not found; C oracle producer and C/Rust diff cannot run."
+            return 1
+        fi
         write_evidence "$evidence" "SKIPPED_C_ORACLE_NO_GCC" "skipped" "gcc was not found; C oracle producer was not run."
         return 0
     fi
@@ -135,6 +141,20 @@ run_c_oracle_producer() {
     local oracle_hash
     oracle_hash="$(sha256_file "$oracle_report")"
     write_evidence "$evidence" "C_ORACLE_PRODUCER_PASSED" "passed" "oracle_report_sha256=$oracle_hash"
+
+    if ! cargo run -- fixture-replay --fixture "$fixture" --report "$rust_report"; then
+        mark_failed "$evidence" "FAILED_C_RUST_REPLAY" "Rust replay failed for C/Rust fixture '$fixture'."
+        return 1
+    fi
+    if ! cargo run -- diff-report --expected "$oracle_report" --actual "$rust_report" --report "$diff_report"; then
+        mark_failed "$evidence" "FAILED_C_RUST_DIFF" "Rust replay report did not match generated C oracle report."
+        return 1
+    fi
+
+    local rust_hash diff_hash
+    rust_hash="$(sha256_file "$rust_report")"
+    diff_hash="$(sha256_file "$diff_report")"
+    write_evidence "$evidence" "C_RUST_DIFF_PASSED" "passed" "oracle_report_sha256=$oracle_hash rust_report_sha256=$rust_hash diff_report_sha256=$diff_hash"
 }
 
 run_release_stress() {
@@ -153,9 +173,9 @@ run_release_stress() {
 }
 
 run_rust_baseline || status=1
-run_rust_fixture_replay_diff || true
+run_rust_fixture_replay_diff || status=1
 run_c_oracle_producer || status=1
-run_release_stress || true
+run_release_stress || status=1
 
 if [ "$status" -ne 0 ]; then
     echo "CI verification failed; see $evidence_dir for evidence files." >&2

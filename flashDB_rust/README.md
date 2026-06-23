@@ -77,9 +77,10 @@ The CI script performs:
 - `cargo run -- unsafe-scan`
 - Rust fixture replay and Rust report diff through the mainline fixture CLI contract
 - C oracle producer execution through `FLASHDB_C_ORACLE_PRODUCER=./oracle/generate_c_oracle.sh` on Ubuntu CI
+- Rust-vs-C schema-aware diff for `fixtures/c-rust-smoke.json`
 - `cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/ci/stress-10000.json`
 
-Evidence is written under `target/verification/ci/` and uploaded as a workflow artifact. The C oracle path never substitutes Rust-only results for C equivalence. If `gcc` is missing, the CI script writes `SKIPPED_C_ORACLE_NO_GCC`. In GitHub Actions the producer is configured by default, so a C oracle producer build or runtime failure fails the job and leaves failure evidence. A manually run local Linux script without `FLASHDB_C_ORACLE_PRODUCER` still writes `SKIPPED_C_ORACLE_PRODUCER_NOT_CONFIGURED`.
+Evidence is written under `target/verification/ci/` and uploaded as a workflow artifact. The C oracle path never substitutes Rust-only results for C equivalence. If `gcc` is missing, the CI script writes `SKIPPED_C_ORACLE_NO_GCC`. In GitHub Actions the producer is configured by default, so a C oracle producer build, runtime failure, or Rust-vs-C behavior mismatch fails the job and leaves failure evidence. A manually run local Linux script without `FLASHDB_C_ORACLE_PRODUCER` still writes `SKIPPED_C_ORACLE_PRODUCER_NOT_CONFIGURED`.
 
 ## Native Windows Verification
 
