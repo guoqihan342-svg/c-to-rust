@@ -28,4 +28,4 @@
 - [x] 4.6 Run `openspec validate "add-schema-aware-c-rust-diff" --strict`.
 - [x] 4.7 Run `openspec validate --all`.
 - [x] 4.8 Run `git diff --check`.
-- [ ] 4.9 Push branch and inspect GitHub Actions C/Rust diff result.
+- [x] 4.9 Push branch and inspect GitHub Actions C/Rust diff result.
