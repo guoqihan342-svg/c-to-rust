@@ -1,0 +1,16 @@
+{
+  "marker": "GITHUB_ACTIONS_C_ORACLE_VERIFIED",
+  "status": "passed",
+  "run_id": "28044483840",
+  "run_url": "https://github.com/guoqihan342-svg/c-to-rust/actions/runs/28044483840",
+  "head_sha": "a594fdfceb59a830e513b58cfdcfd41ac9753711",
+  "branch": "codex/flashdb-rust-skeleton",
+  "observed": [
+    "FLASHDB_C_ORACLE_PRODUCER was configured as ./oracle/generate_c_oracle.sh",
+    "gcc compiled flashdb_c_oracle against FlashDB commit 93d175549da579b8abac07bd175ce4c3f9dde829",
+    "target/verification/ci/c-oracle-report.json was written",
+    "release stress ran with loops=10000 and scenario=all",
+    "GitHub Actions conclusion was success"
+  ],
+  "equivalence_boundary": "This proves CI C oracle generation and Rust stress verification, not complete C/Rust semantic equivalence."
+}

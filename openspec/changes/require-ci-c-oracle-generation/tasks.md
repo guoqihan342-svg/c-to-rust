@@ -20,4 +20,4 @@
 - [x] 3.6 Run `openspec validate "require-ci-c-oracle-generation" --strict`.
 - [x] 3.7 Run `openspec validate --all`.
 - [x] 3.8 Run `git diff --check`.
-- [ ] 3.9 Push branch and inspect GitHub Actions result for real C oracle producer execution.
+- [x] 3.9 Push branch and inspect GitHub Actions result for real C oracle producer execution.
