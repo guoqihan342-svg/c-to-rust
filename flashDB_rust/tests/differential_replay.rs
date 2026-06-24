@@ -701,8 +701,11 @@ fn l3_tsdb_reverse_query_reopen_fixture_replays_reverse_order() {
     assert!(out.contains(
         "\"id\":\"ts-rqr-005\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":3,\"timestamp\":30,\"status\":\"written\",\"value\":\"gamma\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"user1\",\"value\":\"beta\"},{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"alpha\"}]"
     ));
-    assert!(out.contains("\"id\":\"ts-rqr-006\""));
-    assert!(out.contains("\"op\":\"ts.reopen\""));
+    let reopen_step = step_json_for(&out, "ts-rqr-006");
+    assert!(reopen_step.contains("\"op\":\"ts.reopen\""));
+    assert!(reopen_step.contains("\"status\":\"ok\""));
+    assert!(reopen_step.contains("\"code\":\"OK\""));
+    assert!(reopen_step.contains("\"image_hash\""));
     assert!(out.contains(
         "\"id\":\"ts-rqr-007\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":3,\"timestamp\":30,\"status\":\"written\",\"value\":\"gamma\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"user1\",\"value\":\"beta\"},{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"alpha\"}]"
     ));
