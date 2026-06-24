@@ -1,0 +1,20 @@
+{
+  "audit_status": "passed",
+  "audited_modules": [
+    "validation/l2_slices/src/sqlite_varint.rs",
+    "validation/l2_slices/src/zlib_adler32.rs",
+    "validation/l2_slices/src/zstd_xxh32.rs"
+  ],
+  "crate": "validation/l2_slices",
+  "first_party_non_test_unsafe_count": 0,
+  "introduced_unsafe": [],
+  "policy": {
+    "audit_required_even_when_zero": true,
+    "first_party_non_test_unsafe_limit": 0,
+    "registered_unsafe_required": true
+  },
+  "registered_unsafe": [],
+  "scan_report": "validation/evidence/l2-slices/unsafe-scan.json",
+  "schema_version": 1,
+  "scope": "first-party non-test Rust source under validation/l2_slices/src"
+}

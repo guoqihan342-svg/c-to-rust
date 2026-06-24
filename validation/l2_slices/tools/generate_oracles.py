@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,23 @@ ZSTD = Path("/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+
+
+def require_path(path: Path, description: str) -> None:
+    if not path.exists():
+        raise RuntimeError(f"missing {description}: {path}")
+
+
+def preflight() -> None:
+    if os.name == "nt":
+        raise RuntimeError("generate_oracles.py must run under WSL/Linux because oracle paths use /mnt/c")
+    if shutil.which("cc") is None:
+        raise RuntimeError("missing C compiler: cc")
+    require_path(SQLITE / "sqlite3.c", "SQLite amalgamation")
+    require_path(ZLIB_NG / "build" / "libz.a", "zlib-ng static library")
+    require_path(ZLIB_NG / "build" / "zlib.h", "zlib-ng generated header")
+    require_path(ZSTD / "lib" / "common" / "xxhash.c", "zstd xxhash source")
+    require_path(ZSTD / "lib" / "common" / "xxhash.h", "zstd xxhash header")
 
 
 def write(path: Path, text: str) -> None:
@@ -139,6 +157,15 @@ def make_pattern(kind: str, length: int) -> bytes:
     raise ValueError(kind)
 
 
+def make_lcg_pattern(seed: int, length: int) -> bytes:
+    value = seed & 0xFFFFFFFF
+    out = []
+    for _ in range(length):
+        value = (1103515245 * value + 12345) & 0xFFFFFFFF
+        out.append((value >> 16) & 0xFF)
+    return bytes(out)
+
+
 def generate_zlib() -> dict:
     work = WORK / "zlib-adler32"
     work.mkdir(parents=True, exist_ok=True)
@@ -153,10 +180,39 @@ def generate_zlib() -> dict:
         ("lcg_32768", "lcg", 32768),
         ("ff_128", "ff", 128),
     ]
+    deterministic_lengths = [
+        0, 1, 2, 3, 4, 15, 16, 31, 32, 63, 64, 127, 128,
+        255, 256, 511, 512, 1023, 1024, 2047, 2048,
+        5551, 5552, 5553, 8191, 8192,
+    ]
+    deterministic_seeds = [
+        0x00000001,
+        0x12345678,
+        0x5A5A5A5A,
+        0xC0FFEE00,
+        0xFFFFFFFF,
+    ]
+    for seed in deterministic_seeds:
+        for length in deterministic_lengths:
+            vectors.append((f"lcg_{seed:08x}_{length}", "lcg_seeded", length, seed))
     static_rows = []
-    for case_id, kind, length in vectors:
-        data = make_pattern(kind, length)
+    for vector in vectors:
+        if len(vector) == 3:
+            case_id, kind, length = vector
+            data = make_pattern(kind, length)
+        elif len(vector) == 4:
+            case_id, kind, length, seed = vector
+            if kind != "lcg_seeded":
+                raise ValueError(kind)
+            data = make_lcg_pattern(seed, length)
+        else:
+            raise ValueError(f"unsupported zlib vector shape: {vector}")
         static_rows.append((case_id, hex_bytes(data)))
+    if len(static_rows) != 137:
+        raise RuntimeError(f"zlib-adler32 corpus must contain 137 cases, got {len(static_rows)}")
+    ids = [case_id for case_id, _ in static_rows]
+    if len(ids) != len(set(ids)):
+        raise RuntimeError("zlib-adler32 corpus case ids must be unique")
     rows = "\n".join(
         f'  {{"{case_id}", "{hex_data}"}},' for case_id, hex_data in static_rows
     )
@@ -331,6 +387,7 @@ int main(void) {{
 
 
 def main() -> None:
+    preflight()
     FIXTURES.mkdir(parents=True, exist_ok=True)
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     results = [generate_sqlite(), generate_zlib(), generate_zstd()]

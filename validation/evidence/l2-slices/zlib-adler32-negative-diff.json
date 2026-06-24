@@ -1,0 +1,15 @@
+{
+  "case_id": "empty",
+  "detected": true,
+  "first_mismatch": {
+    "case_id": "empty",
+    "field": "value",
+    "mutated_c_value": 0,
+    "rust_value": 1
+  },
+  "level": "L2",
+  "mutation": "first oracle case value is replaced with value ^ 1",
+  "schema_version": 1,
+  "slice_id": "zlib-adler32",
+  "status": "passed"
+}

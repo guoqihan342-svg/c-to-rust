@@ -34,6 +34,19 @@ struct SliceResult {
     l3_status: &'static str,
 }
 
+#[derive(Debug)]
+struct SafetyEvidence {
+    scan: Value,
+    ledger: Value,
+}
+
+#[derive(Debug)]
+struct NegativeDiffResult {
+    slice_id: &'static str,
+    status: &'static str,
+    report_path: &'static str,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = crate_dir
@@ -52,8 +65,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_zlib_adler32(&fixtures_dir, &evidence_dir)?,
         emit_zstd_xxh32(&fixtures_dir, &evidence_dir)?,
     ];
-    let scan = emit_safety_scan(&crate_dir, &evidence_dir)?;
-    emit_summary(&evidence_dir, &slices, &scan)?;
+    let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
+    let negative_diffs = emit_negative_diffs(&fixtures_dir, &evidence_dir)?;
+    emit_summary(&evidence_dir, &slices, &safety, &negative_diffs)?;
 
     Ok(())
 }
@@ -288,7 +302,56 @@ fn emit_zstd_xxh32(
     })
 }
 
-fn emit_safety_scan(crate_dir: &Path, evidence_dir: &Path) -> Result<Value, Box<dyn Error>> {
+fn emit_negative_diffs(
+    fixtures_dir: &Path,
+    evidence_dir: &Path,
+) -> Result<Vec<NegativeDiffResult>, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("zlib-adler32-c-oracle.json");
+    let cases: Vec<ChecksumCase> = read_json(&fixture_path)?;
+    let case = cases
+        .first()
+        .ok_or("zlib-adler32 fixture must contain at least one case")?;
+    let input = hex_to_bytes(&case.input_hex)?;
+    let rust_value = zlib_adler32::adler32(&input);
+    let mutated_c_value = case.value ^ 1;
+    let detected = mutated_c_value != rust_value;
+    let status = if detected { "passed" } else { "failed" };
+    let first_mismatch = if detected {
+        Some(json!({
+            "case_id": case.id,
+            "field": "value",
+            "mutated_c_value": mutated_c_value,
+            "rust_value": rust_value
+        }))
+    } else {
+        None
+    };
+    let report_path = "validation/evidence/l2-slices/zlib-adler32-negative-diff.json";
+    write_json(
+        &evidence_dir.join("zlib-adler32-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L2",
+            "slice_id": "zlib-adler32",
+            "status": status,
+            "mutation": "first oracle case value is replaced with value ^ 1",
+            "case_id": case.id,
+            "detected": detected,
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+
+    Ok(vec![NegativeDiffResult {
+        slice_id: "zlib-adler32",
+        status,
+        report_path,
+    }])
+}
+
+fn emit_safety_evidence(
+    crate_dir: &Path,
+    evidence_dir: &Path,
+) -> Result<SafetyEvidence, Box<dyn Error>> {
     let src_dir = crate_dir.join("src");
     let mut hits = Vec::new();
     scan_rust_files(&src_dir, &mut |path, line_no, line| {
@@ -303,27 +366,56 @@ fn emit_safety_scan(crate_dir: &Path, evidence_dir: &Path) -> Result<Value, Box<
             }));
         }
     })?;
-    let report = json!({
+    let status = if hits.is_empty() { "passed" } else { "failed" };
+    let scan = json!({
         "schema_version": 1,
         "crate": "validation/l2_slices",
         "scope": "first-party Rust source under validation/l2_slices/src",
         "unsafe_count": hits.len(),
-        "status": if hits.is_empty() { "passed" } else { "failed" },
+        "status": status,
         "hits": hits
     });
-    write_json(&evidence_dir.join("unsafe-scan.json"), &report)?;
-    Ok(report)
+    write_json(&evidence_dir.join("unsafe-scan.json"), &scan)?;
+
+    let ledger = json!({
+        "schema_version": 1,
+        "crate": "validation/l2_slices",
+        "scope": "first-party non-test Rust source under validation/l2_slices/src",
+        "policy": {
+            "first_party_non_test_unsafe_limit": 0,
+            "registered_unsafe_required": true,
+            "audit_required_even_when_zero": true
+        },
+        "first_party_non_test_unsafe_count": hits.len(),
+        "registered_unsafe": [],
+        "introduced_unsafe": [],
+        "audit_status": status,
+        "scan_report": "validation/evidence/l2-slices/unsafe-scan.json",
+        "audited_modules": [
+            "validation/l2_slices/src/sqlite_varint.rs",
+            "validation/l2_slices/src/zlib_adler32.rs",
+            "validation/l2_slices/src/zstd_xxh32.rs"
+        ]
+    });
+    write_json(&evidence_dir.join("unsafe-ledger.json"), &ledger)?;
+
+    Ok(SafetyEvidence { scan, ledger })
 }
 
 fn emit_summary(
     evidence_dir: &Path,
     slices: &[SliceResult],
-    scan: &Value,
+    safety: &SafetyEvidence,
+    negative_diffs: &[NegativeDiffResult],
 ) -> Result<(), Box<dyn Error>> {
+    let negative_diffs_passed =
+        !negative_diffs.is_empty() && negative_diffs.iter().all(|diff| diff.status == "passed");
     let all_passed = slices
         .iter()
         .all(|slice| slice.l2_status == "passed" && slice.l3_status == "passed")
-        && scan["status"] == "passed";
+        && safety.scan["status"] == "passed"
+        && safety.ledger["audit_status"] == "passed"
+        && negative_diffs_passed;
     write_json(
         &evidence_dir.join("l2-l3-summary.json"),
         &json!({
@@ -349,7 +441,18 @@ fn emit_summary(
                     })
                 }).collect::<Vec<_>>()
             },
-            "safety_check": scan,
+            "safety_check": &safety.scan,
+            "unsafe_ledger_check": &safety.ledger,
+            "negative_diff_check": {
+                "status": if negative_diffs_passed { "passed" } else { "failed" },
+                "reports": negative_diffs.iter().map(|diff| {
+                    json!({
+                        "slice_id": diff.slice_id,
+                        "status": diff.status,
+                        "report": diff.report_path
+                    })
+                }).collect::<Vec<_>>()
+            },
             "reporting_boundary": "This success applies only to the named slice functions, pinned upstream commits, and committed fixture input domains. It does not prove full-project migration or global semantic equivalence."
         }),
     )

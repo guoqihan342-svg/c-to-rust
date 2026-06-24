@@ -52,14 +52,20 @@ Pass criteria:
 - Slice scope is declared before migration.
 - C function/file boundaries and callers/callees are recorded.
 - Rust translation compiles.
-- First-party unsafe usage is counted.
+- First-party unsafe usage is counted and recorded in an unsafe ledger, even when the count is zero.
+- At least one L2 negative diff proves the diff gate catches an intentional mismatch.
 - Compile self-healing records all rustc errors and patches.
 
 Evidence:
 
 - `validation/evidence/<target>/l2-slice-plan.json`
 - `validation/evidence/<target>/l2-rust-check.json`
-- unsafe ledger and patch log.
+- C oracle fixture and Rust replay report for each slice.
+- Schema-aware diff report for each slice.
+- Unsafe scan plus unsafe ledger, even when first-party unsafe count is zero.
+- At least one L2 negative diff report proving the diff gate catches an intentional mismatch.
+- L2 summary references unsafe ledger and negative diff status.
+- Patch log and reporting boundary for the named slice only.
 
 ## L3: Semantic and Performance Evidence
 
@@ -83,7 +89,7 @@ Evidence:
 
 - L0 passed: catalog target is eligible for deeper validation.
 - L1 passed: native C baseline is reproducible.
-- L2 passed: a bounded Rust migration slice compiles.
+- L2 passed: a bounded Rust migration slice compiles and has required L2 safety/diff-gate evidence.
 - L3 passed: the bounded slice has behavior evidence.
 
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.

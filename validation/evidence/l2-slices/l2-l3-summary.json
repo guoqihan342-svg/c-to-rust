@@ -8,7 +8,7 @@
         "slice_id": "sqlite-varint"
       },
       {
-        "case_count": 7,
+        "case_count": 137,
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "zlib-adler32"
@@ -18,6 +18,16 @@
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "zstd-xxh32"
+      }
+    ],
+    "status": "passed"
+  },
+  "negative_diff_check": {
+    "reports": [
+      {
+        "report": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
+        "slice_id": "zlib-adler32",
+        "status": "passed"
       }
     ],
     "status": "passed"
@@ -41,5 +51,25 @@
     "unsafe_count": 0
   },
   "schema_version": 1,
-  "status": "passed"
+  "status": "passed",
+  "unsafe_ledger_check": {
+    "audit_status": "passed",
+    "audited_modules": [
+      "validation/l2_slices/src/sqlite_varint.rs",
+      "validation/l2_slices/src/zlib_adler32.rs",
+      "validation/l2_slices/src/zstd_xxh32.rs"
+    ],
+    "crate": "validation/l2_slices",
+    "first_party_non_test_unsafe_count": 0,
+    "introduced_unsafe": [],
+    "policy": {
+      "audit_required_even_when_zero": true,
+      "first_party_non_test_unsafe_limit": 0,
+      "registered_unsafe_required": true
+    },
+    "registered_unsafe": [],
+    "scan_report": "validation/evidence/l2-slices/unsafe-scan.json",
+    "schema_version": 1,
+    "scope": "first-party non-test Rust source under validation/l2_slices/src"
+  }
 }
