@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "command": "aggregate-l1-low-cost-remediation",
+  "level": "L1",
+  "generated_at_utc": "2026-06-24T05:09:57Z",
+  "candidate_projects": [
+    "ffmpeg",
+    "hdf5",
+    "libgit2",
+    "librdkafka",
+    "openvpn",
+    "libpcap",
+    "tcpdump",
+    "libuv",
+    "libevent"
+  ],
+  "attempted_count": 9,
+  "passed_count": 8,
+  "failed_count": 1,
+  "other_count": 0,
+  "attempted_projects": [
+    "ffmpeg",
+    "hdf5",
+    "libgit2",
+    "librdkafka",
+    "openvpn",
+    "libpcap",
+    "tcpdump",
+    "libuv",
+    "libevent"
+  ],
+  "passed_projects": [
+    "ffmpeg",
+    "hdf5",
+    "libevent",
+    "libgit2",
+    "libpcap",
+    "librdkafka",
+    "libuv",
+    "tcpdump"
+  ],
+  "failed_projects": [
+    "openvpn"
+  ],
+  "other_projects": [],
+  "not_attempted_candidate_projects": [],
+  "project_results": {
+    "ffmpeg": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853"
+    },
+    "hdf5": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853"
+    },
+    "libgit2": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853"
+    },
+    "librdkafka": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853"
+    },
+    "openvpn": {
+      "status": "failed",
+      "failed_step": "03_build_2",
+      "failure_summary": "03_build_2 exited 1",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853"
+    },
+    "libpcap": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853"
+    },
+    "tcpdump": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853"
+    },
+    "libuv": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853"
+    },
+    "libevent": {
+      "status": "passed",
+      "failed_step": null,
+      "failure_summary": "",
+      "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853"
+    }
+  },
+  "recipe_changes": {
+    "ffmpeg": "Disable x86 assembly and run the repo-local ffmpeg binary.",
+    "hdf5": "Replace full upstream ctest with bounded HDF5 tool version smoke commands.",
+    "libgit2": "Disable NTLM auth when HTTPS is disabled.",
+    "librdkafka": "Build rdkafka_example before running its config-list smoke.",
+    "openvpn": "Disable DCO for the L1 smoke; rerun exposed mandatory libcap-ng dependency.",
+    "libpcap": "Run autogen for git checkouts and smoke pcap-config.",
+    "tcpdump": "Run autogen for git checkouts; dependency on discoverable libpcap remains auditable.",
+    "libuv": "Use UV_RUN_AS_ROOT=1 for a root-safe test-list smoke.",
+    "libevent": "Use an explicit short CTest smoke to close the previous evidence gap."
+  },
+  "deferred_projects": {
+    "freertos-kernel": "Needs an application/config wrapper or an explicit official-example scope decision.",
+    "systemd": "Needs Meson availability.",
+    "zephyr": "Needs west and Zephyr toolchain setup.",
+    "qemu": "Needs glib development package availability.",
+    "micropython": "Needs libffi development package or an explicit minimal-variant scope decision.",
+    "linux": "Needs network retry or mirror policy.",
+    "mbedtls": "Needs fresh filesystem/timestamp normalization before command repair.",
+    "mupdf": "Needs third-party submodule remediation in a separate batch.",
+    "openvpn": "DCO was disabled, but Linux configure still requires libcap-ng development package availability."
+  },
+  "worker_result_sources": {
+    "network-20260624T124853": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853",
+      "started_at_utc": "2026-06-24T04:48:51Z",
+      "finished_at_utc": "2026-06-24T04:50:48Z",
+      "attempted_count": 3,
+      "passed_count": 2,
+      "failed_count": 1
+    },
+    "libs-20260624T124853": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853",
+      "started_at_utc": "2026-06-24T04:48:51Z",
+      "finished_at_utc": "2026-06-24T05:08:46Z",
+      "attempted_count": 4,
+      "passed_count": 4,
+      "failed_count": 0
+    },
+    "media-20260624T124853": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853",
+      "started_at_utc": "2026-06-24T04:48:51Z",
+      "finished_at_utc": "2026-06-24T05:00:26Z",
+      "attempted_count": 2,
+      "passed_count": 2,
+      "failed_count": 0
+    }
+  },
+  "reporting_boundary": "This L1 summary proves native C baseline build/test smoke only. It does not prove Rust slice compilation, unsafe budget, C/Rust semantic equivalence, or performance preservation."
+}

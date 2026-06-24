@@ -3,14 +3,14 @@
   "level": "L1",
   "project_id": "tcpdump",
   "project_name": "tcpdump",
-  "status": "failed",
+  "status": "passed",
   "commit": "6800515e86654f5c1e7a0c6b9320e48c9eb0e749",
   "branch": "master",
   "repo_url": "https://github.com/the-tcpdump-group/tcpdump.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/tcpdump",
-  "source_group": "network-protocol",
-  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/results.json",
-  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+  "source_group": "network-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853",
   "tool_versions": {
     "git": "git version 2.43.0",
     "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
@@ -24,44 +24,95 @@
   "commands": [
     {
       "label": "01_clone",
-      "command": "git clone --depth 1 --branch master --single-branch https://github.com/the-tcpdump-group/tcpdump.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/tcpdump",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/the-tcpdump-group/tcpdump.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1200,
-      "elapsed_seconds": 19.772,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stderr.log",
+      "elapsed_seconds": 10.374,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stderr.log"
       ]
     },
     {
       "label": "02_build_1",
-      "command": "./configure",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/tcpdump",
-      "exit_code": 127,
+      "command": "./autogen.sh",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+      "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 0.023,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stderr.log",
+      "elapsed_seconds": 1.176,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "./configure",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 10.628,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_build_3",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 38.271,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stderr.log"
+      ]
+    },
+    {
+      "label": "05_test_1",
+      "command": "./tcpdump --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/tcpdump",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.038,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stderr.log"
       ]
     }
   ],
-  "failed_step": "02_build_1",
-  "failure_summary": "02_build_1 exited 127",
-  "started_at_utc": "2026-06-24T03:27:06Z",
-  "finished_at_utc": "2026-06-24T03:30:14Z",
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T04:50:17Z",
   "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/tcpdump/02_build_1.stderr.log"
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/04_build_3.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/tcpdump/05_test_1.stderr.log"
   ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."

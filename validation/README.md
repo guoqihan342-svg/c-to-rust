@@ -15,6 +15,8 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `evidence/remaining-l1-native-summary.json`: compact L1 summary for the final 4 catalog targets that previously had no L1 attempt.
 - `evidence/l1-failure-classification.json`: machine-readable classification for failed L1 attempts.
 - `evidence/l1-failure-classification.md`: reviewer-friendly failed L1 classification summary.
+- `evidence/l1-low-cost-remediation-summary.json`: machine-readable low-cost remediation rerun summary.
+- `evidence/l1-low-cost-remediation-summary.md`: reviewer-friendly low-cost remediation rerun summary.
 
 ## Fast Commands
 
@@ -39,15 +41,21 @@ English: Wave2 adds 18 GitHub-reachable super-complex C/C-major targets. This ro
 
 ## Full L1 Attempt Boundary
 
-中文：当前 40 个 catalog 目标都已经有 L1 native C build/test smoke 尝试证据：23 个通过，17 个失败，`not_attempted_catalog_projects` 为空。失败项目仍保留为可审计 evidence，后续若要提升通过率，应针对失败命令和依赖开独立修复 change。
+中文：当前 40 个 catalog 目标都已经有 L1 native C build/test smoke 尝试证据：31 个通过，9 个失败，`not_attempted_catalog_projects` 为空。失败项目仍保留为可审计 evidence，后续若要提升通过率，应针对失败命令和依赖开独立修复 change。
 
-English: all 40 catalog targets now have L1 native C build/test smoke attempt evidence: 23 passed and 17 failed, with an empty `not_attempted_catalog_projects` list. Failed projects remain auditable evidence; improving their pass rate should be handled through separate changes focused on the failed commands and dependencies.
+English: all 40 catalog targets now have L1 native C build/test smoke attempt evidence: 31 passed and 9 failed, with an empty `not_attempted_catalog_projects` list. Failed projects remain auditable evidence; improving their pass rate should be handled through separate changes focused on the failed commands and dependencies.
 
 ## L1 Failure Classification
 
 中文：17 个 L1 failed 项目已经完成诊断分类。主要类别包括缺少开发包、缺少构建工具、git checkout 需要 bootstrap/autogen、构建配方冲突、环境限制、clone/network failure、timeout、evidence gap 等。该分类只用于决定后续修复顺序，不会把失败项目改为通过。
 
 English: the 17 failed L1 projects have diagnostic classifications. Major categories include missing development packages, missing build tools, git-checkout bootstrap requirements, build recipe conflicts, environment restrictions, clone/network failure, timeout, and evidence gaps. The classification is only for remediation planning; it does not convert failed projects to passed.
+
+## L1 Low-Cost Remediation
+
+中文：本轮对 9 个低成本候选执行了 fresh L1 native C build/test smoke 重跑：8 个通过，1 个失败。新增通过项目为 `ffmpeg`、`hdf5`、`libevent`、`libgit2`、`libpcap`、`librdkafka`、`libuv` 和 `tcpdump`。`openvpn` 已通过 `--disable-dco` 绕过 DCO 的 libnl-genl 依赖，但当前 Linux configure 路径仍强依赖 `libcap-ng` 开发包，因此继续保留为失败证据。
+
+English: the low-cost remediation batch reran 9 fresh L1 native C build/test smoke candidates: 8 passed and 1 failed. Newly passing projects are `ffmpeg`, `hdf5`, `libevent`, `libgit2`, `libpcap`, `librdkafka`, `libuv`, and `tcpdump`. `openvpn` bypassed the DCO libnl-genl dependency with `--disable-dco`, but the current Linux configure path still requires the `libcap-ng` development package, so it remains failed evidence.
 
 ## Non-Equivalence Boundary
 

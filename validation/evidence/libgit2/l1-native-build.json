@@ -3,14 +3,14 @@
   "level": "L1",
   "project_id": "libgit2",
   "project_name": "libgit2",
-  "status": "failed",
+  "status": "passed",
   "commit": "44c05e5d12f2b8b86b9730bb50f27daf74143782",
   "branch": "main",
   "repo_url": "https://github.com/libgit2/libgit2.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/repos/libgit2",
-  "source_group": "security-parser",
-  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/results.json",
-  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libgit2",
+  "source_group": "libs-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853",
   "tool_versions": {
     "git": "git version 2.43.0",
     "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
@@ -24,44 +24,78 @@
   "commands": [
     {
       "label": "01_clone",
-      "command": "git clone --depth 1 --branch main --single-branch https://github.com/libgit2/libgit2.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/repos/libgit2",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z",
+      "command": "git clone --depth 1 --branch main --single-branch https://github.com/libgit2/libgit2.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libgit2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1200,
-      "elapsed_seconds": 178.483,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stderr.log",
+      "elapsed_seconds": 184.174,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stderr.log"
       ]
     },
     {
       "label": "02_build_1",
-      "command": "cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_SSH=OFF",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/repos/libgit2",
-      "exit_code": 1,
+      "command": "cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_AUTH_NTLM=OFF -DUSE_SSH=OFF",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libgit2",
+      "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 28.038,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stderr.log",
+      "elapsed_seconds": 55.785,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "cmake --build build --parallel 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libgit2",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 711.729,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_test_1",
+      "command": "ctest --test-dir build --output-on-failure -R core",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libgit2",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.122,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stderr.log"
       ]
     }
   ],
-  "failed_step": "02_build_1",
-  "failure_summary": "02_build_1 exited 1",
-  "started_at_utc": "2026-06-24T03:27:12Z",
-  "finished_at_utc": "2026-06-24T03:39:04Z",
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T05:03:31Z",
   "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/security-parser-20260624T032712Z/logs/libgit2/02_build_1.stderr.log"
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libgit2/04_test_1.stderr.log"
   ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."

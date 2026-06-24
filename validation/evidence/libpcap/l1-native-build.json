@@ -3,14 +3,14 @@
   "level": "L1",
   "project_id": "libpcap",
   "project_name": "libpcap",
-  "status": "failed",
+  "status": "passed",
   "commit": "6b5de1e5f07a4fea6672caa2d34935c3da24a8f2",
   "branch": "master",
   "repo_url": "https://github.com/the-tcpdump-group/libpcap.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/libpcap",
-  "source_group": "network-protocol",
-  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/results.json",
-  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+  "source_group": "network-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853",
   "tool_versions": {
     "git": "git version 2.43.0",
     "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
@@ -24,44 +24,95 @@
   "commands": [
     {
       "label": "01_clone",
-      "command": "git clone --depth 1 --branch master --single-branch https://github.com/the-tcpdump-group/libpcap.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/libpcap",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/the-tcpdump-group/libpcap.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1200,
-      "elapsed_seconds": 4.846,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stderr.log",
+      "elapsed_seconds": 4.729,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stderr.log"
       ]
     },
     {
       "label": "02_build_1",
-      "command": "./configure --disable-shared",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/repos/libpcap",
-      "exit_code": 127,
+      "command": "./autogen.sh",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+      "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 0.038,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stderr.log",
+      "elapsed_seconds": 3.523,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "./configure --disable-shared",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 17.166,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_build_3",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 6.311,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stderr.log"
+      ]
+    },
+    {
+      "label": "05_test_1",
+      "command": "./pcap-config --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/repos/libpcap",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.039,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stderr.log"
       ]
     }
   ],
-  "failed_step": "02_build_1",
-  "failure_summary": "02_build_1 exited 127",
-  "started_at_utc": "2026-06-24T03:27:06Z",
-  "finished_at_utc": "2026-06-24T03:29:54Z",
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T04:49:21Z",
   "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/network-protocol-20260624T032705Z/logs/libpcap/02_build_1.stderr.log"
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/04_build_3.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/network-20260624T124853/logs/libpcap/05_test_1.stderr.log"
   ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."

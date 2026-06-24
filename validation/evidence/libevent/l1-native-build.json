@@ -2,89 +2,101 @@
   "schema_version": 1,
   "level": "L1",
   "project_id": "libevent",
-  "status": "failed",
+  "project_name": "libevent",
+  "status": "passed",
   "commit": "ec52f3f59e9778ae9576e23ac172c001ec91ef50",
   "branch": "master",
   "repo_url": "https://github.com/libevent/libevent.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
-  "source_group": "network-event",
-  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/network-event/results.json",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libevent",
+  "source_group": "libs-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853",
   "tool_versions": {
-    "autoconf": "autoconf (GNU Autoconf) 2.71",
-    "automake": "automake (GNU automake) 1.16.5",
-    "cmake": "cmake version 3.28.3",
-    "ctest": "ctest version 3.28.3",
-    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
     "git": "git version 2.43.0",
-    "libtoolize": "libtoolize (GNU libtool) 2.4.7",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
     "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ninja": "1.11.1",
+    "meson": null,
+    "python3": "Python 3.12.3",
     "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
   },
   "commands": [
     {
-      "label": "clone",
-      "command": "git clone --depth 1 --branch master https://github.com/libevent/libevent.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event",
+      "label": "01_clone",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/libevent/libevent.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libevent",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853",
       "exit_code": 0,
-      "elapsed_seconds": 5.482,
-      "stdout_log": null,
-      "stderr_log": null,
+      "timed_out": false,
+      "timeout_seconds": 1200,
+      "elapsed_seconds": 4.103,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stderr.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stdout.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stderr.log"
       ]
     },
     {
-      "label": "pin_commit",
-      "command": "git rev-parse HEAD",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
-      "exit_code": 0,
-      "elapsed_seconds": 0.052,
-      "stdout_log": null,
-      "stderr_log": null,
-      "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stderr.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stdout.log"
-      ]
-    },
-    {
-      "label": "cmake_configure",
+      "label": "02_build_1",
       "command": "cmake -S . -B build -DEVENT__DISABLE_OPENSSL=ON",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libevent",
       "exit_code": 0,
-      "elapsed_seconds": 167.393,
-      "stdout_log": null,
-      "stderr_log": null,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 90.799,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stderr.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stdout.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stderr.log"
       ]
     },
     {
-      "label": "cmake_build",
+      "label": "03_build_2",
       "command": "cmake --build build --parallel 2",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libevent",
       "exit_code": 0,
-      "elapsed_seconds": 69.282,
-      "stdout_log": null,
-      "stderr_log": null,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 55.152,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stderr.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stdout.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_test_1",
+      "command": "ctest --test-dir build -R '^test-init__timerfd_EPOLL$' --output-on-failure",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libevent",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.069,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stderr.log"
       ]
     }
   ],
-  "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stdout.log"
-  ],
+  "failed_step": null,
   "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T05:08:46Z",
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/logs/libevent/04_test_1.stderr.log"
+  ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
 }

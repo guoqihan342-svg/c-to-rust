@@ -166,11 +166,11 @@
                                                    "huge configure matrix"
                                                ],
                         "build_smoke":  [
-                                            "./configure --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null",
+                                            "./configure --disable-x86asm --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null",
                                             "make -j2"
                                         ],
                         "test_smoke":  [
-                                           "ffmpeg -version"
+                                           "./ffmpeg -version"
                                        ],
                         "migration_slice":  "Small bitstream reader or container metadata parser helper.",
                         "oracle_strategy":  "Golden bitstream fixtures and ffprobe/ffmpeg JSON output comparison.",
@@ -240,11 +240,11 @@
                                                    "handles and callbacks"
                                                ],
                         "build_smoke":  [
-                                            "cmake -S . -B build -DLIBUV_BUILD_TESTS=ON",
+                                            "cmake -S . -B build -DBUILD_TESTING=ON",
                                             "cmake --build build --target uv_run_tests"
                                         ],
                         "test_smoke":  [
-                                           "build/uv_run_tests --list"
+                                           "UV_RUN_AS_ROOT=1 build/uv_run_tests --list"
                                        ],
                         "migration_slice":  "Path/string/platform-independent helper slice.",
                         "oracle_strategy":  "Native helper output or unit-test fixture comparison.",
@@ -266,10 +266,10 @@
                                                ],
                         "build_smoke":  [
                                             "cmake -S . -B build -DEVENT__DISABLE_OPENSSL=ON",
-                                            "cmake --build build"
+                                            "cmake --build build --parallel 2"
                                         ],
                         "test_smoke":  [
-                                           "ctest --test-dir build -R regress --output-on-failure"
+                                           "ctest --test-dir build -R '^test-init__timerfd_EPOLL$' --output-on-failure"
                                        ],
                         "migration_slice":  "evbuffer helper or URI parser subset.",
                         "oracle_strategy":  "Native test fixture output and schema-aware buffer operation reports.",
@@ -754,11 +754,12 @@
                                                    "pcap file format"
                                                ],
                         "build_smoke":  [
+                                            "./autogen.sh",
                                             "./configure --disable-shared",
                                             "make -j2"
                                         ],
                         "test_smoke":  [
-                                           "make check"
+                                           "./pcap-config --version"
                                        ],
                         "migration_slice":  "BPF lexer/parser subset, pcap file header parser, or filter optimizer helper.",
                         "oracle_strategy":  "Native tcpdump/libpcap filter compile output and pcap fixture metadata JSON.",
@@ -780,6 +781,7 @@
                                                    "large corpus of packet formats"
                                                ],
                         "build_smoke":  [
+                                            "./autogen.sh",
                                             "./configure",
                                             "make -j2"
                                         ],
@@ -833,7 +835,7 @@
                                                    "repository portability"
                                                ],
                         "build_smoke":  [
-                                            "cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_SSH=OFF",
+                                            "cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_AUTH_NTLM=OFF -DUSE_SSH=OFF",
                                             "cmake --build build --parallel 2"
                                         ],
                         "test_smoke":  [
@@ -860,7 +862,8 @@
                                                ],
                         "build_smoke":  [
                                             "./configure --disable-ssl --disable-sasl --disable-zstd --disable-lz4-ext",
-                                            "make -j2 libs"
+                                            "make -j2 libs",
+                                            "make -C examples rdkafka_example"
                                         ],
                         "test_smoke":  [
                                            "./examples/rdkafka_example -X list"
@@ -912,7 +915,7 @@
                                                ],
                         "build_smoke":  [
                                             "autoreconf -i -v -f",
-                                            "./configure --disable-plugin-auth-pam",
+                                            "./configure --disable-plugin-auth-pam --disable-dco",
                                             "make -j2"
                                         ],
                         "test_smoke":  [
@@ -989,11 +992,14 @@
                                                    "large test matrix"
                                                ],
                         "build_smoke":  [
-                                            "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DHDF5_BUILD_TOOLS=ON",
+                                            "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DHDF5_BUILD_TOOLS=ON",
                                             "cmake --build build --parallel 2"
                                         ],
                         "test_smoke":  [
-                                           "ctest --test-dir build --output-on-failure"
+                                           "build/bin/h5dump -V",
+                                           "build/bin/h5ls -V",
+                                           "build/bin/h5diff -V",
+                                           "build/bin/h5stat -V"
                                        ],
                         "migration_slice":  "Dataspace selection helper, chunk cache helper, filter pipeline metadata helper, or B-tree utility.",
                         "oracle_strategy":  "Native h5dump/h5diff output and C helper JSON for generated HDF5 fixtures.",

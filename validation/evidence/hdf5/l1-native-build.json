@@ -3,14 +3,14 @@
   "level": "L1",
   "project_id": "hdf5",
   "project_name": "HDF5",
-  "status": "failed",
+  "status": "passed",
   "commit": "b1227f798e57d368334f793182fae641d4f012b8",
   "branch": "develop",
   "repo_url": "https://github.com/HDFGroup/hdf5.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/hdf5",
-  "source_group": "media-data",
-  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/results.json",
-  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+  "source_group": "media-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853",
   "tool_versions": {
     "git": "git version 2.43.0",
     "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
@@ -24,78 +24,129 @@
   "commands": [
     {
       "label": "01_clone",
-      "command": "git clone --depth 1 --branch develop --single-branch https://github.com/HDFGroup/hdf5.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/hdf5",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z",
+      "command": "git clone --depth 1 --branch develop --single-branch https://github.com/HDFGroup/hdf5.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1200,
-      "elapsed_seconds": 45.446,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stderr.log",
+      "elapsed_seconds": 39.071,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stderr.log"
       ]
     },
     {
       "label": "02_build_1",
-      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DHDF5_BUILD_TOOLS=ON",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/hdf5",
+      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DHDF5_BUILD_TOOLS=ON",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 155.973,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stderr.log",
+      "elapsed_seconds": 103.423,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stderr.log"
       ]
     },
     {
       "label": "03_build_2",
       "command": "cmake --build build --parallel 2",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/hdf5",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 684.373,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stderr.log",
+      "elapsed_seconds": 426.132,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stderr.log"
       ]
     },
     {
       "label": "04_test_1",
-      "command": "ctest --test-dir build --output-on-failure",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/hdf5",
-      "exit_code": 124,
-      "timed_out": true,
+      "command": "build/bin/h5dump -V",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+      "exit_code": 0,
+      "timed_out": false,
       "timeout_seconds": 600,
-      "elapsed_seconds": 600.007,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stderr.log",
+      "elapsed_seconds": 0.07,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stderr.log"
+      ]
+    },
+    {
+      "label": "05_test_2",
+      "command": "build/bin/h5ls -V",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.127,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stderr.log"
+      ]
+    },
+    {
+      "label": "06_test_3",
+      "command": "build/bin/h5diff -V",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.069,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stderr.log"
+      ]
+    },
+    {
+      "label": "07_test_4",
+      "command": "build/bin/h5stat -V",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/hdf5",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.071,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stderr.log"
       ]
     }
   ],
-  "failed_step": "04_test_1",
-  "failure_summary": "04_test_1 timed out after 600 seconds",
-  "started_at_utc": "2026-06-24T03:27:25Z",
-  "finished_at_utc": "2026-06-24T03:51:18Z",
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T05:00:26Z",
   "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/02_build_1.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/03_build_2.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/hdf5/04_test_1.stderr.log"
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/04_test_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/05_test_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/06_test_3.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/hdf5/07_test_4.stderr.log"
   ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."

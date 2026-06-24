@@ -3,14 +3,14 @@
   "level": "L1",
   "project_id": "ffmpeg",
   "project_name": "FFmpeg",
-  "status": "failed",
+  "status": "passed",
   "commit": "dc953a19e6bf6b3feb765ecfbffc654aefa4e8f1",
   "branch": "master",
   "repo_url": "https://github.com/FFmpeg/FFmpeg.git",
-  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/repos/ffmpeg",
-  "source_group": "ffmpeg-20260624T041343Z",
-  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/results.json",
-  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/ffmpeg",
+  "source_group": "media-20260624T124853",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853",
   "tool_versions": {
     "git": "git version 2.43.0",
     "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
@@ -24,44 +24,78 @@
   "commands": [
     {
       "label": "01_clone",
-      "command": "git clone --depth 1 --branch master --single-branch https://github.com/FFmpeg/FFmpeg.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/repos/ffmpeg",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/FFmpeg/FFmpeg.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/ffmpeg",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853",
       "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1200,
-      "elapsed_seconds": 62.508,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stderr.log",
+      "elapsed_seconds": 67.84,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stderr.log"
       ]
     },
     {
       "label": "02_build_1",
-      "command": "./configure --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null",
-      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/repos/ffmpeg",
-      "exit_code": 1,
+      "command": "./configure --disable-x86asm --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/ffmpeg",
+      "exit_code": 0,
       "timed_out": false,
       "timeout_seconds": 1800,
-      "elapsed_seconds": 2.031,
-      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stdout.log",
-      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stderr.log",
+      "elapsed_seconds": 26.172,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stderr.log",
       "log_paths": [
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stdout.log",
-        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stderr.log"
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/ffmpeg",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 88.788,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_test_1",
+      "command": "./ffmpeg -version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/repos/ffmpeg",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.037,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stderr.log"
       ]
     }
   ],
-  "failed_step": "02_build_1",
-  "failure_summary": "02_build_1 exited 1",
-  "started_at_utc": "2026-06-24T04:13:43Z",
-  "finished_at_utc": "2026-06-24T04:14:41Z",
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T04:48:51Z",
+  "finished_at_utc": "2026-06-24T04:51:40Z",
   "log_paths": [
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/01_clone.stderr.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stdout.log",
-    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/logs/ffmpeg/02_build_1.stderr.log"
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/media-20260624T124853/logs/ffmpeg/04_test_1.stderr.log"
   ],
   "notes": [],
   "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
