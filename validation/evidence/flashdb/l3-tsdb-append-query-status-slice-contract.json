@@ -1,0 +1,148 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "status":  "frozen",
+    "repo_commit":  "b41e17561b3575c4060c819f560cb1b30734b2b6",
+    "source":  {
+                   "clone_url":  "https://gitcode.com/xwxf/FlashDB.git",
+                   "commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+                   "source_pin_reason":  "Existing FlashDB C oracle contract pins this commit for reproducible C reports."
+               },
+    "c_boundary":  {
+                       "public_apis":  [
+                                           "fdb_tsdb_init",
+                                           "fdb_tsdb_control",
+                                           "fdb_tsdb_deinit",
+                                           "fdb_tsl_append_with_ts",
+                                           "fdb_tsl_iter",
+                                           "fdb_tsl_iter_by_time",
+                                           "fdb_tsl_query_count",
+                                           "fdb_tsl_set_status"
+                                       ],
+                       "reporting_aux_apis":  [
+                                                  "fdb_tsl_to_blob",
+                                                  "fdb_blob_make",
+                                                  "fdb_blob_read"
+                                              ],
+                       "oracle_runner_file":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                       "supported_fixture_ops":  [
+                                                     "ts.append",
+                                                     "ts.query",
+                                                     "ts.set_status",
+                                                     "ts.count_status",
+                                                     "ts.reopen",
+                                                     "ts.image_hash"
+                                                 ],
+                       "feature_matrix":  {
+                                              "FDB_USING_KVDB":  true,
+                                              "FDB_USING_TSDB":  true,
+                                              "FDB_USING_FILE_POSIX_MODE":  true,
+                                              "FDB_WRITE_GRAN":  1
+                                          },
+                       "storage_geometry":  {
+                                                "file_mode":  "posix",
+                                                "sector_size":  4096,
+                                                "ts_sectors":  8,
+                                                "ts_max_size":  32768,
+                                                "tsl_max_len":  128
+                                            }
+                   },
+    "rust_boundary":  {
+                          "crate":  "flashdb-rust",
+                          "modules":  [
+                                          "flashDB_rust/src/tsdb.rs",
+                                          "flashDB_rust/src/replay.rs",
+                                          "flashDB_rust/src/types.rs",
+                                          "flashDB_rust/src/format.rs",
+                                          "flashDB_rust/src/flash.rs"
+                                      ],
+                          "public_apis":  [
+                                              "TsDb::create",
+                                              "TsDb::open",
+                                              "TsDb::append",
+                                              "TsDb::query",
+                                              "TsDb::set_status",
+                                              "TsDb::count_by_status",
+                                              "TsDb::entries",
+                                              "TsDb::into_flash",
+                                              "TsDb::image_hash",
+                                              "TsDb::image",
+                                              "TsDb::bytes_used",
+                                              "TsDb::counters",
+                                              "replay::run_replay",
+                                              "replay::run_diff"
+                                          ]
+                      },
+    "fixture":  {
+                    "path":  "flashDB_rust/fixtures/l3-tsdb-append-query-status.json",
+                    "sha256":  "277dfd1dac5b873e45956f8d4359572fec1439ba2a312411cf6119ce66b0fcf3",
+                    "backend_matrix":  [
+                                           {
+                                               "id":  "rust-file",
+                                               "runner":  "Rust replay",
+                                               "backend_arg":  "file",
+                                               "reopen_semantics":  "drop and reopen FileFlash temp image",
+                                               "l3_primary":  true
+                                           },
+                                           {
+                                               "id":  "flashdb-c",
+                                               "runner":  "C oracle",
+                                               "backend_arg":  null,
+                                               "profile":  "POSIX file mode, sec_size=4096, write_gran=1"
+                                           }
+                                       ],
+                    "required_operations":  [
+                                                "ts.append x3",
+                                                "forward query",
+                                                "ts.set_status",
+                                                "ts.count_status",
+                                                "reversed query",
+                                                "ts.reopen",
+                                                "query-after-reopen"
+                                            ],
+                    "excluded_operations":  [
+                                                "non-monotonic timestamp rejection",
+                                                "max payload length",
+                                                "sector rollover/full",
+                                                "fdb_tsl_clean",
+                                                "byte-for-byte flash image layout"
+                                            ]
+                },
+    "accepted_difference_policy":  {
+                                       "allowed_fields":  [
+                                                              "image_hash",
+                                                              "backend",
+                                                              "toolchain_status",
+                                                              "source",
+                                                              "fixture",
+                                                              "fixture_hash",
+                                                              "report_path"
+                                                          ],
+                                       "forbidden_behavior_fields":  [
+                                                                         "entries",
+                                                                         "entry_id",
+                                                                         "timestamp",
+                                                                         "status",
+                                                                         "value",
+                                                                         "count",
+                                                                         "operation success",
+                                                                         "code",
+                                                                         "error semantics",
+                                                                         "query ordering"
+                                                                     ],
+                                       "policy":  "Layout and metadata differences can be accepted before native FlashDB byte layout migration; TSDB behavior fields cannot be accepted differences."
+                                   },
+    "evidence_paths":  {
+                           "context_pack":  "validation/evidence/flashdb/l3-tsdb-append-query-status-context-pack.json",
+                           "rust_report":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-report.json",
+                           "c_oracle":  "validation/evidence/flashdb/l3-tsdb-append-query-status-c-oracle.json",
+                           "c_oracle_producer":  "validation/evidence/flashdb/l3-tsdb-append-query-status-c-oracle-producer-evidence.json",
+                           "diff":  "validation/evidence/flashdb/l3-tsdb-append-query-status-diff.json",
+                           "local_toolchain":  "validation/evidence/flashdb/l3-tsdb-append-query-status-local-toolchain-evidence.json",
+                           "rust_check":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-check.json",
+                           "performance_smoke":  "validation/evidence/flashdb/l3-tsdb-append-query-status-performance-smoke.json",
+                           "summary":  "validation/evidence/flashdb/l3-tsdb-append-query-status-summary.json"
+                       }
+}

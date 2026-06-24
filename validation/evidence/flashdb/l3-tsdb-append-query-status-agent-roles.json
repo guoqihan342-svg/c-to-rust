@@ -1,0 +1,66 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "agent_policy":  {
+                         "parallelism":  "bounded",
+                         "default_role":  "read-only analysis, independent validation, evidence audit, or patch review",
+                         "code_patch_policy":  "single writer applies patches serially in the main workspace",
+                         "shared_state_policy":  "agents must not edit the same files concurrently and must not revert changes made by others"
+                     },
+    "observed_parallel_agents":  [
+                                     {
+                                         "role":  "kvdb-compact-overwrite-review",
+                                         "agent_id":  "019ef84c-74fd-7e30-b06e-35f0c54b976f",
+                                         "mode":  "read-only explorer",
+                                         "conclusion":  "KVDB compact/overwrite is viable only as visible behavior; true GC/sector compact requires later design."
+                                     },
+                                     {
+                                         "role":  "tsdb-append-query-status-review",
+                                         "agent_id":  "019ef84c-9c47-7c50-b710-7f54798fd098",
+                                         "mode":  "read-only explorer",
+                                         "conclusion":  "TSDB is recommended with strict increasing timestamps and small ASCII payloads."
+                                     },
+                                     {
+                                         "role":  "c-oracle-boundary-review",
+                                         "agent_id":  "019ef84c-c3cd-7ea1-9834-b251e6bb8922",
+                                         "mode":  "read-only explorer",
+                                         "conclusion":  "TSDB has stronger C oracle coverage than KVDB compact."
+                                     }
+                                 ],
+    "assigned_roles":  [
+                           {
+                               "role":  "tsdb-slice-review",
+                               "scope":  [
+                                             "flashDB_rust/src/tsdb.rs",
+                                             "flashDB_rust/src/replay.rs",
+                                             "flashDB_rust/fixtures/l3-tsdb-append-query-status.json"
+                                         ],
+                               "mode":  "read-only explorer"
+                           },
+                           {
+                               "role":  "c-oracle-review",
+                               "scope":  [
+                                             "flashDB_rust/oracle/flashdb_c_oracle.c",
+                                             "flashDB_rust/oracle/generate_c_oracle.sh",
+                                             "flashDB_rust/oracle/.work/FlashDB/src/fdb_tsdb.c"
+                                         ],
+                               "mode":  "read-only explorer"
+                           },
+                           {
+                               "role":  "evidence-audit",
+                               "scope":  [
+                                             "validation/evidence/flashdb/l3-tsdb-append-query-status-*"
+                                         ],
+                               "mode":  "read-only explorer"
+                           },
+                           {
+                               "role":  "patch-writer",
+                               "scope":  [
+                                             "files listed in validation/evidence/flashdb/l3-tsdb-append-query-status-impact-set.json"
+                                         ],
+                               "mode":  "single-writer serial patching"
+                           }
+                       ]
+}

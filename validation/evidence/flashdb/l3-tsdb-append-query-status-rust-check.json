@@ -1,0 +1,21 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "command":  "cargo check --message-format=json",
+    "status":  "passed",
+    "success":  true,
+    "error_count":  0,
+    "warning_count":  0,
+    "automatic_patch_attempt_count":  0,
+    "root_cause_keys":  [
+
+                        ],
+    "affected_items":  [
+
+                       ],
+    "raw_path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-check.raw.jsonl",
+    "stderr_log":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-check.stderr.log",
+    "rerun_command":  "cd flashDB_rust \u0026\u0026 cargo check --message-format=json"
+}

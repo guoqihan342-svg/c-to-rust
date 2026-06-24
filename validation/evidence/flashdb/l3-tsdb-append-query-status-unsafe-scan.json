@@ -1,0 +1,21 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "command":  "cargo run -- unsafe-scan",
+    "status":  "passed",
+    "scanned_root":  "flashDB_rust/src",
+    "ignored_paths":  [
+                          "flashDB_rust/target",
+                          "flashDB_rust/oracle/.work",
+                          "generated/vendor paths outside first-party src"
+                      ],
+    "unsafe_blocks":  0,
+    "unsafe_fns":  0,
+    "unsafe_count":  0,
+    "unsafe_ratio":  0,
+    "findings":  [
+
+                 ]
+}

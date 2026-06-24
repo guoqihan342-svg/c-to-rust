@@ -1,0 +1,14 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "status":  "recorded",
+    "command":  "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-append-query-status.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-append-query-status-performance-replay.json",
+    "backend":  "file",
+    "operation_count":  10,
+    "elapsed_ms":  337,
+    "toolchain_status":  "NOT_APPLICABLE_RUST_REPLAY",
+    "report_path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-performance-replay.json",
+    "correctness_gate":  "secondary_only_not_a_substitute_for_c_rust_diff"
+}

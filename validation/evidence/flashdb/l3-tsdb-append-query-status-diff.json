@@ -1,0 +1,1 @@
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-append-query-status-rust-report.json","oracle_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-append-query-status-c-oracle.json","rust_report_hash":"1190f9cd","oracle_report_hash":"2d310536","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

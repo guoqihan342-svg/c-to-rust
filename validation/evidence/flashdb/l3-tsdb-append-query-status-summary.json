@@ -1,0 +1,161 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "change_id":  "run-flashdb-tsdb-l3-agent-migration-loop",
+    "status":  "passed",
+    "repo_commit":  "b41e17561b3575c4060c819f560cb1b30734b2b6",
+    "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "fixture":  {
+                    "path":  "flashDB_rust/fixtures/l3-tsdb-append-query-status.json",
+                    "name":  "l3-tsdb-append-query-status",
+                    "sha256":  "277dfd1dac5b873e45956f8d4359572fec1439ba2a312411cf6119ce66b0fcf3",
+                    "hash_short":  "2ea6ffb0",
+                    "operation_count":  10,
+                    "backend_matrix":  [
+                                           "rust-file",
+                                           "flashdb-c"
+                                       ],
+                    "timestamp_rule":  "strictly increasing timestamps on main path"
+                },
+    "semantic_equivalence_claim":  {
+                                       "claimed":  true,
+                                       "scope":  "Only the named tsdb-append-query-status slice and behavior fields exercised by l3-tsdb-append-query-status.json.",
+                                       "boundary":  "This does not claim full FlashDB migration, byte-for-byte flash image layout equivalence, non-monotonic timestamp rejection, payload max length, sector rollover/full, or fdb_tsl_clean equivalence.",
+                                       "basis":  [
+                                                     "C oracle report has toolchain_status C_ORACLE_GENERATED",
+                                                     "Rust and C reports use fixture_hash 2ea6ffb0",
+                                                     "Schema-aware diff status is passed with first_mismatch null",
+                                                     "Negative regression test and negative diff artifact reject TSDB count behavior mismatch"
+                                                 ]
+                                   },
+    "evidence":  {
+                     "context_pack":  {
+                                          "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-context-pack.json",
+                                          "sha256":  "b639e46b0d377b6b32afa19077fd450fb43d82289b38fe1f9223452678dd378b"
+                                      },
+                     "slice_contract":  {
+                                            "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-slice-contract.json",
+                                            "sha256":  "4acf5e4d0ee3c0e6ec3ed62c6d3a1e3c97e78509700f41117c4811ee4250360d"
+                                        },
+                     "impact_set":  {
+                                        "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-impact-set.json",
+                                        "sha256":  "150f67b1a3d0ac491ac9998bb8c11a3e06e2ad0745c391ec188baabf145b156f"
+                                    },
+                     "agent_roles":  {
+                                         "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-agent-roles.json",
+                                         "sha256":  "447b546aaa413ac0a4b1ca47d8d60fc18709b9b367cdf77593a9a7627c6fc23d"
+                                     },
+                     "cache_metadata":  {
+                                            "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-cache-metadata.json",
+                                            "sha256":  "1708a9ebadc2da9a231d666473938b46c1c19eb0d465248f73a5fc9ea9385b66"
+                                        },
+                     "local_toolchain":  {
+                                             "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-local-toolchain-evidence.json",
+                                             "sha256":  "4e1b9f5562035d5c10e2b504a652d8aa6ef6db377397609289ad9e900901c4c6"
+                                         },
+                     "rust_report":  {
+                                         "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-report.json",
+                                         "sha256":  "08e43c5b66107c37a81f52d5a701297f33e4cbd2836123c38bd363bde17df9fd"
+                                     },
+                     "c_oracle":  {
+                                      "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-c-oracle.json",
+                                      "sha256":  "2b63874c73d5bfccb452d79a0160b4e9f689dffa02b1ba0973b2e696ee6e5fb5"
+                                  },
+                     "c_oracle_producer":  {
+                                               "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-c-oracle-producer-evidence.json",
+                                               "sha256":  "6e9c826bd9d315f659f8444c35f68c316ed1b5dbbd30e4a8879dbe6ff0032668"
+                                           },
+                     "diff":  {
+                                  "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-diff.json",
+                                  "sha256":  "006083dddcf401f734375f1f1e3d2a7ee9458605a6dec40d9e4fdf3f83b289ec"
+                              },
+                     "negative_diff":  {
+                                           "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-negative-diff.json",
+                                           "sha256":  "d2ad8b88048c581914f95d8a8ec4296819a2adc82670d2330e61d63f140bf015"
+                                       },
+                     "mutated_oracle":  {
+                                            "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-mutated-count-oracle.json",
+                                            "sha256":  "86754136abcbd44ca601e004178977626648a20cd52bf6527cf5f5c88d53a9e2"
+                                        },
+                     "rust_check":  {
+                                        "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-rust-check.json",
+                                        "sha256":  "9c7a8dd0f98dc21f5a2f24ce6868ccd4dc7c1d261a5e2cff670efff21a281d9e"
+                                    },
+                     "unsafe_scan":  {
+                                         "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-unsafe-scan.json",
+                                         "sha256":  "300a7af68d26e2afd46efe8f3a5fa892a1ca08b6914be79dea4f1e9d1c726823"
+                                     },
+                     "unsafe_ledger":  {
+                                           "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-unsafe-ledger.json",
+                                           "sha256":  "aeb89c7e1710d9d575b6d042635f47a17b4d288be61b9d2fa361a1727848a931"
+                                       },
+                     "performance_smoke":  {
+                                               "path":  "validation/evidence/flashdb/l3-tsdb-append-query-status-performance-smoke.json",
+                                               "sha256":  "fa95ddab32734861bd48b6573d8ba83fac271d6ca7ac124fc6f4de36624c67be"
+                                           }
+                 },
+    "c_oracle":  {
+                     "status":  "passed",
+                     "toolchain_status":  "C_ORACLE_GENERATED",
+                     "fixture_hash":  "2ea6ffb0"
+                 },
+    "diff":  {
+                 "status":  "passed",
+                 "first_mismatch":  null,
+                 "note":  "The diff tool probes local Windows toolchain and can report SKIPPED_LOCAL_NO_C_TOOLCHAIN while comparing a WSL-generated C oracle."
+             },
+    "rust_check":  {
+                       "status":  "passed",
+                       "error_count":  0,
+                       "warning_count":  0,
+                       "automatic_patch_attempt_count":  0
+                   },
+    "unsafe":  {
+                   "status":  "passed",
+                   "first_party_non_test_unsafe_count":  0,
+                   "unsafe_ratio":  0
+               },
+    "performance_smoke":  {
+                              "status":  "recorded",
+                              "elapsed_ms":  337,
+                              "operation_count":  10,
+                              "secondary_only":  true
+                          },
+    "accepted_differences":  {
+                                 "allowed_metadata_fields":  [
+                                                                 "image_hash",
+                                                                 "backend",
+                                                                 "toolchain_status",
+                                                                 "source",
+                                                                 "fixture",
+                                                                 "fixture_hash",
+                                                                 "report_path"
+                                                             ],
+                                 "forbidden_behavior_fields":  [
+                                                                   "entries",
+                                                                   "entry_id",
+                                                                   "timestamp",
+                                                                   "status",
+                                                                   "value",
+                                                                   "count",
+                                                                   "operation success",
+                                                                   "code",
+                                                                   "error semantics",
+                                                                   "query ordering"
+                                                               ],
+                                 "behavior_fields_checked":  true
+                             },
+    "windows_skip":  {
+                         "marker":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+                         "counts_as_l3_pass":  false,
+                         "replacement_evidence":  "WSL generated validation/evidence/flashdb/l3-tsdb-append-query-status-c-oracle.json with C_ORACLE_GENERATED."
+                     },
+    "known_gaps":  [
+                       "The target fixture does not cover non-monotonic timestamp rejection.",
+                       "The target fixture does not cover max payload length, sector rollover/full, fdb_tsl_clean, or byte-for-byte layout equivalence.",
+                       "Step reports currently use duplicate JSON key name status for ts.set_status, matching existing Rust and C oracle output; future schema cleanup should separate step_status from entry_status."
+                   ],
+    "next_slice_recommendation":  "KVDB compact/overwrite as visible behavior, or a larger KVDB GC/sector-layout design if native compact semantics are required."
+}

@@ -1,0 +1,18 @@
+{
+  "name": "l3-tsdb-append-query-status",
+  "operations": [
+    {"id":"ts-l3-001","op":"ts.append","timestamp":10,"value":"alpha"},
+    {"id":"ts-l3-002","op":"ts.append","timestamp":20,"value":"beta"},
+    {"id":"ts-l3-003","op":"ts.append","timestamp":30,"value":"gamma"},
+    {"id":"ts-l3-004","op":"ts.query","from":10,"to":30},
+    {"id":"ts-l3-005","op":"ts.set_status","entry_id":2,"status":"user1"},
+    {"id":"ts-l3-006","op":"ts.count_status","from":10,"to":30,"status":"user1"},
+    {"id":"ts-l3-007","op":"ts.query","from":30,"to":10},
+    {"id":"ts-l3-008","op":"ts.reopen"},
+    {"id":"ts-l3-009","op":"ts.query","from":10,"to":30},
+    {"id":"ts-l3-010","op":"ts.count_status","from":10,"to":30,"status":"written"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

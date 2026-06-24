@@ -1,0 +1,54 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "tsdb-append-query-status",
+    "host":  "windows-native",
+    "toolchain_status":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "counts_as_l3_pass":  false,
+    "note":  "Windows native C oracle evidence is diagnostic only; L3 pass requires Linux/WSL/CI C_ORACLE_GENERATED.",
+    "commands":  [
+                     {
+                         "command":  "gcc",
+                         "available":  false,
+                         "path":  null,
+                         "version":  null
+                     },
+                     {
+                         "command":  "clang",
+                         "available":  false,
+                         "path":  null,
+                         "version":  null
+                     },
+                     {
+                         "command":  "cl",
+                         "available":  false,
+                         "path":  null,
+                         "version":  null
+                     },
+                     {
+                         "command":  "cc",
+                         "available":  false,
+                         "path":  null,
+                         "version":  null
+                     },
+                     {
+                         "command":  "make",
+                         "available":  false,
+                         "path":  null,
+                         "version":  null
+                     },
+                     {
+                         "command":  "git",
+                         "available":  true,
+                         "path":  "E:\\git\\Git\\cmd\\git.exe",
+                         "version":  "git version 2.53.0.windows.3"
+                     },
+                     {
+                         "command":  "wsl",
+                         "available":  true,
+                         "path":  "C:\\WINDOWS\\system32\\wsl.exe",
+                         "version":  "available; WSL C oracle generated separately"
+                     }
+                 ]
+}
