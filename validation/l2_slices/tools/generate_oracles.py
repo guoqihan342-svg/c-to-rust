@@ -125,14 +125,17 @@ int main(void) {{
     fixture = FIXTURES / "sqlite-varint-c-oracle.json"
     write(fixture, executed.stdout)
     return {
+        "schema_version": 1,
         "project_id": "sqlite",
         "slice_id": "sqlite-varint",
         "source_commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
         "c_source_boundary": "sqlite3PutVarint/sqlite3GetVarint from sqlite3.c",
         "compile_command": " ".join(compile_cmd),
+        "execution_environment": "WSL/Linux C toolchain",
         "fixture": str(fixture.relative_to(REPO)).replace("\\", "/"),
         "case_count": len(json.loads(executed.stdout)),
         "status": "passed",
+        "toolchain_status": "C_ORACLE_GENERATED",
     }
 
 
@@ -279,14 +282,17 @@ int main(void) {{
     fixture = FIXTURES / "zlib-adler32-c-oracle.json"
     write(fixture, executed.stdout)
     return {
+        "schema_version": 1,
         "project_id": "zlib-ng",
         "slice_id": "zlib-adler32",
         "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
         "c_source_boundary": "adler32_z from zlib-ng build/libz.a",
         "compile_command": " ".join(compile_cmd),
+        "execution_environment": "WSL/Linux C toolchain",
         "fixture": str(fixture.relative_to(REPO)).replace("\\", "/"),
         "case_count": len(json.loads(executed.stdout)),
         "status": "passed",
+        "toolchain_status": "C_ORACLE_GENERATED",
     }
 
 
@@ -375,14 +381,17 @@ int main(void) {{
     fixture = FIXTURES / "zstd-xxh32-c-oracle.json"
     write(fixture, executed.stdout)
     return {
+        "schema_version": 1,
         "project_id": "zstd",
         "slice_id": "zstd-xxh32",
         "source_commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
         "c_source_boundary": "XXH32 from zstd lib/common/xxhash.c",
         "compile_command": " ".join(compile_cmd),
+        "execution_environment": "WSL/Linux C toolchain",
         "fixture": str(fixture.relative_to(REPO)).replace("\\", "/"),
         "case_count": len(json.loads(executed.stdout)),
         "status": "passed",
+        "toolchain_status": "C_ORACLE_GENERATED",
     }
 
 

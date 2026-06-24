@@ -1,5 +1,11 @@
 {
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/l2-slices/unsafe-ledger.json",
+    "sha256": "c6fc8c023f37fef8ad75383f35256e83de91a1bad1da673b45ea4aada94dda97",
+    "status": "passed"
+  },
   "entries": [],
+  "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
   "schema_version": 1,
   "slice_id": "adler32-step",

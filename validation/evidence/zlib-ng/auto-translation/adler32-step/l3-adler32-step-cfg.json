@@ -68,7 +68,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
+  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
   "schema_version": 1,
   "slice_id": "adler32-step",
   "slice_spec_ref": {

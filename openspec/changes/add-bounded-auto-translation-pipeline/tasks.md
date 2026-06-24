@@ -36,7 +36,7 @@
 - [x] 5.1 Use the existing `libuv/ip4-addr` pointer-bearing slice as the first MVP target for auto-translation evidence, because it already exercises C string input, out parameter struct, pointer graph, oracle, replay, diff, and unsafe gates.
 - [x] 5.2 Create a checked-in libuv slice spec and use it to regenerate context pack, type map, CFG, pointer graph, C oracle harness draft, Rust draft provenance, Rust replay test, and L3 evidence manifest.
 - [x] 5.3 Add one pure-value regression slice such as `zlib/adler32` or `sqlite/varint` to ensure the translator path is not overfit to pointer-bearing code.
-- [ ] 5.4 Run generated Rust replay tests, schema-aware diff, negative diff, unsafe scan, version manifest, cache metadata, and final verification for the MVP slices.
+- [x] 5.4 Run generated Rust replay tests, schema-aware diff, negative diff, unsafe scan, version manifest, cache metadata, and final verification for the MVP slices.
 - [x] 5.5 Record known unsupported C constructs and non-goals in the slice summaries so the run does not overclaim C99 coverage.
 
 ## 6. AI Cache And Traceability
@@ -57,7 +57,7 @@
 
 - [x] 8.1 Run translator crate formatting and unit tests.
 - [x] 8.2 Run `cargo fmt -- --check`, targeted replay tests, `cargo test`, and `cargo run --bin emit_reports` for `validation/l2_slices`.
-- [ ] 8.3 Generate or refresh accepted C oracle evidence for MVP slices in WSL/Linux/CI and prove `C_ORACLE_GENERATED` is present for semantic pass claims.
+- [x] 8.3 Generate or refresh accepted C oracle evidence for MVP slices in WSL/Linux/CI and prove `C_ORACLE_GENERATED` is present for semantic pass claims.
 - [x] 8.4 Validate generated JSON evidence against all relevant schemas, including slice spec, type map, CFG, pointer graph, test translation, and L3 evidence manifest.
 - [x] 8.5 Run `openspec validate add-bounded-auto-translation-pipeline --strict`.
 - [x] 8.6 Run `openspec validate --all`.

@@ -1,9 +1,19 @@
 {
+  "accepted_negative_diff": {
+    "path": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
+    "sha256": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
+    "status": "passed"
+  },
   "expected_failure": true,
-  "mutation_detected": false,
-  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+  "first_mismatch": {
+    "case_id": "empty",
+    "field": "value",
+    "mutated_c_value": 0,
+    "rust_value": 1
+  },
+  "mutation_detected": true,
   "schema_version": 1,
   "slice_id": "adler32-step",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "zlib-ng"
 }

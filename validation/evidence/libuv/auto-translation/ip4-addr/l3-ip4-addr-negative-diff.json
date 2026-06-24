@@ -1,9 +1,19 @@
 {
+  "accepted_negative_diff": {
+    "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+    "sha256": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+    "status": "passed"
+  },
   "expected_failure": true,
-  "mutation_detected": false,
-  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+  "first_mismatch": {
+    "case_id": "loopback-test-port",
+    "field": "addr_bytes_hex",
+    "mutated_c_value": "7f000002",
+    "rust_value": "7f000001"
+  },
+  "mutation_detected": true,
   "schema_version": 1,
   "slice_id": "ip4-addr",
-  "status": "incomplete",
+  "status": "expected_failed",
   "target_id": "libuv"
 }

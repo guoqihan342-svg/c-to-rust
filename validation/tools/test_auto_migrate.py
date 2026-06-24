@@ -218,6 +218,85 @@ class AutoMigrateTests(unittest.TestCase):
         ]:
             self.assertIn(artifact, drifted["invalidated_artifacts"])
 
+    def test_accept_existing_evidence_requires_c_oracle_marker(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec = self._accepted_evidence_spec(Path(tmp), include_toolchain_marker=False)
+
+            with self.assertRaises(SystemExit) as raised:
+                auto_migrate.resolve_accepted_evidence(spec)
+
+            self.assertIn("toolchain_status=C_ORACLE_GENERATED", str(raised.exception))
+
+    def test_accept_existing_evidence_binding_keeps_generated_draft_candidate(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec = self._accepted_evidence_spec(Path(tmp), include_toolchain_marker=True)
+
+            accepted = auto_migrate.resolve_accepted_evidence(spec)
+            summary = auto_migrate.accepted_binding_summary(accepted)
+
+            self.assertEqual(accepted["status"], "accepted")
+            self.assertEqual(accepted["toolchain_status"], "C_ORACLE_GENERATED")
+            self.assertFalse(accepted["generated_draft_semantic_pass"])
+            self.assertFalse(summary["generated_draft_semantic_pass"])
+            self.assertEqual(summary["paths"]["c_oracle"], accepted["paths"]["c_oracle"])
+
+    def _accepted_evidence_spec(self, root: Path, include_toolchain_marker: bool) -> dict:
+        fixture = root / "fixture.json"
+        c_oracle = root / "c-oracle.json"
+        rust_report = root / "rust-report.json"
+        diff = root / "diff.json"
+        negative = root / "negative-diff.json"
+        unsafe_scan = root / "unsafe-scan.json"
+        unsafe_ledger = root / "unsafe-ledger.json"
+        fixture.write_text("[]\n", encoding="utf-8")
+        oracle_payload = {
+            "status": "passed",
+            "source_commit": "1234567",
+            "case_count": 1,
+            "slice_id": "demo-slice",
+        }
+        if include_toolchain_marker:
+            oracle_payload["toolchain_status"] = "C_ORACLE_GENERATED"
+        c_oracle.write_text(json.dumps(oracle_payload), encoding="utf-8")
+        rust_report.write_text(
+            json.dumps({"status": "passed", "source_commit": "1234567", "case_count": 1}),
+            encoding="utf-8",
+        )
+        diff.write_text(
+            json.dumps({"status": "passed", "source_commit": "1234567", "first_mismatch": None}),
+            encoding="utf-8",
+        )
+        negative.write_text(
+            json.dumps({"status": "expected_failed", "source_commit": "1234567", "mutation_detected": True}),
+            encoding="utf-8",
+        )
+        unsafe_scan.write_text(
+            json.dumps({"status": "passed", "source_commit": "1234567", "first_party_non_test_unsafe_count": 0}),
+            encoding="utf-8",
+        )
+        unsafe_ledger.write_text(
+            json.dumps({"status": "passed", "source_commit": "1234567", "first_party_non_test_unsafe_count": 0}),
+            encoding="utf-8",
+        )
+        return {
+            "target_id": "demo",
+            "slice_id": "demo-slice",
+            "source_commit": "1234567",
+            "fixture_hash": "fixture-hash",
+            "fixture_contract": {
+                "path": str(fixture),
+                "c_oracle": str(c_oracle),
+                "rust_report": str(rust_report),
+                "diff": str(diff),
+                "negative_diff": str(negative),
+                "unsafe_scan": str(unsafe_scan),
+                "unsafe_ledger": str(unsafe_ledger),
+                "behavior_fields": ["value"],
+            },
+        }
+
 
 if __name__ == "__main__":
     unittest.main()

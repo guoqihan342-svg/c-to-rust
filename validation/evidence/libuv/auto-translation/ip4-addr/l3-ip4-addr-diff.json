@@ -1,9 +1,21 @@
 {
+  "accepted_diff": {
+    "path": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+    "sha256": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "family",
+    "port_host",
+    "port_bytes_hex",
+    "addr_bytes_hex"
+  ],
   "first_mismatch": null,
-  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "ip4-addr",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "libuv"
 }

@@ -1,11 +1,21 @@
 {
-  "boundary": "Draft generation is not oracle success.",
+  "accepted_oracle": {
+    "path": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+    "sha256": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 137,
   "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+  "fixture_sha256": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324",
   "harness_draft": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
-  "required_final_status": "C_ORACLE_GENERATED",
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "adler32-step",
-  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-  "target_id": "zlib-ng"
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "source_slice_id": "zlib-adler32",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "zlib-ng",
+  "toolchain_status": "C_ORACLE_GENERATED"
 }

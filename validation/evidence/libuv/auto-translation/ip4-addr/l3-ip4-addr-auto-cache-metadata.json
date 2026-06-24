@@ -17,7 +17,8 @@
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
-    "validation/slice-specs/libuv-ip4-addr.json"
+    "validation/slice-specs/libuv-ip4-addr.json",
+    "--accept-existing-evidence"
   ],
   "fixture_hash": "libuv-ip4-addr-fixture",
   "invalidates": [

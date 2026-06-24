@@ -1,5 +1,11 @@
 {
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/libuv/l3-ip4-addr-unsafe-ledger.json",
+    "sha256": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
+    "status": "passed"
+  },
   "entries": [],
+  "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
   "schema_version": 1,
   "slice_id": "ip4-addr",

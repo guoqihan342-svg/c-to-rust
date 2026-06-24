@@ -1,11 +1,21 @@
 {
-  "boundary": "Draft generation is not oracle success.",
+  "accepted_oracle": {
+    "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+    "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 7,
   "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+  "fixture_sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
   "harness_draft": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-harness-draft.c",
-  "required_final_status": "C_ORACLE_GENERATED",
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "ip4-addr",
-  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-  "target_id": "libuv"
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_slice_id": "ip4-addr",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "libuv",
+  "toolchain_status": "C_ORACLE_GENERATED"
 }

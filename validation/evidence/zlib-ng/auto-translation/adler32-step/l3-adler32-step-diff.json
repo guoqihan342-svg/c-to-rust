@@ -1,9 +1,16 @@
 {
+  "accepted_diff": {
+    "path": "validation/evidence/l2-slices/zlib-adler32-diff.json",
+    "sha256": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "value"
+  ],
   "first_mismatch": null,
-  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "adler32-step",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "zlib-ng"
 }

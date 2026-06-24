@@ -1,4 +1,31 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+    "fixture_sha256": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+      "diff": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
+      "negative_diff": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
+      "rust_report": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
+      "unsafe_ledger": "c6fc8c023f37fef8ad75383f35256e83de91a1bad1da673b45ea4aada94dda97",
+      "unsafe_scan": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+      "diff": "validation/evidence/l2-slices/zlib-adler32-diff.json",
+      "negative_diff": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
+      "rust_report": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
+      "unsafe_ledger": "validation/evidence/l2-slices/unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/l2-slices/unsafe-scan.json"
+    },
+    "slice_id": "adler32-step",
+    "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "status": "accepted",
+    "target_id": "zlib-ng",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
   "cache": {
     "build_profile_hash": "50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
     "cache_input_fields": [
@@ -18,7 +45,8 @@
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
-      "validation/slice-specs/zlib-adler32-step.json"
+      "validation/slice-specs/zlib-adler32-step.json",
+      "--accept-existing-evidence"
     ],
     "fixture_hash": "zlib-adler32-fixture",
     "invalidates": [
@@ -60,21 +88,14 @@
     "translator_version": "0.1.0"
   },
   "claim_boundary": {
-    "must_still_pass": [
-      "C_ORACLE_GENERATED",
-      "Rust replay",
-      "schema-aware diff",
-      "negative diff",
-      "unsafe scan",
-      "version/config binding",
-      "OpenSpec validation"
-    ],
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
     "non_goals": [
       "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
       "No pointer/buffer ownership proof."
     ],
-    "scope": "auto-translation candidate evidence only",
-    "semantic_pass": false
+    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "semantic_pass": true
   },
   "fixture": {
     "hash": "zlib-adler32-fixture",
@@ -82,20 +103,30 @@
   },
   "l3_evidence_manifest": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-evidence-manifest.json",
-    "semantic_pass": false,
-    "status": "incomplete"
+    "semantic_pass": true,
+    "status": "passed"
   },
   "level": "L3",
   "oracle": {
-    "boundary": "Draft generation is not oracle success.",
+    "accepted_oracle": {
+      "path": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+      "sha256": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 137,
     "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+    "fixture_sha256": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324",
     "harness_draft": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
-    "required_final_status": "C_ORACLE_GENERATED",
     "schema_version": 1,
-    "semantic_pass": false,
+    "semantic_pass": true,
     "slice_id": "adler32-step",
-    "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-    "target_id": "zlib-ng"
+    "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "source_slice_id": "zlib-adler32",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "zlib-ng",
+    "toolchain_status": "C_ORACLE_GENERATED"
   },
   "patch": {
     "blocked_repairs": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-self-healing-blocked-repairs.json",
@@ -128,26 +159,52 @@
     },
     "evidence_links": {
       "c_oracle": {
-        "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
-        "status": "draft_or_skipped"
+        "path": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+        "sha256": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
+        "sha256": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
+        "status": "passed"
       },
       "rust_draft": {
         "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs",
         "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
+        "sha256": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/l2-slices/zlib-adler32-diff.json",
+        "sha256": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
+        "status": "passed"
       }
     },
     "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
     "known_gaps": [
-      "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
+    "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
     "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml adler32_step",
+        "file": "validation/l2_slices/tests/oracle_fixtures.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_adler32_step_replay"
+        ]
+      },
       {
         "cargo_command": "cargo test replay_adler32_step_fixture_contract",
         "file": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs",
-        "file_hash": "b79f861a5486827fa5b238e160926b02bc31f60152b86d0369a863d23403469c",
         "framework": "cargo test",
+        "status": "generated_draft",
         "test_names": [
           "replay_adler32_step_fixture_contract"
         ]
@@ -159,7 +216,7 @@
     "source_test_inputs": {
       "fixtures": [
         {
-          "hash": "zlib-adler32-fixture",
+          "hash": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324",
           "operation_count": 1,
           "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
           "source_kind": "fixture"
@@ -167,11 +224,17 @@
       ],
       "oracle_reports": [
         {
-          "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
-          "status": "draft_or_skipped"
+          "path": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+          "sha256": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
+          "sha256": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
+          "status": "passed"
         }
       ],
-      "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED."
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
     },
     "status": "recorded",
     "target_id": "zlib-ng",
@@ -184,18 +247,29 @@
         "coverage_kind": "oracle_replay",
         "evidence": [
           {
-            "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
-            "status": "not_semantic_pass"
+            "path": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+            "sha256": "4b45725e379dd16afe4ad1334d81aad90fd0e2644ea722082e80784a266797d3",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
+            "sha256": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/l2-slices/zlib-adler32-diff.json",
+            "sha256": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
+            "status": "passed"
           }
         ],
-        "rust_test": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs::replay_adler32_step_fixture_contract",
+        "rust_test": "validation/l2_slices/tests/oracle_fixtures.rs::accepted_adler32_step_replay",
         "source": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
-        "status": "gap"
+        "status": "mapped"
       }
     ]
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-mmc6c6al C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-vo9emxnh C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "schema_version": 1,
@@ -209,7 +283,7 @@
   "schema_version": 1,
   "slice_id": "adler32-step",
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-  "status": "candidate_generated",
+  "status": "accepted_evidence_bound",
   "target_id": "zlib-ng",
   "translator": {
     "artifact_paths": [

@@ -49,6 +49,11 @@ def main() -> int:
     parser.add_argument("--out-root", default=REPO_ROOT / "validation" / "evidence", type=Path)
     parser.add_argument("--skip-c-oracle", action="store_true")
     parser.add_argument("--skip-rust-check", action="store_true")
+    parser.add_argument(
+        "--accept-existing-evidence",
+        action="store_true",
+        help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
+    )
     args = parser.parse_args()
 
     spec = read_json(args.slice_spec)
@@ -63,8 +68,17 @@ def main() -> int:
     oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
     replay = generate_rust_replay_test_draft(spec, evidence_dir)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
-    cache = emit_cache_metadata(spec, args.slice_spec, evidence_dir)
-    manifest = emit_manifest(spec, evidence_dir, translator_summary, oracle, replay, rust_check, patch, cache)
+    cache = emit_cache_metadata(
+        spec,
+        args.slice_spec,
+        evidence_dir,
+        accept_existing_evidence=args.accept_existing_evidence,
+    )
+    accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
+    if accepted is not None:
+        oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
+        replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted)
+    manifest = emit_manifest(spec, evidence_dir, translator_summary, oracle, replay, rust_check, patch, cache, accepted)
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 
@@ -744,8 +758,13 @@ def write_blocked_patch(
     }
 
 
-def emit_cache_metadata(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
-    identity = cache_identity(spec, slice_spec)
+def emit_cache_metadata(
+    spec: dict[str, Any],
+    slice_spec: Path,
+    evidence_dir: Path,
+    accept_existing_evidence: bool = False,
+) -> dict[str, Any]:
+    identity = cache_identity(spec, slice_spec, accept_existing_evidence)
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -767,15 +786,17 @@ def emit_manifest(
     rust_check: dict[str, Any],
     patch: dict[str, Any],
     cache: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
-    l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache)
+    l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
+    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
     payload = {
         "schema_version": 1,
         "level": "L3",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "status": "candidate_generated",
+        "status": "accepted_evidence_bound" if semantic_pass else "candidate_generated",
         "source_commit": spec.get("source_commit"),
         "fixture": {
             "hash": spec.get("fixture_hash"),
@@ -789,13 +810,19 @@ def emit_manifest(
         "cache": cache,
         "l3_evidence_manifest": {
             "path": rel(l3_manifest),
-            "status": "incomplete",
-            "semantic_pass": False,
+            "status": "passed" if semantic_pass else "incomplete",
+            "semantic_pass": semantic_pass,
         },
+        "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
         "claim_boundary": {
-            "scope": "auto-translation candidate evidence only",
-            "semantic_pass": False,
-            "must_still_pass": [
+            "scope": "auto-translation candidate evidence only"
+            if not semantic_pass
+            else "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+            "semantic_pass": semantic_pass,
+            "generated_draft_semantic_pass": False,
+            "must_still_pass": []
+            if semantic_pass
+            else [
                 "C_ORACLE_GENERATED",
                 "Rust replay",
                 "schema-aware diff",
@@ -818,20 +845,23 @@ def emit_l3_evidence_manifest(
     replay: dict[str, Any],
     rust_check: dict[str, Any],
     cache: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
 ) -> Path:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
-    write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache)
+    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
+    write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
     pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
     if pointer_ref["status"] == "not_applicable":
         pointer_ref["not_applicable_reason"] = "slice has no pointer surface"
     test_ref = evidence_ref(evidence_dir / f"{prefix}-test-translation-generated.json", "recorded")
+    negative = read_json(evidence_dir / f"{prefix}-negative-diff.json")
     manifest = {
         "schema_version": 1,
         "level": "L3",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "status": "incomplete",
+        "status": "passed" if semantic_pass else "incomplete",
         "source_commit": source_commit(spec),
         "repo_commit": repo_commit(),
         "fixture": {
@@ -844,39 +874,47 @@ def emit_l3_evidence_manifest(
             "context_pack": evidence_ref(evidence_dir / f"{prefix}-context-pack.json", "recorded"),
             "cache_metadata": evidence_ref(evidence_dir / f"{prefix}-auto-cache-metadata.json", "recorded"),
             "config_profile": {
-                **evidence_ref(evidence_dir / f"{prefix}-config-profile.json", "incomplete"),
+                **evidence_ref(evidence_dir / f"{prefix}-config-profile.json", "recorded" if semantic_pass else "incomplete"),
                 "profile_id": build_profile_id(spec),
             },
             "pointer_dependency_graph": pointer_ref,
             "test_translation": test_ref,
             "c_oracle": evidence_ref(evidence_dir / f"{prefix}-c-oracle-status.json", oracle.get("status", "draft")),
-            "rust_report": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "incomplete"),
-            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "incomplete"),
+            "rust_report": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "passed" if semantic_pass else "incomplete"),
+            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "passed" if semantic_pass else "incomplete"),
             "negative_diff": {
-                **evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", "incomplete"),
+                **evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", negative.get("status", "incomplete")),
                 "expected_failure": True,
-                "mutation_detected": False,
+                "mutation_detected": bool(negative.get("mutation_detected") or negative.get("detected")),
             },
             "rust_check": evidence_ref(evidence_dir / "rust-check.json", rust_check.get("status", "unknown")),
-            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "incomplete"),
-            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "incomplete"),
+            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "passed" if semantic_pass else "incomplete"),
             "performance_smoke": {
                 **evidence_ref(evidence_dir / f"{prefix}-performance-smoke.json", "recorded"),
                 "secondary_only": True,
             },
-            "final_verification": evidence_ref(evidence_dir / f"{prefix}-final-verification.json", "incomplete"),
-            "summary": evidence_ref(evidence_dir / f"{prefix}-summary.json", "incomplete"),
+            "final_verification": evidence_ref(evidence_dir / f"{prefix}-final-verification.json", "passed" if semantic_pass else "incomplete"),
+            "summary": evidence_ref(evidence_dir / f"{prefix}-summary.json", "passed" if semantic_pass else "incomplete"),
             "version_or_config_binding": evidence_ref(evidence_dir / f"{prefix}-version-manifest.json", "recorded"),
         },
         "claim_boundary": {
-            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass.",
+            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass."
+            if not semantic_pass
+            else "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft.",
             "behavior_fields_checked": behavior_fields(spec),
             "accepted_metadata_differences": accepted_metadata_differences(spec),
             "known_gaps": non_goals(spec)
-            + [
-                "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
-                "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists.",
-            ],
+            + (
+                [
+                    "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence.",
+                ]
+                if semantic_pass
+                else [
+                    "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
+                    "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists.",
+                ]
+            ),
             "must_not_claim": must_not_claim(spec)
             + [
                 "semantic equivalence for this auto-generated Rust draft",
@@ -896,10 +934,12 @@ def write_l3_candidate_supporting_evidence(
     replay: dict[str, Any],
     rust_check: dict[str, Any],
     cache: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
 ) -> None:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
+    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
     write_json(
         evidence_dir / f"{prefix}-slice-contract.json",
         {
@@ -915,6 +955,9 @@ def write_l3_candidate_supporting_evidence(
         },
     )
     write_l3_config_profile(spec, evidence_dir)
+    if accepted is not None:
+        write_accepted_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
+        return
     write_json(
         evidence_dir / f"{prefix}-rust-report.json",
         {
@@ -1029,8 +1072,441 @@ def write_l3_candidate_supporting_evidence(
             "repo_commit": repo_commit(),
             "cache": cache,
             "translator_version": "0.1.0",
+            "semantic_pass": semantic_pass,
         },
     )
+
+
+def resolve_accepted_evidence(spec: dict[str, Any]) -> dict[str, Any]:
+    fixture = spec.get("fixture_contract", {})
+    c_oracle_path = required_repo_path(fixture.get("c_oracle"), "fixture_contract.c_oracle")
+    rust_report_path = required_repo_path(fixture.get("rust_report"), "fixture_contract.rust_report")
+    diff_path = optional_repo_path(fixture.get("diff")) or derive_evidence_path(c_oracle_path, "-oracle.json", "-diff.json")
+    negative_diff_path = optional_repo_path(fixture.get("negative_diff")) or derive_evidence_path(
+        c_oracle_path, "-oracle.json", "-negative-diff.json"
+    )
+    unsafe_scan_path = optional_repo_path(fixture.get("unsafe_scan")) or default_unsafe_scan_path(spec, c_oracle_path)
+    unsafe_ledger_path = optional_repo_path(fixture.get("unsafe_ledger")) or default_unsafe_ledger_path(spec, c_oracle_path)
+    performance_path = optional_repo_path(fixture.get("performance_smoke"))
+    final_path = optional_repo_path(fixture.get("final_verification")) or optional_default_evidence(
+        spec, "final-verification"
+    )
+    version_path = optional_repo_path(fixture.get("version_manifest")) or optional_default_evidence(
+        spec, "version-manifest"
+    )
+
+    paths = {
+        "c_oracle": c_oracle_path,
+        "rust_report": rust_report_path,
+        "diff": diff_path,
+        "negative_diff": negative_diff_path,
+        "unsafe_scan": unsafe_scan_path,
+        "unsafe_ledger": unsafe_ledger_path,
+        "performance_smoke": performance_path,
+        "final_verification": final_path,
+        "version_manifest": version_path,
+    }
+    for key in ["c_oracle", "rust_report", "diff", "negative_diff", "unsafe_scan", "unsafe_ledger"]:
+        if paths[key] is None or not paths[key].exists():
+            raise SystemExit(f"--accept-existing-evidence requires {key} evidence at {paths[key]}")
+
+    reports = {key: read_json(path) for key, path in paths.items() if path is not None and path.exists()}
+    require_accepted_report(spec, "c_oracle", reports["c_oracle"], require_toolchain=True)
+    require_accepted_report(spec, "rust_report", reports["rust_report"])
+    require_accepted_report(spec, "diff", reports["diff"])
+    require_accepted_report(spec, "unsafe_scan", reports["unsafe_scan"])
+    if reports["diff"].get("first_mismatch") is not None:
+        raise SystemExit("--accept-existing-evidence requires schema diff with first_mismatch=null")
+    if not mutation_detected(reports["negative_diff"]):
+        raise SystemExit("--accept-existing-evidence requires negative diff mutation_detected/detected=true")
+
+    fixture_path_text = fixture_path(spec)
+    fixture_file = REPO_ROOT / fixture_path_text
+    fixture_sha = sha256(fixture_file) if fixture_file.exists() and fixture_file.is_file() else fixture_hash(spec)
+    return {
+        "schema_version": 1,
+        "status": "accepted",
+        "target_id": spec.get("target_id"),
+        "slice_id": spec.get("slice_id"),
+        "source_commit": source_commit(spec),
+        "fixture_path": fixture_path_text,
+        "fixture_sha256": fixture_sha,
+        "paths": {key: rel(path) for key, path in paths.items() if path is not None and path.exists()},
+        "path_sha256": {key: sha256(path) for key, path in paths.items() if path is not None and path.exists()},
+        "reports": reports,
+        "toolchain_status": "C_ORACLE_GENERATED",
+        "generated_draft_semantic_pass": False,
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    }
+
+
+def promote_accepted_oracle(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_oracle: dict[str, Any],
+    accepted: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    report = accepted["reports"]["c_oracle"]
+    path = evidence_dir / f"l3-{slice_id}-c-oracle-status.json"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "C_ORACLE_GENERATED",
+        "semantic_pass": True,
+        "toolchain_status": "C_ORACLE_GENERATED",
+        "source_commit": source_commit(spec),
+        "fixture": fixture_path(spec),
+        "fixture_sha256": accepted["fixture_sha256"],
+        "case_count": report.get("case_count"),
+        "source_status": report.get("status"),
+        "source_slice_id": report.get("slice_id"),
+        "accepted_oracle": evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
+        "harness_draft": draft_oracle.get("harness_draft"),
+        "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    }
+    write_json(path, payload)
+    return payload
+
+
+def promote_accepted_test_translation(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    replay: dict[str, Any],
+    accepted: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-test-translation-generated.json"
+    payload = read_json(path)
+    test_file = spec.get("rust_boundary", {}).get("test_file") or replay.get("test_draft")
+    test_name = f"accepted_{safe_ident(slice_id)}_replay"
+    payload.update(
+        {
+            "status": "recorded",
+            "source_commit": source_commit(spec),
+            "source_test_inputs": {
+                "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance.",
+                "fixtures": [
+                    {
+                        "path": fixture_path(spec),
+                        "hash": accepted["fixture_sha256"],
+                        "operation_count": len(spec.get("fixture_contract", {}).get("cases", [])),
+                        "source_kind": "fixture",
+                    }
+                ],
+                "oracle_reports": [
+                    evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
+                    evidence_ref(REPO_ROOT / accepted["paths"]["rust_report"], "passed"),
+                ],
+            },
+            "rust_tests": [
+                {
+                    "file": test_file,
+                    "test_names": [test_name],
+                    "cargo_command": f"cargo test --manifest-path validation/l2_slices/Cargo.toml {safe_ident(slice_id)}",
+                    "framework": "cargo test",
+                    "source": "accepted replay evidence",
+                },
+                {
+                    "file": replay.get("test_draft"),
+                    "test_names": [f"replay_{safe_ident(slice_id)}_fixture_contract"],
+                    "cargo_command": f"cargo test replay_{safe_ident(slice_id)}_fixture_contract",
+                    "framework": "cargo test",
+                    "status": "generated_draft",
+                },
+            ],
+            "translation_mappings": [
+                {
+                    "source": fixture_path(spec),
+                    "rust_test": f"{test_file}::{test_name}",
+                    "behavior_fields": behavior_fields(spec),
+                    "coverage_kind": "oracle_replay",
+                    "status": "mapped",
+                    "evidence": [
+                        evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
+                        evidence_ref(REPO_ROOT / accepted["paths"]["rust_report"], "passed"),
+                        evidence_ref(REPO_ROOT / accepted["paths"]["diff"], "passed"),
+                    ],
+                }
+            ],
+            "evidence_links": {
+                "rust_draft": {"path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"), "status": "candidate"},
+                "c_oracle": evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
+                "rust_report": evidence_ref(REPO_ROOT / accepted["paths"]["rust_report"], "passed"),
+                "schema_diff": evidence_ref(REPO_ROOT / accepted["paths"]["diff"], "passed"),
+                "negative_diff": evidence_ref(REPO_ROOT / accepted["paths"]["negative_diff"], "passed"),
+            },
+            "known_gaps": [
+                "Generated replay draft is not itself the accepted replay implementation.",
+                "Generated Rust draft remains a candidate until that exact draft is promoted by later gates.",
+            ],
+        }
+    )
+    write_json(path, payload)
+    return payload
+
+
+def write_accepted_supporting_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    cache: dict[str, Any],
+    accepted: dict[str, Any],
+) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    accepted_paths = accepted["paths"]
+    reports = accepted["reports"]
+    unsafe_count = unsafe_count_from_report(reports["unsafe_scan"])
+    mark_config_profile_recorded(spec, evidence_dir, accepted)
+    write_json(
+        evidence_dir / f"{prefix}-rust-report.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "semantic_pass": True,
+            "source_commit": source_commit(spec),
+            "fixture": {"path": fixture_path(spec), "sha256": accepted["fixture_sha256"]},
+            "source_slice_id": reports["rust_report"].get("slice_id"),
+            "case_count": reports["rust_report"].get("case_count"),
+            "accepted_rust_report": evidence_ref(REPO_ROOT / accepted_paths["rust_report"], "passed"),
+            "generated_draft": evidence_ref(evidence_dir / f"{prefix}-rust-draft.rs", "candidate"),
+            "generated_draft_semantic_pass": False,
+            "replay": replay,
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "semantic_pass": True,
+            "first_mismatch": reports["diff"].get("first_mismatch"),
+            "compared_fields": reports["diff"].get("compared_fields") or behavior_fields(spec),
+            "accepted_diff": evidence_ref(REPO_ROOT / accepted_paths["diff"], "passed"),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-negative-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": reports["negative_diff"].get("status", "passed"),
+            "expected_failure": True,
+            "mutation_detected": mutation_detected(reports["negative_diff"]),
+            "first_mismatch": reports["negative_diff"].get("first_mismatch"),
+            "accepted_negative_diff": evidence_ref(REPO_ROOT / accepted_paths["negative_diff"], "passed"),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-scan.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "semantic_pass": True,
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "first_party_non_test_unsafe_ratio": 0.0,
+            "generated_draft_unsafe_count": rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs"),
+            "accepted_unsafe_scan": evidence_ref(REPO_ROOT / accepted_paths["unsafe_scan"], "passed"),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-ledger.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "entries": [],
+            "accepted_unsafe_ledger": evidence_ref(REPO_ROOT / accepted_paths["unsafe_ledger"], "passed"),
+            "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-performance-smoke.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "secondary_only": True,
+            "semantic_pass": True,
+            "accepted_performance_smoke": optional_evidence_ref(accepted_paths.get("performance_smoke"), "recorded"),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-final-verification.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "semantic_pass": True,
+            "source_commit": source_commit(spec),
+            "fixture": {"path": fixture_path(spec), "sha256": accepted["fixture_sha256"]},
+            "rust_check_status": rust_check.get("status"),
+            "c_oracle_status": oracle.get("status"),
+            "toolchain_status": "C_ORACLE_GENERATED",
+            "rust_report_status": reports["rust_report"].get("status"),
+            "schema_diff_status": reports["diff"].get("status"),
+            "negative_diff_mutation_detected": mutation_detected(reports["negative_diff"]),
+            "unsafe_status": reports["unsafe_scan"].get("status"),
+            "version_config_status": "recorded",
+            "generated_draft_semantic_pass": False,
+            "accepted_evidence_binding": accepted_binding_summary(accepted),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-summary.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed",
+            "semantic_pass": True,
+            "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
+            "generated_draft_semantic_pass": False,
+            "accepted_evidence_binding": accepted_binding_summary(accepted),
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-version-manifest.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "semantic_pass": True,
+            "source_commit": source_commit(spec),
+            "repo_commit": repo_commit(),
+            "cache": cache,
+            "translator_version": "0.1.0",
+            "accepted_evidence_binding": accepted_binding_summary(accepted),
+            "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+        },
+    )
+
+
+def mark_config_profile_recorded(spec: dict[str, Any], evidence_dir: Path, accepted: dict[str, Any]) -> None:
+    path = evidence_dir / f"l3-{required_str(spec, 'slice_id')}-config-profile.json"
+    payload = read_json(path)
+    payload["status"] = "recorded"
+    payload["accepted_evidence_binding"] = accepted_binding_summary(accepted)
+    write_json(path, payload)
+
+
+def required_repo_path(value: Any, field: str) -> Path:
+    path = optional_repo_path(value)
+    if path is None:
+        raise SystemExit(f"--accept-existing-evidence requires {field}")
+    if not path.exists():
+        raise SystemExit(f"--accept-existing-evidence requires existing {field}: {path}")
+    return path
+
+
+def optional_repo_path(value: Any) -> Path | None:
+    if not value:
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
+def derive_evidence_path(c_oracle_path: Path, old_suffix: str, new_suffix: str) -> Path:
+    name = c_oracle_path.name
+    if name.endswith("-c-oracle.json"):
+        return c_oracle_path.with_name(name[: -len("-c-oracle.json")] + new_suffix)
+    if name.endswith(old_suffix):
+        return c_oracle_path.with_name(name[: -len(old_suffix)] + new_suffix)
+    return c_oracle_path.with_name(c_oracle_path.stem + new_suffix)
+
+
+def default_unsafe_scan_path(spec: dict[str, Any], c_oracle_path: Path) -> Path:
+    target_id = str(spec.get("target_id", ""))
+    slice_id = required_str(spec, "slice_id")
+    if target_id == "zlib-ng":
+        return REPO_ROOT / "validation" / "evidence" / "l2-slices" / "unsafe-scan.json"
+    return c_oracle_path.parent / f"l3-{slice_id}-unsafe-scan.json"
+
+
+def default_unsafe_ledger_path(spec: dict[str, Any], c_oracle_path: Path) -> Path:
+    target_id = str(spec.get("target_id", ""))
+    slice_id = required_str(spec, "slice_id")
+    if target_id == "zlib-ng":
+        return REPO_ROOT / "validation" / "evidence" / "l2-slices" / "unsafe-ledger.json"
+    return c_oracle_path.parent / f"l3-{slice_id}-unsafe-ledger.json"
+
+
+def optional_default_evidence(spec: dict[str, Any], name: str) -> Path | None:
+    target_id = str(spec.get("target_id", ""))
+    slice_id = required_str(spec, "slice_id")
+    candidate = REPO_ROOT / "validation" / "evidence" / target_id / f"l3-{slice_id}-{name}.json"
+    return candidate if candidate.exists() else None
+
+
+def require_accepted_report(
+    spec: dict[str, Any],
+    label: str,
+    report: dict[str, Any],
+    require_toolchain: bool = False,
+) -> None:
+    status = str(report.get("status", ""))
+    if status not in {"passed", "expected_failed"}:
+        raise SystemExit(f"--accept-existing-evidence requires {label}.status passed/expected_failed, got {status!r}")
+    report_commit = report.get("source_commit")
+    if report_commit and report_commit != source_commit(spec):
+        raise SystemExit(
+            f"--accept-existing-evidence source_commit mismatch for {label}: {report_commit} != {source_commit(spec)}"
+        )
+    if require_toolchain and report.get("toolchain_status") != "C_ORACLE_GENERATED":
+        raise SystemExit(f"--accept-existing-evidence requires {label}.toolchain_status=C_ORACLE_GENERATED")
+
+
+def mutation_detected(report: dict[str, Any]) -> bool:
+    return bool(report.get("mutation_detected") or report.get("detected"))
+
+
+def unsafe_count_from_report(report: dict[str, Any]) -> int:
+    for key in ["first_party_non_test_unsafe_count", "unsafe_count"]:
+        value = report.get(key)
+        if isinstance(value, int):
+            return value
+    hits = report.get("hits")
+    return len(hits) if isinstance(hits, list) else 0
+
+
+def optional_evidence_ref(path_text: str | None, status: str) -> dict[str, Any]:
+    if not path_text:
+        return {"status": "not_applicable"}
+    return evidence_ref(REPO_ROOT / path_text, status)
+
+
+def accepted_binding_summary(accepted: dict[str, Any] | None) -> dict[str, Any] | None:
+    if accepted is None:
+        return None
+    return {
+        "status": accepted.get("status"),
+        "target_id": accepted.get("target_id"),
+        "slice_id": accepted.get("slice_id"),
+        "source_commit": accepted.get("source_commit"),
+        "fixture_path": accepted.get("fixture_path"),
+        "fixture_sha256": accepted.get("fixture_sha256"),
+        "toolchain_status": accepted.get("toolchain_status"),
+        "generated_draft_semantic_pass": accepted.get("generated_draft_semantic_pass"),
+        "paths": accepted.get("paths", {}),
+        "path_sha256": accepted.get("path_sha256", {}),
+        "binding_boundary": accepted.get("binding_boundary"),
+    }
 
 
 def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path) -> None:
@@ -1268,7 +1744,14 @@ def cache_keys(spec: dict[str, Any], slice_spec_path: Path) -> list[str]:
     ]
 
 
-def cache_identity(spec: dict[str, Any], slice_spec_path: Path) -> dict[str, Any]:
+def cache_identity(
+    spec: dict[str, Any],
+    slice_spec_path: Path,
+    accept_existing_evidence: bool = False,
+) -> dict[str, Any]:
+    command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
+    if accept_existing_evidence:
+        command_arguments.append("--accept-existing-evidence")
     return {
         "source_commit": source_commit(spec),
         "source_file_hashes": source_file_hashes(spec),
@@ -1287,7 +1770,7 @@ def cache_identity(spec: dict[str, Any], slice_spec_path: Path) -> dict[str, Any
         },
         "translator_version": "0.1.0",
         "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
-        "command_arguments": ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)],
+        "command_arguments": command_arguments,
     }
 
 

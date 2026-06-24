@@ -1,4 +1,35 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "fixture_sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+      "diff": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
+      "final_verification": "637743f452075252d87b3c75888011876da93414041983dcbebca0ba504cb3c0",
+      "negative_diff": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+      "rust_report": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
+      "unsafe_ledger": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
+      "unsafe_scan": "4d27beb39d6ba7cbad8187329662442e111bacb5fddbe5b0fb7505251f9c2693",
+      "version_manifest": "1dd2f8c4e9523400788a63a3b7ee1efcfeaa7c404dc47f70810297a99f3c3237"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "diff": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+      "final_verification": "validation/evidence/libuv/l3-ip4-addr-final-verification.json",
+      "negative_diff": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+      "rust_report": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+      "unsafe_ledger": "validation/evidence/libuv/l3-ip4-addr-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/libuv/l3-ip4-addr-unsafe-scan.json",
+      "version_manifest": "validation/evidence/libuv/l3-ip4-addr-version-manifest.json"
+    },
+    "slice_id": "ip4-addr",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "status": "accepted",
+    "target_id": "libuv",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
   "c_defines": {
     "AF_INET": "2",
     "_GNU_SOURCE": true
@@ -42,7 +73,7 @@
     "No whole-program alias proof."
   ],
   "profile_id": "libuv-ip4-addr-linux-gnu",
-  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
+  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
@@ -52,7 +83,7 @@
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-  "status": "incomplete",
+  "status": "recorded",
   "target_id": "libuv",
   "toolchain": {
     "cargo_version": "captured_by_validation",

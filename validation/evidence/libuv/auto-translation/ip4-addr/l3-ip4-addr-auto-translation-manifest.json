@@ -1,4 +1,35 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "fixture_sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+      "diff": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
+      "final_verification": "637743f452075252d87b3c75888011876da93414041983dcbebca0ba504cb3c0",
+      "negative_diff": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+      "rust_report": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
+      "unsafe_ledger": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
+      "unsafe_scan": "4d27beb39d6ba7cbad8187329662442e111bacb5fddbe5b0fb7505251f9c2693",
+      "version_manifest": "1dd2f8c4e9523400788a63a3b7ee1efcfeaa7c404dc47f70810297a99f3c3237"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "diff": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+      "final_verification": "validation/evidence/libuv/l3-ip4-addr-final-verification.json",
+      "negative_diff": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+      "rust_report": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+      "unsafe_ledger": "validation/evidence/libuv/l3-ip4-addr-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/libuv/l3-ip4-addr-unsafe-scan.json",
+      "version_manifest": "validation/evidence/libuv/l3-ip4-addr-version-manifest.json"
+    },
+    "slice_id": "ip4-addr",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "status": "accepted",
+    "target_id": "libuv",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
   "cache": {
     "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "cache_input_fields": [
@@ -18,7 +49,8 @@
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
-      "validation/slice-specs/libuv-ip4-addr.json"
+      "validation/slice-specs/libuv-ip4-addr.json",
+      "--accept-existing-evidence"
     ],
     "fixture_hash": "libuv-ip4-addr-fixture",
     "invalidates": [
@@ -62,23 +94,16 @@
     "translator_version": "0.1.0"
   },
   "claim_boundary": {
-    "must_still_pass": [
-      "C_ORACLE_GENERATED",
-      "Rust replay",
-      "schema-aware diff",
-      "negative diff",
-      "unsafe scan",
-      "version/config binding",
-      "OpenSpec validation"
-    ],
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
     "non_goals": [
       "No full libuv migration claim.",
       "No IPv6 or event-loop behavior.",
       "No null pointer execution.",
       "No whole-program alias proof."
     ],
-    "scope": "auto-translation candidate evidence only",
-    "semantic_pass": false
+    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "semantic_pass": true
   },
   "fixture": {
     "hash": "libuv-ip4-addr-fixture",
@@ -86,20 +111,30 @@
   },
   "l3_evidence_manifest": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-evidence-manifest.json",
-    "semantic_pass": false,
-    "status": "incomplete"
+    "semantic_pass": true,
+    "status": "passed"
   },
   "level": "L3",
   "oracle": {
-    "boundary": "Draft generation is not oracle success.",
+    "accepted_oracle": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 7,
     "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "fixture_sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
     "harness_draft": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-harness-draft.c",
-    "required_final_status": "C_ORACLE_GENERATED",
     "schema_version": 1,
-    "semantic_pass": false,
+    "semantic_pass": true,
     "slice_id": "ip4-addr",
-    "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-    "target_id": "libuv"
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "source_slice_id": "ip4-addr",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "libuv",
+    "toolchain_status": "C_ORACLE_GENERATED"
   },
   "patch": {
     "blocked_repairs": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-self-healing-blocked-repairs.json",
@@ -142,26 +177,52 @@
     },
     "evidence_links": {
       "c_oracle": {
-        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-status.json",
-        "status": "draft_or_skipped"
+        "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+        "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+        "sha256": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+        "status": "passed"
       },
       "rust_draft": {
         "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-draft.rs",
         "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+        "sha256": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+        "sha256": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
+        "status": "passed"
       }
     },
     "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
     "known_gaps": [
-      "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
+    "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
     "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml ip4_addr",
+        "file": "validation/l2_slices/tests/libuv_ip4_addr.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_ip4_addr_replay"
+        ]
+      },
       {
         "cargo_command": "cargo test replay_ip4_addr_fixture_contract",
         "file": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-replay-test-draft.rs",
-        "file_hash": "63c37ab645122613b44d4714a964a4d265bb75510a789edb67edfa1529fc80e5",
         "framework": "cargo test",
+        "status": "generated_draft",
         "test_names": [
           "replay_ip4_addr_fixture_contract"
         ]
@@ -173,7 +234,7 @@
     "source_test_inputs": {
       "fixtures": [
         {
-          "hash": "libuv-ip4-addr-fixture",
+          "hash": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
           "operation_count": 2,
           "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
           "source_kind": "fixture"
@@ -181,11 +242,17 @@
       ],
       "oracle_reports": [
         {
-          "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-status.json",
-          "status": "draft_or_skipped"
+          "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+          "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+          "sha256": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
+          "status": "passed"
         }
       ],
-      "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED."
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
     },
     "status": "recorded",
     "target_id": "libuv",
@@ -203,18 +270,29 @@
         "coverage_kind": "oracle_replay",
         "evidence": [
           {
-            "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-status.json",
-            "status": "not_semantic_pass"
+            "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+            "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+            "sha256": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+            "sha256": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
+            "status": "passed"
           }
         ],
-        "rust_test": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-replay-test-draft.rs::replay_ip4_addr_fixture_contract",
+        "rust_test": "validation/l2_slices/tests/libuv_ip4_addr.rs::accepted_ip4_addr_replay",
         "source": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
-        "status": "gap"
+        "status": "mapped"
       }
     ]
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-4d4djpi0 C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\libuv\\auto-translation\\ip4-addr\\l3-ip4-addr-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ayx2utu7 C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\libuv\\auto-translation\\ip4-addr\\l3-ip4-addr-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "schema_version": 1,
@@ -228,7 +306,7 @@
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-  "status": "candidate_generated",
+  "status": "accepted_evidence_bound",
   "target_id": "libuv",
   "translator": {
     "artifact_paths": [

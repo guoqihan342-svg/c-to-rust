@@ -17,7 +17,8 @@
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
-    "validation/slice-specs/zlib-adler32-step.json"
+    "validation/slice-specs/zlib-adler32-step.json",
+    "--accept-existing-evidence"
   ],
   "fixture_hash": "zlib-adler32-fixture",
   "invalidates": [

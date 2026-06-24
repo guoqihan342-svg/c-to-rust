@@ -1,10 +1,13 @@
 {
+  "schema_version": 1,
   "project_id": "sqlite",
   "slice_id": "sqlite-varint",
   "source_commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
   "c_source_boundary": "sqlite3PutVarint/sqlite3GetVarint from sqlite3.c",
   "compile_command": "cc -std=c99 -O2 -DSQLITE_PRIVATE= -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite/sqlite3.c /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/sqlite-varint/sqlite_varint_oracle.c -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/sqlite-varint/sqlite_varint_oracle",
+  "execution_environment": "WSL/Linux C toolchain",
   "fixture": "validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
   "case_count": 38,
-  "status": "passed"
+  "status": "passed",
+  "toolchain_status": "C_ORACLE_GENERATED"
 }
