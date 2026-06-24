@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "micropython",
+  "project_name": "MicroPython",
+  "status": "failed",
+  "commit": "34417ddb1c03808da2df577c49126e947c2832b9",
+  "branch": "master",
+  "repo_url": "https://github.com/micropython/micropython.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/repos/micropython",
+  "source_group": "micropython-20260624T041326Z",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z",
+  "tool_versions": {
+    "git": "git version 2.43.0",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ninja": "1.11.1",
+    "meson": null,
+    "python3": "Python 3.12.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "01_clone",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/micropython/micropython.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/repos/micropython",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1200,
+      "elapsed_seconds": 51.594,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stderr.log"
+      ]
+    },
+    {
+      "label": "02_build_1",
+      "command": "make -C mpy-cross",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/repos/micropython",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 48.256,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "make -C ports/unix submodules",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/repos/micropython",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 60.279,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_build_3",
+      "command": "make -C ports/unix",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/repos/micropython",
+      "exit_code": 2,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 33.321,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stderr.log"
+      ]
+    }
+  ],
+  "failed_step": "04_build_3",
+  "failure_summary": "04_build_3 exited 2",
+  "started_at_utc": "2026-06-24T04:13:26Z",
+  "finished_at_utc": "2026-06-24T04:16:25Z",
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/logs/micropython/04_build_3.stderr.log"
+  ],
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

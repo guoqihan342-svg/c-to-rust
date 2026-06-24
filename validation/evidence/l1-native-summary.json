@@ -2,13 +2,13 @@
   "schema_version": 1,
   "command": "aggregate-l1-native-validation",
   "level": "L1",
-  "generated_at_utc": "2026-06-24T04:02:17Z",
+  "generated_at_utc": "2026-06-24T04:20:38Z",
   "milestone_status": "passed",
   "pass_threshold": 12,
   "catalog_target_count": 40,
-  "attempted_count": 36,
+  "attempted_count": 40,
   "passed_count": 23,
-  "failed_count": 13,
+  "failed_count": 17,
   "other_count": 0,
   "passed_projects": [
     "curl",
@@ -36,6 +36,8 @@
     "zstd"
   ],
   "failed_projects": [
+    "ffmpeg",
+    "freertos-kernel",
     "hdf5",
     "libevent",
     "libgit2",
@@ -44,19 +46,16 @@
     "libuv",
     "linux",
     "mbedtls",
+    "micropython",
     "mupdf",
     "openvpn",
     "qemu",
     "systemd",
-    "tcpdump"
+    "tcpdump",
+    "zephyr"
   ],
   "other_projects": [],
-  "not_attempted_catalog_projects": [
-    "ffmpeg",
-    "micropython",
-    "zephyr",
-    "freertos-kernel"
-  ],
+  "not_attempted_catalog_projects": [],
   "external_workspace_root": "C:/Users/Administrator/Documents/c-to-rust-l1-work",
   "worker_result_sources": {
     "storage-runtime": {
@@ -163,6 +162,54 @@
       "attempted_count": 1,
       "passed_count": 0,
       "failed_count": 1
+    },
+    "ffmpeg-20260624T041343Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z",
+      "started_at_utc": "2026-06-24T04:13:43Z",
+      "finished_at_utc": "2026-06-24T04:14:41Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "micropython-20260624T041326Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z",
+      "started_at_utc": "2026-06-24T04:13:26Z",
+      "finished_at_utc": "2026-06-24T04:16:25Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "zephyr-20260624T041331Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/zephyr-20260624T041331Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/zephyr-20260624T041331Z",
+      "started_at_utc": "2026-06-24T04:13:31Z",
+      "finished_at_utc": "2026-06-24T04:20:14Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "freertos-kernel-20260624T041333Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/freertos-kernel-20260624T041333Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/freertos-kernel-20260624T041333Z",
+      "started_at_utc": "2026-06-24T04:13:33Z",
+      "finished_at_utc": "2026-06-24T04:13:55Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
     }
   },
   "per_project_evidence": {
@@ -172,6 +219,7 @@
     "curl": "validation/evidence/curl/l1-native-build.json",
     "git": "validation/evidence/git/l1-native-build.json",
     "openssl": "validation/evidence/openssl/l1-native-build.json",
+    "ffmpeg": "validation/evidence/ffmpeg/l1-native-build.json",
     "postgres": "validation/evidence/postgres/l1-native-build.json",
     "lua": "validation/evidence/lua/l1-native-build.json",
     "libuv": "validation/evidence/libuv/l1-native-build.json",
@@ -183,7 +231,10 @@
     "valkey": "validation/evidence/valkey/l1-native-build.json",
     "zstd": "validation/evidence/zstd/l1-native-build.json",
     "libjpeg-turbo": "validation/evidence/libjpeg-turbo/l1-native-build.json",
+    "micropython": "validation/evidence/micropython/l1-native-build.json",
     "tmux": "validation/evidence/tmux/l1-native-build.json",
+    "zephyr": "validation/evidence/zephyr/l1-native-build.json",
+    "freertos-kernel": "validation/evidence/freertos-kernel/l1-native-build.json",
     "linux": "validation/evidence/linux/l1-native-build.json",
     "qemu": "validation/evidence/qemu/l1-native-build.json",
     "systemd": "validation/evidence/systemd/l1-native-build.json",

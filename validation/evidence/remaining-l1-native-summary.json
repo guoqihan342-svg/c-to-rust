@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "command": "aggregate-remaining-l1-native-validation",
+  "level": "L1",
+  "generated_at_utc": "2026-06-24T04:20:38Z",
+  "remaining_target_count": 4,
+  "status": "passed",
+  "attempted_count": 4,
+  "passed_count": 0,
+  "failed_count": 4,
+  "other_count": 0,
+  "attempted_projects": [
+    "ffmpeg",
+    "micropython",
+    "zephyr",
+    "freertos-kernel"
+  ],
+  "passed_projects": [],
+  "failed_projects": [
+    "ffmpeg",
+    "freertos-kernel",
+    "micropython",
+    "zephyr"
+  ],
+  "other_projects": [],
+  "not_attempted_remaining_projects": [],
+  "worker_result_sources": {
+    "ffmpeg-20260624T041343Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/ffmpeg-20260624T041343Z",
+      "started_at_utc": "2026-06-24T04:13:43Z",
+      "finished_at_utc": "2026-06-24T04:14:41Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "micropython-20260624T041326Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/micropython-20260624T041326Z",
+      "started_at_utc": "2026-06-24T04:13:26Z",
+      "finished_at_utc": "2026-06-24T04:16:25Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "zephyr-20260624T041331Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/zephyr-20260624T041331Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/zephyr-20260624T041331Z",
+      "started_at_utc": "2026-06-24T04:13:31Z",
+      "finished_at_utc": "2026-06-24T04:20:14Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    },
+    "freertos-kernel-20260624T041333Z": {
+      "path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/freertos-kernel-20260624T041333Z/results.json",
+      "loaded": true,
+      "error": null,
+      "group": null,
+      "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remaining-l1/freertos-kernel-20260624T041333Z",
+      "started_at_utc": "2026-06-24T04:13:33Z",
+      "finished_at_utc": "2026-06-24T04:13:55Z",
+      "attempted_count": 1,
+      "passed_count": 0,
+      "failed_count": 1
+    }
+  },
+  "per_project_evidence": {
+    "ffmpeg": "validation/evidence/ffmpeg/l1-native-build.json",
+    "micropython": "validation/evidence/micropython/l1-native-build.json",
+    "zephyr": "validation/evidence/zephyr/l1-native-build.json",
+    "freertos-kernel": "validation/evidence/freertos-kernel/l1-native-build.json"
+  },
+  "reporting_boundary": "This L1 summary proves native C baseline build/test smoke only. It does not prove Rust slice compilation, unsafe budget, C/Rust semantic equivalence, or performance preservation."
+}
