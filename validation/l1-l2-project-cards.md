@@ -173,6 +173,134 @@ English: these cards translate L0 catalog targets into executable next steps. Th
 - Oracle: native unit/vector helper output with scheduler-free fixtures.
 - Risk: critical sections, interrupts, task scheduling, and port layers require RTOS-aware gates.
 
+## Wave2 Cards
+
+### Linux Kernel
+
+- L1 native smoke: `make defconfig && make -j2 bzImage`, then a bounded kselftest such as `make -C tools/testing/selftests TARGETS=timers run_tests`.
+- L2 Rust slice: `tools/` user-space helper, `lib/` checksum/string helper, or one selftest-owned utility.
+- Oracle: kselftest output or C helper vectors from `tools/lib` and `lib` helper functions.
+- Risk: Kconfig, inline assembly, RCU, atomics, interrupts, hardware assumptions, and WSL limitations.
+
+### QEMU
+
+- L1 native smoke: `./configure --target-list=x86_64-softmmu --disable-werror --disable-docs && ninja -C build qemu-system-x86_64`, then `build/qemu-system-x86_64 --version`.
+- L2 Rust slice: `qemu-img` helper, block format probe, `util/` data structure, or small wire-format parser.
+- Oracle: native `qemu-img`/`qemu-system` smoke output plus C helper JSON for util/block fixtures.
+- Risk: generated QAPI, coroutine scheduling, device models, and host feature dependencies.
+
+### systemd
+
+- L1 native smoke: `meson setup build -Dtests=false -Dman=false && ninja -C build`, then `build/systemd --version`.
+- L2 Rust slice: `src/basic` utility, journal field parser, udev rule parser subset, or bus message helper.
+- Oracle: native unit/helper output and fixed parser fixtures with normalized environment fields.
+- Risk: privileges, cgroups, namespaces, capabilities, and Linux host state affect tests.
+
+### Vim
+
+- L1 native smoke: `./configure --with-features=tiny --disable-gui --without-x && make -j2`, then `src/vim --version`.
+- L2 Rust slice: regexp helper, option parser, buffer line utility, or ex command parser subset.
+- Oracle: native Vim command transcript plus C helper fixtures for parser/helper functions.
+- Risk: editor state, terminal behavior, locale, and script compatibility.
+
+### HAProxy
+
+- L1 native smoke: `make -j2 TARGET=linux-glibc USE_OPENSSL=0 USE_PCRE=0`, then `./haproxy -vv`.
+- L2 Rust slice: HTTP header parser, ACL sample converter, ring buffer helper, or stick-table key helper.
+- Oracle: native parser/helper JSON or CLI config validation output for fixed fixtures.
+- Risk: high-performance hot paths, intrusive lists, TLS/QUIC options, and vtest-dependent regressions.
+
+### libxml2
+
+- L1 native smoke: `cmake -S . -B build -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_TESTS=ON && cmake --build build --parallel 2`, then `ctest --test-dir build --output-on-failure`.
+- L2 Rust slice: tokenizer/SAX state subset, entity parser, URI helper, or XPath token helper.
+- Oracle: `xmllint` output and C helper JSON for fixed XML fixtures including negative cases.
+- Risk: XML security behavior, entity handling, encodings, and legacy compatibility.
+
+### wolfSSL
+
+- L1 native smoke: `./autogen.sh && ./configure --disable-shared --enable-static && make -j2`, then `make check`.
+- L2 Rust slice: non-secret base64, ASN.1, PEM, or X.509 field parser before cryptographic primitives.
+- Oracle: known-answer non-secret encoding fixtures and native testwolfcrypt/testsuite output.
+- Risk: secret-dependent code and constant-time properties require security review.
+
+### libpcap
+
+- L1 native smoke: `./configure --disable-shared && make -j2`, then `make check`.
+- L2 Rust slice: BPF lexer/parser subset, pcap file header parser, or filter optimizer helper.
+- Oracle: native filter compile output and pcap fixture metadata JSON.
+- Risk: kernel capture backends and device/platform behavior should stay out of early slices.
+
+### tcpdump
+
+- L1 native smoke: `./configure && make -j2`, then `./tcpdump --version`.
+- L2 Rust slice: single protocol printer, address formatter, or packet header parser helper.
+- Oracle: native tcpdump text output for fixed pcap fixtures plus schema-normalized packet fields.
+- Risk: output formatting, protocol edge cases, and libpcap dependency versions must be pinned.
+
+### memcached
+
+- L1 native smoke: `./autogen.sh && ./configure --disable-docs && make -j2`, then `./memcached -h`.
+- L2 Rust slice: ASCII protocol parser, item metadata helper, hash helper, or slab class computation.
+- Oracle: native protocol transcript fixtures and C helper JSON for parser/slab cases.
+- Risk: networking, threads, slab concurrency, and extstore behavior are later gates.
+
+### libgit2
+
+- L1 native smoke: `cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_SSH=OFF && cmake --build build --parallel 2`, then `ctest --test-dir build --output-on-failure -R core`.
+- L2 Rust slice: OID parser, pkt-line helper, pathspec helper, or pack index metadata parser.
+- Oracle: native libgit2 fixtures and C helper JSON for object/path/pkt-line cases.
+- Risk: filesystem and repository state semantics need pinned fixture repositories.
+
+### librdkafka
+
+- L1 native smoke: `./configure --disable-ssl --disable-sasl --disable-zstd --disable-lz4-ext && make -j2 libs`, then `./examples/rdkafka_example -X list`.
+- L2 Rust slice: Kafka protocol encoder/decoder subset, topic partition helper, or config parser.
+- Oracle: native protocol fixture encoder output and schema-aware diff for request/response fields.
+- Risk: cluster integration, network timing, compression, and C++ wrappers should be outside first slices.
+
+### x264
+
+- L1 native smoke: `./configure --disable-asm --enable-static && make -j2`, then `./x264 --version`.
+- L2 Rust slice: NAL header parser, bitstream writer helper, CABAC/CAVLC table helper, or scalar pixel utility.
+- Oracle: native x264 bitstream metadata and C helper vectors with asm disabled.
+- Risk: codec bit-exactness, SIMD, rate control, and floating-point paths require strict fixtures.
+
+### OpenVPN
+
+- L1 native smoke: `autoreconf -i -v -f && ./configure --disable-plugin-auth-pam && make -j2`, then `src/openvpn/openvpn --version`.
+- L2 Rust slice: option parser, packet framing helper, route parser, or non-secret base64/key-value helper.
+- Oracle: native CLI/config parse output and C helper JSON for packet/config fixtures.
+- Risk: privilege, network devices, platform routing, and crypto/session lifecycle are later gates.
+
+### ImageMagick
+
+- L1 native smoke: `./configure --without-perl --disable-opencl --with-modules=no && make -j2`, then `utilities/magick identify logo:`.
+- L2 Rust slice: geometry parser, color parser, pixel math helper, or dependency-light coder metadata parser.
+- Oracle: native `magick identify/convert` output and C helper JSON for geometry/color fixtures.
+- Risk: delegate formats, policy files, OpenMP, and floating-point pixel differences need normalization.
+
+### MuPDF
+
+- L1 native smoke: `make HAVE_X11=no HAVE_GLFW=no build=release -j2`, then `build/release/mutool -v`.
+- L2 Rust slice: PDF object parser, xref helper, stream filter wrapper, or path flattening helper.
+- Oracle: native `mutool` output and C helper JSON for PDF object/xref fixtures.
+- Risk: PDF edge cases, vendored third-party code, rendering nondeterminism, and licensing require isolation.
+
+### HDF5
+
+- L1 native smoke: `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DHDF5_BUILD_TOOLS=ON && cmake --build build --parallel 2`, then `ctest --test-dir build --output-on-failure`.
+- L2 Rust slice: dataspace selection helper, chunk cache helper, filter pipeline metadata helper, or B-tree utility.
+- Oracle: native `h5dump/h5diff` output and C helper JSON for generated HDF5 fixtures.
+- Risk: file-format compatibility, optional language bindings, filters, and long tests need strict scope.
+
+### OpenSSH Portable
+
+- L1 native smoke: `autoreconf && ./configure && make -j2`, then `ssh -V`.
+- L2 Rust slice: `sshbuf` helper, known_hosts parser, authfile parser, packet framing, or key option parser.
+- Oracle: native regress output and C helper JSON for non-secret parser/buffer fixtures.
+- Risk: security boundary, OpenSSL/LibreSSL differences, sandboxing, PAM, and platform ifdefs.
+
 ## Reporting Rule
 
 For a future claim such as "12+ complex C projects validated", require at least:

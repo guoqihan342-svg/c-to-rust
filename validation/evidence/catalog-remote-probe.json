@@ -4,9 +4,9 @@
     "level":  "L0",
     "probe_remote":  true,
     "status":  "passed",
-    "target_count":  22,
-    "minimum_targets":  20,
-    "generated_at_utc":  "2026-06-24T01:05:24Z",
+    "target_count":  40,
+    "minimum_targets":  40,
+    "generated_at_utc":  "2026-06-24T03:18:26Z",
     "failures":  [
 
                  ],
@@ -91,7 +91,7 @@
                         "probe":  {
                                       "ok":  true,
                                       "default_branch":  "master",
-                                      "head_sha":  "a02dfb1262564528a011f0d3e2a97cdce33bd90a",
+                                      "head_sha":  "dc953a19e6bf6b3feb765ecfbffc654aefa4e8f1",
                                       "error":  null
                                   }
                     },
@@ -103,7 +103,7 @@
                         "probe":  {
                                       "ok":  true,
                                       "default_branch":  "master",
-                                      "head_sha":  "4015abe14bb05f67d2c47549f59c5d382e57150b",
+                                      "head_sha":  "419ce13b7019f906ebc010af3be09a9deffc2a47",
                                       "error":  null
                                   }
                     },
@@ -259,7 +259,7 @@
                         "probe":  {
                                       "ok":  true,
                                       "default_branch":  "main",
-                                      "head_sha":  "1704f47ac622db63222a59fa00723605061b3166",
+                                      "head_sha":  "7f372bfc28a895f2b7641c1fc80f19f607e30e23",
                                       "error":  null
                                   }
                     },
@@ -272,6 +272,222 @@
                                       "ok":  true,
                                       "default_branch":  "main",
                                       "head_sha":  "49cec3e9b27e517ac5ea5db5482c59f937e6aea4",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "linux",
+                        "repo_url":  "https://github.com/torvalds/linux.git",
+                        "domain":  "operating-system-kernel",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "840ef6c78e6a2f694b578ecb9063241c992aaa9e",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "qemu",
+                        "repo_url":  "https://github.com/qemu/qemu.git",
+                        "domain":  "virtualization-and-emulation",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "b83371668192a705b878e909c5ae9c1233cbd5fb",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "systemd",
+                        "repo_url":  "https://github.com/systemd/systemd.git",
+                        "domain":  "linux-system-services",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "926bf653591ed34aed21948f9fcebd7ae90d9f0e",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "vim",
+                        "repo_url":  "https://github.com/vim/vim.git",
+                        "domain":  "terminal-editor",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "5c1b989b4aabf1549910752dcfb44030e64edfcc",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "haproxy",
+                        "repo_url":  "https://github.com/haproxy/haproxy.git",
+                        "domain":  "load-balancer-and-proxy",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "94f20d494c4d88b7d097238f50bc843809a7b15c",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libxml2",
+                        "repo_url":  "https://github.com/GNOME/libxml2.git",
+                        "domain":  "xml-parser-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "13a3df99ffe2521a903f270abb33aa7092b34147",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "wolfssl",
+                        "repo_url":  "https://github.com/wolfSSL/wolfssl.git",
+                        "domain":  "tls-and-crypto-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "ad1cd4789ba8dc85dd027c3f03287d6f2b555dcf",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libpcap",
+                        "repo_url":  "https://github.com/the-tcpdump-group/libpcap.git",
+                        "domain":  "packet-capture-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "6b5de1e5f07a4fea6672caa2d34935c3da24a8f2",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "tcpdump",
+                        "repo_url":  "https://github.com/the-tcpdump-group/tcpdump.git",
+                        "domain":  "packet-analysis-tool",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "6800515e86654f5c1e7a0c6b9320e48c9eb0e749",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "memcached",
+                        "repo_url":  "https://github.com/memcached/memcached.git",
+                        "domain":  "networked-cache-server",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "f1674f0231e5d291db474c4ad297f5f069d32521",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libgit2",
+                        "repo_url":  "https://github.com/libgit2/libgit2.git",
+                        "domain":  "git-library",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "44c05e5d12f2b8b86b9730bb50f27daf74143782",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "librdkafka",
+                        "repo_url":  "https://github.com/confluentinc/librdkafka.git",
+                        "domain":  "messaging-client-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "213f59c1ad70bd2bf3aea7e025fcc726174b8068",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "x264",
+                        "repo_url":  "https://github.com/mirror/x264.git",
+                        "domain":  "video-encoder",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "c24e06c2e184345ceb33eb20a15d1024d9fd3497",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "openvpn",
+                        "repo_url":  "https://github.com/OpenVPN/openvpn.git",
+                        "domain":  "vpn-and-secure-networking",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "97ec63372ab354ad48c89e73d1e37715679370ba",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "imagemagick",
+                        "repo_url":  "https://github.com/ImageMagick/ImageMagick.git",
+                        "domain":  "image-processing-suite",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "9f7e3cb14c4d2a61fd72f9d6696ddd0d18dde216",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "mupdf",
+                        "repo_url":  "https://github.com/ArtifexSoftware/mupdf.git",
+                        "domain":  "document-rendering-engine",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "5b1720c87499badd91ba5a27bc2f575d43d1e421",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "hdf5",
+                        "repo_url":  "https://github.com/HDFGroup/hdf5.git",
+                        "domain":  "scientific-data-format",
+                        "expected_default_branch":  "develop",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "develop",
+                                      "head_sha":  "b1227f798e57d368334f793182fae641d4f012b8",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "openssh-portable",
+                        "repo_url":  "https://github.com/openssh/openssh-portable.git",
+                        "domain":  "secure-shell-suite",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "512bfedf61129788d680210081e89843858dde85",
                                       "error":  null
                                   }
                     }

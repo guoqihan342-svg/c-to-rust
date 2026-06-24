@@ -1,0 +1,160 @@
+{
+    "schema_version":  1,
+    "command":  "expand-supercomplex-c-validation-wave2",
+    "level":  "L0",
+    "generated_at_utc":  "2026-06-24T03:18:38Z",
+    "status":  "passed",
+    "catalog_target_count":  40,
+    "wave2_added_count":  18,
+    "wave2_added_projects":  [
+                                 {
+                                     "id":  "linux",
+                                     "name":  "Linux Kernel",
+                                     "repo_url":  "https://github.com/torvalds/linux.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "operating-system-kernel",
+                                     "migration_slice":  "User-space tools helper, lib/ checksum/string helper, or a single selftest-owned utility before kernel runtime paths."
+                                 },
+                                 {
+                                     "id":  "qemu",
+                                     "name":  "QEMU",
+                                     "repo_url":  "https://github.com/qemu/qemu.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "virtualization-and-emulation",
+                                     "migration_slice":  "qemu-img helper, block format probe, util data structure, or small wire-format parser."
+                                 },
+                                 {
+                                     "id":  "systemd",
+                                     "name":  "systemd",
+                                     "repo_url":  "https://github.com/systemd/systemd.git",
+                                     "expected_default_branch":  "main",
+                                     "domain":  "linux-system-services",
+                                     "migration_slice":  "src/basic utility, journal field parser, udev rule parser subset, or bus message helper."
+                                 },
+                                 {
+                                     "id":  "vim",
+                                     "name":  "Vim",
+                                     "repo_url":  "https://github.com/vim/vim.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "terminal-editor",
+                                     "migration_slice":  "regexp helper, option parser, buffer line utility, or ex command parser subset."
+                                 },
+                                 {
+                                     "id":  "haproxy",
+                                     "name":  "HAProxy",
+                                     "repo_url":  "https://github.com/haproxy/haproxy.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "load-balancer-and-proxy",
+                                     "migration_slice":  "HTTP header parser, ACL sample converter, ring buffer helper, or stick-table key helper."
+                                 },
+                                 {
+                                     "id":  "libxml2",
+                                     "name":  "libxml2",
+                                     "repo_url":  "https://github.com/GNOME/libxml2.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "xml-parser-library",
+                                     "migration_slice":  "Tokenizer/SAX state subset, entity parser, URI helper, or XPath token helper."
+                                 },
+                                 {
+                                     "id":  "wolfssl",
+                                     "name":  "wolfSSL",
+                                     "repo_url":  "https://github.com/wolfSSL/wolfssl.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "tls-and-crypto-library",
+                                     "migration_slice":  "Non-secret base64/ASN.1/PEM helper or X.509 field parser before cryptographic primitives."
+                                 },
+                                 {
+                                     "id":  "libpcap",
+                                     "name":  "libpcap",
+                                     "repo_url":  "https://github.com/the-tcpdump-group/libpcap.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "packet-capture-library",
+                                     "migration_slice":  "BPF lexer/parser subset, pcap file header parser, or filter optimizer helper."
+                                 },
+                                 {
+                                     "id":  "tcpdump",
+                                     "name":  "tcpdump",
+                                     "repo_url":  "https://github.com/the-tcpdump-group/tcpdump.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "packet-analysis-tool",
+                                     "migration_slice":  "Single protocol printer, address formatter, or packet header parser helper."
+                                 },
+                                 {
+                                     "id":  "memcached",
+                                     "name":  "memcached",
+                                     "repo_url":  "https://github.com/memcached/memcached.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "networked-cache-server",
+                                     "migration_slice":  "ASCII protocol parser, item metadata helper, hash helper, or slab class computation."
+                                 },
+                                 {
+                                     "id":  "libgit2",
+                                     "name":  "libgit2",
+                                     "repo_url":  "https://github.com/libgit2/libgit2.git",
+                                     "expected_default_branch":  "main",
+                                     "domain":  "git-library",
+                                     "migration_slice":  "OID parser, pkt-line helper, pathspec helper, or pack index metadata parser."
+                                 },
+                                 {
+                                     "id":  "librdkafka",
+                                     "name":  "librdkafka",
+                                     "repo_url":  "https://github.com/confluentinc/librdkafka.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "messaging-client-library",
+                                     "migration_slice":  "Kafka protocol encoder/decoder subset, topic partition helper, or config parser."
+                                 },
+                                 {
+                                     "id":  "x264",
+                                     "name":  "x264",
+                                     "repo_url":  "https://github.com/mirror/x264.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "video-encoder",
+                                     "migration_slice":  "NAL header parser, bitstream writer helper, CABAC/CAVLC table helper, or scalar pixel utility."
+                                 },
+                                 {
+                                     "id":  "openvpn",
+                                     "name":  "OpenVPN",
+                                     "repo_url":  "https://github.com/OpenVPN/openvpn.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "vpn-and-secure-networking",
+                                     "migration_slice":  "Option parser, packet framing helper, route parser, or non-secret base64/key-value helper."
+                                 },
+                                 {
+                                     "id":  "imagemagick",
+                                     "name":  "ImageMagick",
+                                     "repo_url":  "https://github.com/ImageMagick/ImageMagick.git",
+                                     "expected_default_branch":  "main",
+                                     "domain":  "image-processing-suite",
+                                     "migration_slice":  "MagickCore geometry parser, color parser, pixel math helper, or a dependency-light coder metadata parser."
+                                 },
+                                 {
+                                     "id":  "mupdf",
+                                     "name":  "MuPDF",
+                                     "repo_url":  "https://github.com/ArtifexSoftware/mupdf.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "document-rendering-engine",
+                                     "migration_slice":  "PDF object parser, xref helper, stream filter wrapper, or path flattening helper."
+                                 },
+                                 {
+                                     "id":  "hdf5",
+                                     "name":  "HDF5",
+                                     "repo_url":  "https://github.com/HDFGroup/hdf5.git",
+                                     "expected_default_branch":  "develop",
+                                     "domain":  "scientific-data-format",
+                                     "migration_slice":  "Dataspace selection helper, chunk cache helper, filter pipeline metadata helper, or B-tree utility."
+                                 },
+                                 {
+                                     "id":  "openssh-portable",
+                                     "name":  "OpenSSH Portable",
+                                     "repo_url":  "https://github.com/openssh/openssh-portable.git",
+                                     "expected_default_branch":  "master",
+                                     "domain":  "secure-shell-suite",
+                                     "migration_slice":  "sshbuf helper, known_hosts parser, authfile parser, packet framing, or key option parser."
+                                 }
+                             ],
+    "evidence":  {
+                     "offline_catalog":  "validation/evidence/catalog-validation.json",
+                     "remote_probe":  "validation/evidence/catalog-remote-probe.json"
+                 },
+    "reporting_boundary":  "Wave2 evidence is L0 catalog and remote HEAD/default-branch validation only. It is not native C build/test, Rust migration, unsafe budget, C/Rust semantic equivalence, or performance preservation evidence."
+}

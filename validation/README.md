@@ -25,7 +25,11 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 ## Current Candidate Count
 
-The catalog currently contains 22 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, terminal/system, RTOS, and embedded domains.
+The catalog currently contains 40 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, terminal/system, kernel/virtualization, document processing, scientific data, VPN, packet analysis, and embedded domains.
+
+## Wave2 Boundary
+
+Wave2 adds 18 GitHub-reachable super-complex C/C-major targets. The committed evidence validates L0 catalog metadata and remote HEAD/default-branch reachability only. L1 native build/test, L2 bounded Rust migration, and L3 C/Rust semantic equivalence still require separate evidence per target.
 
 ## Non-Equivalence Boundary
 

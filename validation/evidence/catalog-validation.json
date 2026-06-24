@@ -4,9 +4,9 @@
     "level":  "L0",
     "probe_remote":  false,
     "status":  "passed",
-    "target_count":  22,
-    "minimum_targets":  20,
-    "generated_at_utc":  "2026-06-24T01:53:27Z",
+    "target_count":  40,
+    "minimum_targets":  40,
+    "generated_at_utc":  "2026-06-24T03:16:53Z",
     "failures":  [
 
                  ],
@@ -163,6 +163,132 @@
                         "repo_url":  "https://github.com/FreeRTOS/FreeRTOS-Kernel.git",
                         "domain":  "rtos-kernel",
                         "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "linux",
+                        "repo_url":  "https://github.com/torvalds/linux.git",
+                        "domain":  "operating-system-kernel",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "qemu",
+                        "repo_url":  "https://github.com/qemu/qemu.git",
+                        "domain":  "virtualization-and-emulation",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "systemd",
+                        "repo_url":  "https://github.com/systemd/systemd.git",
+                        "domain":  "linux-system-services",
+                        "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "vim",
+                        "repo_url":  "https://github.com/vim/vim.git",
+                        "domain":  "terminal-editor",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "haproxy",
+                        "repo_url":  "https://github.com/haproxy/haproxy.git",
+                        "domain":  "load-balancer-and-proxy",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "libxml2",
+                        "repo_url":  "https://github.com/GNOME/libxml2.git",
+                        "domain":  "xml-parser-library",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "wolfssl",
+                        "repo_url":  "https://github.com/wolfSSL/wolfssl.git",
+                        "domain":  "tls-and-crypto-library",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "libpcap",
+                        "repo_url":  "https://github.com/the-tcpdump-group/libpcap.git",
+                        "domain":  "packet-capture-library",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "tcpdump",
+                        "repo_url":  "https://github.com/the-tcpdump-group/tcpdump.git",
+                        "domain":  "packet-analysis-tool",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "memcached",
+                        "repo_url":  "https://github.com/memcached/memcached.git",
+                        "domain":  "networked-cache-server",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "libgit2",
+                        "repo_url":  "https://github.com/libgit2/libgit2.git",
+                        "domain":  "git-library",
+                        "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "librdkafka",
+                        "repo_url":  "https://github.com/confluentinc/librdkafka.git",
+                        "domain":  "messaging-client-library",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "x264",
+                        "repo_url":  "https://github.com/mirror/x264.git",
+                        "domain":  "video-encoder",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "openvpn",
+                        "repo_url":  "https://github.com/OpenVPN/openvpn.git",
+                        "domain":  "vpn-and-secure-networking",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "imagemagick",
+                        "repo_url":  "https://github.com/ImageMagick/ImageMagick.git",
+                        "domain":  "image-processing-suite",
+                        "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "mupdf",
+                        "repo_url":  "https://github.com/ArtifexSoftware/mupdf.git",
+                        "domain":  "document-rendering-engine",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "hdf5",
+                        "repo_url":  "https://github.com/HDFGroup/hdf5.git",
+                        "domain":  "scientific-data-format",
+                        "expected_default_branch":  "develop",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "openssh-portable",
+                        "repo_url":  "https://github.com/openssh/openssh-portable.git",
+                        "domain":  "secure-shell-suite",
+                        "expected_default_branch":  "master",
                         "probe":  null
                     }
                 ],

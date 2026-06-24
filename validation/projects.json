@@ -1,337 +1,1031 @@
 {
-  "schema_version": 1,
-  "minimum_targets": 20,
-  "purpose": "Catalog of complex C/C-major projects for staged C-to-Rust migration validation.",
-  "targets": [
-    {
-      "id": "sqlite",
-      "name": "SQLite",
-      "repo_url": "https://github.com/sqlite/sqlite.git",
-      "expected_default_branch": "master",
-      "domain": "embedded-sql-database",
-      "language_profile": "C",
-      "complexity_signals": ["single-file amalgamation option", "SQL parser", "pager and btree storage", "cross-platform VFS"],
-      "build_smoke": ["./configure --disable-shared", "make sqlite3"],
-      "test_smoke": ["./sqlite3 :memory: 'select 1;'"],
-      "migration_slice": "CRC/hash helpers or a small VFS-independent utility module before pager/btree migration.",
-      "oracle_strategy": "SQL input/output golden transcripts and native sqlite3 CLI result comparison.",
-      "performance_smoke": "Run a fixed INSERT/SELECT transaction script and record elapsed time.",
-      "risk_notes": "Generated parser and storage invariants make broad migration high risk."
-    },
-    {
-      "id": "redis",
-      "name": "Redis",
-      "repo_url": "https://github.com/redis/redis.git",
-      "expected_default_branch": "unstable",
-      "domain": "networked-kv-store",
-      "language_profile": "C",
-      "complexity_signals": ["event loop", "custom allocator integration", "protocol parser", "persistence formats"],
-      "build_smoke": ["make BUILD_TLS=no MALLOC=libc"],
-      "test_smoke": ["src/redis-server --test-memory 2"],
-      "migration_slice": "RESP parser helper or SDS string utility slice.",
-      "oracle_strategy": "RESP request/response transcript comparison against native Redis helper.",
-      "performance_smoke": "Fixed in-process parser throughput or redis-benchmark subset after L3 exists.",
-      "risk_notes": "Server lifecycle, forks, networking, and persistence should be deferred until small slices pass."
-    },
-    {
-      "id": "nginx",
-      "name": "nginx",
-      "repo_url": "https://github.com/nginx/nginx.git",
-      "expected_default_branch": "master",
-      "domain": "http-server",
-      "language_profile": "C",
-      "complexity_signals": ["event-driven networking", "modules", "custom memory pools", "HTTP parsing"],
-      "build_smoke": ["auto/configure --with-debug --without-http_rewrite_module --without-http_gzip_module", "make"],
-      "test_smoke": ["objs/nginx -t -p $(pwd)/tmp-nginx -c conf/nginx.conf"],
-      "migration_slice": "URI/HTTP header parsing helper with fixed input corpus.",
-      "oracle_strategy": "Native helper or extracted parser golden JSON for request-line/header cases.",
-      "performance_smoke": "Fixed parser corpus throughput.",
-      "risk_notes": "Runtime module ABI and event loop should not be migrated before parser/helper slices."
-    },
-    {
-      "id": "curl",
-      "name": "curl",
-      "repo_url": "https://github.com/curl/curl.git",
-      "expected_default_branch": "master",
-      "domain": "network-client-library",
-      "language_profile": "C",
-      "complexity_signals": ["many protocols", "TLS backends", "URL parser", "large test suite"],
-      "build_smoke": ["./buildconf", "./configure --without-ssl --disable-shared", "make"],
-      "test_smoke": ["src/curl --version"],
-      "migration_slice": "URL parser or percent-encoding helper.",
-      "oracle_strategy": "URL parse fixtures compared with native curl/libcurl output.",
-      "performance_smoke": "Fixed URL corpus parser timing.",
-      "risk_notes": "Protocol matrix and TLS backends require strict feature scoping."
-    },
-    {
-      "id": "git",
-      "name": "Git",
-      "repo_url": "https://github.com/git/git.git",
-      "expected_default_branch": "master",
-      "domain": "version-control-system",
-      "language_profile": "C",
-      "complexity_signals": ["object database", "pack format", "diff machinery", "portable shell/perl test harness"],
-      "build_smoke": ["make NO_GETTEXT=YesPlease"],
-      "test_smoke": ["./git --version"],
-      "migration_slice": "hash/hex/pathspec helper or pkt-line parser slice.",
-      "oracle_strategy": "Golden object/hash/path fixtures against native git plumbing.",
-      "performance_smoke": "Fixed object-id parse corpus.",
-      "risk_notes": "Repository state and platform-specific behavior need pinned fixtures."
-    },
-    {
-      "id": "openssl",
-      "name": "OpenSSL",
-      "repo_url": "https://github.com/openssl/openssl.git",
-      "expected_default_branch": "master",
-      "domain": "cryptography-library",
-      "language_profile": "C",
-      "complexity_signals": ["constant-time code", "assembly integrations", "provider model", "large API surface"],
-      "build_smoke": ["./Configure no-shared no-tests linux-x86_64", "make -j2"],
-      "test_smoke": ["apps/openssl version"],
-      "migration_slice": "Non-secret encoding/ASN.1 helper only; avoid cryptographic primitive rewrites at first.",
-      "oracle_strategy": "Known-answer encoding vectors and native openssl CLI comparison.",
-      "performance_smoke": "Fixed non-secret encode/decode corpus timing.",
-      "risk_notes": "Security-sensitive code requires stronger review and constant-time analysis before L3 claims."
-    },
-    {
-      "id": "ffmpeg",
-      "name": "FFmpeg",
-      "repo_url": "https://github.com/FFmpeg/FFmpeg.git",
-      "expected_default_branch": "master",
-      "domain": "media-codec-framework",
-      "language_profile": "C",
-      "complexity_signals": ["codec registry", "bitstream parsers", "SIMD/assembly", "huge configure matrix"],
-      "build_smoke": ["./configure --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null", "make -j2"],
-      "test_smoke": ["ffmpeg -version"],
-      "migration_slice": "Small bitstream reader or container metadata parser helper.",
-      "oracle_strategy": "Golden bitstream fixtures and ffprobe/ffmpeg JSON output comparison.",
-      "performance_smoke": "Fixed bitstream parser corpus timing.",
-      "risk_notes": "SIMD, codec correctness, and undefined behavior need per-slice handling."
-    },
-    {
-      "id": "postgres",
-      "name": "PostgreSQL",
-      "repo_url": "https://github.com/postgres/postgres.git",
-      "expected_default_branch": "master",
-      "domain": "relational-database",
-      "language_profile": "C",
-      "complexity_signals": ["query parser/planner", "storage engine", "WAL", "server process model"],
-      "build_smoke": ["./configure --without-readline --without-zlib", "make -C src/bin/pg_config"],
-      "test_smoke": ["src/bin/pg_config/pg_config --version"],
-      "migration_slice": "StringInfo, checksum, or small frontend utility helper.",
-      "oracle_strategy": "Golden utility output and native frontend command comparison.",
-      "performance_smoke": "Fixed checksum/string utility corpus.",
-      "risk_notes": "Backend/server semantics and WAL require staged oracle design."
-    },
-    {
-      "id": "lua",
-      "name": "Lua",
-      "repo_url": "https://github.com/lua/lua.git",
-      "expected_default_branch": "master",
-      "domain": "language-runtime",
-      "language_profile": "C",
-      "complexity_signals": ["bytecode VM", "parser", "garbage collector", "C API"],
-      "build_smoke": ["make linux"],
-      "test_smoke": ["./lua -e \"print(1+1)\""],
-      "migration_slice": "Lexer token helper or string table utility with fixed scripts.",
-      "oracle_strategy": "Lua script output fixtures and native lua CLI comparison.",
-      "performance_smoke": "Fixed tokenizer corpus timing.",
-      "risk_notes": "GC and VM stack invariants should be deferred until helper slices pass."
-    },
-    {
-      "id": "libuv",
-      "name": "libuv",
-      "repo_url": "https://github.com/libuv/libuv.git",
-      "expected_default_branch": "v1.x",
-      "domain": "async-io-library",
-      "language_profile": "C",
-      "complexity_signals": ["event loop", "platform abstraction", "thread pool", "handles and callbacks"],
-      "build_smoke": ["cmake -S . -B build -DLIBUV_BUILD_TESTS=ON", "cmake --build build --target uv_run_tests"],
-      "test_smoke": ["build/uv_run_tests --list"],
-      "migration_slice": "Path/string/platform-independent helper slice.",
-      "oracle_strategy": "Native helper output or unit-test fixture comparison.",
-      "performance_smoke": "Fixed helper corpus timing.",
-      "risk_notes": "Callback lifetimes and cross-platform behavior require strict ownership modeling."
-    },
-    {
-      "id": "libevent",
-      "name": "libevent",
-      "repo_url": "https://github.com/libevent/libevent.git",
-      "expected_default_branch": "master",
-      "domain": "event-notification-library",
-      "language_profile": "C",
-      "complexity_signals": ["event backends", "buffers", "HTTP/DNS helpers", "callback lifetimes"],
-      "build_smoke": ["cmake -S . -B build -DEVENT__DISABLE_OPENSSL=ON", "cmake --build build"],
-      "test_smoke": ["ctest --test-dir build -R regress --output-on-failure"],
-      "migration_slice": "evbuffer helper or URI parser subset.",
-      "oracle_strategy": "Native test fixture output and schema-aware buffer operation reports.",
-      "performance_smoke": "Fixed evbuffer operation corpus.",
-      "risk_notes": "Event loop and backend differences need isolated platform matrix."
-    },
-    {
-      "id": "zlib-ng",
-      "name": "zlib-ng",
-      "repo_url": "https://github.com/zlib-ng/zlib-ng.git",
-      "expected_default_branch": "develop",
-      "domain": "compression-library",
-      "language_profile": "C",
-      "complexity_signals": ["deflate/inflate", "checksums", "CPU feature dispatch", "compat API"],
-      "build_smoke": ["cmake -S . -B build -DZLIB_COMPAT=ON", "cmake --build build"],
-      "test_smoke": ["ctest --test-dir build --output-on-failure"],
-      "migration_slice": "Adler32/CRC helper before compressor state machine.",
-      "oracle_strategy": "Known-answer checksum vectors and native test output.",
-      "performance_smoke": "Fixed checksum buffer timing.",
-      "risk_notes": "SIMD and compression state machines need later deeper gates."
-    },
-    {
-      "id": "libpng",
-      "name": "libpng",
-      "repo_url": "https://github.com/pnggroup/libpng.git",
-      "expected_default_branch": "libpng18",
-      "domain": "image-codec-library",
-      "language_profile": "C",
-      "complexity_signals": ["PNG chunks", "filters", "zlib integration", "ABI compatibility"],
-      "build_smoke": ["cmake -S . -B build -DPNG_TESTS=ON", "cmake --build build"],
-      "test_smoke": ["ctest --test-dir build --output-on-failure"],
-      "migration_slice": "Chunk CRC/type parsing or filter helper with small PNG fixtures.",
-      "oracle_strategy": "Golden PNG chunk metadata and native pngtest comparison.",
-      "performance_smoke": "Fixed chunk/filter corpus timing.",
-      "risk_notes": "Image decoding correctness and zlib interactions need pinned fixtures."
-    },
-    {
-      "id": "mbedtls",
-      "name": "Mbed TLS",
-      "repo_url": "https://github.com/Mbed-TLS/mbedtls.git",
-      "expected_default_branch": "development",
-      "domain": "embedded-crypto-library",
-      "language_profile": "C",
-      "complexity_signals": ["embedded portability", "TLS protocol", "X.509 parser", "constant-time primitives"],
-      "build_smoke": ["cmake -S . -B build -DENABLE_TESTING=ON", "cmake --build build"],
-      "test_smoke": ["ctest --test-dir build -R test_suite_md --output-on-failure"],
-      "migration_slice": "Non-secret base64 or PEM parsing helper before cryptographic primitives.",
-      "oracle_strategy": "Known-answer non-secret encoding fixtures and native test-suite comparison.",
-      "performance_smoke": "Fixed base64/PEM corpus timing.",
-      "risk_notes": "Secret-dependent code requires security review before migration claims."
-    },
-    {
-      "id": "jemalloc",
-      "name": "jemalloc",
-      "repo_url": "https://github.com/jemalloc/jemalloc.git",
-      "expected_default_branch": "dev",
-      "domain": "memory-allocator",
-      "language_profile": "C",
-      "complexity_signals": ["allocator internals", "thread caches", "arena management", "platform atomics"],
-      "build_smoke": ["./autogen.sh", "./configure --disable-shared", "make -j2"],
-      "test_smoke": ["make check_unit"],
-      "migration_slice": "Size-class helper or bitmap utility only.",
-      "oracle_strategy": "Native unit fixture output and deterministic helper vectors.",
-      "performance_smoke": "Fixed size-class/bitmap corpus timing.",
-      "risk_notes": "Allocator correctness and concurrency need extensive L3 before runtime use."
-    },
-    {
-      "id": "valkey",
-      "name": "Valkey",
-      "repo_url": "https://github.com/valkey-io/valkey.git",
-      "expected_default_branch": "unstable",
-      "domain": "networked-kv-store",
-      "language_profile": "C",
-      "complexity_signals": ["RESP protocol", "event loop", "RDB/AOF persistence", "cluster and modules", "replication"],
-      "build_smoke": ["make BUILD_TLS=no MALLOC=libc"],
-      "test_smoke": ["src/valkey-server --test-memory 2"],
-      "migration_slice": "RESP parser or SDS string utility slice before server lifecycle work.",
-      "oracle_strategy": "RESP request/response transcripts compared against native Valkey parser/helper.",
-      "performance_smoke": "Fixed RESP parser corpus or command table lookup timing.",
-      "risk_notes": "Cluster, forked persistence, and module ABI require separate deep gates."
-    },
-    {
-      "id": "zstd",
-      "name": "Zstandard",
-      "repo_url": "https://github.com/facebook/zstd.git",
-      "expected_default_branch": "dev",
-      "domain": "compression-library",
-      "language_profile": "C",
-      "complexity_signals": ["entropy coding", "bitstream parser", "streaming state machine", "dictionary training", "CPU feature dispatch"],
-      "build_smoke": ["make"],
-      "test_smoke": ["make shortest"],
-      "migration_slice": "Checksum, frame header, or small bitstream reader helper before compressor/decompressor state machines.",
-      "oracle_strategy": "Known-answer frame/header vectors and native zstd CLI comparison.",
-      "performance_smoke": "Fixed frame/header parser corpus timing.",
-      "risk_notes": "Bit-level compatibility and optimized backends require strict fixture coverage."
-    },
-    {
-      "id": "libjpeg-turbo",
-      "name": "libjpeg-turbo",
-      "repo_url": "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
-      "expected_default_branch": "main",
-      "domain": "image-codec-library",
-      "language_profile": "C/C-major-with-assembly",
-      "complexity_signals": ["JPEG codec", "DCT", "Huffman coding", "colorspace conversion", "SIMD and assembly"],
-      "build_smoke": ["cmake -S . -B build -DWITH_SIMD=0", "cmake --build build"],
-      "test_smoke": ["ctest --test-dir build --output-on-failure"],
-      "migration_slice": "Scalar Huffman table or marker parsing helper before DCT/SIMD paths.",
-      "oracle_strategy": "Small JPEG marker/metadata fixtures and native test output comparison.",
-      "performance_smoke": "Fixed marker/Huffman helper corpus timing.",
-      "risk_notes": "SIMD and codec correctness should be gated after scalar helper equivalence."
-    },
-    {
-      "id": "micropython",
-      "name": "MicroPython",
-      "repo_url": "https://github.com/micropython/micropython.git",
-      "expected_default_branch": "master",
-      "domain": "language-runtime-embedded",
-      "language_profile": "C",
-      "complexity_signals": ["bytecode compiler", "VM", "garbage collector", "qstr interning", "multi-port embedded support"],
-      "build_smoke": ["make -C mpy-cross", "make -C ports/unix submodules", "make -C ports/unix"],
-      "test_smoke": ["ports/unix/build-standard/micropython -c 'print(1+1)'"],
-      "migration_slice": "qstr/hash helper, lexer token helper, or small runtime utility under `py/`.",
-      "oracle_strategy": "Python script output fixtures compared with native unix-port MicroPython.",
-      "performance_smoke": "Fixed lexer/qstr corpus timing.",
-      "risk_notes": "GC, VM stack, generated qstrs, and per-port configs require careful pinning."
-    },
-    {
-      "id": "tmux",
-      "name": "tmux",
-      "repo_url": "https://github.com/tmux/tmux.git",
-      "expected_default_branch": "master",
-      "domain": "terminal-multiplexer",
-      "language_profile": "C",
-      "complexity_signals": ["PTY handling", "terminal grid", "UTF-8 parser", "command parser", "libevent integration"],
-      "build_smoke": ["sh autogen.sh", "./configure", "make"],
-      "test_smoke": ["./tmux -V"],
-      "migration_slice": "UTF-8/grid helper or command parser subset with fixed input lines.",
-      "oracle_strategy": "Command parse or terminal-grid fixtures compared with native helper output.",
-      "performance_smoke": "Fixed UTF-8/grid parser corpus timing.",
-      "risk_notes": "Terminal behavior and PTY lifecycle require isolated integration gates."
-    },
-    {
-      "id": "zephyr",
-      "name": "Zephyr",
-      "repo_url": "https://github.com/zephyrproject-rtos/zephyr.git",
-      "expected_default_branch": "main",
-      "domain": "rtos-and-embedded-platform",
-      "language_profile": "C/C-major",
-      "complexity_signals": ["RTOS kernel", "drivers", "Kconfig", "devicetree", "multi-architecture build"],
-      "build_smoke": ["west build -b qemu_x86 samples/hello_world"],
-      "test_smoke": ["west build -t run"],
-      "migration_slice": "Small kernel utility, ring buffer helper, or subsystem parser that can be built for qemu_x86.",
-      "oracle_strategy": "QEMU sample logs or native ztest output compared with Rust helper output.",
-      "performance_smoke": "Fixed helper corpus or QEMU smoke duration.",
-      "risk_notes": "Multi-repo west workspace and generated config make broad migration expensive."
-    },
-    {
-      "id": "freertos-kernel",
-      "name": "FreeRTOS-Kernel",
-      "repo_url": "https://github.com/FreeRTOS/FreeRTOS-Kernel.git",
-      "expected_default_branch": "main",
-      "domain": "rtos-kernel",
-      "language_profile": "C",
-      "complexity_signals": ["scheduler", "queues", "timers", "portable layer", "critical sections"],
-      "build_smoke": ["cmake -S . -B build -DFREERTOS_PORT=GCC_POSIX"],
-      "test_smoke": ["cmake --build build"],
-      "migration_slice": "List, queue helper, or portable-independent utility before scheduler semantics.",
-      "oracle_strategy": "Native unit/vector helper output and scheduler-free fixtures.",
-      "performance_smoke": "Fixed list/queue helper corpus timing.",
-      "risk_notes": "Scheduler timing and interrupt semantics require separate RTOS-aware gates."
-    }
-  ]
+    "schema_version":  1,
+    "minimum_targets":  40,
+    "purpose":  "Catalog of complex C/C-major projects for staged C-to-Rust migration validation.",
+    "targets":  [
+                    {
+                        "id":  "sqlite",
+                        "name":  "SQLite",
+                        "repo_url":  "https://github.com/sqlite/sqlite.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "embedded-sql-database",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "single-file amalgamation option",
+                                                   "SQL parser",
+                                                   "pager and btree storage",
+                                                   "cross-platform VFS"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --disable-shared",
+                                            "make sqlite3"
+                                        ],
+                        "test_smoke":  [
+                                           "./sqlite3 :memory: \u0027select 1;\u0027"
+                                       ],
+                        "migration_slice":  "CRC/hash helpers or a small VFS-independent utility module before pager/btree migration.",
+                        "oracle_strategy":  "SQL input/output golden transcripts and native sqlite3 CLI result comparison.",
+                        "performance_smoke":  "Run a fixed INSERT/SELECT transaction script and record elapsed time.",
+                        "risk_notes":  "Generated parser and storage invariants make broad migration high risk."
+                    },
+                    {
+                        "id":  "redis",
+                        "name":  "Redis",
+                        "repo_url":  "https://github.com/redis/redis.git",
+                        "expected_default_branch":  "unstable",
+                        "domain":  "networked-kv-store",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event loop",
+                                                   "custom allocator integration",
+                                                   "protocol parser",
+                                                   "persistence formats"
+                                               ],
+                        "build_smoke":  [
+                                            "make BUILD_TLS=no MALLOC=libc"
+                                        ],
+                        "test_smoke":  [
+                                           "src/redis-server --test-memory 2"
+                                       ],
+                        "migration_slice":  "RESP parser helper or SDS string utility slice.",
+                        "oracle_strategy":  "RESP request/response transcript comparison against native Redis helper.",
+                        "performance_smoke":  "Fixed in-process parser throughput or redis-benchmark subset after L3 exists.",
+                        "risk_notes":  "Server lifecycle, forks, networking, and persistence should be deferred until small slices pass."
+                    },
+                    {
+                        "id":  "nginx",
+                        "name":  "nginx",
+                        "repo_url":  "https://github.com/nginx/nginx.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "http-server",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event-driven networking",
+                                                   "modules",
+                                                   "custom memory pools",
+                                                   "HTTP parsing"
+                                               ],
+                        "build_smoke":  [
+                                            "auto/configure --with-debug --without-http_rewrite_module --without-http_gzip_module",
+                                            "make"
+                                        ],
+                        "test_smoke":  [
+                                           "objs/nginx -t -p $(pwd)/tmp-nginx -c conf/nginx.conf"
+                                       ],
+                        "migration_slice":  "URI/HTTP header parsing helper with fixed input corpus.",
+                        "oracle_strategy":  "Native helper or extracted parser golden JSON for request-line/header cases.",
+                        "performance_smoke":  "Fixed parser corpus throughput.",
+                        "risk_notes":  "Runtime module ABI and event loop should not be migrated before parser/helper slices."
+                    },
+                    {
+                        "id":  "curl",
+                        "name":  "curl",
+                        "repo_url":  "https://github.com/curl/curl.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "network-client-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "many protocols",
+                                                   "TLS backends",
+                                                   "URL parser",
+                                                   "large test suite"
+                                               ],
+                        "build_smoke":  [
+                                            "./buildconf",
+                                            "./configure --without-ssl --disable-shared",
+                                            "make"
+                                        ],
+                        "test_smoke":  [
+                                           "src/curl --version"
+                                       ],
+                        "migration_slice":  "URL parser or percent-encoding helper.",
+                        "oracle_strategy":  "URL parse fixtures compared with native curl/libcurl output.",
+                        "performance_smoke":  "Fixed URL corpus parser timing.",
+                        "risk_notes":  "Protocol matrix and TLS backends require strict feature scoping."
+                    },
+                    {
+                        "id":  "git",
+                        "name":  "Git",
+                        "repo_url":  "https://github.com/git/git.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "version-control-system",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "object database",
+                                                   "pack format",
+                                                   "diff machinery",
+                                                   "portable shell/perl test harness"
+                                               ],
+                        "build_smoke":  [
+                                            "make NO_GETTEXT=YesPlease"
+                                        ],
+                        "test_smoke":  [
+                                           "./git --version"
+                                       ],
+                        "migration_slice":  "hash/hex/pathspec helper or pkt-line parser slice.",
+                        "oracle_strategy":  "Golden object/hash/path fixtures against native git plumbing.",
+                        "performance_smoke":  "Fixed object-id parse corpus.",
+                        "risk_notes":  "Repository state and platform-specific behavior need pinned fixtures."
+                    },
+                    {
+                        "id":  "openssl",
+                        "name":  "OpenSSL",
+                        "repo_url":  "https://github.com/openssl/openssl.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "cryptography-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "constant-time code",
+                                                   "assembly integrations",
+                                                   "provider model",
+                                                   "large API surface"
+                                               ],
+                        "build_smoke":  [
+                                            "./Configure no-shared no-tests linux-x86_64",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "apps/openssl version"
+                                       ],
+                        "migration_slice":  "Non-secret encoding/ASN.1 helper only; avoid cryptographic primitive rewrites at first.",
+                        "oracle_strategy":  "Known-answer encoding vectors and native openssl CLI comparison.",
+                        "performance_smoke":  "Fixed non-secret encode/decode corpus timing.",
+                        "risk_notes":  "Security-sensitive code requires stronger review and constant-time analysis before L3 claims."
+                    },
+                    {
+                        "id":  "ffmpeg",
+                        "name":  "FFmpeg",
+                        "repo_url":  "https://github.com/FFmpeg/FFmpeg.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "media-codec-framework",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "codec registry",
+                                                   "bitstream parsers",
+                                                   "SIMD/assembly",
+                                                   "huge configure matrix"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --disable-everything --enable-protocol=file --enable-demuxer=wav --enable-muxer=null",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "ffmpeg -version"
+                                       ],
+                        "migration_slice":  "Small bitstream reader or container metadata parser helper.",
+                        "oracle_strategy":  "Golden bitstream fixtures and ffprobe/ffmpeg JSON output comparison.",
+                        "performance_smoke":  "Fixed bitstream parser corpus timing.",
+                        "risk_notes":  "SIMD, codec correctness, and undefined behavior need per-slice handling."
+                    },
+                    {
+                        "id":  "postgres",
+                        "name":  "PostgreSQL",
+                        "repo_url":  "https://github.com/postgres/postgres.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "relational-database",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "query parser/planner",
+                                                   "storage engine",
+                                                   "WAL",
+                                                   "server process model"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --without-readline --without-zlib",
+                                            "make -C src/bin/pg_config"
+                                        ],
+                        "test_smoke":  [
+                                           "src/bin/pg_config/pg_config --version"
+                                       ],
+                        "migration_slice":  "StringInfo, checksum, or small frontend utility helper.",
+                        "oracle_strategy":  "Golden utility output and native frontend command comparison.",
+                        "performance_smoke":  "Fixed checksum/string utility corpus.",
+                        "risk_notes":  "Backend/server semantics and WAL require staged oracle design."
+                    },
+                    {
+                        "id":  "lua",
+                        "name":  "Lua",
+                        "repo_url":  "https://github.com/lua/lua.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "language-runtime",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "bytecode VM",
+                                                   "parser",
+                                                   "garbage collector",
+                                                   "C API"
+                                               ],
+                        "build_smoke":  [
+                                            "make linux"
+                                        ],
+                        "test_smoke":  [
+                                           "./lua -e \"print(1+1)\""
+                                       ],
+                        "migration_slice":  "Lexer token helper or string table utility with fixed scripts.",
+                        "oracle_strategy":  "Lua script output fixtures and native lua CLI comparison.",
+                        "performance_smoke":  "Fixed tokenizer corpus timing.",
+                        "risk_notes":  "GC and VM stack invariants should be deferred until helper slices pass."
+                    },
+                    {
+                        "id":  "libuv",
+                        "name":  "libuv",
+                        "repo_url":  "https://github.com/libuv/libuv.git",
+                        "expected_default_branch":  "v1.x",
+                        "domain":  "async-io-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event loop",
+                                                   "platform abstraction",
+                                                   "thread pool",
+                                                   "handles and callbacks"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DLIBUV_BUILD_TESTS=ON",
+                                            "cmake --build build --target uv_run_tests"
+                                        ],
+                        "test_smoke":  [
+                                           "build/uv_run_tests --list"
+                                       ],
+                        "migration_slice":  "Path/string/platform-independent helper slice.",
+                        "oracle_strategy":  "Native helper output or unit-test fixture comparison.",
+                        "performance_smoke":  "Fixed helper corpus timing.",
+                        "risk_notes":  "Callback lifetimes and cross-platform behavior require strict ownership modeling."
+                    },
+                    {
+                        "id":  "libevent",
+                        "name":  "libevent",
+                        "repo_url":  "https://github.com/libevent/libevent.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "event-notification-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event backends",
+                                                   "buffers",
+                                                   "HTTP/DNS helpers",
+                                                   "callback lifetimes"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DEVENT__DISABLE_OPENSSL=ON",
+                                            "cmake --build build"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build -R regress --output-on-failure"
+                                       ],
+                        "migration_slice":  "evbuffer helper or URI parser subset.",
+                        "oracle_strategy":  "Native test fixture output and schema-aware buffer operation reports.",
+                        "performance_smoke":  "Fixed evbuffer operation corpus.",
+                        "risk_notes":  "Event loop and backend differences need isolated platform matrix."
+                    },
+                    {
+                        "id":  "zlib-ng",
+                        "name":  "zlib-ng",
+                        "repo_url":  "https://github.com/zlib-ng/zlib-ng.git",
+                        "expected_default_branch":  "develop",
+                        "domain":  "compression-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "deflate/inflate",
+                                                   "checksums",
+                                                   "CPU feature dispatch",
+                                                   "compat API"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DZLIB_COMPAT=ON",
+                                            "cmake --build build"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure"
+                                       ],
+                        "migration_slice":  "Adler32/CRC helper before compressor state machine.",
+                        "oracle_strategy":  "Known-answer checksum vectors and native test output.",
+                        "performance_smoke":  "Fixed checksum buffer timing.",
+                        "risk_notes":  "SIMD and compression state machines need later deeper gates."
+                    },
+                    {
+                        "id":  "libpng",
+                        "name":  "libpng",
+                        "repo_url":  "https://github.com/pnggroup/libpng.git",
+                        "expected_default_branch":  "libpng18",
+                        "domain":  "image-codec-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "PNG chunks",
+                                                   "filters",
+                                                   "zlib integration",
+                                                   "ABI compatibility"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DPNG_TESTS=ON",
+                                            "cmake --build build"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure"
+                                       ],
+                        "migration_slice":  "Chunk CRC/type parsing or filter helper with small PNG fixtures.",
+                        "oracle_strategy":  "Golden PNG chunk metadata and native pngtest comparison.",
+                        "performance_smoke":  "Fixed chunk/filter corpus timing.",
+                        "risk_notes":  "Image decoding correctness and zlib interactions need pinned fixtures."
+                    },
+                    {
+                        "id":  "mbedtls",
+                        "name":  "Mbed TLS",
+                        "repo_url":  "https://github.com/Mbed-TLS/mbedtls.git",
+                        "expected_default_branch":  "development",
+                        "domain":  "embedded-crypto-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "embedded portability",
+                                                   "TLS protocol",
+                                                   "X.509 parser",
+                                                   "constant-time primitives"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DENABLE_TESTING=ON",
+                                            "cmake --build build"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build -R test_suite_md --output-on-failure"
+                                       ],
+                        "migration_slice":  "Non-secret base64 or PEM parsing helper before cryptographic primitives.",
+                        "oracle_strategy":  "Known-answer non-secret encoding fixtures and native test-suite comparison.",
+                        "performance_smoke":  "Fixed base64/PEM corpus timing.",
+                        "risk_notes":  "Secret-dependent code requires security review before migration claims."
+                    },
+                    {
+                        "id":  "jemalloc",
+                        "name":  "jemalloc",
+                        "repo_url":  "https://github.com/jemalloc/jemalloc.git",
+                        "expected_default_branch":  "dev",
+                        "domain":  "memory-allocator",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "allocator internals",
+                                                   "thread caches",
+                                                   "arena management",
+                                                   "platform atomics"
+                                               ],
+                        "build_smoke":  [
+                                            "./autogen.sh",
+                                            "./configure --disable-shared",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "make check_unit"
+                                       ],
+                        "migration_slice":  "Size-class helper or bitmap utility only.",
+                        "oracle_strategy":  "Native unit fixture output and deterministic helper vectors.",
+                        "performance_smoke":  "Fixed size-class/bitmap corpus timing.",
+                        "risk_notes":  "Allocator correctness and concurrency need extensive L3 before runtime use."
+                    },
+                    {
+                        "id":  "valkey",
+                        "name":  "Valkey",
+                        "repo_url":  "https://github.com/valkey-io/valkey.git",
+                        "expected_default_branch":  "unstable",
+                        "domain":  "networked-kv-store",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "RESP protocol",
+                                                   "event loop",
+                                                   "RDB/AOF persistence",
+                                                   "cluster and modules",
+                                                   "replication"
+                                               ],
+                        "build_smoke":  [
+                                            "make BUILD_TLS=no MALLOC=libc"
+                                        ],
+                        "test_smoke":  [
+                                           "src/valkey-server --test-memory 2"
+                                       ],
+                        "migration_slice":  "RESP parser or SDS string utility slice before server lifecycle work.",
+                        "oracle_strategy":  "RESP request/response transcripts compared against native Valkey parser/helper.",
+                        "performance_smoke":  "Fixed RESP parser corpus or command table lookup timing.",
+                        "risk_notes":  "Cluster, forked persistence, and module ABI require separate deep gates."
+                    },
+                    {
+                        "id":  "zstd",
+                        "name":  "Zstandard",
+                        "repo_url":  "https://github.com/facebook/zstd.git",
+                        "expected_default_branch":  "dev",
+                        "domain":  "compression-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "entropy coding",
+                                                   "bitstream parser",
+                                                   "streaming state machine",
+                                                   "dictionary training",
+                                                   "CPU feature dispatch"
+                                               ],
+                        "build_smoke":  [
+                                            "make"
+                                        ],
+                        "test_smoke":  [
+                                           "make shortest"
+                                       ],
+                        "migration_slice":  "Checksum, frame header, or small bitstream reader helper before compressor/decompressor state machines.",
+                        "oracle_strategy":  "Known-answer frame/header vectors and native zstd CLI comparison.",
+                        "performance_smoke":  "Fixed frame/header parser corpus timing.",
+                        "risk_notes":  "Bit-level compatibility and optimized backends require strict fixture coverage."
+                    },
+                    {
+                        "id":  "libjpeg-turbo",
+                        "name":  "libjpeg-turbo",
+                        "repo_url":  "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "image-codec-library",
+                        "language_profile":  "C/C-major-with-assembly",
+                        "complexity_signals":  [
+                                                   "JPEG codec",
+                                                   "DCT",
+                                                   "Huffman coding",
+                                                   "colorspace conversion",
+                                                   "SIMD and assembly"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DWITH_SIMD=0",
+                                            "cmake --build build"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure"
+                                       ],
+                        "migration_slice":  "Scalar Huffman table or marker parsing helper before DCT/SIMD paths.",
+                        "oracle_strategy":  "Small JPEG marker/metadata fixtures and native test output comparison.",
+                        "performance_smoke":  "Fixed marker/Huffman helper corpus timing.",
+                        "risk_notes":  "SIMD and codec correctness should be gated after scalar helper equivalence."
+                    },
+                    {
+                        "id":  "micropython",
+                        "name":  "MicroPython",
+                        "repo_url":  "https://github.com/micropython/micropython.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "language-runtime-embedded",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "bytecode compiler",
+                                                   "VM",
+                                                   "garbage collector",
+                                                   "qstr interning",
+                                                   "multi-port embedded support"
+                                               ],
+                        "build_smoke":  [
+                                            "make -C mpy-cross",
+                                            "make -C ports/unix submodules",
+                                            "make -C ports/unix"
+                                        ],
+                        "test_smoke":  [
+                                           "ports/unix/build-standard/micropython -c \u0027print(1+1)\u0027"
+                                       ],
+                        "migration_slice":  "qstr/hash helper, lexer token helper, or small runtime utility under `py/`.",
+                        "oracle_strategy":  "Python script output fixtures compared with native unix-port MicroPython.",
+                        "performance_smoke":  "Fixed lexer/qstr corpus timing.",
+                        "risk_notes":  "GC, VM stack, generated qstrs, and per-port configs require careful pinning."
+                    },
+                    {
+                        "id":  "tmux",
+                        "name":  "tmux",
+                        "repo_url":  "https://github.com/tmux/tmux.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "terminal-multiplexer",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "PTY handling",
+                                                   "terminal grid",
+                                                   "UTF-8 parser",
+                                                   "command parser",
+                                                   "libevent integration"
+                                               ],
+                        "build_smoke":  [
+                                            "sh autogen.sh",
+                                            "./configure",
+                                            "make"
+                                        ],
+                        "test_smoke":  [
+                                           "./tmux -V"
+                                       ],
+                        "migration_slice":  "UTF-8/grid helper or command parser subset with fixed input lines.",
+                        "oracle_strategy":  "Command parse or terminal-grid fixtures compared with native helper output.",
+                        "performance_smoke":  "Fixed UTF-8/grid parser corpus timing.",
+                        "risk_notes":  "Terminal behavior and PTY lifecycle require isolated integration gates."
+                    },
+                    {
+                        "id":  "zephyr",
+                        "name":  "Zephyr",
+                        "repo_url":  "https://github.com/zephyrproject-rtos/zephyr.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "rtos-and-embedded-platform",
+                        "language_profile":  "C/C-major",
+                        "complexity_signals":  [
+                                                   "RTOS kernel",
+                                                   "drivers",
+                                                   "Kconfig",
+                                                   "devicetree",
+                                                   "multi-architecture build"
+                                               ],
+                        "build_smoke":  [
+                                            "west build -b qemu_x86 samples/hello_world"
+                                        ],
+                        "test_smoke":  [
+                                           "west build -t run"
+                                       ],
+                        "migration_slice":  "Small kernel utility, ring buffer helper, or subsystem parser that can be built for qemu_x86.",
+                        "oracle_strategy":  "QEMU sample logs or native ztest output compared with Rust helper output.",
+                        "performance_smoke":  "Fixed helper corpus or QEMU smoke duration.",
+                        "risk_notes":  "Multi-repo west workspace and generated config make broad migration expensive."
+                    },
+                    {
+                        "id":  "freertos-kernel",
+                        "name":  "FreeRTOS-Kernel",
+                        "repo_url":  "https://github.com/FreeRTOS/FreeRTOS-Kernel.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "rtos-kernel",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "scheduler",
+                                                   "queues",
+                                                   "timers",
+                                                   "portable layer",
+                                                   "critical sections"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DFREERTOS_PORT=GCC_POSIX"
+                                        ],
+                        "test_smoke":  [
+                                           "cmake --build build"
+                                       ],
+                        "migration_slice":  "List, queue helper, or portable-independent utility before scheduler semantics.",
+                        "oracle_strategy":  "Native unit/vector helper output and scheduler-free fixtures.",
+                        "performance_smoke":  "Fixed list/queue helper corpus timing.",
+                        "risk_notes":  "Scheduler timing and interrupt semantics require separate RTOS-aware gates."
+                    },
+                    {
+                        "id":  "linux",
+                        "name":  "Linux Kernel",
+                        "repo_url":  "https://github.com/torvalds/linux.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "operating-system-kernel",
+                        "language_profile":  "C/C-major-with-assembly",
+                        "complexity_signals":  [
+                                                   "monolithic kernel",
+                                                   "Kconfig matrix",
+                                                   "drivers and filesystems",
+                                                   "scheduler and memory management",
+                                                   "inline assembly and atomics"
+                                               ],
+                        "build_smoke":  [
+                                            "make defconfig",
+                                            "make -j2 bzImage"
+                                        ],
+                        "test_smoke":  [
+                                           "make -C tools/testing/selftests TARGETS=timers run_tests"
+                                       ],
+                        "migration_slice":  "User-space tools helper, lib/ checksum/string helper, or a single selftest-owned utility before kernel runtime paths.",
+                        "oracle_strategy":  "Native kselftest output or small C helper vectors from tools/lib and lib helpers.",
+                        "performance_smoke":  "Fixed helper corpus timing or kselftest elapsed time.",
+                        "risk_notes":  "Kernel config, inline assembly, RCU, atomics, interrupts, and hardware assumptions make broad migration unsafe without tiny slices."
+                    },
+                    {
+                        "id":  "qemu",
+                        "name":  "QEMU",
+                        "repo_url":  "https://github.com/qemu/qemu.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "virtualization-and-emulation",
+                        "language_profile":  "C/C-major",
+                        "complexity_signals":  [
+                                                   "TCG translation",
+                                                   "device models",
+                                                   "block layer",
+                                                   "QAPI generated code",
+                                                   "coroutines and event loop"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --target-list=x86_64-softmmu --disable-werror --disable-docs",
+                                            "ninja -C build qemu-system-x86_64"
+                                        ],
+                        "test_smoke":  [
+                                           "build/qemu-system-x86_64 --version"
+                                       ],
+                        "migration_slice":  "qemu-img helper, block format probe, util data structure, or small wire-format parser.",
+                        "oracle_strategy":  "Native qemu-img/qemu-system smoke output plus C helper JSON for selected util/block fixtures.",
+                        "performance_smoke":  "Fixed util/block parser corpus timing.",
+                        "risk_notes":  "Generated code, coroutine scheduling, device models, and host feature dependencies require narrow scoping."
+                    },
+                    {
+                        "id":  "systemd",
+                        "name":  "systemd",
+                        "repo_url":  "https://github.com/systemd/systemd.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "linux-system-services",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "PID1 and service manager",
+                                                   "journald",
+                                                   "udev",
+                                                   "D-Bus and cgroups",
+                                                   "Linux capability and namespace integration"
+                                               ],
+                        "build_smoke":  [
+                                            "meson setup build -Dtests=false -Dman=false",
+                                            "ninja -C build"
+                                        ],
+                        "test_smoke":  [
+                                           "build/systemd --version"
+                                       ],
+                        "migration_slice":  "src/basic utility, journal field parser, udev rule parser subset, or bus message helper.",
+                        "oracle_strategy":  "Native unit/helper output and fixed parser fixtures with normalized environment fields.",
+                        "performance_smoke":  "Fixed parser/helper corpus timing.",
+                        "risk_notes":  "Many tests require privileges, cgroups, namespaces, or specific Linux host state."
+                    },
+                    {
+                        "id":  "vim",
+                        "name":  "Vim",
+                        "repo_url":  "https://github.com/vim/vim.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "terminal-editor",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "text buffer engine",
+                                                   "regex engine",
+                                                   "script interpreter",
+                                                   "terminal UI",
+                                                   "multi-platform portability"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --with-features=tiny --disable-gui --without-x",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "src/vim --version"
+                                       ],
+                        "migration_slice":  "regexp helper, option parser, buffer line utility, or ex command parser subset.",
+                        "oracle_strategy":  "Native vim command transcript and C helper fixtures for parser/helper functions.",
+                        "performance_smoke":  "Fixed regex or command parser corpus timing.",
+                        "risk_notes":  "Editor state, terminal behavior, locale, and script compatibility make full migration broad."
+                    },
+                    {
+                        "id":  "haproxy",
+                        "name":  "HAProxy",
+                        "repo_url":  "https://github.com/haproxy/haproxy.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "load-balancer-and-proxy",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event loop",
+                                                   "HTTP/1 and HTTP/2 parsing",
+                                                   "ACL engine",
+                                                   "stick tables",
+                                                   "high-performance connection handling"
+                                               ],
+                        "build_smoke":  [
+                                            "make -j2 TARGET=linux-glibc USE_OPENSSL=0 USE_PCRE=0"
+                                        ],
+                        "test_smoke":  [
+                                           "./haproxy -vv"
+                                       ],
+                        "migration_slice":  "HTTP header parser, ACL sample converter, ring buffer helper, or stick-table key helper.",
+                        "oracle_strategy":  "Native parser/helper JSON or CLI config validation output for fixed fixtures.",
+                        "performance_smoke":  "Fixed header/ACL corpus throughput.",
+                        "risk_notes":  "Hot paths, intrusive lists, TLS/QUIC options, and vtest-dependent regressions require scoped gates."
+                    },
+                    {
+                        "id":  "libxml2",
+                        "name":  "libxml2",
+                        "repo_url":  "https://github.com/GNOME/libxml2.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "xml-parser-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "SAX and DOM parsers",
+                                                   "XPath",
+                                                   "entity handling",
+                                                   "encodings",
+                                                   "schema validation"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DLIBXML2_WITH_PYTHON=OFF -DLIBXML2_WITH_TESTS=ON",
+                                            "cmake --build build --parallel 2"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure"
+                                       ],
+                        "migration_slice":  "Tokenizer/SAX state subset, entity parser, URI helper, or XPath token helper.",
+                        "oracle_strategy":  "Native xmllint output and C helper JSON for fixed XML fixtures including negative cases.",
+                        "performance_smoke":  "Fixed XML tokenizer/parser corpus timing.",
+                        "risk_notes":  "Security-sensitive XML behaviors and legacy compatibility need exact error-code and entity handling policy."
+                    },
+                    {
+                        "id":  "wolfssl",
+                        "name":  "wolfSSL",
+                        "repo_url":  "https://github.com/wolfSSL/wolfssl.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "tls-and-crypto-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "TLS/DTLS protocols",
+                                                   "embedded portability",
+                                                   "X.509",
+                                                   "cryptographic primitives",
+                                                   "many feature flags"
+                                               ],
+                        "build_smoke":  [
+                                            "./autogen.sh",
+                                            "./configure --disable-shared --enable-static",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "make check"
+                                       ],
+                        "migration_slice":  "Non-secret base64/ASN.1/PEM helper or X.509 field parser before cryptographic primitives.",
+                        "oracle_strategy":  "Known-answer non-secret encoding fixtures and native testwolfcrypt/testsuite output.",
+                        "performance_smoke":  "Fixed non-secret parser corpus timing.",
+                        "risk_notes":  "Secret-dependent code and constant-time properties require security-specific review before migration claims."
+                    },
+                    {
+                        "id":  "libpcap",
+                        "name":  "libpcap",
+                        "repo_url":  "https://github.com/the-tcpdump-group/libpcap.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "packet-capture-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "BPF compiler",
+                                                   "capture backends",
+                                                   "packet filter optimizer",
+                                                   "platform abstraction",
+                                                   "pcap file format"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --disable-shared",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "make check"
+                                       ],
+                        "migration_slice":  "BPF lexer/parser subset, pcap file header parser, or filter optimizer helper.",
+                        "oracle_strategy":  "Native tcpdump/libpcap filter compile output and pcap fixture metadata JSON.",
+                        "performance_smoke":  "Fixed BPF filter corpus compile timing.",
+                        "risk_notes":  "Kernel capture backends and platform-specific device behavior should be avoided in early slices."
+                    },
+                    {
+                        "id":  "tcpdump",
+                        "name":  "tcpdump",
+                        "repo_url":  "https://github.com/the-tcpdump-group/tcpdump.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "packet-analysis-tool",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "protocol dissectors",
+                                                   "pcap integration",
+                                                   "printer matrix",
+                                                   "network byte order parsing",
+                                                   "large corpus of packet formats"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "./tcpdump --version"
+                                       ],
+                        "migration_slice":  "Single protocol printer, address formatter, or packet header parser helper.",
+                        "oracle_strategy":  "Native tcpdump text output for fixed pcap fixtures and schema-normalized packet fields.",
+                        "performance_smoke":  "Fixed pcap/dissector corpus timing.",
+                        "risk_notes":  "Output formatting, protocol edge cases, and libpcap dependency versions must be pinned."
+                    },
+                    {
+                        "id":  "memcached",
+                        "name":  "memcached",
+                        "repo_url":  "https://github.com/memcached/memcached.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "networked-cache-server",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "event-driven server",
+                                                   "slab allocator",
+                                                   "ASCII and binary protocols",
+                                                   "LRU management",
+                                                   "threaded workers"
+                                               ],
+                        "build_smoke":  [
+                                            "./autogen.sh",
+                                            "./configure --disable-docs",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "./memcached -h"
+                                       ],
+                        "migration_slice":  "ASCII protocol parser, item metadata helper, hash helper, or slab class computation.",
+                        "oracle_strategy":  "Native protocol transcript fixtures and C helper JSON for parser/slab cases.",
+                        "performance_smoke":  "Fixed parser/slab helper corpus timing.",
+                        "risk_notes":  "Networking, threads, slab concurrency, and extstore behavior are later gates."
+                    },
+                    {
+                        "id":  "libgit2",
+                        "name":  "libgit2",
+                        "repo_url":  "https://github.com/libgit2/libgit2.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "git-library",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "object database",
+                                                   "pack and index formats",
+                                                   "diff and merge",
+                                                   "network transports",
+                                                   "repository portability"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DBUILD_TESTS=ON -DUSE_HTTPS=OFF -DUSE_SSH=OFF",
+                                            "cmake --build build --parallel 2"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure -R core"
+                                       ],
+                        "migration_slice":  "OID parser, pkt-line helper, pathspec helper, or pack index metadata parser.",
+                        "oracle_strategy":  "Native libgit2 test fixtures and C helper JSON for object/path/pkt-line cases.",
+                        "performance_smoke":  "Fixed OID/path/pkt-line corpus timing.",
+                        "risk_notes":  "Filesystem and repository state semantics need pinned fixture repositories."
+                    },
+                    {
+                        "id":  "librdkafka",
+                        "name":  "librdkafka",
+                        "repo_url":  "https://github.com/confluentinc/librdkafka.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "messaging-client-library",
+                        "language_profile":  "C/C++",
+                        "complexity_signals":  [
+                                                   "Kafka protocol",
+                                                   "metadata cache",
+                                                   "consumer groups",
+                                                   "compression integrations",
+                                                   "threaded networking"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --disable-ssl --disable-sasl --disable-zstd --disable-lz4-ext",
+                                            "make -j2 libs"
+                                        ],
+                        "test_smoke":  [
+                                           "./examples/rdkafka_example -X list"
+                                       ],
+                        "migration_slice":  "Kafka protocol encoder/decoder subset, topic partition helper, or config parser.",
+                        "oracle_strategy":  "Native protocol fixture encoder output and schema-aware diff for request/response fields.",
+                        "performance_smoke":  "Fixed protocol encode/decode corpus timing.",
+                        "risk_notes":  "Cluster integration, network timing, compression, and C++ wrappers should be outside first slices."
+                    },
+                    {
+                        "id":  "x264",
+                        "name":  "x264",
+                        "repo_url":  "https://github.com/mirror/x264.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "video-encoder",
+                        "language_profile":  "C/C-major-with-assembly",
+                        "complexity_signals":  [
+                                                   "H.264 encoder",
+                                                   "bitstream writer",
+                                                   "motion estimation",
+                                                   "rate control",
+                                                   "SIMD and assembly"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --disable-asm --enable-static",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "./x264 --version"
+                                       ],
+                        "migration_slice":  "NAL header parser, bitstream writer helper, CABAC/CAVLC table helper, or scalar pixel utility.",
+                        "oracle_strategy":  "Native x264 bitstream metadata and C helper vectors with asm disabled.",
+                        "performance_smoke":  "Fixed bitstream/helper corpus timing.",
+                        "risk_notes":  "Codec bit-exactness, SIMD, rate control, and floating-point paths require strict fixtures."
+                    },
+                    {
+                        "id":  "openvpn",
+                        "name":  "OpenVPN",
+                        "repo_url":  "https://github.com/OpenVPN/openvpn.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "vpn-and-secure-networking",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "TLS control channel",
+                                                   "packet tunnel",
+                                                   "platform adapters",
+                                                   "crypto integration",
+                                                   "configuration parser"
+                                               ],
+                        "build_smoke":  [
+                                            "autoreconf -i -v -f",
+                                            "./configure --disable-plugin-auth-pam",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "src/openvpn/openvpn --version"
+                                       ],
+                        "migration_slice":  "Option parser, packet framing helper, route parser, or non-secret base64/key-value helper.",
+                        "oracle_strategy":  "Native CLI/config parse output and C helper JSON for packet/config fixtures.",
+                        "performance_smoke":  "Fixed parser/framing corpus timing.",
+                        "risk_notes":  "Privilege, network devices, platform routing, and crypto/session lifecycle are later gates."
+                    },
+                    {
+                        "id":  "imagemagick",
+                        "name":  "ImageMagick",
+                        "repo_url":  "https://github.com/ImageMagick/ImageMagick.git",
+                        "expected_default_branch":  "main",
+                        "domain":  "image-processing-suite",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "many image formats",
+                                                   "pixel cache",
+                                                   "color management",
+                                                   "geometry transforms",
+                                                   "delegates and security policy"
+                                               ],
+                        "build_smoke":  [
+                                            "./configure --without-perl --disable-opencl --with-modules=no",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "utilities/magick identify logo:"
+                                       ],
+                        "migration_slice":  "MagickCore geometry parser, color parser, pixel math helper, or a dependency-light coder metadata parser.",
+                        "oracle_strategy":  "Native magick identify/convert output and C helper JSON for geometry/color fixtures.",
+                        "performance_smoke":  "Fixed geometry/color helper corpus timing.",
+                        "risk_notes":  "Delegate formats, policy files, OpenMP, and floating-point pixel differences need tight normalization."
+                    },
+                    {
+                        "id":  "mupdf",
+                        "name":  "MuPDF",
+                        "repo_url":  "https://github.com/ArtifexSoftware/mupdf.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "document-rendering-engine",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "PDF parser",
+                                                   "xref and object streams",
+                                                   "graphics state",
+                                                   "font handling",
+                                                   "image filters"
+                                               ],
+                        "build_smoke":  [
+                                            "make HAVE_X11=no HAVE_GLFW=no build=release -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "build/release/mutool -v"
+                                       ],
+                        "migration_slice":  "PDF object parser, xref helper, stream filter wrapper, or path flattening helper.",
+                        "oracle_strategy":  "Native mutool output and C helper JSON for PDF object/xref fixtures.",
+                        "performance_smoke":  "Fixed PDF object/parser corpus timing.",
+                        "risk_notes":  "PDF edge cases, vendored thirdparty code, rendering nondeterminism, and licensing require isolation."
+                    },
+                    {
+                        "id":  "hdf5",
+                        "name":  "HDF5",
+                        "repo_url":  "https://github.com/HDFGroup/hdf5.git",
+                        "expected_default_branch":  "develop",
+                        "domain":  "scientific-data-format",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "chunked storage",
+                                                   "metadata B-trees",
+                                                   "filter pipeline",
+                                                   "VFD/VOL layers",
+                                                   "large test matrix"
+                                               ],
+                        "build_smoke":  [
+                                            "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DHDF5_BUILD_TOOLS=ON",
+                                            "cmake --build build --parallel 2"
+                                        ],
+                        "test_smoke":  [
+                                           "ctest --test-dir build --output-on-failure"
+                                       ],
+                        "migration_slice":  "Dataspace selection helper, chunk cache helper, filter pipeline metadata helper, or B-tree utility.",
+                        "oracle_strategy":  "Native h5dump/h5diff output and C helper JSON for generated HDF5 fixtures.",
+                        "performance_smoke":  "Fixed metadata/chunk helper corpus timing.",
+                        "risk_notes":  "Test runtime, file-format compatibility, optional language bindings, and filters need strict scope."
+                    },
+                    {
+                        "id":  "openssh-portable",
+                        "name":  "OpenSSH Portable",
+                        "repo_url":  "https://github.com/openssh/openssh-portable.git",
+                        "expected_default_branch":  "master",
+                        "domain":  "secure-shell-suite",
+                        "language_profile":  "C",
+                        "complexity_signals":  [
+                                                   "SSH protocol",
+                                                   "authentication",
+                                                   "privilege separation",
+                                                   "crypto integration",
+                                                   "platform compatibility layer"
+                                               ],
+                        "build_smoke":  [
+                                            "autoreconf",
+                                            "./configure",
+                                            "make -j2"
+                                        ],
+                        "test_smoke":  [
+                                           "ssh -V"
+                                       ],
+                        "migration_slice":  "sshbuf helper, known_hosts parser, authfile parser, packet framing, or key option parser.",
+                        "oracle_strategy":  "Native unit/regress output and C helper JSON for non-secret parser/buffer fixtures.",
+                        "performance_smoke":  "Fixed sshbuf/parser corpus timing.",
+                        "risk_notes":  "Security boundary, OpenSSL/LibreSSL differences, sandboxing, PAM, and platform ifdefs require careful isolation."
+                    }
+                ]
 }
