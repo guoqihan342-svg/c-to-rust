@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "status": "passed",
+  "slice_id": "tsdb-set-status-report-schema",
+  "fixture": "flashDB_rust/fixtures/l3-tsdb-set-status-report-schema.json",
+  "fixture_hash": "bd8c4ede",
+  "repair": {
+    "before": "successful ts.set_status emitted duplicate status keys",
+    "after": "successful ts.set_status emits step status as status and TS business status as ts_status"
+  },
+  "strict_behavior_fields": [
+    "id",
+    "op",
+    "status",
+    "code",
+    "entry_id",
+    "ts_status"
+  ],
+  "evidence": {
+    "red_test": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-red-test.log",
+    "green_test": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-green-test.log",
+    "rust_report": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-rust-report.json",
+    "c_oracle": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-c-oracle.json",
+    "diff": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-negative-diff.json",
+    "rust_check": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-rust-check.json",
+    "unsafe_scan": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-unsafe-scan.json",
+    "performance_smoke": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-performance-smoke.json",
+    "final_verification": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-verification.json"
+  },
+  "non_goals": [
+    "No TSDB storage behavior change.",
+    "No query entry status field rename.",
+    "No accepted-difference widening for behavior fields.",
+    "No async runtime or internal multithreading change.",
+    "No unsafe introduction."
+  ]
+}

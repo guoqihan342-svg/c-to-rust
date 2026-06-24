@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on artifact directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.35s
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-c-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-diff.json`
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-set-status-report-schema-rust-report.json","oracle_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-set-status-report-schema-c-oracle.json","rust_report_hash":"f4756360","oracle_report_hash":"cbdb73d8","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

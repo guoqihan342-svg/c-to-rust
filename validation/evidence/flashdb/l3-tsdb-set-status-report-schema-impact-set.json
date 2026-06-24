@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "implementation_impact": [
+    {
+      "path": "flashDB_rust/src/replay.rs",
+      "reason": "Rust replay successful ts.set_status output currently emits business status under status."
+    },
+    {
+      "path": "flashDB_rust/oracle/flashdb_c_oracle.c",
+      "reason": "C oracle successful ts.set_status output must match the Rust repaired schema."
+    },
+    {
+      "path": "flashDB_rust/tests/differential_replay.rs",
+      "reason": "Focused TDD and diff tests lock the repaired field shape."
+    },
+    {
+      "path": "flashDB_rust/fixtures/ci-smoke.expected.json",
+      "reason": "Checked-in expected report includes successful ts.set_status output."
+    }
+  ],
+  "semantic_impact": {
+    "public_rust_api": "unchanged",
+    "storage_layout": "unchanged",
+    "tsdb_status_values": "unchanged",
+    "fixture_input_schema": "unchanged",
+    "unsafe_policy": "unchanged"
+  }
+}

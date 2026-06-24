@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "policy": "first-party non-test Rust sources under flashDB_rust/src must not use unsafe fn or unsafe blocks",
+  "status": "passed",
+  "unsafe_count": 0,
+  "unsafe_ratio": 0,
+  "matches": []
+}

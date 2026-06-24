@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-mutated-ts-status-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-negative-diff.json`
+cli error: diff mismatch: ts-schema-002 at steps.ts-schema-002.ts_status
+error: process didn't exit successfully: `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-mutated-ts-status-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-set-status-report-schema-negative-diff.json` (exit code: 1)

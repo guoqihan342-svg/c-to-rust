@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "slice_id": "tsdb-set-status-report-schema",
+  "contract": {
+    "step_status_field": "status",
+    "business_ts_status_field": "ts_status",
+    "input_fixture_status_field": "status",
+    "query_entry_status_field": "status"
+  },
+  "must_hold": [
+    "Successful ts.set_status report steps keep status:\"ok\" for operation outcome.",
+    "Successful ts.set_status report steps emit ts_status for the requested TS business status.",
+    "Successful ts.set_status report steps do not emit a second status key for business status.",
+    "Rust replay and C oracle use the same repaired field name.",
+    "Schema-aware diff treats ts_status as a strict behavior field."
+  ],
+  "must_not_claim": [
+    "new TSDB storage semantics",
+    "new query ordering semantics",
+    "new count semantics",
+    "native FlashDB clean or GC semantics",
+    "byte-for-byte layout equivalence",
+    "historical evidence rewrite"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-c-oracle.json fixture=fixtures/l3-tsdb-set-status-report-schema.json",
+  "timestamp_utc": "2026-06-24T08:15:34Z"
+}

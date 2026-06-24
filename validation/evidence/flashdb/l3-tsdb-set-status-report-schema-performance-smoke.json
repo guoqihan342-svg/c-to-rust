@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "command": "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-set-status-report-schema.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-performance-replay.json",
+  "status": "passed",
+  "elapsed_ms": 406,
+  "operation_count": 3,
+  "secondary_only": true,
+  "report_path": "../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-performance-replay.json"
+}

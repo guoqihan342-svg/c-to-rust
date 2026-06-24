@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=evidence/c-oracle-report.json fixture=fixtures/c-rust-smoke.json",
+  "timestamp_utc": "2026-06-24T08:16:14Z"
+}

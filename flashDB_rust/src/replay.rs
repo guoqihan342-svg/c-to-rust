@@ -397,7 +397,7 @@ fn execute_operation(
             state.ts.set_status(id, status)?;
             Ok(vec![
                 ("entry_id".to_string(), id.to_string()),
-                ("status".to_string(), json_string(status_name(status))),
+                ("ts_status".to_string(), json_string(status_name(status))),
             ])
         }
         "ts.reopen" => {

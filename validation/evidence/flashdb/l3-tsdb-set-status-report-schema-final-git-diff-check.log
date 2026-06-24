@@ -1,0 +1,4 @@
+warning: in the working copy of 'flashDB_rust/evidence/c-oracle-report.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/oracle/flashdb_c_oracle.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/src/replay.rs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/tests/differential_replay.rs', LF will be replaced by CRLF the next time Git touches it

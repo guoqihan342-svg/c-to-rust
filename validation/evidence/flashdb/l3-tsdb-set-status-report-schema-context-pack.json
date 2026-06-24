@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "slice_id": "tsdb-set-status-report-schema",
+  "target_id": "flashdb",
+  "branch": "codex/flashdb-rust-skeleton",
+  "base_commit": "31c3ea26b39673873fd2bffe59e03c5c89e24229",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "problem": "Successful ts.set_status replay steps currently use duplicate status keys: step status and TS business status.",
+  "strict_behavior_fields": [
+    "id",
+    "op",
+    "status",
+    "code",
+    "entry_id",
+    "ts_status"
+  ],
+  "allowed_metadata_differences": [
+    "image_hash",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "affected_files": [
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/fixtures/l3-tsdb-set-status-report-schema.json",
+    "flashDB_rust/fixtures/ci-smoke.expected.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-*"
+  ],
+  "out_of_scope": [
+    "TSDB storage layout",
+    "FlashDB C semantic behavior",
+    "query entry status field names",
+    "accepted-difference widening",
+    "async runtime",
+    "internal multithreading",
+    "unsafe introduction"
+  ]
+}

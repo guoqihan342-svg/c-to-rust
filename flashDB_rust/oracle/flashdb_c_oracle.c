@@ -944,7 +944,7 @@ static void exec_ts_set_status(struct oracle_state *state, const struct operatio
     }
     step_begin(first, op->id, op->op, "ok", "OK");
     json_field_u64("entry_id", entry_id);
-    json_field_string("status", ts_status_name(status));
+    json_field_string("ts_status", ts_status_name(status));
     putchar('}');
 }
 

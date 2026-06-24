@@ -3,6 +3,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn step_json_for<'a>(report: &'a str, step_id: &str) -> &'a str {
+    let marker = format!("{{\"id\":\"{step_id}\"");
+    let start = report.find(&marker).expect("step id exists in report");
+    let end = report[start..].find('}').expect("step object closes");
+    &report[start..start + end + 1]
+}
+
 #[test]
 fn replay_fixture_writes_per_step_report_with_error_codes() {
     let report = temp_path("replay-report.json");
@@ -148,6 +155,34 @@ fn l3_kvdb_error_boundary_fixture_replays_visible_errors() {
 }
 
 #[test]
+fn l3_tsdb_set_status_report_schema_uses_ts_status_for_business_status() {
+    let report = temp_path("l3-tsdb-set-status-report-schema-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-set-status-report-schema.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-set-status-report-schema\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-set-status-report-schema\""));
+    let set_status_step = step_json_for(&out, "ts-schema-002");
+    assert!(set_status_step.contains("\"op\":\"ts.set_status\""));
+    assert!(set_status_step.contains("\"status\":\"ok\""));
+    assert!(set_status_step.contains("\"code\":\"OK\""));
+    assert!(set_status_step.contains("\"entry_id\":1"));
+    assert!(set_status_step.contains("\"ts_status\":\"user1\""));
+    assert_eq!(set_status_step.matches("\"status\"").count(), 1);
+    assert!(!set_status_step.contains("\"status\":\"user1\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_append_query_status_fixture_replays_main_path() {
     let report = temp_path("l3-tsdb-append-query-status-report.json");
     let out = cli::run([
@@ -174,7 +209,7 @@ fn l3_tsdb_append_query_status_fixture_replays_main_path() {
     assert!(out.contains("\"timestamp\":30"));
     assert!(out.contains("\"id\":\"ts-l3-005\""));
     assert!(out.contains("\"op\":\"ts.set_status\""));
-    assert!(out.contains("\"status\":\"user1\""));
+    assert!(out.contains("\"ts_status\":\"user1\""));
     assert!(out.contains("\"id\":\"ts-l3-006\""));
     assert!(out.contains("\"op\":\"ts.count_status\""));
     assert!(out.contains("\"count\":1"));
@@ -215,7 +250,7 @@ fn l3_tsdb_deleted_status_reopen_fixture_replays_visible_counts() {
     assert!(out.contains("\"id\":\"ts-del-003\""));
     assert!(out.contains("\"op\":\"ts.set_status\""));
     assert!(out.contains("\"entry_id\":1"));
-    assert!(out.contains("\"status\":\"deleted\""));
+    assert!(out.contains("\"ts_status\":\"deleted\""));
     assert!(out.contains(
         "\"id\":\"ts-del-004\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
     ));

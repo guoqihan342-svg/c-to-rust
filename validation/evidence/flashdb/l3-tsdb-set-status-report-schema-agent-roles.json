@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "roles": [
+    {
+      "agent": "019ef8ad-441e-7a30-bcc7-e1c636d8712f",
+      "role": "Rust/C oracle emitter review",
+      "result": "Confirmed successful ts.set_status emits duplicate status keys in Rust replay and C oracle; recommended renaming only the business field to ts_status."
+    },
+    {
+      "agent": "019ef8ad-65c6-7c33-881f-29226db86646",
+      "role": "OpenSpec and evidence review",
+      "result": "Confirmed change artifacts were missing at first and recommended a focused schema repair slice with Rust/C oracle, negative diff, unsafe, and final verification evidence."
+    },
+    {
+      "agent": "main",
+      "role": "implementation coordinator",
+      "result": "Owns TDD, minimal code changes, verification, OpenSpec task updates, commit, and push."
+    }
+  ]
+}

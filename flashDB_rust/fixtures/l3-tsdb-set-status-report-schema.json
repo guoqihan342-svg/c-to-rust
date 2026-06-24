@@ -1,0 +1,11 @@
+{
+  "name": "l3-tsdb-set-status-report-schema",
+  "operations": [
+    {"id":"ts-schema-001","op":"ts.append","timestamp":10,"value":"alpha"},
+    {"id":"ts-schema-002","op":"ts.set_status","entry_id":1,"status":"user1"},
+    {"id":"ts-schema-003","op":"ts.count_status","from":10,"to":10,"status":"user1"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Step status, code, entry id, TS business status, operation identity, and operation success are strict behavior fields.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "status": "passed",
+  "commands": [
+    {
+      "name": "cargo fmt",
+      "command": "cargo fmt -- --check",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-cargo-fmt.log"
+    },
+    {
+      "name": "targeted tests",
+      "command": "cargo test --test differential_replay tsdb_set_status_report_schema -- --nocapture",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-targeted-tests.log"
+    },
+    {
+      "name": "cargo test",
+      "command": "cargo test",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-cargo-test.log"
+    },
+    {
+      "name": "schema diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-c-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-set-status-report-schema-diff.json",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-schema-diff.log"
+    },
+    {
+      "name": "unsafe scan",
+      "command": "cargo test --test unsafe_scan",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-unsafe-scan.log"
+    },
+    {
+      "name": "OpenSpec change strict",
+      "command": "openspec validate repair-tsdb-set-status-report-schema --strict",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-openspec-change-strict.log"
+    },
+    {
+      "name": "OpenSpec all",
+      "command": "openspec validate --all",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-openspec-all.log"
+    },
+    {
+      "name": "git whitespace",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-final-git-diff-check.log"
+    }
+  ],
+  "tdd": {
+    "red_log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-red-test.log",
+    "green_log": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-green-test.log",
+    "red_failure": "assertion failed: set_status_step.contains(\"\\\"ts_status\\\":\\\"user1\\\"\")"
+  },
+  "c_oracle": {
+    "status": "C_ORACLE_GENERATED",
+    "report": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-c-oracle.json",
+    "producer_evidence": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-c-oracle-producer-evidence.json"
+  },
+  "negative_diff": {
+    "status": "failed_as_expected",
+    "field_path": "steps.ts-schema-002.ts_status",
+    "report": "validation/evidence/flashdb/l3-tsdb-set-status-report-schema-negative-diff.json"
+  },
+  "unsafe": {
+    "first_party_non_test_unsafe_count": 0,
+    "ratio": 0
+  }
+}

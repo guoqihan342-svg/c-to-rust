@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "change": "repair-tsdb-set-status-report-schema",
+  "cache_key_scope": "tsdb-set-status-report-schema",
+  "invalidation_inputs": [
+    {
+      "file": "flashDB_rust/fixtures/l3-tsdb-set-status-report-schema.json",
+      "sha256": "93906af1a57decef95f9ed6330fa6ca06c4fbf0fa27e7f1062ecd6b0513487a0"
+    },
+    {
+      "file": "flashDB_rust/src/replay.rs",
+      "sha256": "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+    },
+    {
+      "file": "flashDB_rust/oracle/flashdb_c_oracle.c",
+      "sha256": "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+    },
+    {
+      "file": "flashDB_rust/tests/differential_replay.rs",
+      "sha256": "52bd54a38f28c541e3c27b020cf7f592500900eccbd5b8808208232e38a3632f"
+    }
+  ],
+  "invalidated_because": "report schema field name changed from duplicate status to ts_status for successful ts.set_status",
+  "deterministic": true
+}
