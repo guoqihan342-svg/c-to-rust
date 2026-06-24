@@ -74,6 +74,7 @@ Purpose: prove behavior-level equivalence for the migrated slice.
 Pass criteria:
 
 - C oracle or golden fixture is generated from the same input sequence.
+- Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
 - Rust output is compared against C/golden output by schema-aware diff.
 - Negative regression counterexample fails as expected.
 - Performance smoke records timing or operation counters without replacing correctness gates.
@@ -84,7 +85,12 @@ Evidence:
 - `validation/evidence/<target>/l3-rust-report.json`
 - `validation/evidence/<target>/l3-diff.json`
 - `validation/evidence/<target>/l3-performance-smoke.json`
+- `validation/evidence/<target>/l3-config-profile.json` or equivalent version/cache profile evidence
 - Slice-specific artifact names and required statuses may be declared through `validation/l3-template/evidence-manifest.json`.
+
+Config profile is a traceability and invalidation gate, not a full macro solver. A profile change invalidates affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless those artifacts are regenerated or explicitly invalidated.
+
+中文：config profile 是追溯与缓存失效门禁，不是完整宏求解器。profile 变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
 ## Reporting Rules
 

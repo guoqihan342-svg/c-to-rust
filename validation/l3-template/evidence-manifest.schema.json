@@ -73,6 +73,7 @@
         "slice_contract",
         "context_pack",
         "cache_metadata",
+        "config_profile",
         "c_oracle",
         "rust_report",
         "schema_diff",
@@ -120,6 +121,25 @@
               "properties": {
                 "secondary_only": {
                   "const": true
+                }
+              }
+            }
+          ]
+        },
+        "config_profile": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/evidenceRef"
+            },
+            {
+              "type": "object",
+              "required": [
+                "profile_id"
+              ],
+              "properties": {
+                "profile_id": {
+                  "type": "string",
+                  "minLength": 1
                 }
               }
             }
@@ -191,4 +211,3 @@
     }
   }
 }
-

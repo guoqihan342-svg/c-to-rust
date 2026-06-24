@@ -10,6 +10,8 @@
       "repo_commit",
       "fixture.path",
       "fixture.sha256_or_hash_short",
+      "evidence.config_profile.path",
+      "evidence.config_profile.profile_id",
       "semantic_equivalence_claim.scope",
       "semantic_equivalence_claim.boundary",
       "known_gaps"
@@ -37,6 +39,16 @@
       "path_pattern": "validation/evidence/<target>/l3-<slice>-context-pack.json",
       "expected_status": "recorded",
       "purpose": "Captures direct modules, call relationships, tests, unsafe status, cache/version facts, and rollback id."
+    },
+    {
+      "id": "config_profile",
+      "path_patterns": [
+        "validation/evidence/<target>/l3-<slice>-config-profile.json",
+        "validation/evidence/<target>/config-profile.json",
+        "validation/l3-template/config-profile.example.json"
+      ],
+      "expected_status": "recorded",
+      "purpose": "Binds the L3 claim to a normalized macro/config/feature/compile profile, including config header hash and cache invalidation keys."
     },
     {
       "id": "c_oracle",
@@ -105,7 +117,7 @@
         "validation/evidence/<target>/l3-<slice>-local-toolchain-evidence.json"
       ],
       "expected_status": "recorded",
-      "purpose": "Binds evidence to source commit, fixture hash, toolchain, feature/macro matrix, and cache invalidation keys."
+      "purpose": "Binds evidence to source commit, fixture hash, toolchain, feature/macro matrix, and cache invalidation keys. Future slices should also link a config_profile artifact for normalized profile fields."
     },
     {
       "id": "final_verification",
@@ -147,6 +159,7 @@
   ],
   "legacy_notes": [
     "Some historical FlashDB L3 slices predate this template and may miss future-required artifacts such as per-slice version manifests or final verification reports.",
+    "Some historical FlashDB L3 slices record config facts through version-governance manifests or cache metadata instead of a dedicated config-profile artifact.",
     "Future L3 slices should satisfy every required_artifacts entry before claiming L3 semantic equivalence."
   ]
 }

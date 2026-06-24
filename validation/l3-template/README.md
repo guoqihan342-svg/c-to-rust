@@ -16,6 +16,7 @@ Every L3 slice must provide:
 
 - slice contract: selected C/Rust boundary, APIs, fixture, non-goals, and accepted differences.
 - context pack: direct modules, callers/callees, tests, unsafe status, rollback/cache/version facts.
+- config profile: normalized C config header hash, `#define` values, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, and cache invalidation keys.
 - C oracle report: generated from pinned C source and the same fixture input.
 - Rust replay report: generated from the migrated Rust implementation and the same fixture input.
 - schema-aware diff: compares behavior fields and records `first_mismatch`.
@@ -26,6 +27,14 @@ Every L3 slice must provide:
 - final verification: final command evidence before reporting, archiving, commit, or push.
 - summary: machine-readable L3 claim, known gaps, evidence paths, and next-slice guidance.
 - version or configuration binding: source commit, fixture hash, toolchain/version manifest, feature matrix, macro/config profile, and cache key facts.
+
+## Config Profile Gate
+
+The config profile is an identity and invalidation gate. It proves that all L3 evidence for the slice is tied to the same C config header, macro/feature matrix, compile profile, Rust Cargo features, Rust feature environment, backend profile, fixture, and toolchain inputs.
+
+It is not a macro solver. It does not prove every possible `#ifdef` branch, every macro expansion, or every build profile was explored. If any profile input changes, affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence must be regenerated or explicitly invalidated.
+
+中文：config profile 是证据身份与缓存失效门禁，用于证明该切片的 L3 证据绑定到同一组 C 配置头、宏/feature 矩阵、编译 profile、Rust Cargo features、Rust feature environment、backend、fixture 和工具链输入。它不是完整宏求解器，也不证明所有 `#ifdef` 分支、宏展开或构建 profile 都已覆盖。任一 profile 输入变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式标记失效。
 
 ## Pass Semantics
 
@@ -55,6 +64,8 @@ Machine-readable template files:
 - `validation/l3-template/evidence-manifest.json`: canonical required/optional evidence categories.
 - `validation/l3-template/evidence-manifest.schema.json`: schema for future per-slice L3 evidence manifests.
 - `validation/l3-template/evidence-manifest.example.json`: example per-slice manifest using `kvdb-compact-overwrite`.
+- `validation/l3-template/config-profile.schema.json`: schema for future config-profile evidence.
+- `validation/l3-template/config-profile.example.json`: example config profile using the current FlashDB oracle config.
 
 ## Non-Goal Language
 

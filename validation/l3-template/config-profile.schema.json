@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "L3 Config Profile",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "level",
+    "target_id",
+    "profile_id",
+    "status",
+    "source_commit",
+    "repo_commit",
+    "fixture",
+    "config_header",
+    "c_defines",
+    "feature_matrix",
+    "compile_profile",
+    "rust_profile",
+    "toolchain",
+    "cache_invalidation_keys",
+    "non_goals"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "level": {
+      "const": "L3"
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "recorded",
+        "passed",
+        "stale",
+        "incomplete"
+      ]
+    },
+    "source_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "repo_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "fixture": {
+      "type": "object",
+      "required": [
+        "path",
+        "hash"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "config_header": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "c_defines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    "feature_matrix": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "compile_profile": {
+      "type": "object",
+      "required": [
+        "c_oracle_command",
+        "include_paths",
+        "config_header_included"
+      ],
+      "properties": {
+        "c_oracle_command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "include_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "config_header_included": {
+          "const": true
+        },
+        "command_args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rust_profile": {
+      "type": "object",
+      "required": [
+        "package",
+        "cargo_features",
+        "feature_env",
+        "backend"
+      ],
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cargo_features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feature_env": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cargo_profile": {
+          "type": "object"
+        },
+        "cargo_toml_sha256": {
+          "type": "string"
+        },
+        "cargo_lock_sha256": {
+          "type": "string"
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "required": [
+        "rustc_version",
+        "cargo_version",
+        "openspec_version"
+      ]
+    },
+    "cache_invalidation_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "non_goals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

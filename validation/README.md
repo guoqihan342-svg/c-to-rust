@@ -18,6 +18,8 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `evidence/l1-low-cost-remediation-summary.json`: machine-readable low-cost remediation rerun summary.
 - `evidence/l1-low-cost-remediation-summary.md`: reviewer-friendly low-cost remediation rerun summary.
 - `l3-template/`: reusable L3 evidence template, checklist, schema, and example for bounded C/Rust semantic-equivalence claims.
+- `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
+- `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
 
 ## Fast Commands
 

@@ -9,6 +9,9 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Rust repo commit is recorded.
 - [ ] C source boundary and Rust public API boundary are recorded.
 - [ ] Fixture path, fixture hash, and operation count are recorded.
+- [ ] Config profile id is recorded.
+- [ ] C config header path and hash are recorded.
+- [ ] C defines, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend, and toolchain inputs are recorded.
 - [ ] Non-goals and accepted differences are written before the pass claim.
 
 ## Required Evidence
@@ -16,6 +19,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Slice contract exists.
 - [ ] Context pack exists.
 - [ ] Impact set or equivalent boundary evidence exists.
+- [ ] Config profile exists or equivalent version/cache evidence records all required profile fields.
 - [ ] C oracle report exists and records generated status from a real C toolchain.
 - [ ] Rust replay report exists.
 - [ ] C and Rust reports use the same fixture hash.
@@ -27,6 +31,13 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Performance smoke exists and is marked secondary-only.
 - [ ] Summary JSON exists.
 - [ ] Version/config manifest or equivalent binding exists.
+
+## Config Profile
+
+- [ ] Profile binds `source_commit`, `repo_commit`, fixture hash, config header hash, C defines, feature matrix, compile command/include paths, Rust Cargo features, Rust feature environment, backend, Cargo lock hash, and toolchain versions.
+- [ ] Profile changes invalidate C oracle, Rust replay, schema diff, negative diff, unsafe ledger, performance smoke, cache metadata, and summary evidence.
+- [ ] Profile is described as traceability/cache evidence, not as complete macro activation-condition coverage.
+- [ ] Async, multithreaded, and runtime-cache semantics remain non-goals unless separate evidence exists.
 
 ## Claim Boundary
 
@@ -49,4 +60,3 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Unsafe scan command is recorded.
 - [ ] OpenSpec validation is recorded when a change is involved.
 - [ ] `git diff --check` or equivalent whitespace check is recorded before commit.
-

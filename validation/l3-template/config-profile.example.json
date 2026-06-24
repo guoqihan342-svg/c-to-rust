@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "profile_id": "flashdb-file-kvdb-tsdb-fdb-cfg-fb3cde1a",
+  "status": "recorded",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "6ec5f45ad96940be3c50f3641504047cff2aee40",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+    "hash": "78e5ef24",
+    "operation_count": 14
+  },
+  "config_header": {
+    "path": "flashDB_rust/oracle/fdb_cfg.h",
+    "sha256": "fb3cde1afcc367e01f15529b29d55ac3061d0dd2336aa1c1797678e34a99f4e3",
+    "role": "C oracle FlashDB configuration header"
+  },
+  "c_defines": {
+    "FDB_USING_KVDB": true,
+    "FDB_USING_TSDB": true,
+    "FDB_USING_FILE_POSIX_MODE": true,
+    "FDB_WRITE_GRAN": 1,
+    "FDB_PRINT": "stderr"
+  },
+  "feature_matrix": {
+    "FDB_USING_KVDB": true,
+    "FDB_USING_TSDB": true,
+    "FDB_USING_FILE_POSIX_MODE": true,
+    "FDB_WRITE_GRAN": 1
+  },
+  "compile_profile": {
+    "c_oracle_command": "flashDB_rust/oracle/generate_c_oracle.sh",
+    "include_paths": [
+      "flashDB_rust/oracle",
+      "flashDB_rust/oracle/.work/FlashDB/inc",
+      "flashDB_rust/oracle/.work/FlashDB/src"
+    ],
+    "config_header_included": true,
+    "command_args": [
+      "backend=file",
+      "fixture=flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json"
+    ]
+  },
+  "rust_profile": {
+    "package": "flashdb_rust",
+    "cargo_features": [],
+    "feature_env": "default",
+    "backend": "file",
+    "cargo_profile": {
+      "opt_level": "0",
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "cargo_toml_sha256": "79c63ce7878a62d252196cff5f3a232f0c899178bbf922f2f53624b82be66c82",
+    "cargo_lock_sha256": "8bf2cc252a9fc8a4dae3656276816fc74590cac086fd75210c1922e0fadc7f40"
+  },
+  "toolchain": {
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec_version": "1.4.1",
+    "git_version": "git version 2.53.0.windows.3",
+    "host_os": "windows",
+    "c_oracle_host": "wsl-or-ci-required-for-pass"
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "config_header.sha256",
+    "c_defines",
+    "feature_matrix",
+    "compile_profile.c_oracle_command",
+    "compile_profile.include_paths",
+    "compile_profile.command_args",
+    "rust_profile.cargo_features",
+    "rust_profile.feature_env",
+    "rust_profile.backend",
+    "rust_profile.cargo_profile",
+    "rust_profile.cargo_toml_sha256",
+    "rust_profile.cargo_lock_sha256",
+    "toolchain.rustc_version",
+    "toolchain.cargo_version",
+    "toolchain.openspec_version"
+  ],
+  "invalidates": [
+    "C oracle report",
+    "Rust replay report",
+    "schema-aware diff",
+    "negative diff",
+    "unsafe ledger",
+    "performance smoke",
+    "cache metadata",
+    "summary claim"
+  ],
+  "non_goals": [
+    "Does not prove all macro activation conditions.",
+    "Does not prove all conditional-compilation branches.",
+    "Does not prove async, multithreaded, or runtime cache semantics.",
+    "Does not replace C oracle generation or schema-aware differential evidence."
+  ]
+}

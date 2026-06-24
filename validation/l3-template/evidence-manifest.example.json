@@ -24,6 +24,11 @@
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
       "status": "recorded"
     },
+    "config_profile": {
+      "path": "validation/l3-template/config-profile.example.json",
+      "status": "recorded",
+      "profile_id": "flashdb-file-kvdb-tsdb-fdb-cfg-fb3cde1a"
+    },
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
       "status": "passed",
