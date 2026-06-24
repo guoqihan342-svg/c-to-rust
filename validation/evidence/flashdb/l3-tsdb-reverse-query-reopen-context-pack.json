@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+  "slice_id": "tsdb-reverse-query-reopen",
+  "target_id": "flashdb",
+  "branch": "codex/flashdb-rust-skeleton",
+  "base_commit": "538c581b1cca18fc2c68edb3e4e06f6495d8bc97",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "problem": "Existing TSDB L3 evidence validates reverse query before reopen and forward query after reopen but not reverse query after reopen.",
+  "strict_behavior_fields": [
+    "id",
+    "op",
+    "status",
+    "code",
+    "entry_id",
+    "timestamp",
+    "value",
+    "entries"
+  ],
+  "allowed_metadata_differences": [
+    "image_hash",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "affected_files": [
+    "flashDB_rust/fixtures/l3-tsdb-reverse-query-reopen.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-*"
+  ],
+  "context_files_read": [
+    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/proposal.md",
+    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/design.md",
+    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
+    "openspec/changes/run-flashdb-tsdb-reverse-query-reopen-l3-loop/tasks.md",
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/tests/differential_replay.rs",
+    "flashDB_rust/fixtures/l3-tsdb-append-query-status.json"
+  ],
+  "out_of_scope": [
+    "reverse count_status semantics",
+    "explicit reverse field in fixture schema",
+    "TSDB storage layout",
+    "FlashDB C semantic behavior changes",
+    "clean or GC semantics",
+    "sector rollover or capacity pressure",
+    "byte-for-byte image equivalence",
+    "corrupt-image reopen",
+    "payload limit behavior",
+    "non-monotonic timestamps",
+    "power-loss behavior",
+    "async runtime",
+    "internal multithreading",
+    "unsafe introduction"
+  ]
+}

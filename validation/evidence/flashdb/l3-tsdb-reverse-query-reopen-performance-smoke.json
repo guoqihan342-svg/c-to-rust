@@ -1,0 +1,12 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+    "command":  "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-reverse-query-reopen.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-performance-replay.json",
+    "status":  "passed",
+    "exit_code":  0,
+    "elapsed_ms":  357,
+    "operation_count":  7,
+    "secondary_only":  true,
+    "report_path":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-performance-replay.json",
+    "log_path":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-performance-smoke.log"
+}

@@ -1,0 +1,51 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+    "slice_id":  "tsdb-reverse-query-reopen",
+    "status":  "passed",
+    "generated_at_local":  "2026-06-24T17:15:11",
+    "commands":  [
+                     {
+                         "name":  "cargo fmt -- --check",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-cargo-fmt.log"
+                     },
+                     {
+                         "name":  "cargo test --test differential_replay reverse_query_reopen -- --nocapture",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-targeted-tests.log"
+                     },
+                     {
+                         "name":  "cargo test",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-cargo-test.log"
+                     },
+                     {
+                         "name":  "cargo run -- diff",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-diff.log",
+                         "report":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-diff.json"
+                     },
+                     {
+                         "name":  "cargo run -- unsafe-scan",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-unsafe-scan.log"
+                     },
+                     {
+                         "name":  "openspec validate run-flashdb-tsdb-reverse-query-reopen-l3-loop --strict",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-openspec-strict.log"
+                     },
+                     {
+                         "name":  "openspec validate --all",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-openspec-all.log"
+                     },
+                     {
+                         "name":  "git diff --check",
+                         "status":  "passed",
+                         "log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-final-git-diff-check.log"
+                     }
+                 ],
+    "evidence_summary":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-summary.json"
+}

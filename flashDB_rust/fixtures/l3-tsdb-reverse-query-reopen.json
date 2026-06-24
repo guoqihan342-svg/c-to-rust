@@ -1,0 +1,15 @@
+{
+  "name": "l3-tsdb-reverse-query-reopen",
+  "operations": [
+    {"id":"ts-rqr-001","op":"ts.append","timestamp":10,"value":"alpha"},
+    {"id":"ts-rqr-002","op":"ts.append","timestamp":20,"value":"beta"},
+    {"id":"ts-rqr-003","op":"ts.append","timestamp":30,"value":"gamma"},
+    {"id":"ts-rqr-004","op":"ts.set_status","entry_id":2,"status":"user1"},
+    {"id":"ts-rqr-005","op":"ts.query","from":30,"to":10},
+    {"id":"ts-rqr-006","op":"ts.reopen"},
+    {"id":"ts-rqr-007","op":"ts.query","from":30,"to":10}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Reverse query entry ordering, entry id, timestamp, status, value, operation identity, and operation success are strict behavior fields.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

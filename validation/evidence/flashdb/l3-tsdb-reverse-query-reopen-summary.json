@@ -1,0 +1,52 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+    "slice_id":  "tsdb-reverse-query-reopen",
+    "status":  "passed",
+    "fixture":  "flashDB_rust/fixtures/l3-tsdb-reverse-query-reopen.json",
+    "fixture_hash":  "1e0a2914",
+    "coverage":  [
+                     "three monotonic TSDB appends at timestamps 10, 20, and 30",
+                     "middle entry status update to user1",
+                     "reverse query before reopen returns timestamps 30, 20, 10",
+                     "reopen preserves reverse query order and middle entry status",
+                     "negative schema diff rejects a mutated after-reopen forward order"
+                 ],
+    "reports":  {
+                    "rust_report":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-rust-report.json",
+                    "c_oracle_report":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-c-oracle.json",
+                    "c_oracle_producer_evidence":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-c-oracle-producer-evidence.json",
+                    "diff":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-diff.json",
+                    "negative_diff":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-negative-diff.json",
+                    "rust_check":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-rust-check.json",
+                    "unsafe_scan":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-unsafe-scan.json",
+                    "cache_metadata":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-cache-metadata.json",
+                    "performance_smoke":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-performance-smoke.json"
+                },
+    "verification":  {
+                         "cargo_fmt":  "passed",
+                         "targeted_tests":  "2 passed, 0 failed",
+                         "cargo_test":  "passed",
+                         "c_oracle_marker":  "C_ORACLE_GENERATED",
+                         "schema_diff":  "passed",
+                         "negative_diff":  "failed as expected at steps.ts-rqr-007.entries",
+                         "compiler_errors":  0,
+                         "compiler_warnings":  0,
+                         "self_healing_needed":  false,
+                         "unsafe_count":  0,
+                         "unsafe_ratio":  0,
+                         "performance_smoke_elapsed_ms":  357,
+                         "openspec_strict":  "passed",
+                         "openspec_all":  "passed",
+                         "git_diff_check":  "passed"
+                     },
+    "non_goals":  [
+                      "reverse count_status semantics",
+                      "capacity pressure or sector rollover/full behavior",
+                      "clean or GC behavior",
+                      "physical deletion or byte-for-byte layout equivalence",
+                      "payload limits or non-monotonic timestamp behavior",
+                      "async/threading or power-loss behavior"
+                  ],
+    "next_slice_recommendation":  "Consider tsdb-over-limit-payload-error as a separate next slice, using the third review agent proposal, after this archived change is pushed."
+}

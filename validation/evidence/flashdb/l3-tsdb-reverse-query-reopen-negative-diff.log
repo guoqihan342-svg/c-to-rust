@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-mutated-order-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-negative-diff.json`
+cli error: diff mismatch: ts-rqr-007 at steps.ts-rqr-007.entries
+error: process didn't exit successfully: `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-mutated-order-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-reverse-query-reopen-negative-diff.json` (exit code: 1)

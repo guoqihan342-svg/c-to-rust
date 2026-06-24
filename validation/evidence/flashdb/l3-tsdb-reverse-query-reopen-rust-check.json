@@ -1,0 +1,11 @@
+{
+    "command":  "cargo check --message-format=json",
+    "exit_code":  0,
+    "status":  "passed",
+    "errors":  0,
+    "warnings":  0,
+    "self_healing_needed":  false,
+    "self_healing_notes":  "No compiler error stack appeared for this slice; no auto patch was needed.",
+    "raw_jsonl":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-rust-check.raw.jsonl",
+    "stderr_log":  "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-rust-check.stderr.log"
+}

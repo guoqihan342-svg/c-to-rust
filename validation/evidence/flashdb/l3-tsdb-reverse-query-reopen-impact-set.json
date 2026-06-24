@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+  "implementation_impact": [
+    {
+      "path": "flashDB_rust/fixtures/l3-tsdb-reverse-query-reopen.json",
+      "reason": "Adds the focused reverse query after reopen scenario for Rust and C replay."
+    },
+    {
+      "path": "flashDB_rust/tests/differential_replay.rs",
+      "reason": "Locks reverse query ordering before and after reopen and negative diff coverage."
+    },
+    {
+      "path": "validation/evidence/flashdb/l3-tsdb-reverse-query-reopen-*",
+      "reason": "Persists machine-readable evidence for the L3 C/Rust oracle loop."
+    }
+  ],
+  "semantic_impact": {
+    "public_rust_api": "unchanged",
+    "storage_layout": "unchanged",
+    "fixture_input_schema": "unchanged",
+    "report_schema": "unchanged",
+    "accepted_difference_policy": "unchanged",
+    "unsafe_policy": "unchanged"
+  }
+}

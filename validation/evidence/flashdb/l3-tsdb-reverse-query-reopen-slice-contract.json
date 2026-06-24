@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
+  "slice_id": "tsdb-reverse-query-reopen",
+  "contract": {
+    "fixture_name": "l3-tsdb-reverse-query-reopen",
+    "fixture_path": "flashDB_rust/fixtures/l3-tsdb-reverse-query-reopen.json",
+    "reverse_query_expression": "ts.query with from greater than to",
+    "primary_gate": "reverse query returns entries ordered by timestamp 30, 20, 10 after reopen",
+    "secondary_gate": "middle entry keeps user1 status in the reversed entries"
+  },
+  "must_hold": [
+    "The fixture appends three TSDB records with timestamps 10, 20, and 30.",
+    "The middle entry is updated to user1.",
+    "Reverse query before reopen returns gamma, beta, alpha order by timestamps 30, 20, 10.",
+    "Reverse query after reopen returns the same gamma, beta, alpha order.",
+    "Schema-aware diff treats query entries ordering as a strict behavior field."
+  ],
+  "must_not_claim": [
+    "reverse count_status behavior",
+    "explicit reverse fixture fields",
+    "native FlashDB clean or GC semantics",
+    "sector full or rollover behavior",
+    "byte-for-byte layout equivalence",
+    "power-loss behavior"
+  ]
+}
