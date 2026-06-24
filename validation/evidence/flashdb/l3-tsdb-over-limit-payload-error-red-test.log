@@ -1,0 +1,19 @@
+   Compiling flashdb_rust v0.1.0 (C:\Users\Administrator\Documents\c-to-rust-flashdb\flashDB_rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.55s
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 1 test
+
+thread 'l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery' (23792) panicked at tests\differential_replay.rs:501:5:
+assertion failed: out.contains("\"id\":\"ts-ol-002\",\"op\":\"ts.append\",\"status\":\"error\",\"code\":\"FDB_WRITE_ERR\"")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery ... FAILED
+
+failures:
+
+failures:
+    l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.21s
+
+error: test failed, to rerun pass `--test differential_replay`

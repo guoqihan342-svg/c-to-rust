@@ -1,0 +1,4 @@
+warning: in the working copy of 'flashDB_rust/src/config.rs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/src/tsdb.rs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/src/types.rs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'flashDB_rust/tests/differential_replay.rs', LF will be replaced by CRLF the next time Git touches it

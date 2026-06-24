@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=../validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-c-oracle.json fixture=fixtures/l3-tsdb-over-limit-payload-error.json",
+  "timestamp_utc": "2026-06-24T09:25:43Z"
+}

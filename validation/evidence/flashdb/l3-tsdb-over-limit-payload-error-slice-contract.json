@@ -1,0 +1,45 @@
+{
+    "schema_version":  1,
+    "slice_id":  "tsdb-over-limit-payload-error",
+    "validates":  [
+                      "129-byte ASCII TSDB payload rejection",
+                      "append step reports status error and code FDB_WRITE_ERR",
+                      "rejected payload is not visible in query results",
+                      "written count excludes failed append",
+                      "next successful append uses the next contiguous successful entry_id",
+                      "query/count behavior remains stable after reopen"
+                  ],
+    "strict_behavior_fields":  [
+                                   "step.id",
+                                   "step.op",
+                                   "step.status",
+                                   "step.code",
+                                   "entry_id",
+                                   "timestamp",
+                                   "entries",
+                                   "count",
+                                   "error semantics"
+                               ],
+    "accepted_metadata_fields":  [
+                                     "image_hash",
+                                     "backend",
+                                     "toolchain_status",
+                                     "source",
+                                     "fixture",
+                                     "fixture_hash",
+                                     "report_path"
+                                 ],
+    "non_goals":  [
+                      "binary or NUL payload handling",
+                      "payloads larger than 129 bytes",
+                      "capacity pressure",
+                      "sector rollover/full",
+                      "clean/GC",
+                      "physical deletion",
+                      "byte-for-byte layout",
+                      "corrupt-image reopen",
+                      "non-monotonic timestamps",
+                      "async/threading",
+                      "power-loss behavior"
+                  ]
+}

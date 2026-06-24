@@ -1,0 +1,37 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+    "cache_key_scope":  "tsdb-over-limit-payload-error",
+    "invalidation_inputs":  [
+                                {
+                                    "file":  "flashDB_rust/fixtures/l3-tsdb-over-limit-payload-error.json",
+                                    "sha256":  "1fa33090e34af08e93695618a06c0dfac3da384f5a97c63d9db36a9fec7095c4"
+                                },
+                                {
+                                    "file":  "flashDB_rust/tests/differential_replay.rs",
+                                    "sha256":  "70b3f900bce79f317af4db183c8003d5df27c70f30f41c308ad73bcf5f9d35c3"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/config.rs",
+                                    "sha256":  "75bcc9c9d50f8c3b11a36eca95f1c6890bf5a76e9dc25ec6a12ae8337ed3aa01"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/types.rs",
+                                    "sha256":  "0b5d094e4eb63433c9275b2fe88f3ee4808538a72e99997ca635f943e3bf828f"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/tsdb.rs",
+                                    "sha256":  "0f588d617705f710da4df7247c738a31a92f83449c733bee38724f383d282341"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/replay.rs",
+                                    "sha256":  "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+                                },
+                                {
+                                    "file":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                                    "sha256":  "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+                                }
+                            ],
+    "invalidated_because":  "new TSDB over-limit payload fixture, focused replay/diff tests, and Rust TSDB payload length enforcement were added",
+    "deterministic":  true
+}

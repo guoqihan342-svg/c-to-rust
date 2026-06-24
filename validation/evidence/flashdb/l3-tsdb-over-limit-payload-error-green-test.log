@@ -1,0 +1,9 @@
+   Compiling flashdb_rust v0.1.0 (C:\Users\Administrator\Documents\c-to-rust-flashdb\flashDB_rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 2 tests
+test l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery ... ok
+test l3_diff_rejects_tsdb_over_limit_payload_error_regression ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.26s

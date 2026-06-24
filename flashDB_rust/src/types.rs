@@ -9,6 +9,7 @@ pub enum Error {
         len: usize,
         max: usize,
     },
+    WriteError(String),
     InvalidRange(String),
     OutOfBounds {
         addr: usize,
@@ -34,6 +35,7 @@ impl fmt::Display for Error {
         match self {
             Error::InvalidKey => write!(f, "key must not be empty"),
             Error::KeyTooLong { len, max } => write!(f, "key length {len} exceeds max {max}"),
+            Error::WriteError(msg) => write!(f, "write error: {msg}"),
             Error::InvalidRange(msg) => write!(f, "invalid range: {msg}"),
             Error::OutOfBounds { addr, size, len } => {
                 write!(f, "out of bounds: addr={addr}, size={size}, len={len}")
@@ -60,6 +62,7 @@ impl Error {
         match self {
             Error::InvalidKey => "INVALID_KEY",
             Error::KeyTooLong { .. } => "KEY_TOO_LONG",
+            Error::WriteError(_) => "FDB_WRITE_ERR",
             Error::InvalidRange(_) => "INVALID_RANGE",
             Error::OutOfBounds { .. } => "OUT_OF_BOUNDS",
             Error::CapacityExceeded { .. } => "CAPACITY_EXCEEDED",

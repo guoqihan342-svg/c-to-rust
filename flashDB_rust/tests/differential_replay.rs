@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TSDB_128_BYTE_PAYLOAD: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const TSDB_129_BYTE_PAYLOAD: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefx";
 
 fn step_json_for<'a>(report: &'a str, step_id: &str) -> &'a str {
     let marker = format!("{{\"id\":\"{step_id}\"");
@@ -467,6 +468,66 @@ fn l3_tsdb_payload_boundary_fixture_replays_visible_payloads() {
         TSDB_128_BYTE_PAYLOAD
     )));
     assert!(!out.contains("\"fields\":\"value\""));
+    assert!(!out.contains("\"fields\":\"entries\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
+fn l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery() {
+    assert_eq!(TSDB_129_BYTE_PAYLOAD.len(), 129);
+    let report = temp_path("l3-tsdb-over-limit-payload-error-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-over-limit-payload-error.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-over-limit-payload-error\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-over-limit-payload-error\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-001\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":1,\"timestamp\":10,\"value\":\"control\""
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-002\",\"op\":\"ts.append\",\"status\":\"error\",\"code\":\"FDB_WRITE_ERR\""
+    ));
+    assert!(!step_json_for(&out, "ts-ol-002").contains("\"entry_id\""));
+    assert!(!step_json_for(&out, "ts-ol-002").contains(TSDB_129_BYTE_PAYLOAD));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-003\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":2,\"timestamp\":30,\"value\":\"after\""
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-004\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"control\"},{\"entry_id\":2,\"timestamp\":30,\"status\":\"written\",\"value\":\"after\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-005\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-006\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":2"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-007\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":0"
+    ));
+    assert!(out.contains("\"id\":\"ts-ol-008\""));
+    assert!(out.contains("\"op\":\"ts.reopen\""));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-009\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"control\"},{\"entry_id\":2,\"timestamp\":30,\"status\":\"written\",\"value\":\"after\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-ol-010\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":2"
+    ));
+    assert!(!out.contains("\"fields\":\"code\""));
+    assert!(!out.contains("\"fields\":\"status\""));
     assert!(!out.contains("\"fields\":\"entries\""));
     assert!(report.exists());
     let _ = fs::remove_file(report);
@@ -984,6 +1045,51 @@ fn l3_diff_rejects_tsdb_payload_boundary_value_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.ts-pb-009.entries"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_tsdb_over_limit_payload_error_regression() {
+    let actual = temp_path("l3-tsdb-over-limit-payload-error-actual-report.json");
+    let expected = temp_path("l3-tsdb-over-limit-payload-error-expected-report.json");
+    let diff_report = temp_path("l3-tsdb-over-limit-payload-error-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-over-limit-payload-error.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"ts-ol-002","op":"ts.append","status":"error","code":"FDB_WRITE_ERR""#,
+        r#""id":"ts-ol-002","op":"ts.append","status":"ok","code":"OK""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.ts-ol-002.code"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

@@ -1,3 +1,4 @@
+use crate::config::MAX_TSDB_PAYLOAD_LEN;
 use crate::flash::{FlashCounters, FlashDevice};
 use crate::format::{encode_record, encoded_len, image_hash, scan_records_with_len, RecordKind};
 use crate::types::{Error, Result, TsStatus};
@@ -70,6 +71,13 @@ impl<D: FlashDevice> TsDb<D> {
     }
 
     pub fn append(&mut self, timestamp: i64, payload: &[u8]) -> Result<u64> {
+        if payload.len() > MAX_TSDB_PAYLOAD_LEN {
+            return Err(Error::WriteError(format!(
+                "TSDB payload length {} exceeds max {}",
+                payload.len(),
+                MAX_TSDB_PAYLOAD_LEN
+            )));
+        }
         let id = self.next_id;
         let entry = TsEntry {
             id,

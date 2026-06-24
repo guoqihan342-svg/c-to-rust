@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-mutated-over-limit-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-negative-diff.json`
+cli error: diff mismatch: ts-ol-002 at steps.ts-ol-002.code
+error: process didn't exit successfully: `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-mutated-over-limit-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-over-limit-payload-error-negative-diff.json` (exit code: 1)

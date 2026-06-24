@@ -5,6 +5,7 @@ pub const DEFAULT_FLASH_SIZE: usize = 4 * 1024 * 1024;
 pub const DEFAULT_SECTOR_SIZE: usize = 4 * 1024;
 pub const DEFAULT_WRITE_GRAN: usize = 1;
 pub const MAX_KEY_LEN: usize = 64;
+pub const MAX_TSDB_PAYLOAD_LEN: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DbConfig {

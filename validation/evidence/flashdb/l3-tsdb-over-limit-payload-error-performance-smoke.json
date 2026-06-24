@@ -1,0 +1,12 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
+    "command":  "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-over-limit-payload-error.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-performance-replay.json",
+    "status":  "passed",
+    "exit_code":  0,
+    "elapsed_ms":  373,
+    "operation_count":  10,
+    "secondary_only":  true,
+    "report_path":  "validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-performance-replay.json",
+    "log_path":  "validation/evidence/flashdb/l3-tsdb-over-limit-payload-error-performance-smoke.log"
+}
