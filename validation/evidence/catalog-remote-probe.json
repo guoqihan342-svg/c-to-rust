@@ -1,0 +1,196 @@
+﻿{
+    "command":  "validate-c-project-catalog",
+    "schema_version":  1,
+    "level":  "L0",
+    "probe_remote":  true,
+    "status":  "passed",
+    "target_count":  15,
+    "minimum_targets":  12,
+    "generated_at_utc":  "2026-06-24T00:46:15Z",
+    "failures":  [
+
+                 ],
+    "targets":  [
+                    {
+                        "id":  "sqlite",
+                        "repo_url":  "https://github.com/sqlite/sqlite.git",
+                        "domain":  "embedded-sql-database",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "99a92ee66d80d519851015cf27def1c54e7a2037",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "redis",
+                        "repo_url":  "https://github.com/redis/redis.git",
+                        "domain":  "networked-kv-store",
+                        "expected_default_branch":  "unstable",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "unstable",
+                                      "head_sha":  "4e59b8c00ef7a2c3429c6f19bd64f898125cc343",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "nginx",
+                        "repo_url":  "https://github.com/nginx/nginx.git",
+                        "domain":  "http-server",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "be84ac8bda2265d254f3ead9c3f0ba1d78a79319",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "curl",
+                        "repo_url":  "https://github.com/curl/curl.git",
+                        "domain":  "network-client-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "bf29c3e17544ff13c67e94157e6440662317355b",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "git",
+                        "repo_url":  "https://github.com/git/git.git",
+                        "domain":  "version-control-system",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "ab776a62a78576513ee121424adb19597fbb7613",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "openssl",
+                        "repo_url":  "https://github.com/openssl/openssl.git",
+                        "domain":  "cryptography-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "24137d12a2e65db94118e01bf370ccce1d68c80f",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "ffmpeg",
+                        "repo_url":  "https://github.com/FFmpeg/FFmpeg.git",
+                        "domain":  "media-codec-framework",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "a02dfb1262564528a011f0d3e2a97cdce33bd90a",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "postgres",
+                        "repo_url":  "https://github.com/postgres/postgres.git",
+                        "domain":  "relational-database",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "4015abe14bb05f67d2c47549f59c5d382e57150b",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "lua",
+                        "repo_url":  "https://github.com/lua/lua.git",
+                        "domain":  "language-runtime",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "40b76de2d77e66b70a9d4bf989c3f5340919973f",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libuv",
+                        "repo_url":  "https://github.com/libuv/libuv.git",
+                        "domain":  "async-io-library",
+                        "expected_default_branch":  "v1.x",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "v1.x",
+                                      "head_sha":  "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libevent",
+                        "repo_url":  "https://github.com/libevent/libevent.git",
+                        "domain":  "event-notification-library",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "ec52f3f59e9778ae9576e23ac172c001ec91ef50",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "zlib-ng",
+                        "repo_url":  "https://github.com/zlib-ng/zlib-ng.git",
+                        "domain":  "compression-library",
+                        "expected_default_branch":  "develop",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "develop",
+                                      "head_sha":  "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libpng",
+                        "repo_url":  "https://github.com/pnggroup/libpng.git",
+                        "domain":  "image-codec-library",
+                        "expected_default_branch":  "libpng18",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "libpng18",
+                                      "head_sha":  "a22696be0aadb185de33c152cc81df899eeefe6a",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "mbedtls",
+                        "repo_url":  "https://github.com/Mbed-TLS/mbedtls.git",
+                        "domain":  "embedded-crypto-library",
+                        "expected_default_branch":  "development",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "development",
+                                      "head_sha":  "45ad2fc5ee6e5ca2a7236f44e88275038d870464",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "jemalloc",
+                        "repo_url":  "https://github.com/jemalloc/jemalloc.git",
+                        "domain":  "memory-allocator",
+                        "expected_default_branch":  "dev",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "dev",
+                                      "head_sha":  "9f37c70826a21022451aed1a1827d60c00c24226",
+                                      "error":  null
+                                  }
+                    }
+                ],
+    "note":  "L0 validates catalog metadata and optional remote reachability only; it is not C-to-Rust migration equivalence evidence."
+}
