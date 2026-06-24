@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "passed",
+  "repo_commit": "a516e442f4cbdff84a018d5b48268cbc71fe3a5b",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-error-boundary.json",
+    "fixture_hash": "a67cc63c",
+    "sha256": "2d48fefdea2e1c3b35c1fc4139a547062196cf8af84d059eae4ec90e12a7ee69",
+    "operation_count": 8
+  },
+  "visible_error_scope": [
+    "valid append before errors",
+    "unknown entry_id set_status -> INVALID_RANGE",
+    "unknown status set_status -> PARSE",
+    "unknown status count_status -> PARSE",
+    "invalid timestamp append -> PARSE",
+    "missing query range field -> PARSE",
+    "valid empty-payload append after errors",
+    "valid query after errors returns expected entries"
+  ],
+  "c_oracle": {
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "producer_marker": "C_ORACLE_GENERATED",
+    "producer_status": "passed",
+    "fixture_hash": "a67cc63c"
+  },
+  "diff": {
+    "status": "passed",
+    "first_mismatch": null
+  },
+  "negative_diff": {
+    "status": "failed",
+    "first_mismatch": "steps.ts-eb-002.code"
+  },
+  "rust_check": {
+    "status": "passed",
+    "error_count": 0,
+    "warning_count": 0,
+    "automatic_patch_attempt_count": 0
+  },
+  "unsafe": {
+    "status": "passed",
+    "first_party_non_test_unsafe_count": 0,
+    "unsafe_ratio": 0
+  },
+  "performance_smoke": {
+    "status": "recorded",
+    "elapsed_ms": 158,
+    "operation_count": 8,
+    "secondary_only": true
+  },
+  "accepted_differences": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "message",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "status",
+      "code",
+      "entry_id",
+      "timestamp",
+      "value",
+      "count",
+      "entries",
+      "step status",
+      "step code",
+      "operation id",
+      "operation name",
+      "operation success",
+      "error semantics"
+    ],
+    "behavior_fields_checked": true
+  },
+  "windows_skip": {
+    "marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "counts_as_l3_pass": false,
+    "replacement_evidence": "WSL generated C oracle report with C_ORACLE_GENERATED."
+  },
+  "known_gaps": [
+    "This slice does not cover TSDB capacity exhaustion, sector full, clean, GC, physical deletion, corrupt image reopen, byte-for-byte layout, power-loss recovery, payload maximum length, or arbitrary binary payload behavior.",
+    "This slice treats diagnostic message text as accepted metadata; status and code are strict behavior gates.",
+    "This slice does not treat reverse query from > to as an error.",
+    "This slice avoids relying on successful ts.set_status output because that report currently uses duplicate status keys."
+  ],
+  "evidence_paths": [
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-context-pack.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-slice-contract.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-impact-set.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-agent-roles.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-cache-metadata.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-local-toolchain-evidence.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-rust-report.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-c-oracle.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-c-oracle-producer-evidence.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-mutated-code-or-status-oracle.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-negative-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-rust-check.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-unsafe-scan.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-unsafe-ledger.json",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-performance-smoke.json"
+  ],
+  "next_slice_recommendation": "Continue with TSDB capacity-pressure only as a separate layout-aware slice, or start report-schema cleanup for ts.set_status duplicate status keys before expanding status-heavy evidence."
+}

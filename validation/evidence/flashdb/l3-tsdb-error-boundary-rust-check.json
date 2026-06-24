@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "passed",
+  "command": "cargo check --message-format=json",
+  "raw_path": "validation/evidence/flashdb/l3-tsdb-error-boundary-rust-check.raw.jsonl",
+  "stderr_path": "validation/evidence/flashdb/l3-tsdb-error-boundary-rust-check.stderr.log",
+  "error_count": 0,
+  "warning_count": 0,
+  "root_cause_keys": [],
+  "affected_items": [],
+  "automatic_repair": "not_needed",
+  "rerun_command": "cd flashDB_rust && cargo check --message-format=json"
+}

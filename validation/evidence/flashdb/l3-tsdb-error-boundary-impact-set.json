@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "frozen",
+  "write_set": [
+    "flashDB_rust/fixtures/l3-tsdb-error-boundary.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-error-boundary-*",
+    "validation/evidence/flashdb/error-events.jsonl",
+    "validation/evidence/flashdb/patches.jsonl",
+    "openspec/changes/run-flashdb-tsdb-error-boundary-l3-loop/**"
+  ],
+  "read_set": [
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/src/types.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/oracle/generate_c_oracle.sh",
+    "openspec/specs/flashdb-l3-agent-migration-loop/spec.md"
+  ],
+  "public_api_changes": [],
+  "expected_production_code_changes": [],
+  "forbidden_changes": [
+    "new runtime dependency",
+    "async runtime",
+    "internal multithreading",
+    "first-party non-test unsafe",
+    "public API outside TSDB impact set",
+    "C oracle contract broadening",
+    "fixture behavior rewrite after evidence",
+    "accepted behavior-field differences"
+  ],
+  "accepted_difference_allowed_fields": [
+    "image_hash",
+    "message",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "behavior_fields": [
+    "status",
+    "code",
+    "entry_id",
+    "timestamp",
+    "value",
+    "count",
+    "entries",
+    "id",
+    "op",
+    "operation success",
+    "error semantics"
+  ]
+}

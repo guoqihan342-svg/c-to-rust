@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "recorded",
+  "invalidation_keys": {
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "repo_commit": "a516e442f4cbdff84a018d5b48268cbc71fe3a5b",
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "cargo_lock_sha256": "8bf2cc252a9fc8a4dae3656276816fc74590cac086fd75210c1922e0fadc7f40",
+    "fixture_sha256": "2d48fefdea2e1c3b35c1fc4139a547062196cf8af84d059eae4ec90e12a7ee69",
+    "fixture_report_hash": "a67cc63c",
+    "rust_context_hashes": {
+      "tsdb": "55b999c2911eafe638889e78afe63a08b038aa8a1ba9d9d48fc713883e909a1e",
+      "replay": "40efe30e788bd767667a05a4dc4129760796e939feedcb70955fb320d11492f6",
+      "cli": "46e022bc3b1ccca126a910c575f309f7b59d2536dc605afa8d772acd1435aedc",
+      "tests": "146e6b72e8936cf69147f77fca507a954c4575bb047217b1c610fd3a0c95fb95"
+    },
+    "oracle_hashes": {
+      "runner": "ab5ce41ada0bfe23a02715da49dc5f8050a4845d589289e7c4c4b3cdb397eab9",
+      "script": "5c9a71af72ed11adb004d8da1ec4006293f98ac5a1647b75c8bb6c8ad81eeaa8",
+      "config": "fb3cde1afcc367e01f15529b29d55ac3061d0dd2336aa1c1797678e34a99f4e3"
+    },
+    "command_args": [
+      "replay fixture l3-tsdb-error-boundary backend=file",
+      "diff rust-report vs C oracle",
+      "cargo check --message-format=json",
+      "unsafe-scan",
+      "performance smoke"
+    ],
+    "feature_env": "default",
+    "context_schema": 1
+  },
+  "cached_outputs": [
+    "ContextPack",
+    "error classification",
+    "PatchPlan suggestions",
+    "oracle/diff report hashes"
+  ],
+  "ai_usage": {
+    "used_for_candidate_analysis": true,
+    "used_as_fact_source": false,
+    "fact_sources": [
+      "repo source",
+      "C oracle output",
+      "Rust reports",
+      "OpenSpec artifacts"
+    ]
+  }
+}

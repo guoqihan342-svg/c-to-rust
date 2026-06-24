@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests\unsafe_scan.rs (target\debug\deps\unsafe_scan-1c8533b420f4cced.exe)
+
+running 1 test
+test first_party_non_test_sources_do_not_use_unsafe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

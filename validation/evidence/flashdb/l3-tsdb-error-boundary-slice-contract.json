@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "frozen",
+  "included_behavior": [
+    "valid ts.append before error steps",
+    "ts.set_status unknown entry_id returns status error and code INVALID_RANGE",
+    "ts.set_status unknown status returns status error and code PARSE",
+    "ts.count_status unknown status returns status error and code PARSE",
+    "ts.append invalid timestamp returns status error and code PARSE",
+    "ts.query missing range field returns status error and code PARSE",
+    "valid empty-payload ts.append after errors succeeds",
+    "valid ts.query after errors returns expected entries"
+  ],
+  "excluded_behavior": [
+    "capacity exhaustion",
+    "sector full",
+    "fdb_tsl_clean",
+    "GC",
+    "physical deletion",
+    "corrupt image reopen",
+    "byte-for-byte flash image equivalence",
+    "power-loss recovery",
+    "payload maximum length",
+    "arbitrary binary payload behavior",
+    "reverse query as error",
+    "exact diagnostic message equality"
+  ],
+  "rust_public_api_impact_set": [
+    "TsDb::append",
+    "TsDb::set_status",
+    "TsDb::count_by_status",
+    "TsDb::query",
+    "replay::run_replay",
+    "replay::run_diff"
+  ],
+  "c_oracle_operations": [
+    "ts.append",
+    "ts.set_status",
+    "ts.count_status",
+    "ts.query"
+  ],
+  "accepted_difference_policy": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "message",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "status",
+      "code",
+      "entry_id",
+      "timestamp",
+      "value",
+      "count",
+      "entries",
+      "step status",
+      "step code",
+      "operation success",
+      "error semantics",
+      "steps.len",
+      "step id",
+      "op"
+    ],
+    "message_note": "message text is diagnostic metadata only; status and code are strict behavior gates."
+  },
+  "pass_fail_gates": [
+    "Rust replay completes for l3-tsdb-error-boundary fixture",
+    "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
+    "schema-aware diff status passed with first_mismatch null",
+    "negative diff fails on code or status mutation",
+    "cargo check raw JSON build-finished success=true",
+    "unsafe scan reports zero first-party non-test unsafe",
+    "OpenSpec validation passes"
+  ],
+  "concurrency_boundary": "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
+  "async_threading_boundary": "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
+}

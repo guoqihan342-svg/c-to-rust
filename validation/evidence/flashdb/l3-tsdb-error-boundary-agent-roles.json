@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "recorded",
+  "single_writer": "main Codex agent applies all file edits serially",
+  "agents": [
+    {
+      "id": "019ef898-2921-7ae1-b9e9-7f9f3a9095aa",
+      "role": "OpenSpec encoding and bilingual spec audit",
+      "mode": "read-only",
+      "result": "main spec UTF-8 content is valid; preserve OpenSpec anchors"
+    },
+    {
+      "id": "019ef898-df5f-7b11-ab9d-4a32c0f62118",
+      "role": "Rust TSDB error-boundary feasibility review",
+      "mode": "read-only",
+      "result": "fixture/test layer is sufficient; no production API change expected"
+    },
+    {
+      "id": "019ef899-0485-7622-8f4d-16122403fc88",
+      "role": "C oracle TSDB error-boundary feasibility review",
+      "mode": "read-only",
+      "result": "use public replay input errors and unknown entry id; require C_ORACLE_GENERATED"
+    },
+    {
+      "id": "019ef899-3147-7491-9198-0710cef8e8c8",
+      "role": "OpenSpec evidence and archive checklist review",
+      "mode": "read-only",
+      "result": "use standard 7 task groups and l3-tsdb-error-boundary evidence prefix"
+    }
+  ],
+  "forbidden_parallel_actions": [
+    "conflicting code edits",
+    "oracle contract widening without design update",
+    "accepted-difference broadening",
+    "unsafe widening"
+  ]
+}

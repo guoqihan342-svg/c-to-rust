@@ -1,0 +1,16 @@
+{
+  "name": "l3-tsdb-error-boundary",
+  "operations": [
+    {"id":"ts-eb-001","op":"ts.append","timestamp":10,"value":"ok"},
+    {"id":"ts-eb-002","op":"ts.set_status","entry_id":99,"status":"deleted"},
+    {"id":"ts-eb-003","op":"ts.set_status","entry_id":1,"status":"bogus"},
+    {"id":"ts-eb-004","op":"ts.count_status","from":10,"to":10,"status":"bogus"},
+    {"id":"ts-eb-005","op":"ts.append","timestamp":"bad","value":"bad-time"},
+    {"id":"ts-eb-006","op":"ts.query","from":10},
+    {"id":"ts-eb-007","op":"ts.append","timestamp":30,"value":""},
+    {"id":"ts-eb-008","op":"ts.query","from":10,"to":30}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Diagnostic message text may differ, but error status, code, entry id, timestamp, value, entries, operation identity, and operation success are strict behavior fields.","fields":"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

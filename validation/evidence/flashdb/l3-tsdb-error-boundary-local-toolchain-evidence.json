@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "host": "windows",
+  "local_c_toolchain_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "local_c_toolchains": {
+    "gcc": [],
+    "clang": [],
+    "cl": [],
+    "make": [],
+    "git": [
+      "E:\\git\\Git\\cmd\\git.exe"
+    ]
+  },
+  "wsl_available": true,
+  "wsl_toolchains": [
+    "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "GNU Make 4.3",
+    "git version 2.43.0"
+  ],
+  "counts_as_l3_pass": false,
+  "replacement_gate": "Require WSL/Linux/CI C oracle report with toolchain_status C_ORACLE_GENERATED.",
+  "command": "where gcc clang cl make git; wsl bash -lc \"gcc --version | head -1; make --version | head -1; git --version\""
+}

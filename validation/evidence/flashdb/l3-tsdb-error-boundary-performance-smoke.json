@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-error-boundary",
+  "status": "recorded",
+  "secondary_only": true,
+  "backend": "file",
+  "operation_count": 8,
+  "elapsed_ms": 158,
+  "command": "cargo run -- replay --fixture fixtures/l3-tsdb-error-boundary.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-error-boundary-performance-replay.json",
+  "report_path": "validation/evidence/flashdb/l3-tsdb-error-boundary-performance-replay.json",
+  "toolchain_status": "NOT_APPLICABLE_RUST_REPLAY"
+}
