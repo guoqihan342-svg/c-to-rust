@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=../validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-c-oracle.json fixture=fixtures/l3-tsdb-deleted-status-reopen.json",
+  "timestamp_utc": "2026-06-24T07:34:48Z"
+}

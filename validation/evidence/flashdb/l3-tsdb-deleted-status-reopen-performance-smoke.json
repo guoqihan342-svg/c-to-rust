@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "recorded",
+  "secondary_only": true,
+  "backend": "file",
+  "operation_count": 7,
+  "elapsed_ms": 374,
+  "command": "cargo run -- replay --fixture fixtures/l3-tsdb-deleted-status-reopen.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-performance-replay.json",
+  "toolchain_status": "NOT_APPLICABLE_RUST_REPLAY",
+  "report_path": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-performance-replay.json",
+  "correctness_gate_replaced": false
+}

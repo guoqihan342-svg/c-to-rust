@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "passed",
+  "command": "cargo check --message-format=json",
+  "raw_jsonl": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-check.raw.jsonl",
+  "stderr_log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-check.stderr.log",
+  "error_count": 0,
+  "warning_count": 0,
+  "root_cause_keys": [],
+  "affected_items": [],
+  "build_finished_success": true,
+  "rerun_command": "cd flashDB_rust && cargo check --message-format=json",
+  "automatic_repair": "not_needed"
+}

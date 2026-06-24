@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "passed",
+  "repo_commit": "76f35bfad6b0bffa96ce0d8dccb820dacf8e8c41",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-deleted-status-reopen.json",
+    "fixture_hash": "ee09075f",
+    "sha256": "4f19d769450452177d68a78c4e5eb54877d5055d94472ea2ad1f06b7e750dcfb",
+    "operation_count": 7
+  },
+  "visible_status_scope": [
+    "two ts.append operations",
+    "entry 1 set to deleted",
+    "deleted count is 1 before reopen",
+    "written count is 1 before reopen",
+    "reopen succeeds",
+    "deleted count is 1 after reopen"
+  ],
+  "c_oracle": {
+    "toolchain_status": "C_ORACLE_GENERATED",
+    "producer_marker": "C_ORACLE_GENERATED",
+    "fixture_hash": "ee09075f"
+  },
+  "diff": {
+    "status": "passed",
+    "first_mismatch": null
+  },
+  "negative_diff": {
+    "status": "failed",
+    "first_mismatch": "steps.ts-del-007.count"
+  },
+  "rust_check": {
+    "status": "passed",
+    "error_count": 0,
+    "warning_count": 0,
+    "automatic_patch_attempt_count": 0
+  },
+  "unsafe": {
+    "status": "passed",
+    "first_party_non_test_unsafe_count": 0,
+    "unsafe_ratio": 0
+  },
+  "performance_smoke": {
+    "status": "recorded",
+    "elapsed_ms": 374,
+    "operation_count": 7,
+    "secondary_only": true
+  },
+  "accepted_differences": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "entry_id",
+      "timestamp",
+      "status",
+      "value",
+      "count",
+      "step status",
+      "step code",
+      "operation success",
+      "operation id",
+      "operation name",
+      "error semantics"
+    ],
+    "behavior_fields_checked": true
+  },
+  "windows_skip": {
+    "marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "counts_as_l3_pass": false,
+    "replacement_evidence": "WSL generated C oracle report with C_ORACLE_GENERATED."
+  },
+  "known_gaps": [
+    "This slice does not cover fdb_tsl_clean or physical deletion.",
+    "This slice does not assert whether deleted records are included or excluded from ts.query results.",
+    "This slice does not cover byte-for-byte flash image layout, sector rollover/full, power-loss recovery, capacity-pressure behavior, non-monotonic timestamp rejection, max payload length, user2, or TSDB error boundaries.",
+    "Current ts.set_status report JSON uses duplicate status keys, so this slice does not claim the schema cleanly separates step_status from entry_status."
+  ],
+  "evidence_paths": [
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-context-pack.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-slice-contract.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-impact-set.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-agent-roles.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-cache-metadata.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-local-toolchain-evidence.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-report.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-c-oracle.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-c-oracle-producer-evidence.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-mutated-status-or-count-oracle.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-negative-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-check.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-unsafe-scan.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-unsafe-ledger.json",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-performance-smoke.json"
+  ],
+  "next_slice_recommendation": "Continue with kvdb-delete-invalid-key if expanding KVDB error boundaries, or tsdb-error-boundary if expanding TSDB public API error behavior."
+}

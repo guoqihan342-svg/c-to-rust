@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "recorded",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-deleted-status-reopen.json",
+    "sha256": "4f19d769450452177d68a78c4e5eb54877d5055d94472ea2ad1f06b7e750dcfb",
+    "fixture_hash": "ee09075f",
+    "operation_count": 7
+  },
+  "planned_write_set": [
+    "flashDB_rust/fixtures/l3-tsdb-deleted-status-reopen.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-*",
+    "validation/evidence/flashdb/error-events.jsonl",
+    "validation/evidence/flashdb/patches.jsonl",
+    "openspec/changes/run-flashdb-tsdb-deleted-status-reopen-l3-loop/**",
+    "openspec/specs/flashdb-l3-agent-migration-loop/spec.md after archive"
+  ],
+  "allowed_production_code_changes_if_needed": [
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs"
+  ],
+  "expected_production_code_changes": [],
+  "forbidden_changes": [
+    "public API outside TSDB impact set",
+    "accepted behavior-field differences",
+    "new first-party non-test unsafe",
+    "C oracle contract broadening without design update",
+    "fixture behavior rewrite after oracle evidence",
+    "async runtime or internal multithreading"
+  ],
+  "behavior_fields": [
+    "entry_id",
+    "timestamp",
+    "status",
+    "value",
+    "count",
+    "step status",
+    "step code",
+    "operation id",
+    "operation name",
+    "operation success"
+  ],
+  "non_goals": [
+    "fdb_tsl_clean",
+    "physical deletion",
+    "deleted query visibility",
+    "byte-for-byte layout",
+    "sector rollover/full",
+    "power-loss recovery",
+    "capacity pressure",
+    "non-monotonic timestamp rejection",
+    "payload limit",
+    "user2",
+    "TSDB error boundary"
+  ]
+}

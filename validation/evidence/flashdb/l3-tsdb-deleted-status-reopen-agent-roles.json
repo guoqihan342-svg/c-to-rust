@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "policy": "bounded parallelism with single-writer edits",
+  "agents": [
+    {
+      "id": "019ef887-92a7-7f73-97b5-2ae429486afe",
+      "name": "Sartre",
+      "role": "Rust replay and fixture review",
+      "edit_permissions": "read-only",
+      "result": "Confirmed Rust supports deleted status, set_status, count_status, and reopen; advised optional query check but production code changes are not expected."
+    },
+    {
+      "id": "019ef887-a6a0-7b22-96f8-9e6554555175",
+      "name": "Erdos",
+      "role": "C oracle boundary review",
+      "edit_permissions": "read-only",
+      "result": "Confirmed C oracle maps deleted to FDB_TSL_DELETED and supports ts.append, ts.set_status, ts.count_status, and ts.reopen; warned not to claim fdb_tsl_clean or physical deletion."
+    },
+    {
+      "id": "019ef887-ba97-7653-a868-26bbfd09d80e",
+      "name": "Kierkegaard",
+      "role": "OpenSpec and evidence audit",
+      "edit_permissions": "read-only",
+      "result": "Pending at initial context freeze; expected to audit evidence boundaries and archive requirements."
+    },
+    {
+      "id": "main",
+      "name": "Codex",
+      "role": "single-writer implementation and verification",
+      "edit_permissions": "write",
+      "result": "Creating fixture/tests and generating evidence without production Rust API changes unless validation requires a minimal parity fix."
+    }
+  ],
+  "forbidden_parallel_actions": [
+    "conflicting file edits",
+    "accepted behavior-field broadening",
+    "unsafe widening",
+    "oracle contract mutation without design update"
+  ]
+}

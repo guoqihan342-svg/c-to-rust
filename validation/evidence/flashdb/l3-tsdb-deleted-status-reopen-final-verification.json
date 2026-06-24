@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "recorded",
+  "commands": [
+    {
+      "command": "cargo fmt -- --check",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-cargo-fmt.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --test differential_replay tsdb_deleted_status_reopen",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-differential-replay-tests.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo check",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-cargo-check.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-cargo-test.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo run -- replay --fixture fixtures/l3-tsdb-deleted-status-reopen.json --backend file",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-cli-replay.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo run -- diff --rust-report ... --oracle-report ...",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-schema-diff.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --test unsafe_scan",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-unsafe-scan.log",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo run -- replay performance smoke",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-performance-smoke.log",
+      "exit_code": 0
+    },
+    {
+      "command": "openspec validate run-flashdb-tsdb-deleted-status-reopen-l3-loop --strict",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-openspec-change-strict.log",
+      "exit_code": 0
+    },
+    {
+      "command": "openspec validate --all",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-openspec-all.log",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "log": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-final-git-diff-check.log",
+      "exit_code": 0
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "target_item": "tsdb-deleted-status-reopen",
+  "owning_module": "flashDB_rust/src/tsdb.rs",
+  "repo_commit": "76f35bfad6b0bffa96ce0d8dccb820dacf8e8c41",
+  "branch": "codex/flashdb-rust-skeleton",
+  "worktree_state": {
+    "dirty": true,
+    "note": "ContextPack is bound to file_hashes because the L3 implementation is in progress and contains local edits."
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "created_for_change": "run-flashdb-tsdb-deleted-status-reopen-l3-loop",
+  "c_context": {
+    "upstream_checkout": "flashDB_rust/oracle/.work/FlashDB",
+    "oracle_runner": "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "build_entrypoint": "flashDB_rust/oracle/generate_c_oracle.sh",
+    "config_header": "flashDB_rust/oracle/fdb_cfg.h",
+    "direct_public_apis": [
+      "fdb_tsdb_init",
+      "fdb_tsdb_control",
+      "fdb_tsdb_deinit",
+      "fdb_tsl_append_with_ts",
+      "fdb_tsl_query_count",
+      "fdb_tsl_set_status"
+    ],
+    "status_mapping": [
+      "deleted -> FDB_TSL_DELETED",
+      "written -> FDB_TSL_WRITE"
+    ],
+    "oracle_fixture_ops": [
+      "ts.append",
+      "ts.set_status",
+      "ts.count_status",
+      "ts.reopen"
+    ],
+    "deleted_boundary": "Public visible count_status and reopen persistence only; no fdb_tsl_clean or physical deletion claim.",
+    "confidence": "high for public visible count/reopen behavior, low for storage internals intentionally excluded"
+  },
+  "rust_context": {
+    "modules": [
+      "flashDB_rust/src/tsdb.rs",
+      "flashDB_rust/src/replay.rs",
+      "flashDB_rust/src/cli.rs",
+      "flashDB_rust/src/types.rs",
+      "flashDB_rust/src/format.rs",
+      "flashDB_rust/src/flash.rs",
+      "flashDB_rust/src/lib.rs"
+    ],
+    "public_types": [
+      "TsDb<D: FlashDevice>",
+      "TsEntry",
+      "TsStatus",
+      "FlashDevice",
+      "MemoryFlash",
+      "FileFlash",
+      "Error"
+    ],
+    "direct_public_apis": [
+      "TsDb::create",
+      "TsDb::open",
+      "TsDb::append",
+      "TsDb::set_status",
+      "TsDb::count_by_status",
+      "TsDb::into_flash",
+      "TsDb::image_hash",
+      "TsDb::image",
+      "replay::run_replay",
+      "replay::run_diff"
+    ],
+    "replay_layer_ops": [
+      "ts.append",
+      "ts.set_status",
+      "ts.count_status",
+      "ts.reopen"
+    ],
+    "related_tests": [
+      "flashDB_rust/tests/differential_replay.rs",
+      "flashDB_rust/tests/tsdb_basic_paths.rs",
+      "flashDB_rust/tests/persistence.rs",
+      "flashDB_rust/tests/unsafe_scan.rs"
+    ]
+  },
+  "fixture_context": {
+    "target_fixture": "flashDB_rust/fixtures/l3-tsdb-deleted-status-reopen.json",
+    "planned_operations": [
+      "ts.append timestamp 10",
+      "ts.append timestamp 20",
+      "ts.set_status entry_id 1 deleted",
+      "ts.count_status deleted",
+      "ts.count_status written",
+      "ts.reopen",
+      "ts.count_status deleted after reopen",
+      "ts.count_status written after reopen"
+    ],
+    "accepted_difference_policy_ref": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-slice-contract.json",
+    "known_gaps": [
+      "Does not cover fdb_tsl_clean or physical deletion.",
+      "Does not assert whether deleted records appear in ts.query results.",
+      "Does not cover user2, TSDB error boundaries, max payload length, non-monotonic timestamp rejection, sector rollover/full, byte-for-byte layout, or power-loss recovery."
+    ],
+    "target_fixture_sha256": "4f19d769450452177d68a78c4e5eb54877d5055d94472ea2ad1f06b7e750dcfb",
+    "target_fixture_report_hash": "ee09075f",
+    "operation_count": 7
+  },
+  "unsafe_ledger_summary": {
+    "scan_scope": "flashDB_rust/src/**/*.rs",
+    "scan_test": "flashDB_rust/tests/unsafe_scan.rs",
+    "current_policy": "0% first-party non-test unsafe for this slice; project hard limit remains below 10% with ledger.",
+    "expected_unsafe_count": 0,
+    "expected_unsafe_ratio": 0,
+    "ledger_path": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-unsafe-ledger.json"
+  },
+  "self_healing_evidence": {
+    "rust_check_report": "validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-check.json",
+    "error_events_jsonl": "validation/evidence/flashdb/error-events.jsonl",
+    "patch_events_jsonl": "validation/evidence/flashdb/patches.jsonl",
+    "rerun_order": [
+      "cargo check --message-format=json",
+      "targeted Rust tests",
+      "cargo test",
+      "replay/diff",
+      "unsafe scan",
+      "performance smoke"
+    ],
+    "blocked_conditions": [
+      "new unsafe",
+      "public API change outside TSDB impact set",
+      "oracle or fixture contract change",
+      "behavior field accepted difference",
+      "new error category",
+      "repeated root cause over retry limit"
+    ]
+  },
+  "cache_key": {
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "repo_commit": "76f35bfad6b0bffa96ce0d8dccb820dacf8e8c41",
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "feature_env": "default",
+    "context_schema": 1,
+    "command_args": [
+      "cargo check --message-format=json",
+      "cargo test --test differential_replay tsdb_deleted_status",
+      "cargo run -- replay --fixture fixtures/l3-tsdb-deleted-status-reopen.json --backend file",
+      "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-deleted-status-reopen-c-oracle.json"
+    ],
+    "file_hashes": {
+      "flashDB_rust/src/tsdb.rs": "55b999c2911eafe638889e78afe63a08b038aa8a1ba9d9d48fc713883e909a1e",
+      "flashDB_rust/src/replay.rs": "40efe30e788bd767667a05a4dc4129760796e939feedcb70955fb320d11492f6",
+      "flashDB_rust/src/cli.rs": "46e022bc3b1ccca126a910c575f309f7b59d2536dc605afa8d772acd1435aedc",
+      "flashDB_rust/src/types.rs": "61c836e5a1e7f792ba9ae6025a112d7ec0fbed2b503d53f89522442b8f4265c0",
+      "flashDB_rust/src/format.rs": "f08e9902fd39bb8676a67f6959f70d77704b18ea0ed8a27c4bba55d55978cb16",
+      "flashDB_rust/src/flash.rs": "0b7177af5bc03ff9f852469178aa2e9d85c22293cfbabea2620246bbdd32e728",
+      "flashDB_rust/src/lib.rs": "64a9c425c208e7db034b6a6a712a6e96ca47b13f3e29f97c8a355849078bb165",
+      "flashDB_rust/tests/differential_replay.rs": "7343879c2b113db754db78e5831b9e1ee130e9b8e2e1ae8bf3d1e6852145b25c",
+      "flashDB_rust/tests/tsdb_basic_paths.rs": "d846ddf460130d5e990cda6ad49208107b576ecd2b15b67ef7c00af64c691a00",
+      "flashDB_rust/tests/persistence.rs": "3629e72d5412f1bd92a32f3c32720051687556be7a2582412ff158d2715e0bd6",
+      "flashDB_rust/tests/unsafe_scan.rs": "b7cb739ba8f3e453dc8bdbb139ad8797938767ae00a77bbadf7672170366eb6e",
+      "flashDB_rust/Cargo.lock": "8bf2cc252a9fc8a4dae3656276816fc74590cac086fd75210c1922e0fadc7f40",
+      "flashDB_rust/oracle/flashdb_c_oracle.c": "ab5ce41ada0bfe23a02715da49dc5f8050a4845d589289e7c4c4b3cdb397eab9",
+      "flashDB_rust/oracle/generate_c_oracle.sh": "5c9a71af72ed11adb004d8da1ec4006293f98ac5a1647b75c8bb6c8ad81eeaa8",
+      "flashDB_rust/oracle/fdb_cfg.h": "fb3cde1afcc367e01f15529b29d55ac3061d0dd2336aa1c1797678e34a99f4e3",
+      "flashDB_rust/fixtures/l3-tsdb-deleted-status-reopen.json": "4f19d769450452177d68a78c4e5eb54877d5055d94472ea2ad1f06b7e750dcfb"
+    }
+  },
+  "rollback_id": "76f35bfad6b0bffa96ce0d8dccb820dacf8e8c41"
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-deleted-status-reopen",
+  "status": "frozen",
+  "included_behavior": [
+    "two ts.append operations return deterministic entry ids",
+    "ts.set_status entry 1 to deleted returns status ok and reports deleted",
+    "ts.count_status deleted returns 1 before reopen",
+    "ts.count_status written returns 1 before reopen",
+    "ts.reopen succeeds",
+    "ts.count_status deleted returns 1 after reopen",
+    "ts.count_status written returns 1 after reopen"
+  ],
+  "excluded_behavior": [
+    "fdb_tsl_clean",
+    "physical deletion",
+    "deleted record visibility in ts.query",
+    "user2 status",
+    "TSDB error boundaries",
+    "non-monotonic timestamp rejection",
+    "max payload length",
+    "sector rollover/full",
+    "byte-for-byte flash image equivalence",
+    "power-loss or crash recovery",
+    "capacity-pressure behavior"
+  ],
+  "rust_public_api_impact_set": [
+    "TsDb::append",
+    "TsDb::set_status",
+    "TsDb::count_by_status",
+    "TsDb::open",
+    "replay::run_replay",
+    "replay::run_diff"
+  ],
+  "c_oracle_operations": [
+    "ts.append",
+    "ts.set_status",
+    "ts.count_status",
+    "ts.reopen"
+  ],
+  "accepted_difference_policy": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "entry_id",
+      "timestamp",
+      "status",
+      "value",
+      "count",
+      "step status",
+      "step code",
+      "operation success",
+      "error semantics",
+      "steps.len",
+      "step id",
+      "op"
+    ],
+    "status_note": "deleted status and count are strict behavior fields; message text is not part of this happy-path fixture."
+  },
+  "pass_fail_gates": [
+    "Rust replay completes for l3-tsdb-deleted-status-reopen fixture",
+    "WSL/Linux/CI C oracle report has toolchain_status C_ORACLE_GENERATED",
+    "schema-aware diff status passed with first_mismatch null",
+    "negative diff fails on count or status mutation",
+    "cargo check raw JSON build-finished success=true",
+    "unsafe scan reports zero first-party non-test unsafe",
+    "OpenSpec validation passes"
+  ],
+  "concurrency_boundary": "Parallel agents may analyze/review/evidence-audit only; code edits are single-writer.",
+  "async_threading_boundary": "No async runtime, internal multithreading, or concurrency changes are introduced in this slice."
+}

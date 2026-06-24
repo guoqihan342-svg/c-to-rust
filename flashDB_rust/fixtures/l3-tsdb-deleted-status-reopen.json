@@ -1,0 +1,15 @@
+{
+  "name": "l3-tsdb-deleted-status-reopen",
+  "operations": [
+    {"id":"ts-del-001","op":"ts.append","timestamp":10,"value":"drop-me"},
+    {"id":"ts-del-002","op":"ts.append","timestamp":20,"value":"keep-me"},
+    {"id":"ts-del-003","op":"ts.set_status","entry_id":1,"status":"deleted"},
+    {"id":"ts-del-004","op":"ts.count_status","from":10,"to":20,"status":"deleted"},
+    {"id":"ts-del-005","op":"ts.count_status","from":10,"to":20,"status":"written"},
+    {"id":"ts-del-006","op":"ts.reopen"},
+    {"id":"ts-del-007","op":"ts.count_status","from":10,"to":20,"status":"deleted"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Deleted status, entry id, timestamp, count, operation identity, and operation success are strict behavior fields.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}
