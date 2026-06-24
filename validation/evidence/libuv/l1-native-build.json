@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "libuv",
+  "status": "failed",
+  "commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "branch": "v1.x",
+  "repo_url": "https://github.com/libuv/libuv.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+  "source_group": "network-event",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/network-event/results.json",
+  "tool_versions": {
+    "autoconf": "autoconf (GNU Autoconf) 2.71",
+    "automake": "automake (GNU automake) 1.16.5",
+    "cmake": "cmake version 3.28.3",
+    "ctest": "ctest version 3.28.3",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "git": "git version 2.43.0",
+    "libtoolize": "libtoolize (GNU libtool) 2.4.7",
+    "make": "GNU Make 4.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch v1.x https://github.com/libuv/libuv.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event",
+      "exit_code": 0,
+      "elapsed_seconds": 8.568,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/01_clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/01_clone.stdout.log"
+      ]
+    },
+    {
+      "label": "pin_commit",
+      "command": "git rev-parse HEAD",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+      "exit_code": 0,
+      "elapsed_seconds": 0.077,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/02_pin_commit.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/02_pin_commit.stdout.log"
+      ]
+    },
+    {
+      "label": "cmake_configure",
+      "command": "cmake -S . -B build -DBUILD_TESTING=ON",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+      "exit_code": 0,
+      "elapsed_seconds": 35.649,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/03_cmake_configure.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/03_cmake_configure.stdout.log"
+      ]
+    },
+    {
+      "label": "cmake_build",
+      "command": "cmake --build build --parallel 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+      "exit_code": 0,
+      "elapsed_seconds": 113.705,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/04_cmake_build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/04_cmake_build.stdout.log"
+      ]
+    },
+    {
+      "label": "smoke_ip4_addr",
+      "command": "build/uv_run_tests_a ip4_addr",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libuv",
+      "exit_code": 1,
+      "elapsed_seconds": 0.037,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/05_smoke_ip4_addr.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/05_smoke_ip4_addr.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/02_pin_commit.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/02_pin_commit.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/03_cmake_configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/03_cmake_configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/04_cmake_build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/04_cmake_build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/05_smoke_ip4_addr.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libuv/05_smoke_ip4_addr.stdout.log"
+  ],
+  "failure_summary": "smoke_ip4_addr exited 1: The libuv test suite cannot be run as root.",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

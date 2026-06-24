@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "nginx",
+  "status": "passed",
+  "commit": "be84ac8bda2265d254f3ead9c3f0ba1d78a79319",
+  "branch": "master",
+  "repo_url": "https://github.com/nginx/nginx.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/run-20260624T015028Z/nginx",
+  "source_group": "network-event-manual-recovery",
+  "source_results_path": null,
+  "tool_versions": {
+    "note": "Uses WSL Ubuntu toolchain recorded in l1-native-summary worker sources."
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master https://github.com/nginx/nginx.git nginx",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/run-20260624T015028Z",
+      "exit_code": 0,
+      "elapsed_seconds": null,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stderr.log"
+      ]
+    },
+    {
+      "label": "configure",
+      "command": "auto/configure --with-debug --without-http_rewrite_module --without-http_gzip_module",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/run-20260624T015028Z/nginx",
+      "exit_code": 0,
+      "elapsed_seconds": null,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stderr.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/run-20260624T015028Z/nginx",
+      "exit_code": 0,
+      "elapsed_seconds": null,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stderr.log"
+      ]
+    },
+    {
+      "label": "smoke_config_test",
+      "command": "objs/nginx -t -p \"$PWD/\" -c conf/nginx.conf",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/run-20260624T015028Z/nginx",
+      "exit_code": 0,
+      "elapsed_seconds": null,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stderr.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/manual-nginx/logs/nginx-smoke.stderr.log"
+  ],
+  "failure_summary": "",
+  "notes": [
+    "Manual main-thread L1 run added after network worker was stopped once the 12-project threshold had already been reached."
+  ],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

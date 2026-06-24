@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "git",
+  "status": "passed",
+  "commit": "ab776a62a78576513ee121424adb19597fbb7613",
+  "branch": null,
+  "repo_url": null,
+  "external_clone_dir": null,
+  "source_group": "storage-runtime",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/results.json",
+  "tool_versions": {
+    "raw_log_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/tool-versions.log"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master 'https://github.com/git/git.git' '/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/git'",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z",
+      "exit_code": 0,
+      "elapsed_seconds": 22,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-clone.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2 NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PERL=YesPlease NO_CURL=YesPlease NO_EXPAT=YesPlease",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/git",
+      "exit_code": 0,
+      "elapsed_seconds": 290,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-build.log"
+      ]
+    },
+    {
+      "label": "version_smoke",
+      "command": "./git --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/git",
+      "exit_code": 0,
+      "elapsed_seconds": 0,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-version_smoke.log"
+      ]
+    },
+    {
+      "label": "hash_smoke",
+      "command": "echo x | ./git hash-object --stdin",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/git",
+      "exit_code": 0,
+      "elapsed_seconds": 0,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-hash_smoke.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-build.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-clone.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-hash_smoke.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/git-version_smoke.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "lua",
+  "status": "passed",
+  "commit": "40b76de2d77e66b70a9d4bf989c3f5340919973f",
+  "branch": null,
+  "repo_url": null,
+  "external_clone_dir": null,
+  "source_group": "storage-runtime",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/results.json",
+  "tool_versions": {
+    "raw_log_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/tool-versions.log"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master 'https://github.com/lua/lua.git' '/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/lua'",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z",
+      "exit_code": 0,
+      "elapsed_seconds": 3,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-clone.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2 linux",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/lua",
+      "exit_code": 2,
+      "elapsed_seconds": 0,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-build.log"
+      ]
+    },
+    {
+      "label": "build_adapted",
+      "command": "make -j2 all",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/lua",
+      "exit_code": 0,
+      "elapsed_seconds": 7,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-build_adapted.log"
+      ]
+    },
+    {
+      "label": "smoke",
+      "command": "./lua -e \"print(1+1)\"",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/lua",
+      "exit_code": 0,
+      "elapsed_seconds": 0,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-smoke.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-build.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-build_adapted.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-clone.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/lua-smoke.log"
+  ],
+  "failure_summary": "Recovered command build exited 2: make: *** No rule to make target 'linux'.  Stop.",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

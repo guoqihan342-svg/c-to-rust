@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "valkey",
+  "status": "passed",
+  "commit": "ead3dc6f290a9af3bf2e2b77a8f6c1699bdb61eb",
+  "branch": "unstable",
+  "repo_url": "https://github.com/valkey-io/valkey.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/valkey",
+  "source_group": "kv-crypto",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/results.json",
+  "tool_versions": {
+    "uname": {
+      "command": "uname -a",
+      "exit_code": 0,
+      "elapsed_seconds": 0.37,
+      "summary": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/uname.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/uname.stderr.log"
+    },
+    "git": {
+      "command": "git --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.345,
+      "summary": "git version 2.43.0",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/git.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/git.stderr.log"
+    },
+    "gcc": {
+      "command": "gcc --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.149,
+      "summary": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/gcc.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/gcc.stderr.log"
+    },
+    "make": {
+      "command": "make --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.076,
+      "summary": "GNU Make 4.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/make.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/make.stderr.log"
+    },
+    "cmake": {
+      "command": "cmake --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.058,
+      "summary": "cmake version 3.28.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/cmake.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/cmake.stderr.log"
+    },
+    "perl": {
+      "command": "perl -v",
+      "exit_code": 0,
+      "elapsed_seconds": 0.076,
+      "summary": "This is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/perl.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/perl.stderr.log"
+    },
+    "python3": {
+      "command": "python3 --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.115,
+      "summary": "Python 3.12.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/python3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/python3.stderr.log"
+    },
+    "tclsh": {
+      "command": "tclsh -version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.357,
+      "summary": "",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/tclsh.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/tclsh.stderr.log"
+    },
+    "openssl": {
+      "command": "openssl version -a",
+      "exit_code": 0,
+      "elapsed_seconds": 0.18,
+      "summary": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/openssl.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/openssl.stderr.log"
+    },
+    "libssl_dev": {
+      "command": "bash -lc 'dpkg-query -W -f='\"'\"'${Version}'\"'\"' libssl-dev 2>/dev/null || true'",
+      "exit_code": 0,
+      "elapsed_seconds": 0.105,
+      "summary": "3.0.13-0ubuntu3.11",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/libssl_dev.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/libssl_dev.stderr.log"
+    }
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch unstable https://github.com/valkey-io/valkey.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/valkey",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z",
+      "exit_code": 0,
+      "elapsed_seconds": 22.732,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/clone.stdout.log"
+      ]
+    },
+    {
+      "label": "rev_parse_head",
+      "command": "git rev-parse HEAD",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/valkey",
+      "exit_code": 0,
+      "elapsed_seconds": 0.07,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/rev_parse_head.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/rev_parse_head.stdout.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2 BUILD_TLS=no MALLOC=libc",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/valkey",
+      "exit_code": 0,
+      "elapsed_seconds": 343.987,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/build.stdout.log"
+      ]
+    },
+    {
+      "label": "smoke_test",
+      "command": "src/valkey-server --test-memory 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/valkey",
+      "exit_code": 0,
+      "elapsed_seconds": 18.233,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/smoke_test.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/smoke_test.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/rev_parse_head.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/rev_parse_head.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/smoke_test.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/valkey/smoke_test.stdout.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

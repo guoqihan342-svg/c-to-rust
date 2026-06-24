@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "mbedtls",
+  "status": "failed",
+  "commit": "45ad2fc5ee6e5ca2a7236f44e88275038d870464",
+  "branch": "development",
+  "repo_url": "https://github.com/Mbed-TLS/mbedtls.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+  "source_group": "kv-crypto",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/results.json",
+  "tool_versions": {
+    "uname": {
+      "command": "uname -a",
+      "exit_code": 0,
+      "elapsed_seconds": 0.37,
+      "summary": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/uname.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/uname.stderr.log"
+    },
+    "git": {
+      "command": "git --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.345,
+      "summary": "git version 2.43.0",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/git.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/git.stderr.log"
+    },
+    "gcc": {
+      "command": "gcc --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.149,
+      "summary": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/gcc.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/gcc.stderr.log"
+    },
+    "make": {
+      "command": "make --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.076,
+      "summary": "GNU Make 4.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/make.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/make.stderr.log"
+    },
+    "cmake": {
+      "command": "cmake --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.058,
+      "summary": "cmake version 3.28.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/cmake.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/cmake.stderr.log"
+    },
+    "perl": {
+      "command": "perl -v",
+      "exit_code": 0,
+      "elapsed_seconds": 0.076,
+      "summary": "This is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/perl.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/perl.stderr.log"
+    },
+    "python3": {
+      "command": "python3 --version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.115,
+      "summary": "Python 3.12.3",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/python3.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/python3.stderr.log"
+    },
+    "tclsh": {
+      "command": "tclsh -version",
+      "exit_code": 0,
+      "elapsed_seconds": 0.357,
+      "summary": "",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/tclsh.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/tclsh.stderr.log"
+    },
+    "openssl": {
+      "command": "openssl version -a",
+      "exit_code": 0,
+      "elapsed_seconds": 0.18,
+      "summary": "OpenSSL 3.0.13 30 Jan 2024 (Library: OpenSSL 3.0.13 30 Jan 2024)",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/openssl.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/openssl.stderr.log"
+    },
+    "libssl_dev": {
+      "command": "bash -lc 'dpkg-query -W -f='\"'\"'${Version}'\"'\"' libssl-dev 2>/dev/null || true'",
+      "exit_code": 0,
+      "elapsed_seconds": 0.105,
+      "summary": "3.0.13-0ubuntu3.11",
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/libssl_dev.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/_tool_versions/libssl_dev.stderr.log"
+    }
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch development https://github.com/Mbed-TLS/mbedtls.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z",
+      "exit_code": 0,
+      "elapsed_seconds": 5.709,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/clone.stdout.log"
+      ]
+    },
+    {
+      "label": "rev_parse_head",
+      "command": "git rev-parse HEAD",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+      "exit_code": 0,
+      "elapsed_seconds": 0.039,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/rev_parse_head.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/rev_parse_head.stdout.log"
+      ]
+    },
+    {
+      "label": "submodule_update",
+      "command": "git submodule update --init --recursive",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+      "exit_code": 0,
+      "elapsed_seconds": 190.712,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/submodule_update.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/submodule_update.stdout.log"
+      ]
+    },
+    {
+      "label": "configure",
+      "command": "cmake -S . -B build -DENABLE_TESTING=ON",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+      "exit_code": 0,
+      "elapsed_seconds": 74.08,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/configure.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/configure.stdout.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "cmake --build build --parallel 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/repos/20260624T011731Z/mbedtls",
+      "exit_code": 2,
+      "elapsed_seconds": 323.17,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/build.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/rev_parse_head.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/rev_parse_head.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/submodule_update.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/kv-crypto/logs/20260624T011731Z/mbedtls/submodule_update.stdout.log"
+  ],
+  "failure_summary": "build failed with exit 2. Log tail:\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_psa_crypto_storage_format.current.c' has modification time 0.85 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_psa_crypto_util.c' has modification time 0.59 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_psa_crypto_storage_format.v0.c' has modification time 0.56 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_psa_crypto_xof.c' has modification time 0.34 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_psa_its.c' has modification time 0.33 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_random.c' has modification time 2.4 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_rsa.c' has modification time 2.4 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_rsa.pkcs1_v15.c' has modification time 2.2 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_rsa.pkcs1_v21.c' has modification time 2.2 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha256.c' has modification time 2 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha1.c' has modification time 2 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha3.misc.c' has modification time 1.8 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha3.kat.c' has modification time 1.8 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha3.shake_py.c' has modification time 1.6 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha3.multi.c' has modification time 1.6 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_tf_psa_crypto_version.c' has modification time 1.4 s in the future\ngmake[2]: Warning: File 'tf-psa-crypto/tests/test_suite_sha512.c' has modification time 1.4 s in the future\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: warning:  Clock skew detected.  Your build may be incomplete.\ngmake[2]: *** [library/CMakeFiles/mbedx509.dir/build.make:152: library/CMakeFiles/mbedx509.dir/x509.c.o] Terminated\ngmake[2]: *** Waiting for unfinished jobs....\ngmake[2]: *** [library/CMakeFiles/mbedx509.dir/build.make:166: library/CMakeFiles/mbedx509.dir/x509_create.c.o] Terminated\ngmake[1]: *** [CMakeFiles/Makefile2:5938: library/CMakeFiles/mbedx509.dir/all] Error 2\ngmake: *** [Makefile:146: all] Error 2\n[ 74%] Linking C executable test_suite_rsa.pkcs1_v21\n[ 74%] Built target test_suite_rsa.pkcs1_v15\n[ 74%] Built target test_suite_rsa.pkcs1_v21\n[ 74%] Generating test_suite_sha1.c\n[ 74%] Generating test_suite_sha256.c\n[ 74%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha256.dir/test_suite_sha256.c.o\n[ 74%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha1.dir/test_suite_sha1.c.o\n[ 75%] Linking C executable test_suite_sha1\n[ 75%] Linking C executable test_suite_sha256\n[ 75%] Built target test_suite_sha1\n[ 75%] Built target test_suite_sha256\n[ 75%] Generating test_suite_sha3.kat.c\n[ 75%] Generating test_suite_sha3.misc.c\n[ 75%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.misc.dir/test_suite_sha3.misc.c.o\n[ 75%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.kat.dir/test_suite_sha3.kat.c.o\n[ 75%] Linking C executable test_suite_sha3.misc\n[ 75%] Linking C executable test_suite_sha3.kat\n[ 75%] Built target test_suite_sha3.kat\n[ 75%] Built target test_suite_sha3.misc\n[ 75%] Generating test_suite_sha3.multi.c\n[ 75%] Generating test_suite_sha3.shake_py.c\n[ 75%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.shake_py.dir/test_suite_sha3.shake_py.c.o\n[ 76%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha3.multi.dir/test_suite_sha3.multi.c.o\n[ 76%] Linking C executable test_suite_sha3.shake_py\n[ 76%] Linking C executable test_suite_sha3.multi\n[ 76%] Built target test_suite_sha3.multi\n[ 76%] Built target test_suite_sha3.shake_py\n[ 76%] Generating test_suite_sha512.c\n[ 76%] Generating test_suite_tf_psa_crypto_version.c\n[ 76%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_tf_psa_crypto_version.dir/test_suite_tf_psa_crypto_version.c.o\n[ 76%] Building C object tf-psa-crypto/tests/CMakeFiles/test_suite_sha512.dir/test_suite_sha512.c.o\n[ 77%] Linking C executable test_suite_sha512\n[ 77%] Linking C executable test_suite_tf_psa_crypto_version\n[ 77%] Built target test_suite_sha512\n[ 77%] Built target test_suite_tf_psa_crypto_version\n[ 77%] Building C object library/CMakeFiles/mbedx509.dir/error.c.o\n[ 77%] Building C object library/CMakeFiles/mbedx509.dir/mbedtls_config.c.o\n[ 77%] Building C object library/CMakeFiles/mbedx509.dir/pkcs7.c.o\n[ 77%] Building C object library/CMakeFiles/mbedx509.dir/x509.c.o\n[ 78%] Building C object library/CMakeFiles/mbedx509.dir/x509_create.c.o",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

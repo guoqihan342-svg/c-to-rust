@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "curl",
+  "status": "passed",
+  "commit": "bf29c3e17544ff13c67e94157e6440662317355b",
+  "branch": "master",
+  "repo_url": "https://github.com/curl/curl.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+  "source_group": "network-event",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/network-event/results.json",
+  "tool_versions": {
+    "autoconf": "autoconf (GNU Autoconf) 2.71",
+    "automake": "automake (GNU automake) 1.16.5",
+    "cmake": "cmake version 3.28.3",
+    "ctest": "ctest version 3.28.3",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "git": "git version 2.43.0",
+    "libtoolize": "libtoolize (GNU libtool) 2.4.7",
+    "make": "GNU Make 4.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master https://github.com/curl/curl.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event",
+      "exit_code": 0,
+      "elapsed_seconds": 20.334,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/01_clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/01_clone.stdout.log"
+      ]
+    },
+    {
+      "label": "pin_commit",
+      "command": "git rev-parse HEAD",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "exit_code": 0,
+      "elapsed_seconds": 0.049,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/02_pin_commit.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/02_pin_commit.stdout.log"
+      ]
+    },
+    {
+      "label": "autoreconf",
+      "command": "autoreconf -fi",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "exit_code": 0,
+      "elapsed_seconds": 12.149,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/03_autoreconf.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/03_autoreconf.stdout.log"
+      ]
+    },
+    {
+      "label": "configure",
+      "command": "./configure --without-ssl --without-libpsl --disable-shared",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "exit_code": 0,
+      "elapsed_seconds": 45.505,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/04_configure.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/04_configure.stdout.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "exit_code": 0,
+      "elapsed_seconds": 177.222,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/05_build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/05_build.stdout.log"
+      ]
+    },
+    {
+      "label": "smoke_version",
+      "command": "src/curl --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/curl",
+      "exit_code": 0,
+      "elapsed_seconds": 0.032,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/06_smoke_version.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/06_smoke_version.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/02_pin_commit.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/02_pin_commit.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/03_autoreconf.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/03_autoreconf.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/04_configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/04_configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/05_build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/05_build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/06_smoke_version.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/curl/06_smoke_version.stdout.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

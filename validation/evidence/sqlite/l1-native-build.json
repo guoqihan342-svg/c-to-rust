@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "sqlite",
+  "status": "passed",
+  "commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
+  "branch": null,
+  "repo_url": null,
+  "external_clone_dir": null,
+  "source_group": "storage-runtime",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/results.json",
+  "tool_versions": {
+    "raw_log_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/tool-versions.log"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master 'https://github.com/sqlite/sqlite.git' '/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite'",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z",
+      "exit_code": 0,
+      "elapsed_seconds": 17,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-clone.log"
+      ]
+    },
+    {
+      "label": "configure",
+      "command": "./configure --disable-shared",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite",
+      "exit_code": 0,
+      "elapsed_seconds": 6,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-configure.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2 sqlite3",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite",
+      "exit_code": 0,
+      "elapsed_seconds": 108,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-build.log"
+      ]
+    },
+    {
+      "label": "smoke",
+      "command": "./sqlite3 :memory: \"select 1;\"",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite",
+      "exit_code": 0,
+      "elapsed_seconds": 0,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-smoke.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-build.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-clone.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-configure.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/logs/sqlite-smoke.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

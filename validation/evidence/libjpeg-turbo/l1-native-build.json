@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "libjpeg-turbo",
+  "status": "passed",
+  "commit": "01d607bd618334ccb5bfdd7e1891dda11d58036c",
+  "branch": "main",
+  "repo_url": "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+  "external_clone_dir": null,
+  "source_group": "compression-image",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/results.json",
+  "tool_versions": {
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+    "bash": "GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ctest": "ctest version 3.28.3",
+    "git": "git version 2.43.0",
+    "python3": "Python 3.12.3"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch main https://github.com/libjpeg-turbo/libjpeg-turbo.git libjpeg-turbo",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638",
+      "exit_code": 0,
+      "elapsed_seconds": 7.653,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stdout.log"
+      ]
+    },
+    {
+      "label": "configure",
+      "command": "cmake -S . -B build -DWITH_SIMD=0",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/libjpeg-turbo",
+      "exit_code": 0,
+      "elapsed_seconds": 22.742,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stdout.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "cmake --build build --parallel 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/libjpeg-turbo",
+      "exit_code": 0,
+      "elapsed_seconds": 122.781,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stdout.log"
+      ]
+    },
+    {
+      "label": "test",
+      "command": "ctest --test-dir build --output-on-failure",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/libjpeg-turbo",
+      "exit_code": 0,
+      "elapsed_seconds": 657.754,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/00-clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/01-configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/02-build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/libjpeg-turbo/03-test.stdout.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

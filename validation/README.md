@@ -10,6 +10,7 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `gates.md`: L0-L3 validation gates and evidence requirements.
 - `evidence/catalog-validation.json`: latest offline catalog validation report.
 - `evidence/catalog-remote-probe.json`: latest optional remote HEAD probe report.
+- `evidence/l1-native-summary.json`: latest compact L1 native C build/test smoke summary.
 
 ## Fast Commands
 

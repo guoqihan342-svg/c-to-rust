@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "libevent",
+  "status": "failed",
+  "commit": "ec52f3f59e9778ae9576e23ac172c001ec91ef50",
+  "branch": "master",
+  "repo_url": "https://github.com/libevent/libevent.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+  "source_group": "network-event",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/network-event/results.json",
+  "tool_versions": {
+    "autoconf": "autoconf (GNU Autoconf) 2.71",
+    "automake": "automake (GNU automake) 1.16.5",
+    "cmake": "cmake version 3.28.3",
+    "ctest": "ctest version 3.28.3",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "git": "git version 2.43.0",
+    "libtoolize": "libtoolize (GNU libtool) 2.4.7",
+    "make": "GNU Make 4.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch master https://github.com/libevent/libevent.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event",
+      "exit_code": 0,
+      "elapsed_seconds": 5.482,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stdout.log"
+      ]
+    },
+    {
+      "label": "pin_commit",
+      "command": "git rev-parse HEAD",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "exit_code": 0,
+      "elapsed_seconds": 0.052,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stdout.log"
+      ]
+    },
+    {
+      "label": "cmake_configure",
+      "command": "cmake -S . -B build -DEVENT__DISABLE_OPENSSL=ON",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "exit_code": 0,
+      "elapsed_seconds": 167.393,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stdout.log"
+      ]
+    },
+    {
+      "label": "cmake_build",
+      "command": "cmake --build build --parallel 2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/repos/20260624T011607Z/libevent",
+      "exit_code": 0,
+      "elapsed_seconds": 69.282,
+      "stdout_log": null,
+      "stderr_log": null,
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stdout.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/02_pin_commit.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/03_cmake_configure.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/network-event/logs/20260624T011607Z/libevent/04_cmake_build.stdout.log"
+  ],
+  "failure_summary": "",
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

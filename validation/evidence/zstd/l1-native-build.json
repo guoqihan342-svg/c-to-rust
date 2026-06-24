@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "zstd",
+  "status": "passed",
+  "commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+  "branch": "dev",
+  "repo_url": "https://github.com/facebook/zstd.git",
+  "external_clone_dir": null,
+  "source_group": "compression-image",
+  "source_results_path": "C:/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/results.json",
+  "tool_versions": {
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux",
+    "bash": "GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ctest": "ctest version 3.28.3",
+    "git": "git version 2.43.0",
+    "python3": "Python 3.12.3"
+  },
+  "commands": [
+    {
+      "label": "clone",
+      "command": "git clone --depth 1 --branch dev https://github.com/facebook/zstd.git zstd",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638",
+      "exit_code": 0,
+      "elapsed_seconds": 6.448,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stdout.log"
+      ]
+    },
+    {
+      "label": "build",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd",
+      "exit_code": 0,
+      "elapsed_seconds": 60.157,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stdout.log"
+      ]
+    },
+    {
+      "label": "test",
+      "command": "make shortest",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd",
+      "exit_code": 2,
+      "elapsed_seconds": 0.084,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stderr.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stdout.log"
+      ]
+    },
+    {
+      "label": "smoke_version_recovery",
+      "command": "programs/zstd --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd",
+      "exit_code": 0,
+      "elapsed_seconds": null,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stderr.log"
+      ]
+    }
+  ],
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/00-clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/01-build.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/02-test.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/logs/20260624-091638/zstd/03-smoke-version.stdout.log"
+  ],
+  "failure_summary": "Recovered: original `make shortest` target was unavailable; `programs/zstd --version` smoke passed.",
+  "notes": [
+    "Initial worker smoke `make shortest` failed because the current dev branch has no `shortest` target.",
+    "Main thread reran native smoke as `programs/zstd --version`; it exited 0 and is recorded as recovery evidence."
+  ],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence.",
+  "recovered_from_failed_smoke": true,
+  "status_before_recovery": "failed"
+}
