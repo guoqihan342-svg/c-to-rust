@@ -12,6 +12,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Config profile id is recorded.
 - [ ] C config header path and hash are recorded.
 - [ ] C defines, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend, and toolchain inputs are recorded.
+- [ ] Pointer dependency graph is recorded for pointer-bearing slices, or marked `not_applicable` with a reason for pure value slices.
 - [ ] Non-goals and accepted differences are written before the pass claim.
 
 ## Required Evidence
@@ -20,6 +21,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Context pack exists.
 - [ ] Impact set or equivalent boundary evidence exists.
 - [ ] Config profile exists or equivalent version/cache evidence records all required profile fields.
+- [ ] Pointer dependency graph exists for pointer-bearing slices or records a `not_applicable` reason.
 - [ ] C oracle report exists and records generated status from a real C toolchain.
 - [ ] Rust replay report exists.
 - [ ] C and Rust reports use the same fixture hash.
@@ -38,6 +40,13 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Profile changes invalidate C oracle, Rust replay, schema diff, negative diff, unsafe ledger, performance smoke, cache metadata, and summary evidence.
 - [ ] Profile is described as traceability/cache evidence, not as complete macro activation-condition coverage.
 - [ ] Async, multithreaded, and runtime-cache semantics remain non-goals unless separate evidence exists.
+
+## Pointer Dependency Graph
+
+- [ ] Graph applicability decision covers pointer parameters, pointer returns, pointer fields, buffers, callbacks, opaque handles, globals, manual allocation, and external mutable state.
+- [ ] Graph records pointer nodes, dependency edges, ownership/lifetime assumptions, external state, Rust mapping strategy, and known gaps.
+- [ ] Graph changes invalidate ContextPack, PatchPlan, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, performance smoke, cache metadata, and summary evidence.
+- [ ] Graph is described as dependency evidence, not complete alias safety proof.
 
 ## Claim Boundary
 

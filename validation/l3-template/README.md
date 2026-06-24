@@ -17,6 +17,7 @@ Every L3 slice must provide:
 - slice contract: selected C/Rust boundary, APIs, fixture, non-goals, and accepted differences.
 - context pack: direct modules, callers/callees, tests, unsafe status, rollback/cache/version facts.
 - config profile: normalized C config header hash, `#define` values, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, and cache invalidation keys.
+- pointer dependency graph: C pointer nodes, dependency edges, ownership/lifetime assumptions, external mutable state, Rust mapping strategy, and invalidation keys for pointer-bearing slices; pure value slices record `not_applicable` with a reason.
 - C oracle report: generated from pinned C source and the same fixture input.
 - Rust replay report: generated from the migrated Rust implementation and the same fixture input.
 - schema-aware diff: compares behavior fields and records `first_mismatch`.
@@ -35,6 +36,14 @@ The config profile is an identity and invalidation gate. It proves that all L3 e
 It is not a macro solver. It does not prove every possible `#ifdef` branch, every macro expansion, or every build profile was explored. If any profile input changes, affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence must be regenerated or explicitly invalidated.
 
 中文：config profile 是证据身份与缓存失效门禁，用于证明该切片的 L3 证据绑定到同一组 C 配置头、宏/feature 矩阵、编译 profile、Rust Cargo features、Rust feature environment、backend、fixture 和工具链输入。它不是完整宏求解器，也不证明所有 `#ifdef` 分支、宏展开或构建 profile 都已覆盖。任一 profile 输入变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式标记失效。
+
+## Pointer Dependency Graph Gate
+
+Pointer dependency graph evidence is required for future L3 slices that carry C pointer parameters, pointer returns, struct pointer fields, buffers, opaque handles, callbacks, manual allocation, external mutable state, or alias-sensitive state. It is recorded before implementation edits so Rust ownership and unsafe decisions are made with the cross-file pointer context visible.
+
+The pointer graph is not an alias proof. It does not prove whole-program pointer coverage or safe Rust soundness. It records dependency context, risk boundaries, and cache invalidation inputs.
+
+中文：后续 L3 切片只要包含 C 指针参数、指针返回、struct 指针字段、buffer、opaque handle、callback、手动分配、外部可变状态或 alias-sensitive state，就必须提供 pointer dependency graph 证据。该图应在实现编辑前记录，确保 Rust ownership 与 unsafe 决策能看到跨文件指针上下文。它不是 alias 证明，只是依赖上下文、风险边界和缓存失效输入。
 
 ## Pass Semantics
 
@@ -66,6 +75,7 @@ Machine-readable template files:
 - `validation/l3-template/evidence-manifest.example.json`: example per-slice manifest using `kvdb-compact-overwrite`.
 - `validation/l3-template/config-profile.schema.json`: schema for future config-profile evidence.
 - `validation/l3-template/config-profile.example.json`: example config profile using the current FlashDB oracle config.
+- `validation/pointer-graph-template/`: schema, checklist, and example for pointer dependency graph evidence.
 
 ## Non-Goal Language
 

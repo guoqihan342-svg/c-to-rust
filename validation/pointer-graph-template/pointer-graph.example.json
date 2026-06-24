@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "level": "L3",
+  "status": "recorded",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "df26f12f6e6da03627ff90a68590717c0bf7c1b6",
+  "context_pack_ref": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
+  "impact_set_ref": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-impact-set.json",
+  "config_profile_ref": "validation/l3-template/config-profile.example.json",
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "struct_pointer_field",
+      "buffer",
+      "opaque_handle",
+      "external_mutable_state",
+      "alias_sensitive_state"
+    ]
+  },
+  "source_boundary": {
+    "files": [
+      "flashDB_rust/oracle/.work/FlashDB/src/fdb_kvdb.c",
+      "flashDB_rust/oracle/.work/FlashDB/inc/flashdb.h",
+      "flashDB_rust/oracle/flashdb_c_oracle.c"
+    ],
+    "functions": [
+      "fdb_kvdb_init",
+      "fdb_kv_set",
+      "fdb_kv_get",
+      "fdb_kv_del",
+      "fdb_kv_iterator_init",
+      "fdb_kv_iterate",
+      "fdb_blob_make",
+      "fdb_blob_read",
+      "fdb_kvdb_deinit"
+    ],
+    "structs": [
+      "struct fdb_kvdb",
+      "struct fdb_blob",
+      "struct fdb_kv_iterator",
+      "struct fdb_kv"
+    ],
+    "globals": [],
+    "direct_call_edges": [
+      {
+        "from": "flashdb_c_oracle.c",
+        "to": "fdb_kv_set",
+        "condition": "fixture operation kv.set"
+      },
+      {
+        "from": "flashdb_c_oracle.c",
+        "to": "fdb_kv_get",
+        "condition": "fixture operation kv.get"
+      }
+    ]
+  },
+  "pointer_nodes": [
+    {
+      "id": "kvdb_handle",
+      "symbol": "fdb_kvdb_t db",
+      "kind": "opaque_handle",
+      "c_type": "struct fdb_kvdb *",
+      "mutability": "read_write",
+      "nullability": "non_null",
+      "ownership_role": "inout_param",
+      "lifetime_owner": "oracle runner setup/deinit",
+      "cross_file_exposure": true
+    },
+    {
+      "id": "blob_value",
+      "symbol": "struct fdb_blob blob",
+      "kind": "buffer",
+      "c_type": "struct fdb_blob",
+      "mutability": "read_write",
+      "nullability": "non_null",
+      "ownership_role": "borrowed",
+      "lifetime_owner": "fixture step local buffer",
+      "cross_file_exposure": true
+    },
+    {
+      "id": "iterator",
+      "symbol": "struct fdb_kv_iterator iterator",
+      "kind": "struct_pointer",
+      "c_type": "struct fdb_kv_iterator *",
+      "mutability": "read_write",
+      "nullability": "non_null",
+      "ownership_role": "inout_param",
+      "lifetime_owner": "entries operation local scope",
+      "cross_file_exposure": true
+    }
+  ],
+  "dependency_edges": [
+    {
+      "from": "kvdb_handle",
+      "to": "blob_value",
+      "relationship": "passes_to",
+      "evidence": "fdb_kv_set and fdb_kv_get receive db handle plus blob buffer"
+    },
+    {
+      "from": "kvdb_handle",
+      "to": "iterator",
+      "relationship": "passes_to",
+      "evidence": "fdb_kv_iterator_init binds iterator traversal to db handle"
+    },
+    {
+      "from": "blob_value",
+      "to": "kvdb_handle",
+      "relationship": "writes_through",
+      "evidence": "fdb_kv_set persists blob bytes into KVDB visible state"
+    },
+    {
+      "from": "kvdb_handle",
+      "to": "blob_value",
+      "relationship": "reads_through",
+      "evidence": "fdb_kv_get copies visible value into caller-provided blob"
+    }
+  ],
+  "alias_sets": [
+    {
+      "id": "kvdb-visible-state",
+      "members": [
+        "kvdb_handle",
+        "iterator"
+      ],
+      "risk": "Iterator reads live KVDB state; mutation during iteration is outside this fixture boundary."
+    }
+  ],
+  "external_state": [
+    {
+      "id": "flash-image",
+      "kind": "flash_sector",
+      "access": "read_write"
+    }
+  ],
+  "rust_mapping": [
+    {
+      "pointer_node": "kvdb_handle",
+      "strategy": "Map to KvDb<FileFlash> owner value with methods enforcing one mutable borrow at a time.",
+      "unsafe_expected": false,
+      "notes": "Rust slice does not expose raw FlashDB pointer handles."
+    },
+    {
+      "pointer_node": "blob_value",
+      "strategy": "Map to owned Vec<u8> or String values at replay boundary.",
+      "unsafe_expected": false,
+      "notes": "Blob lifetime is represented by owned report values."
+    },
+    {
+      "pointer_node": "iterator",
+      "strategy": "Map to entries() snapshot vector for visible behavior.",
+      "unsafe_expected": false,
+      "notes": "Native iterator mutation interleavings are non-goals for this slice."
+    }
+  ],
+  "validation_coverage": {
+    "fixtures": [
+      "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json"
+    ],
+    "tests": [
+      "flashDB_rust/tests/differential_replay.rs",
+      "flashDB_rust/tests/kvdb_main_paths.rs",
+      "flashDB_rust/tests/unsafe_scan.rs"
+    ],
+    "oracle_reports": [
+      "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json"
+    ]
+  },
+  "risk_summary": {
+    "unsafe_expected": false,
+    "blocked_reasons": [],
+    "known_gaps": [
+      "No claim about native iterator mutation interleavings.",
+      "No claim about byte-for-byte flash sector layout.",
+      "No claim about power-loss recovery or capacity-pressure GC."
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "source_boundary.files",
+    "source_boundary.functions",
+    "pointer_nodes",
+    "dependency_edges",
+    "rust_mapping",
+    "fixture.hash",
+    "config_profile.profile_id",
+    "schema_version"
+  ]
+}

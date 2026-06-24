@@ -1,0 +1,445 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Pointer Dependency Graph Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "level",
+    "status",
+    "source_commit",
+    "repo_commit",
+    "context_pack_ref",
+    "applicability",
+    "source_boundary",
+    "cache_invalidation_keys"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "level": {
+      "enum": [
+        "L2",
+        "L3",
+        "L2_OR_L3"
+      ]
+    },
+    "status": {
+      "enum": [
+        "recorded",
+        "not_applicable",
+        "stale",
+        "incomplete"
+      ]
+    },
+    "not_applicable_reason": {
+      "type": "string"
+    },
+    "source_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "repo_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "context_pack_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "impact_set_ref": {
+      "type": "string"
+    },
+    "config_profile_ref": {
+      "type": "string"
+    },
+    "applicability": {
+      "type": "object",
+      "required": [
+        "has_pointer_surface",
+        "triggers"
+      ],
+      "properties": {
+        "has_pointer_surface": {
+          "type": "boolean"
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pointer_parameter",
+              "pointer_return",
+              "struct_pointer_field",
+              "buffer",
+              "opaque_handle",
+              "callback_context",
+              "manual_allocation",
+              "global_state",
+              "external_mutable_state",
+              "alias_sensitive_state",
+              "none"
+            ]
+          }
+        }
+      }
+    },
+    "source_boundary": {
+      "type": "object",
+      "required": [
+        "files",
+        "functions"
+      ],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "structs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "globals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "direct_call_edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/callEdge"
+          }
+        }
+      }
+    },
+    "pointer_nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/pointerNode"
+      }
+    },
+    "dependency_edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/dependencyEdge"
+      }
+    },
+    "alias_sets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/aliasSet"
+      }
+    },
+    "external_state": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/externalState"
+      }
+    },
+    "rust_mapping": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/rustMapping"
+      }
+    },
+    "validation_coverage": {
+      "type": "object",
+      "properties": {
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "oracle_reports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "risk_summary": {
+      "type": "object",
+      "properties": {
+        "unsafe_expected": {
+          "type": "boolean"
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "known_gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cache_invalidation_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "status": {
+        "const": "not_applicable"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "not_applicable_reason"
+    ],
+    "properties": {
+      "not_applicable_reason": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "else": {
+    "required": [
+      "pointer_nodes",
+      "dependency_edges",
+      "rust_mapping",
+      "risk_summary"
+    ]
+  },
+  "definitions": {
+    "callEdge": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "condition": {
+          "type": "string"
+        }
+      }
+    },
+    "pointerNode": {
+      "type": "object",
+      "required": [
+        "id",
+        "symbol",
+        "kind",
+        "c_type",
+        "mutability",
+        "nullability",
+        "ownership_role"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "raw_pointer",
+            "struct_pointer",
+            "buffer",
+            "opaque_handle",
+            "callback_context",
+            "global_pointer",
+            "derived_pointer",
+            "value"
+          ]
+        },
+        "c_type": {
+          "type": "string"
+        },
+        "mutability": {
+          "enum": [
+            "read_only",
+            "write_only",
+            "read_write",
+            "unknown"
+          ]
+        },
+        "nullability": {
+          "enum": [
+            "nullable",
+            "non_null",
+            "unknown"
+          ]
+        },
+        "ownership_role": {
+          "enum": [
+            "owner",
+            "borrowed",
+            "observer",
+            "out_param",
+            "inout_param",
+            "global",
+            "unknown"
+          ]
+        },
+        "lifetime_owner": {
+          "type": "string"
+        },
+        "cross_file_exposure": {
+          "type": "boolean"
+        }
+      }
+    },
+    "dependencyEdge": {
+      "type": "object",
+      "required": [
+        "from",
+        "to",
+        "relationship",
+        "evidence"
+      ],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "relationship": {
+          "enum": [
+            "owns",
+            "borrows",
+            "aliases",
+            "derives_from",
+            "stores",
+            "returns",
+            "passes_to",
+            "reads_through",
+            "writes_through",
+            "invalidates",
+            "callback_captures"
+          ]
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "aliasSet": {
+      "type": "object",
+      "required": [
+        "id",
+        "members"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risk": {
+          "type": "string"
+        }
+      }
+    },
+    "externalState": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "access"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "global",
+            "heap",
+            "file",
+            "device",
+            "flash_sector",
+            "allocator",
+            "thread_local",
+            "unknown"
+          ]
+        },
+        "access": {
+          "enum": [
+            "read",
+            "write",
+            "read_write",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "rustMapping": {
+      "type": "object",
+      "required": [
+        "pointer_node",
+        "strategy",
+        "unsafe_expected"
+      ],
+      "properties": {
+        "pointer_node": {
+          "type": "string"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "unsafe_expected": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

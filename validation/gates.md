@@ -51,6 +51,7 @@ Pass criteria:
 
 - Slice scope is declared before migration.
 - C function/file boundaries and callers/callees are recorded.
+- Pointer dependency graph evidence is recorded before translation when the slice has C pointer parameters, pointer returns, struct pointer fields, buffers, opaque handles, callbacks, manual allocation, external mutable state, or alias-sensitive state. Pure value slices record `not_applicable` with a reason.
 - Rust translation compiles.
 - First-party unsafe usage is counted and recorded in an unsafe ledger, even when the count is zero.
 - At least one L2 negative diff proves the diff gate catches an intentional mismatch.
@@ -59,6 +60,7 @@ Pass criteria:
 Evidence:
 
 - `validation/evidence/<target>/l2-slice-plan.json`
+- `validation/evidence/<target>/l2-<slice>-pointer-graph.json` or `not_applicable` pointer graph evidence with a reason
 - `validation/evidence/<target>/l2-rust-check.json`
 - C oracle fixture and Rust replay report for each slice.
 - Schema-aware diff report for each slice.
@@ -74,6 +76,7 @@ Purpose: prove behavior-level equivalence for the migrated slice.
 Pass criteria:
 
 - C oracle or golden fixture is generated from the same input sequence.
+- Pointer dependency graph evidence is recorded for pointer-bearing slices or explicitly marked `not_applicable` for pure value slices.
 - Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
 - Rust output is compared against C/golden output by schema-aware diff.
 - Negative regression counterexample fails as expected.
@@ -86,11 +89,16 @@ Evidence:
 - `validation/evidence/<target>/l3-diff.json`
 - `validation/evidence/<target>/l3-performance-smoke.json`
 - `validation/evidence/<target>/l3-config-profile.json` or equivalent version/cache profile evidence
+- `validation/evidence/<target>/l3-<slice>-pointer-graph.json` or `not_applicable` pointer graph evidence with a reason
 - Slice-specific artifact names and required statuses may be declared through `validation/l3-template/evidence-manifest.json`.
 
 Config profile is a traceability and invalidation gate, not a full macro solver. A profile change invalidates affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless those artifacts are regenerated or explicitly invalidated.
 
 中文：config profile 是追溯与缓存失效门禁，不是完整宏求解器。profile 变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
+
+Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
+
+中文：pointer dependency graph 是上下文与风险边界门禁，不是全程序 alias 证明。graph 变化时，受影响的 ContextPack、PatchPlan、C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
 ## Reporting Rules
 

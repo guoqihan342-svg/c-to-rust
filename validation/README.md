@@ -20,6 +20,7 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `l3-template/`: reusable L3 evidence template, checklist, schema, and example for bounded C/Rust semantic-equivalence claims.
 - `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
 - `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
+- `pointer-graph-template/`: reusable pointer dependency graph template for pointer-bearing L2/L3 migration slices.
 
 ## Fast Commands
 

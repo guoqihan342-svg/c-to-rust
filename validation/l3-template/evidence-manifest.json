@@ -12,6 +12,7 @@
       "fixture.sha256_or_hash_short",
       "evidence.config_profile.path",
       "evidence.config_profile.profile_id",
+      "evidence.pointer_dependency_graph.path",
       "semantic_equivalence_claim.scope",
       "semantic_equivalence_claim.boundary",
       "known_gaps"
@@ -49,6 +50,16 @@
       ],
       "expected_status": "recorded",
       "purpose": "Binds the L3 claim to a normalized macro/config/feature/compile profile, including config header hash and cache invalidation keys."
+    },
+    {
+      "id": "pointer_dependency_graph",
+      "path_patterns": [
+        "validation/evidence/<target>/l3-<slice>-pointer-graph.json",
+        "validation/evidence/<target>/l2-<slice>-pointer-graph.json",
+        "validation/pointer-graph-template/pointer-graph.example.json"
+      ],
+      "expected_status": "recorded_or_not_applicable_with_reason",
+      "purpose": "Records pointer nodes, dependency edges, ownership/lifetime assumptions, external state, Rust mapping strategy, and invalidation keys for pointer-bearing slices."
     },
     {
       "id": "c_oracle",

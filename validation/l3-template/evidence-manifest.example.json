@@ -29,6 +29,10 @@
       "status": "recorded",
       "profile_id": "flashdb-file-kvdb-tsdb-fdb-cfg-fb3cde1a"
     },
+    "pointer_dependency_graph": {
+      "path": "validation/pointer-graph-template/pointer-graph.example.json",
+      "status": "recorded"
+    },
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
       "status": "passed",
