@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json fixture=fixtures/l3-kvdb-compact-overwrite.json",
+  "timestamp_utc": "2026-06-24T06:52:02Z"
+}

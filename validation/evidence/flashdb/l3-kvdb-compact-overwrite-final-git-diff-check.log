@@ -1,0 +1,7 @@
+git.exe : warning: in the working copy of 'flashDB_rust/tests/differential_replay.rs', LF will be replaced by CRLF the
+next time Git touches it
+At line:13 char:15
++     $output = & $exe @argList 2>&1
++               ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: in the... Git touches it:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError

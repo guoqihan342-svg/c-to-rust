@@ -1,0 +1,22 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-compact-overwrite",
+    "command":  "cargo check --message-format=json",
+    "status":  "passed",
+    "build_finished_success":  true,
+    "error_count":  0,
+    "warning_count":  0,
+    "root_cause_keys":  [
+
+                        ],
+    "affected_items":  [
+
+                       ],
+    "raw_output":  "validation\\evidence\\flashdb\\l3-kvdb-compact-overwrite-rust-check.raw.jsonl",
+    "stderr_log":  "validation\\evidence\\flashdb\\l3-kvdb-compact-overwrite-rust-check.stderr.log",
+    "stderr_note":  "PowerShell may wrap cargo stderr status text as NativeCommandError while rustc JSON reports build success.",
+    "rerun_command":  "cd flashDB_rust \u0026\u0026 cargo check --message-format=json",
+    "automatic_patch_attempt_count":  0
+}

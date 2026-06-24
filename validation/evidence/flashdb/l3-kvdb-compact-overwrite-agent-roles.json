@@ -1,0 +1,43 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-compact-overwrite",
+    "policy":  "bounded parallelism with single-writer edits",
+    "agents":  [
+                   {
+                       "id":  "019ef85f-3a14-7381-a2a0-db98e3867265",
+                       "name":  "Fermat",
+                       "role":  "KVDB Rust behavior review",
+                       "edit_permissions":  "read-only",
+                       "result":  "Confirmed existing KvDb/replay supports overwrite, entries, compact, reopen, delete for visible behavior."
+                   },
+                   {
+                       "id":  "019ef85f-68b3-7820-91f8-20bf489888b5",
+                       "name":  "Russell",
+                       "role":  "C oracle boundary review",
+                       "edit_permissions":  "read-only",
+                       "result":  "Confirmed C oracle uses public FlashDB APIs for set/get/entries/delete/reopen and treats kv.compact as accepted metadata image hash."
+                   },
+                   {
+                       "id":  "019ef85f-99ef-7611-9c79-48f3e2276623",
+                       "name":  "Nietzsche",
+                       "role":  "Evidence and OpenSpec audit",
+                       "edit_permissions":  "read-only",
+                       "result":  "Defined evidence file set, accepted-difference boundaries, and forbidden behavior fields."
+                   },
+                   {
+                       "id":  "main",
+                       "name":  "Codex",
+                       "role":  "single-writer implementation and verification",
+                       "edit_permissions":  "write",
+                       "result":  "Added fixture/tests and generated evidence without production Rust API changes."
+                   }
+               ],
+    "forbidden_parallel_actions":  [
+                                       "conflicting file edits",
+                                       "accepted behavior-field broadening",
+                                       "unsafe widening",
+                                       "oracle contract mutation without design update"
+                                   ]
+}

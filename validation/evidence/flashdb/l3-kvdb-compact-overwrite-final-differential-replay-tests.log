@@ -1,0 +1,22 @@
+cargo.exe :     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:13 char:15
++     $output = & $exe @argList 2>&1
++               ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `t...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 10 tests
+test diff_does_not_allow_accepted_differences_to_hide_behavior_fields ... ok
+test diff_ignores_metadata_but_rejects_behavior_difference ... ok
+test l3_kvdb_lifecycle_fixture_replays_main_path ... ok
+test l3_diff_rejects_tsdb_count_regression ... ok
+test l3_diff_rejects_kvdb_lifecycle_value_regression ... ok
+test l3_tsdb_append_query_status_fixture_replays_main_path ... ok
+test l3_kvdb_compact_overwrite_fixture_replays_visible_behavior ... ok
+test l3_diff_rejects_kvdb_compact_overwrite_value_regression ... ok
+test replay_fixture_writes_per_step_report_with_error_codes ... ok
+test diff_passes_for_matching_reports_and_fails_with_first_mismatch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s

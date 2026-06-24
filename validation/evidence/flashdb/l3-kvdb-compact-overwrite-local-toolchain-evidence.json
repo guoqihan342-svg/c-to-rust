@@ -1,0 +1,16 @@
+﻿{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-compact-overwrite",
+    "host":  "windows",
+    "local_c_toolchain_status":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "local_c_toolchains":  [
+
+                           ],
+    "wsl_available":  true,
+    "wsl_source":  "C:\\WINDOWS\\system32\\wsl.exe",
+    "counts_as_l3_pass":  false,
+    "replacement_gate":  "Require WSL/Linux/CI C oracle report with toolchain_status C_ORACLE_GENERATED.",
+    "command":  "Get-Command gcc clang cl cc wsl"
+}

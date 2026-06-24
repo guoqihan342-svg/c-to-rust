@@ -59,6 +59,55 @@ fn l3_kvdb_lifecycle_fixture_replays_main_path() {
 }
 
 #[test]
+fn l3_kvdb_compact_overwrite_fixture_replays_visible_behavior() {
+    let report = temp_path("l3-kvdb-compact-overwrite-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-compact-overwrite.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-kvdb-compact-overwrite\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"kvdb-compact-overwrite\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains("\"id\":\"kv-co-001\""));
+    assert!(out.contains("\"op\":\"kv.set\""));
+    assert!(out.contains("\"id\":\"kv-co-004\""));
+    assert!(out.contains("\"value\":\"two\""));
+    assert!(out.contains("\"id\":\"kv-co-005\""));
+    assert!(out.contains(
+        "\"entries\":[{\"key\":\"alpha\",\"value\":\"two\"},{\"key\":\"beta\",\"value\":\"keep\"}]"
+    ));
+    assert!(out.contains("\"id\":\"kv-co-006\""));
+    assert!(out.contains("\"op\":\"kv.compact\""));
+    assert!(out.contains(
+        "\"id\":\"kv-co-008\",\"op\":\"kv.entries\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"key\":\"alpha\",\"value\":\"two\"},{\"key\":\"beta\",\"value\":\"keep\"}]"
+    ));
+    assert!(out.contains("\"id\":\"kv-co-009\""));
+    assert!(out.contains("\"op\":\"kv.reopen\""));
+    assert!(out.contains("\"id\":\"kv-co-010\""));
+    assert!(out.contains("\"value\":\"two\""));
+    assert!(out.contains(
+        "\"id\":\"kv-co-012\",\"op\":\"kv.entries\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"key\":\"alpha\",\"value\":\"two\"},{\"key\":\"beta\",\"value\":\"keep\"}]"
+    ));
+    assert!(out.contains("\"id\":\"kv-co-013\""));
+    assert!(out.contains("\"op\":\"kv.delete\""));
+    assert!(out.contains("\"id\":\"kv-co-014\""));
+    assert!(out.contains("\"value\":null"));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_append_query_status_fixture_replays_main_path() {
     let report = temp_path("l3-tsdb-append-query-status-report.json");
     let out = cli::run([
@@ -190,6 +239,51 @@ fn l3_diff_rejects_kvdb_lifecycle_value_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.kv-l3-007.value"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_kvdb_compact_overwrite_value_regression() {
+    let actual = temp_path("l3-kvdb-compact-overwrite-actual-report.json");
+    let expected = temp_path("l3-kvdb-compact-overwrite-expected-report.json");
+    let diff_report = temp_path("l3-kvdb-compact-overwrite-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-compact-overwrite.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"kv-co-010","op":"kv.get","status":"ok","code":"OK","value":"two""#,
+        r#""id":"kv-co-010","op":"kv.get","status":"ok","code":"OK","value":"changed""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.kv-co-010.value"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

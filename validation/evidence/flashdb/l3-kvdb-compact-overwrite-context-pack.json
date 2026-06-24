@@ -1,0 +1,167 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-compact-overwrite",
+    "target_item":  "kvdb-compact-overwrite",
+    "owning_module":  "flashDB_rust/src/kvdb.rs",
+    "repo_commit":  "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+    "worktree_state":  {
+                           "dirty":  true,
+                           "note":  "ContextPack is bound to file_hashes because the L3 implementation is in progress and contains local edits."
+                       },
+    "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "created_for_change":  "run-flashdb-kvdb-compact-overwrite-l3-loop",
+    "c_context":  {
+                      "upstream_checkout":  "flashDB_rust/oracle/.work/FlashDB",
+                      "oracle_runner":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                      "build_entrypoint":  "flashDB_rust/oracle/generate_c_oracle.sh",
+                      "config_header":  "flashDB_rust/oracle/fdb_cfg.h",
+                      "direct_public_apis":  [
+                                                 "fdb_kvdb_init",
+                                                 "fdb_kv_set",
+                                                 "fdb_kv_get",
+                                                 "fdb_kv_del",
+                                                 "fdb_kvdb_deinit"
+                                             ],
+                      "reporting_aux_apis":  [
+                                                 "fdb_kv_iterator_init",
+                                                 "fdb_kv_iterate",
+                                                 "fdb_kv_to_blob",
+                                                 "fdb_blob_make",
+                                                 "fdb_blob_read"
+                                             ],
+                      "oracle_fixture_ops":  [
+                                                 "kv.set",
+                                                 "kv.get",
+                                                 "kv.entries",
+                                                 "kv.compact",
+                                                 "kv.reopen",
+                                                 "kv.delete"
+                                             ],
+                      "compact_boundary":  "kv.compact is metadata-only in the current C oracle and returns accepted-difference image_hash; visible behavior is checked through get/entries/reopen/delete around it.",
+                      "confidence":  "high for public visible behavior, low for native GC internals intentionally excluded"
+                  },
+    "rust_context":  {
+                         "modules":  [
+                                         "flashDB_rust/src/kvdb.rs",
+                                         "flashDB_rust/src/replay.rs",
+                                         "flashDB_rust/src/cli.rs",
+                                         "flashDB_rust/src/types.rs",
+                                         "flashDB_rust/src/format.rs",
+                                         "flashDB_rust/src/flash.rs",
+                                         "flashDB_rust/src/lib.rs"
+                                     ],
+                         "public_types":  [
+                                              "KvDb\u003cD: FlashDevice\u003e",
+                                              "KvEntry",
+                                              "FlashDevice",
+                                              "MemoryFlash",
+                                              "FileFlash",
+                                              "Error"
+                                          ],
+                         "direct_public_apis":  [
+                                                    "KvDb::create",
+                                                    "KvDb::open",
+                                                    "KvDb::set",
+                                                    "KvDb::get",
+                                                    "KvDb::delete",
+                                                    "KvDb::entries",
+                                                    "KvDb::compact",
+                                                    "KvDb::into_flash",
+                                                    "KvDb::image_hash",
+                                                    "KvDb::image",
+                                                    "KvDb::bytes_used",
+                                                    "KvDb::counters",
+                                                    "replay::run_replay",
+                                                    "replay::run_diff"
+                                                ],
+                         "replay_layer_ops":  [
+                                                  "kv.set",
+                                                  "kv.get",
+                                                  "kv.entries",
+                                                  "kv.compact",
+                                                  "kv.reopen",
+                                                  "kv.delete"
+                                              ],
+                         "related_tests":  [
+                                               "flashDB_rust/tests/differential_replay.rs",
+                                               "flashDB_rust/tests/kvdb_main_paths.rs",
+                                               "flashDB_rust/tests/persistence.rs",
+                                               "flashDB_rust/tests/unsafe_scan.rs"
+                                           ]
+                     },
+    "fixture_context":  {
+                            "target_fixture":  "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+                            "target_fixture_sha256":  "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
+                            "target_fixture_report_hash":  "78e5ef24",
+                            "operation_count":  14,
+                            "accepted_difference_policy_ref":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-slice-contract.json",
+                            "known_gaps":  [
+                                               "Does not cover native FlashDB GC, sector movement, tombstone layout, byte-for-byte flash image layout, power-loss recovery, or capacity-pressure compaction.",
+                                               "Does not cover binary/blob value encoding or invalid-key matrix beyond previously validated slices."
+                                           ]
+                        },
+    "unsafe_ledger_summary":  {
+                                  "scan_scope":  "flashDB_rust/src/**/*.rs",
+                                  "scan_test":  "flashDB_rust/tests/unsafe_scan.rs",
+                                  "current_policy":  "0% first-party non-test unsafe for this slice; project hard limit remains below 10% with ledger.",
+                                  "expected_unsafe_count":  0,
+                                  "expected_unsafe_ratio":  0,
+                                  "ledger_path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json"
+                              },
+    "self_healing_evidence":  {
+                                  "rust_check_report":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-check.json",
+                                  "error_events_jsonl":  "validation/evidence/flashdb/error-events.jsonl",
+                                  "patch_events_jsonl":  "validation/evidence/flashdb/patches.jsonl",
+                                  "rerun_order":  [
+                                                      "cargo check --message-format=json",
+                                                      "targeted Rust tests",
+                                                      "cargo test",
+                                                      "replay/diff",
+                                                      "unsafe scan",
+                                                      "performance smoke"
+                                                  ],
+                                  "blocked_conditions":  [
+                                                             "new unsafe",
+                                                             "public API change outside KVDB impact set",
+                                                             "oracle or fixture contract change",
+                                                             "behavior field accepted difference",
+                                                             "new error category",
+                                                             "repeated root cause over retry limit"
+                                                         ]
+                              },
+    "cache_key":  {
+                      "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+                      "repo_commit":  "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+                      "rustc_version":  "rustc 1.95.0 (59807616e 2026-04-14)",
+                      "cargo_version":  "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+                      "feature_env":  "default",
+                      "context_schema":  1,
+                      "command_args":  [
+                                           "cargo check --message-format=json",
+                                           "cargo test --test differential_replay l3_kvdb_compact_overwrite",
+                                           "cargo run -- replay --fixture fixtures/l3-kvdb-compact-overwrite.json --backend file",
+                                           "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json"
+                                       ],
+                      "file_hashes":  {
+                                          "flashDB_rust/src/kvdb.rs":  "f79a82e3c6b6781f106d7ef0d0f5a9962cf99a38857d1aa71d3e38f1b11ac8c4",
+                                          "flashDB_rust/src/replay.rs":  "40efe30e788bd767667a05a4dc4129760796e939feedcb70955fb320d11492f6",
+                                          "flashDB_rust/src/cli.rs":  "46e022bc3b1ccca126a910c575f309f7b59d2536dc605afa8d772acd1435aedc",
+                                          "flashDB_rust/src/types.rs":  "61c836e5a1e7f792ba9ae6025a112d7ec0fbed2b503d53f89522442b8f4265c0",
+                                          "flashDB_rust/src/format.rs":  "f08e9902fd39bb8676a67f6959f70d77704b18ea0ed8a27c4bba55d55978cb16",
+                                          "flashDB_rust/src/flash.rs":  "0b7177af5bc03ff9f852469178aa2e9d85c22293cfbabea2620246bbdd32e728",
+                                          "flashDB_rust/src/lib.rs":  "64a9c425c208e7db034b6a6a712a6e96ca47b13f3e29f97c8a355849078bb165",
+                                          "flashDB_rust/tests/differential_replay.rs":  "035b054e9045704f74c7fba44b771b26e8bf4c2c96dc03689ae4536d4c9ecbb0",
+                                          "flashDB_rust/tests/kvdb_main_paths.rs":  "da39cb2a95a1a13e222ff2042b455fa9ee69cd45facc10027ffd6d9a41951c9c",
+                                          "flashDB_rust/tests/persistence.rs":  "3629e72d5412f1bd92a32f3c32720051687556be7a2582412ff158d2715e0bd6",
+                                          "flashDB_rust/tests/unsafe_scan.rs":  "b7cb739ba8f3e453dc8bdbb139ad8797938767ae00a77bbadf7672170366eb6e",
+                                          "flashDB_rust/Cargo.lock":  "8bf2cc252a9fc8a4dae3656276816fc74590cac086fd75210c1922e0fadc7f40",
+                                          "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json":  "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
+                                          "flashDB_rust/oracle/flashdb_c_oracle.c":  "ab5ce41ada0bfe23a02715da49dc5f8050a4845d589289e7c4c4b3cdb397eab9",
+                                          "flashDB_rust/oracle/generate_c_oracle.sh":  "5c9a71af72ed11adb004d8da1ec4006293f98ac5a1647b75c8bb6c8ad81eeaa8",
+                                          "flashDB_rust/oracle/fdb_cfg.h":  "fb3cde1afcc367e01f15529b29d55ac3061d0dd2336aa1c1797678e34a99f4e3"
+                                      }
+                  },
+    "rollback_id":  "7c2fdff2311ecdf0d7d3643ca188723a724145c3"
+}

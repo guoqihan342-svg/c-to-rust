@@ -1,0 +1,11 @@
+cargo.exe :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:13 char:15
++     $output = & $exe @argList 2>&1
++               ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running `target\debug\flashdb-rust.exe diff --rust-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite
+-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json --report ../va
+lidation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json`
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"../validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json","oracle_report":"../validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json","rust_report_hash":"57334b07","oracle_report_hash":"3805dd4e","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}
