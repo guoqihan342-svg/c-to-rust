@@ -1,0 +1,17 @@
+{
+  "case_count": 7,
+  "compared_fields": [
+    "return_code",
+    "status",
+    "family",
+    "port_host",
+    "port_bytes_hex",
+    "addr_bytes_hex"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "status": "passed",
+  "target_id": "libuv"
+}

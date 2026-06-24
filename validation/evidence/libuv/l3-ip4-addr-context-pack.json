@@ -1,0 +1,55 @@
+{
+  "cache_inputs": [
+    "input_fixture_sha256=ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "c_oracle_sha256=4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+    "rust_module_sha256=0782964cffb5370faab1b68706e2f193b977013d333117d74849cd56b75bbca2",
+    "rust_test_sha256=1b56ffac18202800668ea6194bf5471df5a4a4a6453e74415b52b524e0983a51"
+  ],
+  "call_edges": [
+    {
+      "from": "oracle helper",
+      "to": "uv_ip4_addr"
+    },
+    {
+      "from": "uv_ip4_addr",
+      "to": "uv_inet_pton"
+    },
+    {
+      "from": "uv_inet_pton",
+      "to": "inet_pton4"
+    },
+    {
+      "from": "Rust emit_reports",
+      "to": "libuv_ip4_addr::uv_ip4_addr"
+    }
+  ],
+  "direct_c_files": [
+    "include/uv.h",
+    "src/uv-common.c",
+    "src/inet.c",
+    "test/test-ip4-addr.c"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/libuv_ip4_addr.rs",
+    "validation/l2_slices/tests/libuv_ip4_addr.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/libuv_ip4_addr.rs::libuv_ip4_addr_encodes_loopback_and_port_in_network_order",
+    "validation/l2_slices/tests/libuv_ip4_addr.rs::libuv_ip4_addr_encodes_wildcard_and_broadcast_boundaries",
+    "validation/l2_slices/tests/libuv_ip4_addr.rs::libuv_ip4_addr_rejects_upstream_invalid_ipv4_cases"
+  ],
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_refs": {
+    "include/uv.h": "uv_ip4_addr declaration",
+    "src/inet.c": "uv_inet_pton and inet_pton4 parser",
+    "src/uv-common.c": "uv_ip4_addr implementation and sockaddr_in writes",
+    "test/test-ip4-addr.c": "upstream positive and invalid IPv4 cases"
+  },
+  "status": "recorded",
+  "target_id": "libuv"
+}

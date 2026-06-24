@@ -1,0 +1,13 @@
+{
+  "calls": 70000,
+  "elapsed_ms": 58.1807,
+  "iterations": 10000,
+  "level": "L3",
+  "operation": "safe Rust uv_ip4_addr replay over fixture corpus",
+  "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates.",
+  "schema_version": 1,
+  "secondary_only": true,
+  "slice_id": "ip4-addr",
+  "status": "recorded",
+  "target_id": "libuv"
+}

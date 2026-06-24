@@ -1,0 +1,115 @@
+{
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "behavior_fields_checked": [
+      "return_code",
+      "status",
+      "family",
+      "port_host",
+      "port_bytes_hex",
+      "addr_bytes_hex"
+    ],
+    "known_gaps": [
+      "No IPv6.",
+      "No socket/event-loop behavior.",
+      "No whole-program alias proof.",
+      "No null pointer execution."
+    ],
+    "must_not_claim": [
+      "full libuv migration",
+      "event-loop migration",
+      "UDP/TCP behavior",
+      "IPv6 behavior",
+      "whole-program alias safety"
+    ],
+    "scope": "Only libuv uv_ip4_addr for the pinned commit and committed fixture corpus."
+  },
+  "evidence": {
+    "c_oracle": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "status": "passed",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-cache-metadata.json",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-config-profile.json",
+      "profile_id": "libuv-ip4-addr-linux-gnu-uvh-58c71c59",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-context-pack.json",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-performance-smoke.json",
+      "secondary_only": true,
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-pointer-graph.json",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-rust-check.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "first_mismatch": null,
+      "path": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-slice-contract.json",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-summary.json",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-test-translation.json",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-unsafe-ledger.json",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-unsafe-scan.json",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-version-manifest.json",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "operation_count": 7,
+    "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
+  },
+  "level": "L3",
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "passed",
+  "target_id": "libuv"
+}

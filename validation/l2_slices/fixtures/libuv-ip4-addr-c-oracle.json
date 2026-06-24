@@ -1,0 +1,120 @@
+{
+  "case_count": 7,
+  "cases": [
+    {
+      "addr_bytes_hex": "7f000001",
+      "coverage_kind": "main_path",
+      "family": 2,
+      "id": "loopback-test-port",
+      "ip": "127.0.0.1",
+      "port": 9123,
+      "port_bytes_hex": "23a3",
+      "port_host": 9123,
+      "return_code": 0,
+      "status": "ok"
+    },
+    {
+      "addr_bytes_hex": "00000000",
+      "coverage_kind": "main_path",
+      "family": 2,
+      "id": "wildcard-zero-port",
+      "ip": "0.0.0.0",
+      "port": 0,
+      "port_bytes_hex": "0000",
+      "port_host": 0,
+      "return_code": 0,
+      "status": "ok"
+    },
+    {
+      "addr_bytes_hex": "ffffffff",
+      "coverage_kind": "main_path",
+      "family": 2,
+      "id": "broadcast-max-port",
+      "ip": "255.255.255.255",
+      "port": 65535,
+      "port_bytes_hex": "ffff",
+      "port_host": 65535,
+      "return_code": 0,
+      "status": "ok"
+    },
+    {
+      "addr_bytes_hex": "00000000",
+      "coverage_kind": "error_path",
+      "family": 2,
+      "id": "invalid-asterisk",
+      "ip": "255.255.255*000",
+      "port": 9123,
+      "port_bytes_hex": "23a3",
+      "port_host": 9123,
+      "return_code": -22,
+      "status": "invalid"
+    },
+    {
+      "addr_bytes_hex": "00000000",
+      "coverage_kind": "error_path",
+      "family": 2,
+      "id": "invalid-octet-overflow",
+      "ip": "255.255.255.256",
+      "port": 9123,
+      "port_bytes_hex": "23a3",
+      "port_host": 9123,
+      "return_code": -22,
+      "status": "invalid"
+    },
+    {
+      "addr_bytes_hex": "00000000",
+      "coverage_kind": "error_path",
+      "family": 2,
+      "id": "invalid-wide-first-octet",
+      "ip": "2555.0.0.0",
+      "port": 9123,
+      "port_bytes_hex": "23a3",
+      "port_host": 9123,
+      "return_code": -22,
+      "status": "invalid"
+    },
+    {
+      "addr_bytes_hex": "00000000",
+      "coverage_kind": "error_path",
+      "family": 2,
+      "id": "invalid-too-few-octets",
+      "ip": "255",
+      "port": 9123,
+      "port_bytes_hex": "23a3",
+      "port_host": 9123,
+      "return_code": -22,
+      "status": "invalid"
+    }
+  ],
+  "compared_fields": [
+    "return_code",
+    "status",
+    "family",
+    "port_host",
+    "port_bytes_hex",
+    "addr_bytes_hex"
+  ],
+  "input_fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+  "input_fixture_sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_boundary": {
+    "files": [
+      "include/uv.h",
+      "src/uv-common.c",
+      "src/inet.c",
+      "test/test-ip4-addr.c"
+    ],
+    "functions": [
+      "uv_ip4_addr",
+      "uv_inet_pton",
+      "inet_pton4"
+    ],
+    "signature": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr)"
+  },
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "passed",
+  "target_id": "libuv",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

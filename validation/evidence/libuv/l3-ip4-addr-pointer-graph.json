@@ -1,0 +1,177 @@
+{
+  "alias_sets": [
+    {
+      "id": "caller-owned-output",
+      "members": [
+        "addr_out",
+        "sin_addr_buffer"
+      ],
+      "risk": "Derived field pointer aliases storage inside caller-owned sockaddr_in."
+    }
+  ],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "struct_pointer_field",
+      "buffer",
+      "external_mutable_state",
+      "alias_sensitive_state"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "source_boundary.functions",
+    "fixture.hash=ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "config_profile=libuv-ip4-addr-linux-gnu-uvh-58c71c59",
+    "pointer_nodes",
+    "dependency_edges",
+    "rust_mapping",
+    "schema_version"
+  ],
+  "config_profile_ref": "validation/evidence/libuv/l3-ip4-addr-config-profile.json",
+  "context_pack_ref": "validation/evidence/libuv/l3-ip4-addr-context-pack.json",
+  "dependency_edges": [
+    {
+      "evidence": "uv_ip4_addr passes &(addr->sin_addr.s_addr) to uv_inet_pton",
+      "from": "addr_out",
+      "relationship": "derives_from",
+      "to": "sin_addr_buffer"
+    },
+    {
+      "evidence": "inet_pton4 parses ip and writes four bytes through dst",
+      "from": "ip_cstr",
+      "relationship": "writes_through",
+      "to": "sin_addr_buffer"
+    },
+    {
+      "evidence": "sin_addr.s_addr is a field inside sockaddr_in",
+      "from": "addr_out",
+      "relationship": "stores",
+      "to": "sin_addr_buffer"
+    }
+  ],
+  "external_state": [
+    {
+      "access": "write",
+      "id": "caller-stack-addr",
+      "kind": "heap"
+    }
+  ],
+  "impact_set_ref": "validation/evidence/libuv/l3-ip4-addr-impact-set.json",
+  "level": "L3",
+  "pointer_nodes": [
+    {
+      "c_type": "const char *",
+      "cross_file_exposure": true,
+      "id": "ip_cstr",
+      "kind": "raw_pointer",
+      "lifetime_owner": "caller fixture case string literal",
+      "mutability": "read_only",
+      "nullability": "nullable",
+      "ownership_role": "borrowed",
+      "symbol": "const char* ip"
+    },
+    {
+      "c_type": "struct sockaddr_in *",
+      "cross_file_exposure": true,
+      "id": "addr_out",
+      "kind": "struct_pointer",
+      "lifetime_owner": "caller stack frame",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "symbol": "struct sockaddr_in* addr"
+    },
+    {
+      "c_type": "in_addr_t",
+      "cross_file_exposure": true,
+      "id": "sin_addr_buffer",
+      "kind": "buffer",
+      "lifetime_owner": "addr_out",
+      "mutability": "write_only",
+      "nullability": "non_null",
+      "ownership_role": "out_param",
+      "symbol": "addr->sin_addr.s_addr"
+    }
+  ],
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "risk_summary": {
+    "blocked_reasons": [],
+    "known_gaps": [
+      "No null pointer call is executed because C would have undefined/crashing behavior for addr == NULL.",
+      "No whole-program alias proof."
+    ],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "pointer_node": "ip_cstr",
+      "strategy": "Map to borrowed &str validated by a safe parser.",
+      "unsafe_expected": false
+    },
+    {
+      "pointer_node": "addr_out",
+      "strategy": "Map out-param writes to an owned Ip4AddrReport return value.",
+      "unsafe_expected": false
+    },
+    {
+      "pointer_node": "sin_addr_buffer",
+      "strategy": "Map four output bytes to addr_bytes_hex generated from [u8; 4].",
+      "unsafe_expected": false
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_boundary": {
+    "direct_call_edges": [
+      {
+        "condition": "each fixture case",
+        "from": "oracle helper",
+        "to": "uv_ip4_addr"
+      },
+      {
+        "condition": "after memset/family/port writes",
+        "from": "uv_ip4_addr",
+        "to": "uv_inet_pton"
+      },
+      {
+        "condition": "AF_INET",
+        "from": "uv_inet_pton",
+        "to": "inet_pton4"
+      }
+    ],
+    "files": [
+      "include/uv.h",
+      "src/uv-common.c",
+      "src/inet.c",
+      "test/test-ip4-addr.c"
+    ],
+    "functions": [
+      "uv_ip4_addr",
+      "uv_inet_pton",
+      "inet_pton4"
+    ],
+    "globals": [],
+    "structs": [
+      "struct sockaddr_in",
+      "struct in_addr"
+    ]
+  },
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "recorded",
+  "target_id": "libuv",
+  "validation_coverage": {
+    "fixtures": [
+      "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
+    ],
+    "oracle_reports": [
+      "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "validation/evidence/libuv/l3-ip4-addr-rust-report.json"
+    ],
+    "tests": [
+      "validation/l2_slices/tests/libuv_ip4_addr.rs"
+    ]
+  }
+}

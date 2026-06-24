@@ -1,0 +1,43 @@
+{
+  "commands": [
+    {
+      "command": "python3 validation/l2_slices/tools/generate_libuv_ip4_oracle.py --libuv-root <pinned-libuv-root>",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test --test libuv_ip4_addr",
+      "status": "passed"
+    },
+    {
+      "command": "cargo run --bin emit_reports",
+      "status": "passed"
+    },
+    {
+      "command": "cargo fmt -- --check",
+      "status": "passed"
+    },
+    {
+      "command": "cargo test",
+      "status": "passed"
+    },
+    {
+      "command": "openspec validate run-libuv-ip4-addr-pointer-l3 --strict",
+      "status": "passed"
+    },
+    {
+      "command": "openspec validate --all",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed"
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "passed",
+  "target_id": "libuv"
+}

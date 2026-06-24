@@ -1,0 +1,34 @@
+{
+  "case_count": 7,
+  "diff_status": "passed",
+  "evidence_paths": {
+    "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+    "evidence_manifest": "validation/evidence/libuv/l3-ip4-addr-evidence-manifest.json",
+    "negative_diff": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+    "pointer_graph": "validation/evidence/libuv/l3-ip4-addr-pointer-graph.json",
+    "rust_report": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+    "schema_diff": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+    "test_translation": "validation/evidence/libuv/l3-ip4-addr-test-translation.json"
+  },
+  "first_mismatch": null,
+  "known_gaps": [
+    "No libuv event-loop/socket behavior.",
+    "No IPv6 behavior.",
+    "No null pointer execution.",
+    "No whole-program alias proof."
+  ],
+  "level": "L3",
+  "negative_mutation_detected": true,
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "rust_case_count": 7,
+  "schema_version": 1,
+  "semantic_equivalence_claim": {
+    "boundary": "pinned libuv commit, WSL/Linux C oracle, committed fixture corpus",
+    "scope": "Limited to uv_ip4_addr fixture behavior fields.",
+    "supported": true
+  },
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "passed",
+  "target_id": "libuv"
+}

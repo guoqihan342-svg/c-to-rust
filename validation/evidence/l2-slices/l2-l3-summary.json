@@ -18,6 +18,12 @@
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "zstd-xxh32"
+      },
+      {
+        "case_count": 7,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "libuv-ip4-addr"
       }
     ],
     "status": "passed"
@@ -37,6 +43,7 @@
     "command": "cargo test",
     "status": "passed",
     "tested_modules": [
+      "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/zlib_adler32.rs",
       "validation/l2_slices/src/zstd_xxh32.rs"
@@ -55,6 +62,7 @@
   "unsafe_ledger_check": {
     "audit_status": "passed",
     "audited_modules": [
+      "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/zlib_adler32.rs",
       "validation/l2_slices/src/zstd_xxh32.rs"

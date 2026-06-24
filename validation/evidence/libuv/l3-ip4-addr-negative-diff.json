@@ -1,0 +1,17 @@
+{
+  "case_id": "loopback-test-port",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "loopback-test-port",
+    "field": "addr_bytes_hex",
+    "mutated_c_value": "7f000002",
+    "rust_value": "7f000001"
+  },
+  "level": "L3",
+  "mutation": "first passing oracle case addr_bytes_hex is changed",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "status": "expected_failed",
+  "target_id": "libuv"
+}

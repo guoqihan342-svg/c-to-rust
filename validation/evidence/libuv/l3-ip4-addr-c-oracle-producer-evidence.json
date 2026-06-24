@@ -1,0 +1,21 @@
+{
+  "compile_command": "gcc -std=c99 -D_GNU_SOURCE -pthread -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libuv/include /tmp/libuv-ip4-oracle-kulismfu/libuv_ip4_oracle.c -L /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libuv/build -Wl,-rpath,/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libuv/build -luv -o /tmp/libuv-ip4-oracle-kulismfu/libuv_ip4_oracle",
+  "evidence_output": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/libuv-ip4-addr-c-oracle.json",
+  "helper_stdout_sha256": "30a5911847e08e820b559310278e85117360e2dbda8e905fb37679092755d5b5",
+  "level": "L3",
+  "libuv_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/remediation-l1/libs-20260624T124853/repos/libuv",
+  "run_command": "/tmp/libuv-ip4-oracle-kulismfu/libuv_ip4_oracle",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_hashes": {
+    "include/uv.h": "58c71c59459a743f58fb934410d3924735327d1b0439b08cb6ed423fdeaf4944",
+    "src/inet.c": "71b08670424d9e7d062a75f5554da606c2340f2dd55c3df5f4cd7f132a6b727d",
+    "src/uv-common.c": "8be5802be4ab39842e549974431be18daddf102fb2f192236344cf8008ca8aea",
+    "test/test-ip4-addr.c": "514f94186ce83ad1f1d4e6cdd0de364583c973f2a01798b2b888e76434fc08ce"
+  },
+  "status": "passed",
+  "target_id": "libuv",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

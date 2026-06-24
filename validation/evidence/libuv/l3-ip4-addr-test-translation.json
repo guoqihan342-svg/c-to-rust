@@ -1,0 +1,135 @@
+{
+  "cache_invalidation_keys": [
+    "schema_version",
+    "source_commit",
+    "repo_commit",
+    "fixture.sha256=ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "rust_tests.sha256=1b56ffac18202800668ea6194bf5471df5a4a4a6453e74415b52b524e0983a51",
+    "cargo test --test libuv_ip4_addr",
+    "accepted_differences:none"
+  ],
+  "coverage": {
+    "error_paths": [
+      "invalid character",
+      "octet overflow",
+      "wide first octet",
+      "too few octets"
+    ],
+    "main_paths": [
+      "valid loopback address",
+      "wildcard zero port",
+      "broadcast max port"
+    ],
+    "negative_cases": [
+      "addr_bytes_hex mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-pointer-graph.json",
+      "status": "recorded"
+    },
+    "rust_report": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/libuv/l3-ip4-addr-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "No IPv6 coverage.",
+    "No event-loop/socket behavior coverage.",
+    "No null addr pointer execution."
+  ],
+  "level": "L3",
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --test libuv_ip4_addr",
+      "file": "validation/l2_slices/tests/libuv_ip4_addr.rs",
+      "file_hash": "1b56ffac18202800668ea6194bf5471df5a4a4a6453e74415b52b524e0983a51",
+      "framework": "cargo test",
+      "test_names": [
+        "libuv_ip4_addr_encodes_loopback_and_port_in_network_order",
+        "libuv_ip4_addr_encodes_wildcard_and_broadcast_boundaries",
+        "libuv_ip4_addr_rejects_upstream_invalid_ipv4_cases"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_test_inputs": {
+    "c_tests": [
+      {
+        "name": "upstream test-ip4-addr assertions",
+        "path": "libuv/test/test-ip4-addr.c",
+        "source_kind": "c_test"
+      }
+    ],
+    "fixtures": [
+      {
+        "hash": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+        "operation_count": 7,
+        "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+        "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Compile a helper against pinned libuv and replay upstream test-ip4-addr cases plus port/address boundaries."
+  },
+  "status": "recorded",
+  "target_id": "libuv",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "family",
+        "port_bytes_hex",
+        "addr_bytes_hex"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/libuv_ip4_addr.rs::libuv_ip4_addr_encodes_loopback_and_port_in_network_order",
+      "source": "libuv/test/test-ip4-addr.c valid cases",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_code",
+        "status"
+      ],
+      "coverage_kind": "error_path",
+      "rust_test": "validation/l2_slices/tests/libuv_ip4_addr.rs::libuv_ip4_addr_rejects_upstream_invalid_ipv4_cases",
+      "source": "libuv/test/test-ip4-addr.c invalid cases",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "addr_bytes_hex"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_libuv_negative_diff",
+      "source": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "c_defines": {
+    "AF_INET": 2,
+    "_GNU_SOURCE": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "config_header.sha256",
+    "c_defines",
+    "feature_matrix",
+    "compile_profile.c_oracle_command",
+    "compile_profile.command_args",
+    "rust_profile.cargo_toml_sha256",
+    "rust_profile.cargo_lock_sha256",
+    "toolchain.rustc_version",
+    "toolchain.cargo_version",
+    "toolchain.openspec_version"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "python3 validation/l2_slices/tools/generate_libuv_ip4_oracle.py --libuv-root <pinned-libuv-root>",
+    "command_args": [
+      "gcc",
+      "-std=c99",
+      "-D_GNU_SOURCE",
+      "-pthread",
+      "-luv"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "<pinned-libuv-root>/include"
+    ]
+  },
+  "config_header": {
+    "path": "libuv/include/uv.h",
+    "role": "libuv public API and platform include boundary for uv_ip4_addr",
+    "sha256": "58c71c59459a743f58fb934410d3924735327d1b0439b08cb6ed423fdeaf4944"
+  },
+  "feature_matrix": {
+    "address_family": "AF_INET",
+    "event_loop": false,
+    "function": "uv_ip4_addr",
+    "host": "WSL/Linux",
+    "ipv6": false
+  },
+  "fixture": {
+    "hash": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea",
+    "operation_count": 7,
+    "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "Does not prove all libuv platform branches.",
+    "Does not replace C oracle or diff evidence."
+  ],
+  "profile_id": "libuv-ip4-addr-linux-gnu-uvh-58c71c59",
+  "repo_commit": "9f887e770a2afa98f01396795d0377647c29a7d8",
+  "rust_profile": {
+    "backend": "safe-rust-validation-slice",
+    "cargo_features": [],
+    "cargo_lock_sha256": "1571163f39e5bf027e9ccdd9ab01235fc997503a2c8479df385475cc006a21bb",
+    "cargo_profile": {
+      "debug_assertions": true,
+      "opt_level": "0",
+      "overflow_checks": true
+    },
+    "cargo_toml_sha256": "a361334b75a537290b7da69fa2c00ab744e0647129ca182961074d6ee7ecbf86",
+    "feature_env": "default",
+    "package": "c-to-rust-l2-slices"
+  },
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "recorded",
+  "target_id": "libuv",
+  "toolchain": {
+    "c_oracle_host": "WSL/Linux",
+    "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "git_version": "git version 2.53.0.windows.3",
+    "openspec_version": "unknown",
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)"
+  }
+}
