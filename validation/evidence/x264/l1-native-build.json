@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "x264",
+  "project_name": "x264",
+  "status": "passed",
+  "commit": "c24e06c2e184345ceb33eb20a15d1024d9fd3497",
+  "branch": "master",
+  "repo_url": "https://github.com/mirror/x264.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/x264",
+  "source_group": "media-data",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z",
+  "tool_versions": {
+    "git": "git version 2.43.0",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ninja": "1.11.1",
+    "meson": null,
+    "python3": "Python 3.12.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "01_clone",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/mirror/x264.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/x264",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1200,
+      "elapsed_seconds": 4.344,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stderr.log"
+      ]
+    },
+    {
+      "label": "02_build_1",
+      "command": "./configure --disable-asm --enable-static",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/x264",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 4.751,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "make -j2",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/x264",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 55.031,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_test_1",
+      "command": "./x264 --version",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/repos/x264",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.021,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stderr.log"
+      ]
+    }
+  ],
+  "failed_step": null,
+  "failure_summary": "",
+  "started_at_utc": "2026-06-24T03:27:25Z",
+  "finished_at_utc": "2026-06-24T03:28:25Z",
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/media-data-20260624T032725Z/logs/x264/04_test_1.stderr.log"
+  ],
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}

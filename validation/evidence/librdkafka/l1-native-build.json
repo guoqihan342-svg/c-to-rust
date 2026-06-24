@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "level": "L1",
+  "project_id": "librdkafka",
+  "project_name": "librdkafka",
+  "status": "failed",
+  "commit": "213f59c1ad70bd2bf3aea7e025fcc726174b8068",
+  "branch": "master",
+  "repo_url": "https://github.com/confluentinc/librdkafka.git",
+  "external_clone_dir": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/repos/librdkafka",
+  "source_group": "messaging",
+  "source_results_path": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/results.json",
+  "work_root": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z",
+  "tool_versions": {
+    "git": "git version 2.43.0",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "make": "GNU Make 4.3",
+    "cmake": "cmake version 3.28.3",
+    "ninja": "1.11.1",
+    "meson": null,
+    "python3": "Python 3.12.3",
+    "uname": "Linux ADMIN-20230202K 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux"
+  },
+  "commands": [
+    {
+      "label": "01_clone",
+      "command": "git clone --depth 1 --branch master --single-branch https://github.com/confluentinc/librdkafka.git /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/repos/librdkafka",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1200,
+      "elapsed_seconds": 8.04,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stderr.log"
+      ]
+    },
+    {
+      "label": "02_build_1",
+      "command": "./configure --disable-ssl --disable-sasl --disable-zstd --disable-lz4-ext",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/repos/librdkafka",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 5.375,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stderr.log"
+      ]
+    },
+    {
+      "label": "03_build_2",
+      "command": "make -j2 libs",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/repos/librdkafka",
+      "exit_code": 0,
+      "timed_out": false,
+      "timeout_seconds": 1800,
+      "elapsed_seconds": 98.488,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stderr.log"
+      ]
+    },
+    {
+      "label": "04_test_1",
+      "command": "./examples/rdkafka_example -X list",
+      "cwd": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/repos/librdkafka",
+      "exit_code": 127,
+      "timed_out": false,
+      "timeout_seconds": 600,
+      "elapsed_seconds": 0.022,
+      "stdout_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stdout.log",
+      "stderr_log": "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stderr.log",
+      "log_paths": [
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stdout.log",
+        "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stderr.log"
+      ]
+    }
+  ],
+  "failed_step": "04_test_1",
+  "failure_summary": "04_test_1 exited 127",
+  "started_at_utc": "2026-06-24T03:58:42Z",
+  "finished_at_utc": "2026-06-24T04:00:25Z",
+  "log_paths": [
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/01_clone.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/02_build_1.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/03_build_2.stderr.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stdout.log",
+    "/mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/wave2-l1/messaging-20260624T035842Z/logs/librdkafka/04_test_1.stderr.log"
+  ],
+  "notes": [],
+  "reporting_boundary": "L1 proves only pinned native C build/test smoke reproducibility. It is not Rust migration or C/Rust semantic equivalence evidence."
+}
