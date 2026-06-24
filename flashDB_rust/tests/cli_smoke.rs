@@ -13,6 +13,17 @@ fn temp_report(name: &str) -> std::path::PathBuf {
     ))
 }
 
+fn temp_dir(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "flashdb_rust_{name}_{}_{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
+
 #[test]
 fn cli_smoke_writes_json_report() {
     let report = temp_report("smoke");
@@ -86,4 +97,110 @@ fn cli_version_manifest_writes_version_governance_report() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(stdout.trim(), text.trim());
     let _ = fs::remove_file(report);
+}
+
+#[test]
+fn cli_evidence_search_reports_matches() {
+    let dir = temp_dir("evidence-search");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(
+        dir.join("final-verification.json"),
+        "{\"status\":\"passed\"}\n",
+    )
+    .unwrap();
+    let report = temp_report("evidence-search-report");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flashdb-rust"))
+        .args([
+            "evidence-search",
+            "--evidence-dir",
+            dir.to_str().unwrap(),
+            "--query",
+            "passed",
+            "--report",
+            report.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = fs::read_to_string(&report).unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout.trim(), text.trim());
+    assert!(text.contains("\"command\":\"evidence-search\""));
+    assert!(text.contains("\"match_count\":1"));
+    assert!(text.contains("\"path\":\"final-verification.json\""));
+    assert!(text.contains("\"line\":1"));
+    assert!(text.contains("\"snippet\":\"{\\\"status\\\":\\\"passed\\\"}\""));
+
+    let _ = fs::remove_file(report);
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn cli_evidence_search_excludes_report_inside_evidence_dir() {
+    let dir = temp_dir("evidence-search-report-exclusion");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("source.json"), "{\"status\":\"passed\"}\n").unwrap();
+    let report = dir.join("evidence-search-report.json");
+    fs::write(&report, "{\"old_query\":\"passed\"}\n").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flashdb-rust"))
+        .args([
+            "evidence-search",
+            "--evidence-dir",
+            dir.to_str().unwrap(),
+            "--query",
+            "passed",
+            "--report",
+            report.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = fs::read_to_string(&report).unwrap();
+    assert!(text.contains("\"match_count\":1"));
+    assert!(text.contains("\"path\":\"source.json\""));
+    assert!(!text.contains("\"path\":\"evidence-search-report.json\""));
+
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn cli_evidence_search_tolerates_non_utf8_evidence_file() {
+    let dir = temp_dir("evidence-search-non-utf8");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("a-bad.log"), [0xff, b'\n']).unwrap();
+    fs::write(dir.join("z-good.json"), "{\"status\":\"passed\"}\n").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flashdb-rust"))
+        .args([
+            "evidence-search",
+            "--evidence-dir",
+            dir.to_str().unwrap(),
+            "--query",
+            "passed",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("\"match_count\":1"));
+    assert!(stdout.contains("\"path\":\"z-good.json\""));
+
+    let _ = fs::remove_dir_all(dir);
 }
