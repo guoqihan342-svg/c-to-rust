@@ -24,7 +24,7 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 ## Current Candidate Count
 
-The catalog currently contains 15 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, and systems domains.
+The catalog currently contains 22 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, terminal/system, RTOS, and embedded domains.
 
 ## Non-Equivalence Boundary
 

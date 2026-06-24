@@ -4,9 +4,9 @@
     "level":  "L0",
     "probe_remote":  false,
     "status":  "passed",
-    "target_count":  15,
-    "minimum_targets":  12,
-    "generated_at_utc":  "2026-06-24T00:45:36Z",
+    "target_count":  22,
+    "minimum_targets":  20,
+    "generated_at_utc":  "2026-06-24T01:04:33Z",
     "failures":  [
 
                  ],
@@ -114,6 +114,55 @@
                         "repo_url":  "https://github.com/jemalloc/jemalloc.git",
                         "domain":  "memory-allocator",
                         "expected_default_branch":  "dev",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "valkey",
+                        "repo_url":  "https://github.com/valkey-io/valkey.git",
+                        "domain":  "networked-kv-store",
+                        "expected_default_branch":  "unstable",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "zstd",
+                        "repo_url":  "https://github.com/facebook/zstd.git",
+                        "domain":  "compression-library",
+                        "expected_default_branch":  "dev",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "libjpeg-turbo",
+                        "repo_url":  "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+                        "domain":  "image-codec-library",
+                        "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "micropython",
+                        "repo_url":  "https://github.com/micropython/micropython.git",
+                        "domain":  "language-runtime-embedded",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "tmux",
+                        "repo_url":  "https://github.com/tmux/tmux.git",
+                        "domain":  "terminal-multiplexer",
+                        "expected_default_branch":  "master",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "zephyr",
+                        "repo_url":  "https://github.com/zephyrproject-rtos/zephyr.git",
+                        "domain":  "rtos-and-embedded-platform",
+                        "expected_default_branch":  "main",
+                        "probe":  null
+                    },
+                    {
+                        "id":  "freertos-kernel",
+                        "repo_url":  "https://github.com/FreeRTOS/FreeRTOS-Kernel.git",
+                        "domain":  "rtos-kernel",
+                        "expected_default_branch":  "main",
                         "probe":  null
                     }
                 ],

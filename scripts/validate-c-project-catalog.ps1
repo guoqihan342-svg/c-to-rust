@@ -105,6 +105,9 @@ foreach ($target in $targets) {
         if ($ProbeRemote -and -not $probe.ok) {
             $failures += "target '$id' remote probe failed"
         }
+        if ($ProbeRemote -and $probe.ok -and $probe.default_branch -ne [string]$target.expected_default_branch) {
+            $failures += "target '$id' default branch mismatch: expected '$($target.expected_default_branch)', got '$($probe.default_branch)'"
+        }
         $targetReports += [ordered]@{
             id = $id
             repo_url = [string]$target.repo_url

@@ -4,9 +4,9 @@
     "level":  "L0",
     "probe_remote":  true,
     "status":  "passed",
-    "target_count":  15,
-    "minimum_targets":  12,
-    "generated_at_utc":  "2026-06-24T00:46:15Z",
+    "target_count":  22,
+    "minimum_targets":  20,
+    "generated_at_utc":  "2026-06-24T01:05:24Z",
     "failures":  [
 
                  ],
@@ -188,6 +188,90 @@
                                       "ok":  true,
                                       "default_branch":  "dev",
                                       "head_sha":  "9f37c70826a21022451aed1a1827d60c00c24226",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "valkey",
+                        "repo_url":  "https://github.com/valkey-io/valkey.git",
+                        "domain":  "networked-kv-store",
+                        "expected_default_branch":  "unstable",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "unstable",
+                                      "head_sha":  "ead3dc6f290a9af3bf2e2b77a8f6c1699bdb61eb",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "zstd",
+                        "repo_url":  "https://github.com/facebook/zstd.git",
+                        "domain":  "compression-library",
+                        "expected_default_branch":  "dev",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "dev",
+                                      "head_sha":  "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "libjpeg-turbo",
+                        "repo_url":  "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+                        "domain":  "image-codec-library",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "01d607bd618334ccb5bfdd7e1891dda11d58036c",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "micropython",
+                        "repo_url":  "https://github.com/micropython/micropython.git",
+                        "domain":  "language-runtime-embedded",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "34417ddb1c03808da2df577c49126e947c2832b9",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "tmux",
+                        "repo_url":  "https://github.com/tmux/tmux.git",
+                        "domain":  "terminal-multiplexer",
+                        "expected_default_branch":  "master",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "master",
+                                      "head_sha":  "f23ea9e977d338ce5a971bb4c1f07bed1deb362d",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "zephyr",
+                        "repo_url":  "https://github.com/zephyrproject-rtos/zephyr.git",
+                        "domain":  "rtos-and-embedded-platform",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "1704f47ac622db63222a59fa00723605061b3166",
+                                      "error":  null
+                                  }
+                    },
+                    {
+                        "id":  "freertos-kernel",
+                        "repo_url":  "https://github.com/FreeRTOS/FreeRTOS-Kernel.git",
+                        "domain":  "rtos-kernel",
+                        "expected_default_branch":  "main",
+                        "probe":  {
+                                      "ok":  true,
+                                      "default_branch":  "main",
+                                      "head_sha":  "49cec3e9b27e517ac5ea5db5482c59f937e6aea4",
                                       "error":  null
                                   }
                     }
