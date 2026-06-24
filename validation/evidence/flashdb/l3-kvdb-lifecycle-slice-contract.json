@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "status": "frozen",
+  "repo_commit": "b9d38991290cf93f80090af4c908add7683196d9",
+  "source": {
+    "clone_url": "https://gitcode.com/xwxf/FlashDB.git",
+    "commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_pin_reason": "Existing FlashDB C oracle contract pins this commit for reproducible C reports."
+  },
+  "c_boundary": {
+    "public_apis": [
+      "fdb_kvdb_init",
+      "fdb_kv_set",
+      "fdb_kv_get",
+      "fdb_kv_del",
+      "fdb_kvdb_deinit"
+    ],
+    "configuration_apis": [
+      "fdb_kvdb_control"
+    ],
+    "reporting_aux_apis": [
+      "fdb_kv_iterator_init",
+      "fdb_kv_iterate",
+      "fdb_kv_to_blob",
+      "fdb_blob_make",
+      "fdb_blob_read"
+    ],
+    "oracle_runner_file": "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "supported_fixture_ops": [
+      "kv.set",
+      "kv.get",
+      "kv.delete",
+      "kv.entries",
+      "kv.compact",
+      "kv.image_hash",
+      "kv.reopen"
+    ],
+    "feature_matrix": {
+      "FDB_USING_KVDB": true,
+      "FDB_USING_TSDB": true,
+      "FDB_USING_FILE_POSIX_MODE": true,
+      "FDB_WRITE_GRAN": 1
+    },
+    "storage_geometry": {
+      "file_mode": "posix",
+      "sector_size": 4096,
+      "kv_sectors": 8,
+      "kv_max_size": 32768,
+      "ts_sectors": 8,
+      "ts_max_size": 32768,
+      "work_dir_layout": {
+        "kvdb": "<work-dir>/kvdb",
+        "tsdb": "<work-dir>/tsdb"
+      }
+    }
+  },
+  "rust_boundary": {
+    "crate": "flashdb-rust",
+    "modules": [
+      "flashDB_rust/src/kvdb.rs",
+      "flashDB_rust/src/flash.rs",
+      "flashDB_rust/src/format.rs",
+      "flashDB_rust/src/replay.rs",
+      "flashDB_rust/src/cli.rs",
+      "flashDB_rust/src/types.rs"
+    ],
+    "public_apis": [
+      "KvDb::create",
+      "KvDb::open",
+      "KvDb::set",
+      "KvDb::get",
+      "KvDb::delete",
+      "KvDb::entries",
+      "KvDb::compact",
+      "KvDb::into_flash",
+      "KvDb::image_hash",
+      "KvDb::image",
+      "KvDb::bytes_used",
+      "KvDb::counters",
+      "MemoryFlash::new",
+      "MemoryFlash::from_bytes",
+      "FileFlash::create",
+      "FileFlash::open",
+      "replay::run_replay",
+      "replay::run_diff"
+    ],
+    "replay_layer_ops": [
+      "kv.reopen"
+    ],
+    "public_api_note": "KvDb::reopen is not a public API; kv.reopen is replay-layer behavior implemented through KvDb::open with MemoryFlash::from_bytes or FileFlash::open."
+  },
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-kvdb-lifecycle.json",
+    "sha256": "3cc83c6fa78d3bfdbfe5dc78e49e65fd758ef5a374a044bf329d079020fa280c",
+    "backend_matrix": [
+      {
+        "id": "rust-memory",
+        "runner": "Rust replay",
+        "backend_arg": "memory",
+        "reopen_semantics": "snapshot via MemoryFlash::from_bytes"
+      },
+      {
+        "id": "rust-file",
+        "runner": "Rust replay",
+        "backend_arg": "file",
+        "reopen_semantics": "drop and reopen FileFlash temp image",
+        "l3_primary": true
+      },
+      {
+        "id": "flashdb-c",
+        "runner": "C oracle",
+        "backend_arg": null,
+        "profile": "POSIX file mode, sec_size=4096, write_gran=1"
+      }
+    ],
+    "required_operations": [
+      "set",
+      "get",
+      "delete",
+      "missing get",
+      "reopen",
+      "invalid empty key",
+      "invalid overlong key"
+    ],
+    "coverage": {
+      "covered": [
+        "kv.set",
+        "kv.get existing",
+        "kv.delete",
+        "kv.get missing",
+        "kv.reopen",
+        "kv.entries",
+        "invalid empty key",
+        "invalid overlong key"
+      ],
+      "not_in_target_fixture": [
+        "kv.compact",
+        "overwrite same key"
+      ]
+    },
+    "existing_sources_considered": [
+      "flashDB_rust/fixtures/kvdb-main.json",
+      "flashDB_rust/fixtures/c-rust-smoke.json"
+    ]
+  },
+  "accepted_difference_policy": {
+    "allowed_fields": [
+      "image_hash",
+      "message",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "forbidden_behavior_fields": [
+      "value",
+      "entries",
+      "status",
+      "count",
+      "operation success",
+      "code",
+      "error semantics"
+    ],
+    "policy": "Layout and metadata differences can be accepted before native FlashDB byte layout migration; behavior fields cannot be accepted differences."
+  },
+  "known_gaps": [
+    "Current diff report does not strictly enforce top-level fixture_hash or source.commit equality; summary evidence audits both fields for this slice.",
+    "Target fixture omits compact and overwrite update semantics; kvdb-main.json remains the source fixture for those later extensions."
+  ],
+  "evidence_paths": {
+    "context_pack": "validation/evidence/flashdb/l3-kvdb-lifecycle-context-pack.json",
+    "rust_report": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-report.json",
+    "c_oracle": "validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle.json",
+    "c_oracle_producer": "validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle-producer-evidence.json",
+    "diff": "validation/evidence/flashdb/l3-kvdb-lifecycle-diff.json",
+    "local_toolchain": "validation/evidence/flashdb/l3-kvdb-lifecycle-local-toolchain-evidence.json",
+    "rust_check": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-check.json",
+    "performance_smoke": "validation/evidence/flashdb/l3-kvdb-lifecycle-performance-smoke.json",
+    "summary": "validation/evidence/flashdb/l3-kvdb-lifecycle-summary.json"
+  }
+}

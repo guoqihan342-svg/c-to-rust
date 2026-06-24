@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "status": "recorded",
+  "command": "cargo run -- stress --loops 64 --report ../validation/evidence/flashdb/l3-kvdb-lifecycle-performance-smoke.json",
+  "reporting_boundary": "Performance smoke is secondary evidence and does not replace C/Rust correctness gates.",
+  "backend": "memory",
+  "loops": 64,
+  "seed": 1,
+  "scenario": "all",
+  "scenario_counts": {
+    "abnormal": 64,
+    "production": 64,
+    "reliability": 64
+  },
+  "duration_ms": 870,
+  "operation_counters": {
+    "read_ops": 2,
+    "write_ops": 268,
+    "erase_ops": 8,
+    "flush_ops": 159,
+    "bytes_read": 8388608,
+    "bytes_written": 16408,
+    "bytes_erased": 8397498
+  },
+  "bytes_processed": 7578,
+  "image_hashes": [
+    "0b616cf4",
+    "8e2e9a8d",
+    "5ffd81e0",
+    "f01ec2dd"
+  ]
+}

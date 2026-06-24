@@ -24,6 +24,41 @@ fn replay_fixture_writes_per_step_report_with_error_codes() {
 }
 
 #[test]
+fn l3_kvdb_lifecycle_fixture_replays_main_path() {
+    let report = temp_path("l3-kvdb-lifecycle-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-lifecycle.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-kvdb-lifecycle\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"kvdb-lifecycle\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains("\"id\":\"kv-l3-001\""));
+    assert!(out.contains("\"op\":\"kv.set\""));
+    assert!(out.contains("\"id\":\"kv-l3-004\""));
+    assert!(out.contains("\"value\":null"));
+    assert!(out.contains("\"id\":\"kv-l3-006\""));
+    assert!(out.contains("\"op\":\"kv.reopen\""));
+    assert!(out.contains("\"id\":\"kv-l3-009\""));
+    assert!(out.contains("\"code\":\"INVALID_KEY\""));
+    assert!(out.contains("\"id\":\"kv-l3-010\""));
+    assert!(out.contains("\"code\":\"KEY_TOO_LONG\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn diff_passes_for_matching_reports_and_fails_with_first_mismatch() {
     let actual = temp_path("actual-report.json");
     let expected = temp_path("expected-report.json");
@@ -75,6 +110,51 @@ fn diff_passes_for_matching_reports_and_fails_with_first_mismatch() {
     let _ = fs::remove_file(expected);
     let _ = fs::remove_file(pass_report);
     let _ = fs::remove_file(fail_report);
+}
+
+#[test]
+fn l3_diff_rejects_kvdb_lifecycle_value_regression() {
+    let actual = temp_path("l3-actual-report.json");
+    let expected = temp_path("l3-expected-report.json");
+    let diff_report = temp_path("l3-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-lifecycle.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"kv-l3-007","op":"kv.get","status":"ok","code":"OK","value":"two""#,
+        r#""id":"kv-l3-007","op":"kv.get","status":"ok","code":"OK","value":"changed""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.kv-l3-007.value"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
 }
 
 #[test]

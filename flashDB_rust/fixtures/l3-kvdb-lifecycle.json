@@ -1,0 +1,18 @@
+{
+  "name": "l3-kvdb-lifecycle",
+  "operations": [
+    {"id":"kv-l3-001","op":"kv.set","key":"alpha","value":"one"},
+    {"id":"kv-l3-002","op":"kv.get","key":"alpha"},
+    {"id":"kv-l3-003","op":"kv.delete","key":"alpha"},
+    {"id":"kv-l3-004","op":"kv.get","key":"alpha"},
+    {"id":"kv-l3-005","op":"kv.set","key":"beta","value":"two"},
+    {"id":"kv-l3-006","op":"kv.reopen"},
+    {"id":"kv-l3-007","op":"kv.get","key":"beta"},
+    {"id":"kv-l3-008","op":"kv.entries"},
+    {"id":"kv-l3-009","op":"kv.set","key":"","value":"bad"},
+    {"id":"kv-l3-010","op":"kv.set","key":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","value":"bad"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration.","fields":"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

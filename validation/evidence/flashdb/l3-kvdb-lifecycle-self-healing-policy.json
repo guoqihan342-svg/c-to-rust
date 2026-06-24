@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "status": "recorded",
+  "created_at_utc": "2026-06-24T06:12:23Z",
+  "rule_first_classifiers": {
+    "api_update": [
+      "E0061",
+      "E0277",
+      "E0560",
+      "E0599",
+      "E0603"
+    ],
+    "type_mismatch": [
+      "E0282",
+      "E0283",
+      "E0308",
+      "E0609"
+    ],
+    "borrow_checker": [
+      "E0382",
+      "E0499",
+      "E0502",
+      "E0505",
+      "E0597",
+      "E0716"
+    ],
+    "module_path": [
+      "E0425",
+      "E0432",
+      "E0433",
+      "E0583"
+    ]
+  },
+  "retry_limit_per_root_cause": 2,
+  "rollback_id": "b9d38991290cf93f80090af4c908add7683196d9",
+  "patch_plan_required_fields": [
+    "id",
+    "files",
+    "spans",
+    "reason",
+    "expected_error_delta",
+    "risk",
+    "rollback_id",
+    "forbidden_changes",
+    "ai_used",
+    "verification_commands"
+  ],
+  "blocked_conditions": [
+    "new first-party non-test unsafe",
+    "public API change outside impact set",
+    "C oracle contract change",
+    "golden fixture outcome change",
+    "accepted behavior-field difference",
+    "new error category introduced by repair",
+    "same root cause exceeds retry limit"
+  ],
+  "rerun_order": [
+    "cargo check --message-format=json",
+    "targeted Rust tests",
+    "cargo test",
+    "replay/diff",
+    "unsafe scan",
+    "performance smoke"
+  ],
+  "automatic_patch_policy": {
+    "rule_based_before_ai": true,
+    "ai_candidates_require_patch_plan": true,
+    "patch_files_must_be_in_impact_set": true,
+    "semantic_diff_failure_cannot_be_fixed_by_weakening_tests": true
+  }
+}

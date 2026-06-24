@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "impact_set_id": "impact-kvdb-lifecycle-001",
+  "status": "approved_for_minimal_changes",
+  "context_pack_ref": "validation/evidence/flashdb/l3-kvdb-lifecycle-context-pack.json",
+  "rollback_id": "b9d38991290cf93f80090af4c908add7683196d9",
+  "allowed_write_sets": {
+    "fixtures": [
+      "flashDB_rust/fixtures/l3-kvdb-lifecycle.json"
+    ],
+    "rust_tests": [
+      "flashDB_rust/tests/differential_replay.rs",
+      "flashDB_rust/tests/kvdb_main_paths.rs",
+      "flashDB_rust/tests/persistence.rs",
+      "flashDB_rust/tests/unsafe_scan.rs"
+    ],
+    "rust_sources": [
+      "flashDB_rust/src/replay.rs",
+      "flashDB_rust/src/cli.rs",
+      "flashDB_rust/src/kvdb.rs",
+      "flashDB_rust/src/format.rs"
+    ],
+    "oracle": [
+      "flashDB_rust/oracle/flashdb_c_oracle.c",
+      "flashDB_rust/oracle/generate_c_oracle.sh",
+      "flashDB_rust/oracle/README.md"
+    ],
+    "evidence": [
+      "validation/evidence/flashdb/"
+    ],
+    "openspec": [
+      "openspec/changes/run-flashdb-l3-agent-migration-loop/tasks.md"
+    ]
+  },
+  "public_api_change_policy": {
+    "default": "forbidden",
+    "allowed_without_design_update": [
+      "additive CLI alias for existing replay or diff command",
+      "additive report field that preserves old fields",
+      "new test-only helper inside tests"
+    ],
+    "requires_updated_impact_set": [
+      "changing KvDb public method signatures",
+      "changing FlashDevice trait signatures",
+      "changing replay fixture operation semantics",
+      "changing diff accepted-difference allowlist",
+      "changing C oracle contract",
+      "changing persistent flash image layout"
+    ]
+  },
+  "patch_plan_constraints": {
+    "files_must_be_subset_of_allowed_write_sets": true,
+    "required_patch_fields": [
+      "id",
+      "files",
+      "spans",
+      "reason",
+      "expected_error_delta",
+      "risk",
+      "rollback_id",
+      "forbidden_changes",
+      "ai_used",
+      "verification_commands"
+    ],
+    "forbidden_without_human_review": [
+      "first-party unsafe",
+      "KvDb public signature change",
+      "FlashDevice trait signature change",
+      "C oracle contract change",
+      "golden fixture outcome change",
+      "accepted behavior-field difference"
+    ]
+  },
+  "cross_module_signature_change_gate": {
+    "default": "blocked",
+    "requires_record": [
+      "target_symbol",
+      "old_signature",
+      "new_signature",
+      "direct_callers",
+      "direct_callees",
+      "public_adapters",
+      "tests_to_update",
+      "rollback_id"
+    ]
+  },
+  "forbidden_automatic_changes": [
+    "add first-party non-test unsafe",
+    "weaken tests or assertions",
+    "change golden fixture outcomes to hide mismatches",
+    "add behavior fields to accepted differences",
+    "replace deterministic sync semantics with async or multithreading",
+    "modify unrelated TSDB behavior",
+    "rewrite broad modules outside the selected slice"
+  ],
+  "required_verification_after_patch": [
+    "cargo check --message-format=json",
+    "targeted Rust tests for changed behavior",
+    "cargo test",
+    "fixture replay",
+    "schema-aware diff",
+    "unsafe scan"
+  ],
+  "verification_outputs": {
+    "rust_check": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-check.json",
+    "error_events": "validation/evidence/flashdb/error-events.jsonl",
+    "patches": "validation/evidence/flashdb/patches.jsonl",
+    "unsafe_ledger": "validation/evidence/flashdb/l3-kvdb-lifecycle-unsafe-ledger.json"
+  }
+}

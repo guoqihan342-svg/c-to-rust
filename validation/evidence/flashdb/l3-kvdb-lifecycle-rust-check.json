@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "status": "passed",
+  "command": "cargo check --message-format=json",
+  "cwd": "flashDB_rust",
+  "exit_code": 0,
+  "repo_commit": "b9d38991290cf93f80090af4c908add7683196d9",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "input_path": "validation\\evidence\\flashdb\\l3-kvdb-lifecycle-rust-check.raw.jsonl",
+  "input_sha256": "b5f63942ab2b3d1604c29fee8fd43c56036d900329f57221d021e32cb64a3b54",
+  "message_count": 0,
+  "error_count": 0,
+  "warning_count": 0,
+  "build_success": null,
+  "error_events_path": "validation\\evidence\\flashdb\\error-events.jsonl",
+  "patch_events_path": "validation\\evidence\\flashdb\\patches.jsonl",
+  "policy_path": "validation\\evidence\\flashdb\\l3-kvdb-lifecycle-self-healing-policy.json",
+  "automatic_patch_attempt_count": 0,
+  "created_at_utc": "2026-06-24T06:12:23Z"
+}

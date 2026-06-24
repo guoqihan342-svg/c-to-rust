@@ -9,6 +9,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const FLASHDB_SOURCE_COMMIT: &str = "93d175549da579b8abac07bd175ce4c3f9dde829";
+
 #[derive(Debug, Clone)]
 struct Fixture {
     name: String,
@@ -866,11 +868,13 @@ fn replay_report_json(
     steps: &[StepReport],
     toolchain_status: &str,
 ) -> String {
+    let l3_metadata = l3_report_metadata_json(&fixture.name);
     format!(
         concat!(
             "{{",
             "\"command\":\"replay\",",
             "\"schema_version\":1,",
+            "{}",
             "\"fixture\":\"{}\",",
             "\"fixture_name\":\"{}\",",
             "\"fixture_hash\":\"{}\",",
@@ -881,6 +885,7 @@ fn replay_report_json(
             "\"steps\":[{}]",
             "}}"
         ),
+        l3_metadata,
         json_escape(&fixture_path.display().to_string()),
         json_escape(&fixture.name),
         json_escape(fixture_hash),
@@ -888,6 +893,25 @@ fn replay_report_json(
         json_escape(toolchain_status),
         accepted_differences_json(&fixture.accepted_differences),
         steps_json(steps)
+    )
+}
+
+fn l3_report_metadata_json(fixture_name: &str) -> String {
+    let Some(slice_id) = fixture_name.strip_prefix("l3-") else {
+        return String::new();
+    };
+    format!(
+        concat!(
+            "\"level\":\"L3\",",
+            "\"target_id\":\"flashdb\",",
+            "\"slice_id\":\"{}\",",
+            "\"source\":{{",
+            "\"clone_url\":\"https://gitcode.com/xwxf/FlashDB.git\",",
+            "\"commit\":\"{}\"",
+            "}},"
+        ),
+        json_escape(slice_id),
+        FLASHDB_SOURCE_COMMIT
     )
 }
 

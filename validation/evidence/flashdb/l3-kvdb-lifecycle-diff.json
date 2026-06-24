@@ -1,0 +1,1 @@
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"..\\validation\\evidence\\flashdb\\l3-kvdb-lifecycle-rust-report.json","oracle_report":"..\\validation\\evidence\\flashdb\\l3-kvdb-lifecycle-c-oracle.json","rust_report_hash":"022d2d25","oracle_report_hash":"3728933d","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

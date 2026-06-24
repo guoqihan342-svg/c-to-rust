@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "host": {
+    "os": "windows",
+    "native_gcc_on_path": false,
+    "native_make_on_path": false,
+    "local_marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+  },
+  "wsl": {
+    "available": true,
+    "distribution": "Ubuntu",
+    "gcc": "/usr/bin/gcc",
+    "make": "/usr/bin/make",
+    "git": "/usr/bin/git",
+    "oracle_marker": "C_ORACLE_GENERATED",
+    "producer_evidence": "validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle-producer-evidence.json"
+  },
+  "policy": "The Windows native skip marker is not L3 pass evidence. The WSL-generated C oracle report is the pass evidence for task 2.4."
+}

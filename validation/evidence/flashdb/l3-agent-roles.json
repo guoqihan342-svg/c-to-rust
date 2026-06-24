@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "agent_policy": {
+    "parallelism": "bounded",
+    "default_role": "read-only analysis, independent validation, evidence audit, or patch review",
+    "code_patch_policy": "single writer applies patches serially in the main workspace",
+    "shared_state_policy": "agents must not edit the same files concurrently and must not revert changes made by others"
+  },
+  "role_output_contract": {
+    "c-slice-review": {
+      "outputs": [
+        "c_api_boundary",
+        "oracle_runner_contract",
+        "feature_matrix",
+        "confidence_notes"
+      ],
+      "must_not": [
+        "edit oracle files",
+        "claim C_ORACLE_GENERATED on local Windows skip"
+      ]
+    },
+    "rust-api-and-fixture-review": {
+      "outputs": [
+        "rust_public_api_boundary",
+        "fixture_ops",
+        "related_tests",
+        "cache_relevant_hashes"
+      ],
+      "must_not": [
+        "change public API",
+        "broaden accepted differences"
+      ]
+    },
+    "oracle-diff-review": {
+      "outputs": [
+        "behavior_fields",
+        "accepted_metadata_fields",
+        "negative_regression_expectation"
+      ],
+      "must_not": [
+        "accept value/status/count/code/error semantic differences"
+      ]
+    },
+    "self-healing-and-safety-review": {
+      "outputs": [
+        "error_event_schema",
+        "patch_plan_schema",
+        "retry_and_rollback_rules",
+        "unsafe_policy"
+      ],
+      "must_not": [
+        "apply patches",
+        "add unregistered unsafe"
+      ]
+    },
+    "evidence-audit": {
+      "outputs": [
+        "missing_evidence_paths",
+        "stale_cache_keys",
+        "toolchain_status",
+        "pass_fail_boundary"
+      ],
+      "must_not": [
+        "treat skipped C oracle as L3 pass"
+      ]
+    },
+    "patch-writer": {
+      "mode": "single-writer serial patching",
+      "requires": [
+        "approved impact set",
+        "PatchPlan before edit",
+        "rollback_id"
+      ],
+      "must_not": [
+        "edit outside impact set",
+        "parallel-write shared files"
+      ]
+    }
+  },
+  "assigned_roles": [
+    {
+      "role": "c-slice-review",
+      "scope": [
+        "flashDB_rust/oracle/flashdb_c_oracle.c",
+        "flashDB_rust/oracle/generate_c_oracle.sh",
+        "flashDB_rust/oracle/fdb_cfg.h",
+        "flashDB_rust/oracle/README.md"
+      ],
+      "mode": "read-only explorer"
+    },
+    {
+      "role": "rust-api-and-fixture-review",
+      "scope": [
+        "flashDB_rust/src/kvdb.rs",
+        "flashDB_rust/src/replay.rs",
+        "flashDB_rust/src/cli.rs",
+        "flashDB_rust/fixtures/*.json",
+        "flashDB_rust/tests/*.rs"
+      ],
+      "mode": "read-only explorer"
+    },
+    {
+      "role": "evidence-schema-review",
+      "scope": [
+        "validation/gates.md",
+        "validation/README.md",
+        "flashDB_rust/evidence/*.json",
+        "validation/evidence/l2-slices/*.json"
+      ],
+      "mode": "read-only explorer"
+    },
+    {
+      "role": "self-healing-and-safety-review",
+      "scope": [
+        "docs/c2rust-migration-agent/context-store-and-self-healing.md",
+        "docs/c2rust-migration-agent/agent-contract.md",
+        "docs/c2rust-migration-agent/testing-unsafe-cache-and-milestone.md",
+        "flashDB_rust/tests/unsafe_scan.rs"
+      ],
+      "mode": "read-only explorer"
+    },
+    {
+      "role": "patch-writer",
+      "scope": [
+        "files listed in validation/evidence/flashdb/l3-kvdb-lifecycle-impact-set.json"
+      ],
+      "mode": "single-writer serial patching"
+    }
+  ]
+}
