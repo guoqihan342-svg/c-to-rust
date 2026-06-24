@@ -1,0 +1,14 @@
+cmd :     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:2 char:1
++ cmd /c "cargo test --test differential_replay payload_boundary -- --n ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `t...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 2 tests
+test l3_diff_rejects_tsdb_payload_boundary_value_regression ... ok
+test l3_tsdb_payload_boundary_fixture_replays_visible_payloads ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.28s

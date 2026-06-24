@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const TSDB_128_BYTE_PAYLOAD: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 fn step_json_for<'a>(report: &'a str, step_id: &str) -> &'a str {
     let marker = format!("{{\"id\":\"{step_id}\"");
     let start = report.find(&marker).expect("step id exists in report");
@@ -408,6 +410,64 @@ fn l3_tsdb_status_transition_fixture_replays_latest_status() {
     ));
     assert!(!out.contains("\"fields\":\"count\""));
     assert!(!out.contains("\"fields\":\"status\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
+fn l3_tsdb_payload_boundary_fixture_replays_visible_payloads() {
+    assert_eq!(TSDB_128_BYTE_PAYLOAD.len(), 128);
+    let report = temp_path("l3-tsdb-payload-boundary-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-payload-boundary.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-payload-boundary\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-payload-boundary\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains(
+        "\"id\":\"ts-pb-001\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":1,\"timestamp\":10,\"value\":\"\""
+    ));
+    assert!(out.contains(&format!(
+        "\"id\":\"ts-pb-002\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":2,\"timestamp\":20,\"value\":\"{}\"",
+        TSDB_128_BYTE_PAYLOAD
+    )));
+    assert!(out.contains(&format!(
+        "\"id\":\"ts-pb-003\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"\"}},{{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"{}\"}}]",
+        TSDB_128_BYTE_PAYLOAD
+    )));
+    assert!(out.contains(&format!(
+        "\"id\":\"ts-pb-004\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"{}\"}}]",
+        TSDB_128_BYTE_PAYLOAD
+    )));
+    assert!(out.contains(
+        "\"id\":\"ts-pb-005\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-pb-006\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":2"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-pb-007\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":0"
+    ));
+    assert!(out.contains("\"id\":\"ts-pb-008\""));
+    assert!(out.contains("\"op\":\"ts.reopen\""));
+    assert!(out.contains(&format!(
+        "\"id\":\"ts-pb-009\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"\"}},{{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"{}\"}}]",
+        TSDB_128_BYTE_PAYLOAD
+    )));
+    assert!(!out.contains("\"fields\":\"value\""));
+    assert!(!out.contains("\"fields\":\"entries\""));
     assert!(report.exists());
     let _ = fs::remove_file(report);
 }
@@ -826,6 +886,59 @@ fn l3_diff_rejects_tsdb_status_transition_query_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.ts-tr-013.entries"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_tsdb_payload_boundary_value_regression() {
+    let actual = temp_path("l3-tsdb-payload-boundary-actual-report.json");
+    let expected = temp_path("l3-tsdb-payload-boundary-expected-report.json");
+    let diff_report = temp_path("l3-tsdb-payload-boundary-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-payload-boundary.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mutated_payload = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdee";
+    assert_eq!(mutated_payload.len(), 128);
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        &format!(
+            r#""id":"ts-pb-009","op":"ts.query","status":"ok","code":"OK","entries":[{{"entry_id":1,"timestamp":10,"status":"written","value":""}},{{"entry_id":2,"timestamp":20,"status":"written","value":"{}"}}]"#,
+            TSDB_128_BYTE_PAYLOAD
+        ),
+        &format!(
+            r#""id":"ts-pb-009","op":"ts.query","status":"ok","code":"OK","entries":[{{"entry_id":1,"timestamp":10,"status":"written","value":""}},{{"entry_id":2,"timestamp":20,"status":"written","value":"{}"}}]"#,
+            mutated_payload
+        ),
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.ts-pb-009.entries"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

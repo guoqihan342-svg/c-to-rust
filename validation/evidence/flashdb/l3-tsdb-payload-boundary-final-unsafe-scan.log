@@ -1,0 +1,9 @@
+cmd :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:2 char:1
++ cmd /c "cargo run -- unsafe-scan" *> "..\validation\evidence\flashdb\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running `target\debug\flashdb-rust.exe unsafe-scan`
+{"unsafe_blocks":0,"unsafe_fns":0,"findings":[]}

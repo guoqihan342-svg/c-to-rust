@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "implementation_impact": [
+    {
+      "path": "flashDB_rust/fixtures/l3-tsdb-payload-boundary.json",
+      "reason": "Adds the focused empty and 128-byte payload visibility scenario for Rust and C replay."
+    },
+    {
+      "path": "flashDB_rust/tests/differential_replay.rs",
+      "reason": "Locks payload query/count/reopen behavior and negative diff coverage."
+    },
+    {
+      "path": "validation/evidence/flashdb/l3-tsdb-payload-boundary-*",
+      "reason": "Persists machine-readable evidence for the L3 C/Rust oracle loop."
+    }
+  ],
+  "semantic_impact": {
+    "public_rust_api": "unchanged",
+    "storage_layout": "unchanged",
+    "fixture_input_schema": "unchanged",
+    "report_schema": "unchanged",
+    "accepted_difference_policy": "unchanged",
+    "unsafe_policy": "unchanged"
+  }
+}

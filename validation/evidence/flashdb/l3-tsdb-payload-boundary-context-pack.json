@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "slice_id": "tsdb-payload-boundary",
+  "target_id": "flashdb",
+  "branch": "codex/flashdb-rust-skeleton",
+  "base_commit": "3af29d49ffded956f7e4435d730fb61238bd1f06",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "problem": "Existing TSDB L3 evidence validates status and error paths but not empty and exactly 128-byte payload visibility across C/Rust replay.",
+  "strict_behavior_fields": [
+    "id",
+    "op",
+    "status",
+    "code",
+    "entry_id",
+    "timestamp",
+    "value",
+    "count",
+    "entries"
+  ],
+  "allowed_metadata_differences": [
+    "image_hash",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "affected_files": [
+    "flashDB_rust/fixtures/l3-tsdb-payload-boundary.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-payload-boundary-*"
+  ],
+  "context_files_read": [
+    "openspec/changes/run-flashdb-tsdb-payload-boundary-l3-loop/proposal.md",
+    "openspec/changes/run-flashdb-tsdb-payload-boundary-l3-loop/design.md",
+    "openspec/changes/run-flashdb-tsdb-payload-boundary-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
+    "openspec/changes/run-flashdb-tsdb-payload-boundary-l3-loop/tasks.md",
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/tests/differential_replay.rs"
+  ],
+  "out_of_scope": [
+    "over-limit payload rejection",
+    "binary or NUL payload behavior",
+    "TSDB storage layout",
+    "FlashDB C semantic behavior changes",
+    "clean or GC semantics",
+    "sector rollover or capacity pressure",
+    "byte-for-byte image equivalence",
+    "corrupt-image reopen",
+    "non-monotonic timestamps",
+    "power-loss behavior",
+    "async runtime",
+    "internal multithreading",
+    "unsafe introduction"
+  ]
+}

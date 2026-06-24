@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "slice_id": "tsdb-payload-boundary",
+  "status": "passed",
+  "fixture": "flashDB_rust/fixtures/l3-tsdb-payload-boundary.json",
+  "fixture_hash": "441bcb21",
+  "coverage": [
+    "empty TSDB payload append and query visibility",
+    "exactly 128-byte ASCII TSDB payload append and query visibility",
+    "full-range query with both payloads",
+    "exact timestamp query for the 128-byte payload",
+    "empty range query and written count 0",
+    "reopen and query-after-reopen payload persistence",
+    "negative schema diff for a mutated 128-byte payload value"
+  ],
+  "reports": {
+    "rust_report": "validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-report.json",
+    "c_oracle_report": "validation/evidence/flashdb/l3-tsdb-payload-boundary-c-oracle.json",
+    "c_oracle_producer_evidence": "validation/evidence/flashdb/l3-tsdb-payload-boundary-c-oracle-producer-evidence.json",
+    "diff": "validation/evidence/flashdb/l3-tsdb-payload-boundary-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-tsdb-payload-boundary-negative-diff.json",
+    "rust_check": "validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-check.json",
+    "unsafe_scan": "validation/evidence/flashdb/l3-tsdb-payload-boundary-unsafe-scan.json",
+    "cache_metadata": "validation/evidence/flashdb/l3-tsdb-payload-boundary-cache-metadata.json",
+    "performance_smoke": "validation/evidence/flashdb/l3-tsdb-payload-boundary-performance-smoke.json"
+  },
+  "verification": {
+    "cargo_fmt": "passed",
+    "targeted_tests": "2 passed, 0 failed",
+    "cargo_test": "passed; differential_replay 23 passed, 0 failed",
+    "c_oracle_marker": "C_ORACLE_GENERATED",
+    "schema_diff": "passed",
+    "negative_diff": "failed as expected at steps.ts-pb-009.entries",
+    "compiler_errors": 0,
+    "compiler_warnings": 0,
+    "self_healing_needed": false,
+    "unsafe_count": 0,
+    "unsafe_ratio": 0,
+    "openspec_strict": "passed",
+    "openspec_all": "16 passed, 0 failed",
+    "git_diff_check": "passed"
+  },
+  "non_goals": [
+    "129-byte or larger payload rejection",
+    "binary or NUL payload semantics",
+    "capacity exhaustion",
+    "sector rollover or full behavior",
+    "clean or GC behavior",
+    "byte-for-byte layout equivalence",
+    "power-loss behavior"
+  ],
+  "next_slice_recommendation": "tsdb-over-limit-payload-error should be separate only after C/Rust error-code parity is scoped; otherwise continue with a similarly small public-visible TSDB query edge."
+}

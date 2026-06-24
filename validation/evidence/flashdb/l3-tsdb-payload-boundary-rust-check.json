@@ -1,0 +1,14 @@
+{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-payload-boundary-l3-loop",
+    "slice_id":  "tsdb-payload-boundary",
+    "command":  "cargo check --message-format=json",
+    "status":  "passed",
+    "exit_code":  0,
+    "compiler_errors":  0,
+    "compiler_warnings":  0,
+    "self_healing_needed":  false,
+    "patch_plan_generated":  false,
+    "raw_jsonl":  "validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-check.raw.jsonl",
+    "stderr_log":  "validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-check.stderr.log"
+}

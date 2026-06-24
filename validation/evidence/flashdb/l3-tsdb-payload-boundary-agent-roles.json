@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "roles": [
+    {
+      "agent": "019ef8d4-161d-7aa3-9e6a-500d36bf4ad5",
+      "role": "C oracle payload boundary review",
+      "result": "Assigned read-only review of C oracle support for empty and 128-byte TSDB payload behavior."
+    },
+    {
+      "agent": "019ef8d4-361a-70e2-84f5-4bf72774f1b1",
+      "role": "Rust replay and diff boundary review",
+      "result": "Assigned read-only review of Rust TSDB replay, fixture shape, and negative diff strategy."
+    },
+    {
+      "agent": "019ef8d4-56b7-7763-8d66-4e3319ef8ab0",
+      "role": "OpenSpec and evidence shape review",
+      "result": "Assigned read-only review of existing L3 OpenSpec and evidence naming patterns."
+    },
+    {
+      "agent": "main",
+      "role": "implementation coordinator",
+      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+    }
+  ]
+}

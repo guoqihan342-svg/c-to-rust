@@ -1,0 +1,26 @@
+cmd :    Compiling flashdb_rust v0.1.0 (C:\Users\Administrator\Documents\c-to-rust-flashdb\flashDB_rust)
+At line:2 char:1
++ cmd /c "cargo test --test differential_replay payload_boundary -- --n ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling fl...b\flashDB_rust):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 1 test
+
+thread 'l3_tsdb_payload_boundary_fixture_replays_visible_payloads' (23612) panicked at tests\differential_replay.rs:430
+:6:
+called `Result::unwrap()` on an `Err` value: Io("系统找不到指定的文件。 (os error 2)")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test l3_tsdb_payload_boundary_fixture_replays_visible_payloads ... FAILED
+
+failures:
+
+failures:
+    l3_tsdb_payload_boundary_fixture_replays_visible_payloads
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test differential_replay`

@@ -1,0 +1,11 @@
+cmd :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:2 char:1
++ cmd /c "cargo run -- diff --rust-report ..\validation\evidence\flashd ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-
+rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-c-oracle.json --report ..\vali
+dation\evidence\flashdb\l3-tsdb-payload-boundary-final-diff.json`
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-payload-boundary-rust-report.json","oracle_report":"..\\validation\\evidence\\flashdb\\l3-tsdb-payload-boundary-c-oracle.json","rust_report_hash":"4da27a01","oracle_report_hash":"f4d89a47","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

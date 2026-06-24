@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "slice_id": "tsdb-payload-boundary",
+  "contract": {
+    "fixture_name": "l3-tsdb-payload-boundary",
+    "fixture_path": "flashDB_rust/fixtures/l3-tsdb-payload-boundary.json",
+    "c_oracle_success_boundary_bytes": 128,
+    "payload_encoding": "ASCII JSON string",
+    "primary_gate": "empty and exactly 128-byte payload values remain visible through append, query, count, reopen, and query-after-reopen",
+    "secondary_gate": "schema-aware diff treats payload value differences as strict behavior differences"
+  },
+  "must_hold": [
+    "The fixture appends one empty TSDB payload.",
+    "The fixture appends one exactly 128-byte ASCII payload.",
+    "Full-range query reports both payloads without truncation.",
+    "Exact timestamp query reports only the 128-byte payload entry.",
+    "Empty range query reports no entries and written count 0.",
+    "Reopen preserves both visible payload values.",
+    "Schema-aware diff rejects mutated payload values."
+  ],
+  "must_not_claim": [
+    "129-byte or larger payload rejection",
+    "binary or NUL payload semantics",
+    "native FlashDB clean or GC semantics",
+    "sector full or rollover behavior",
+    "byte-for-byte layout equivalence",
+    "power-loss behavior"
+  ]
+}

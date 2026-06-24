@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
+  "slice_id": "tsdb-payload-boundary",
+  "status": "passed",
+  "commands": [
+    {
+      "command": "cargo fmt -- --check",
+      "workdir": "flashDB_rust",
+      "status": "passed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-cargo-fmt.log"
+    },
+    {
+      "command": "cargo test --test differential_replay payload_boundary -- --nocapture",
+      "workdir": "flashDB_rust",
+      "status": "passed",
+      "result": "2 passed, 0 failed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-targeted-tests.log"
+    },
+    {
+      "command": "cargo test",
+      "workdir": "flashDB_rust",
+      "status": "passed",
+      "result": "all Rust tests passed; differential_replay 23 passed, 0 failed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-cargo-test.log"
+    },
+    {
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-c-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-final-diff.json",
+      "workdir": "flashDB_rust",
+      "status": "passed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-diff.log"
+    },
+    {
+      "command": "cargo run -- unsafe-scan",
+      "workdir": "flashDB_rust",
+      "status": "passed",
+      "result": "unsafe_blocks=0 unsafe_fns=0",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-unsafe-scan.log"
+    },
+    {
+      "command": "openspec validate run-flashdb-tsdb-payload-boundary-l3-loop --strict",
+      "workdir": ".",
+      "status": "passed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-openspec-strict.log"
+    },
+    {
+      "command": "openspec validate --all",
+      "workdir": ".",
+      "status": "passed",
+      "result": "16 passed, 0 failed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-openspec-all.log"
+    },
+    {
+      "command": "git diff --check",
+      "workdir": ".",
+      "status": "passed",
+      "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-final-git-diff-check.log"
+    }
+  ],
+  "negative_diff": {
+    "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-mutated-payload-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-payload-boundary-negative-diff.json",
+    "status": "failed_as_expected",
+    "first_mismatch": "steps.ts-pb-009.entries",
+    "log": "validation/evidence/flashdb/l3-tsdb-payload-boundary-negative-diff.log"
+  }
+}

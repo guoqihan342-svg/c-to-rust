@@ -1,0 +1,17 @@
+{
+  "name": "l3-tsdb-payload-boundary",
+  "operations": [
+    {"id":"ts-pb-001","op":"ts.append","timestamp":10,"value":""},
+    {"id":"ts-pb-002","op":"ts.append","timestamp":20,"value":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+    {"id":"ts-pb-003","op":"ts.query","from":10,"to":20},
+    {"id":"ts-pb-004","op":"ts.query","from":20,"to":20},
+    {"id":"ts-pb-005","op":"ts.query","from":11,"to":19},
+    {"id":"ts-pb-006","op":"ts.count_status","from":10,"to":20,"status":"written"},
+    {"id":"ts-pb-007","op":"ts.count_status","from":11,"to":19,"status":"written"},
+    {"id":"ts-pb-008","op":"ts.reopen"},
+    {"id":"ts-pb-009","op":"ts.query","from":10,"to":20}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Payload value, entry id, timestamp, status, count, operation identity, and operation success are strict behavior fields.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

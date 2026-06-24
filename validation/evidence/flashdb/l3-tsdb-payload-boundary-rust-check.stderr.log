@@ -1,0 +1,6 @@
+cmd :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:5 char:1
++ cmd /c "cargo check --message-format=json" 1> $raw 2> $stderr
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError

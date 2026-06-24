@@ -1,0 +1,15 @@
+cmd :     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+At line:2 char:1
++ cmd /c "cargo run -- diff --rust-report ..\validation\evidence\flashd ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `d...get(s) in 0.01s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-
+rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-mutated-payload-oracle.json --
+report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-negative-diff.json`
+cli error: diff mismatch: ts-pb-009 at steps.ts-pb-009.entries
+error: process didn't exit successfully: `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flash
+db\l3-tsdb-payload-boundary-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-mu
+tated-payload-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-payload-boundary-negative-diff.json` (exit co
+de: 1)
