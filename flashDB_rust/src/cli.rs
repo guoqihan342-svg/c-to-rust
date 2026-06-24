@@ -322,7 +322,10 @@ where
             .entry("production".to_string())
             .or_insert(0) += 1;
     }
-    report.counters = report.counters.add(kv.counters()).add(ts.counters());
+    report.counters = report
+        .counters
+        .combined_with(kv.counters())
+        .combined_with(ts.counters());
     report.bytes_processed += kv.bytes_used()? as u64 + ts.bytes_used()? as u64;
     report.image_hashes.push(kv.image_hash()?);
     report.image_hashes.push(ts.image_hash()?);
@@ -332,7 +335,7 @@ where
 fn run_abnormal(options: &Options, report: &mut Report) -> Result<()> {
     let mut kv = KvDb::create(MemoryFlash::new(options.size))?;
     assert!(matches!(kv.set("", b"value"), Err(Error::InvalidKey)));
-    assert!(matches!(kv.get("missing")?, None));
+    assert!(kv.get("missing")?.is_none());
     let long_key = "x".repeat(65);
     assert!(matches!(
         kv.set(&long_key, b"value"),
@@ -432,8 +435,8 @@ fn run_reliability(options: &Options, report: &mut Report) -> Result<()> {
     }
     report.counters = report
         .counters
-        .add(kv_reopened.counters())
-        .add(ts_reopened.counters());
+        .combined_with(kv_reopened.counters())
+        .combined_with(ts_reopened.counters());
     report.image_hashes.push(kv_hash);
     report.image_hashes.push(ts_hash);
     drop(kv_reopened);

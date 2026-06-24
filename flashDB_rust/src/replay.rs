@@ -505,9 +505,7 @@ fn field_value(input: &str, name: &str) -> Option<String> {
         let end = rest.find('"')?;
         Some(rest[..end].to_string())
     } else {
-        let end = rest
-            .find(|ch: char| ch == ',' || ch == '}' || ch == ']')
-            .unwrap_or(rest.len());
+        let end = rest.find([',', '}', ']']).unwrap_or(rest.len());
         Some(rest[..end].trim().to_string())
     }
 }

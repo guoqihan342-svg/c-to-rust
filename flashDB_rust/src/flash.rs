@@ -16,7 +16,7 @@ pub struct FlashCounters {
 }
 
 impl FlashCounters {
-    pub fn add(self, other: FlashCounters) -> FlashCounters {
+    pub fn combined_with(self, other: FlashCounters) -> FlashCounters {
         FlashCounters {
             read_ops: self.read_ops + other.read_ops,
             write_ops: self.write_ops + other.write_ops,

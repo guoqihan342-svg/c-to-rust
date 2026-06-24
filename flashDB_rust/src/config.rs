@@ -33,7 +33,7 @@ impl DbConfig {
                 "sizes must be greater than zero".to_string(),
             ));
         }
-        if self.flash_size % self.sector_size != 0 {
+        if !self.flash_size.is_multiple_of(self.sector_size) {
             return Err(Error::InvalidRange(
                 "flash size must align to sector size".to_string(),
             ));
