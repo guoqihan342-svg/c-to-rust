@@ -269,6 +269,65 @@ fn l3_tsdb_deleted_status_reopen_fixture_replays_visible_counts() {
 }
 
 #[test]
+fn l3_tsdb_user2_status_fixture_replays_visible_counts() {
+    let report = temp_path("l3-tsdb-user2-status-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-user2-status.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-user2-status\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-user2-status\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains("\"id\":\"ts-u2-001\""));
+    assert!(out.contains("\"op\":\"ts.append\""));
+    assert!(out.contains("\"entry_id\":1"));
+    assert!(out.contains("\"id\":\"ts-u2-002\""));
+    assert!(out.contains("\"entry_id\":2"));
+
+    let set_status_step = step_json_for(&out, "ts-u2-003");
+    assert!(set_status_step.contains("\"op\":\"ts.set_status\""));
+    assert!(set_status_step.contains("\"status\":\"ok\""));
+    assert!(set_status_step.contains("\"code\":\"OK\""));
+    assert!(set_status_step.contains("\"entry_id\":2"));
+    assert!(set_status_step.contains("\"ts_status\":\"user2\""));
+    assert_eq!(set_status_step.matches("\"status\"").count(), 1);
+    assert!(!set_status_step.contains("\"status\":\"user2\""));
+
+    assert!(out.contains(
+        "\"id\":\"ts-u2-004\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-u2-005\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains("\"id\":\"ts-u2-006\""));
+    assert!(out.contains("\"op\":\"ts.query\""));
+    assert!(out.contains(
+        "\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"alpha\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"user2\",\"value\":\"beta\"}]"
+    ));
+    assert!(out.contains("\"id\":\"ts-u2-007\""));
+    assert!(out.contains("\"op\":\"ts.reopen\""));
+    assert!(out.contains(
+        "\"id\":\"ts-u2-008\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains("\"id\":\"ts-u2-009\""));
+    assert!(!out.contains("\"fields\":\"count\""));
+    assert!(!out.contains("\"fields\":\"status\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_error_boundary_fixture_replays_visible_errors() {
     let report = temp_path("l3-tsdb-error-boundary-report.json");
     let out = cli::run([
@@ -592,6 +651,51 @@ fn l3_diff_rejects_tsdb_deleted_status_reopen_count_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.ts-del-007.count"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_tsdb_user2_status_regression() {
+    let actual = temp_path("l3-tsdb-user2-status-actual-report.json");
+    let expected = temp_path("l3-tsdb-user2-status-expected-report.json");
+    let diff_report = temp_path("l3-tsdb-user2-status-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-user2-status.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"ts-u2-003","op":"ts.set_status","status":"ok","code":"OK","entry_id":2,"ts_status":"user2""#,
+        r#""id":"ts-u2-003","op":"ts.set_status","status":"ok","code":"OK","entry_id":2,"ts_status":"user1""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.ts-u2-003.ts_status"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

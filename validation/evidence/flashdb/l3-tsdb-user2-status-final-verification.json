@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-user2-status-l3-loop",
+  "status": "passed",
+  "repo_commit_before_slice": "70763f9b103947dc9afecbce5b3a87f34efeb4bc",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-user2-status.json",
+    "fixture_hash": "71b3a7f8",
+    "sha256": "e9bc155a50ac8020c5e69c9d7fef0bdb61a226882b2c52624cb260dc3835bd03",
+    "operation_count": 9
+  },
+  "commands": [
+    {
+      "name": "red_test",
+      "command": "cargo test --test differential_replay l3_tsdb_user2_status -- --nocapture",
+      "status": "expected_failed_before_fixture",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-red-test.log"
+    },
+    {
+      "name": "green_test",
+      "command": "cargo test --test differential_replay l3_tsdb_user2_status -- --nocapture",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-green-test.log"
+    },
+    {
+      "name": "rust_replay",
+      "command": "cargo run -- replay --fixture fixtures/l3-tsdb-user2-status.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-user2-status-rust-report.json",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-rust-report.json"
+    },
+    {
+      "name": "c_oracle",
+      "command": "wsl bash -lc \"cd /mnt/c/Users/Administrator/Documents/c-to-rust-flashdb/flashDB_rust && sh oracle/generate_c_oracle.sh --fixture fixtures/l3-tsdb-user2-status.json --report ../validation/evidence/flashdb/l3-tsdb-user2-status-c-oracle.json --evidence ../validation/evidence/flashdb/l3-tsdb-user2-status-c-oracle-producer-evidence.json\"",
+      "status": "passed",
+      "marker": "C_ORACLE_GENERATED",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-c-oracle.json"
+    },
+    {
+      "name": "schema_diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-user2-status-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-user2-status-c-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-user2-status-diff.json",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-diff.json"
+    },
+    {
+      "name": "negative_diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-user2-status-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-user2-status-mutated-ts-status-or-count-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-user2-status-negative-diff.json",
+      "status": "expected_failed",
+      "first_mismatch": "steps.ts-u2-003.ts_status",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-negative-diff.json"
+    },
+    {
+      "name": "cargo_check",
+      "command": "cargo check --message-format=json",
+      "status": "passed",
+      "compiler_errors": 0,
+      "compiler_warnings": 0,
+      "self_healing_needed": false,
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-rust-check.json"
+    },
+    {
+      "name": "cargo_fmt",
+      "command": "cargo fmt -- --check",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-cargo-fmt.log"
+    },
+    {
+      "name": "targeted_tests",
+      "command": "cargo test --test differential_replay user2_status -- --nocapture",
+      "status": "passed",
+      "tests": "2 passed, 0 failed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-targeted-tests.log"
+    },
+    {
+      "name": "cargo_test",
+      "command": "cargo test",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-cargo-test.log"
+    },
+    {
+      "name": "unsafe_scan",
+      "command": "cargo run -- unsafe-scan",
+      "status": "passed",
+      "unsafe_blocks": 0,
+      "unsafe_fns": 0,
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-unsafe-scan.log"
+    },
+    {
+      "name": "openspec_change_strict",
+      "command": "openspec validate run-flashdb-tsdb-user2-status-l3-loop --strict",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-openspec-change-strict.log"
+    },
+    {
+      "name": "openspec_all",
+      "command": "openspec validate --all",
+      "status": "passed",
+      "items": "16 passed, 0 failed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-openspec-all.log"
+    },
+    {
+      "name": "git_diff_check",
+      "command": "git diff --check",
+      "status": "passed",
+      "note": "Git emitted an LF-to-CRLF working-copy warning but no whitespace error.",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-user2-status-final-git-diff-check.log"
+    }
+  ]
+}

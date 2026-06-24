@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-user2-status-l3-loop",
+  "slice_id": "tsdb-user2-status",
+  "contract": {
+    "fixture_name": "l3-tsdb-user2-status",
+    "fixture_path": "flashDB_rust/fixtures/l3-tsdb-user2-status.json",
+    "step_status_field": "status",
+    "business_ts_status_field": "ts_status",
+    "input_fixture_status_field": "status",
+    "query_entry_status_field": "status",
+    "primary_gate": "count_status user2 before and after reopen",
+    "secondary_visibility_gate": "query entries show user2 on entry 2"
+  },
+  "must_hold": [
+    "The fixture appends at least two TSDB records.",
+    "The fixture sets entry_id 2 to user2.",
+    "Successful ts.set_status report steps keep status:\"ok\" for operation outcome.",
+    "Successful ts.set_status report steps emit ts_status:\"user2\" for the TS business status.",
+    "count_status user2 returns 1 before reopen.",
+    "count_status written returns 1 after entry_id 2 is moved to user2.",
+    "count_status user2 returns 1 after reopen.",
+    "Schema-aware diff treats ts_status and count as strict behavior fields."
+  ],
+  "must_not_claim": [
+    "new TSDB storage semantics",
+    "new query ordering semantics",
+    "native FlashDB clean or GC semantics",
+    "sector full or rollover behavior",
+    "byte-for-byte layout equivalence",
+    "payload limit behavior",
+    "power-loss behavior"
+  ]
+}

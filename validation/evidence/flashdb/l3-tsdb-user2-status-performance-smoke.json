@@ -1,0 +1,12 @@
+﻿{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-user2-status-l3-loop",
+    "command":  "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-user2-status.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-user2-status-performance-replay.json",
+    "status":  "passed",
+    "exit_code":  0,
+    "elapsed_ms":  375,
+    "operation_count":  9,
+    "secondary_only":  true,
+    "report_path":  "validation/evidence/flashdb/l3-tsdb-user2-status-performance-replay.json",
+    "log_path":  "validation/evidence/flashdb/l3-tsdb-user2-status-performance-smoke.log"
+}

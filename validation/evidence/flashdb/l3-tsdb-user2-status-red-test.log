@@ -1,0 +1,19 @@
+   Compiling flashdb_rust v0.1.0 (C:\Users\Administrator\Documents\c-to-rust-flashdb\flashDB_rust)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.98s
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 1 test
+
+thread 'l3_tsdb_user2_status_fixture_replays_visible_counts' (1872) panicked at tests\differential_replay.rs:283:6:
+called `Result::unwrap()` on an `Err` value: Io("系统找不到指定的文件。 (os error 2)")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test l3_tsdb_user2_status_fixture_replays_visible_counts ... FAILED
+
+failures:
+
+failures:
+    l3_tsdb_user2_status_fixture_replays_visible_counts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test differential_replay`

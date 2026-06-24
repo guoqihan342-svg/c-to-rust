@@ -1,0 +1,25 @@
+﻿{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-user2-status-l3-loop",
+    "cache_key_scope":  "tsdb-user2-status",
+    "invalidation_inputs":  [
+                                {
+                                    "file":  "flashDB_rust/fixtures/l3-tsdb-user2-status.json",
+                                    "sha256":  "e9bc155a50ac8020c5e69c9d7fef0bdb61a226882b2c52624cb260dc3835bd03"
+                                },
+                                {
+                                    "file":  "flashDB_rust/tests/differential_replay.rs",
+                                    "sha256":  "99cbb3ff0aaf97374946b2b5b60cd27de2f791c951c9f1dccbcb48c3756e38d6"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/replay.rs",
+                                    "sha256":  "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+                                },
+                                {
+                                    "file":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                                    "sha256":  "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+                                }
+                            ],
+    "invalidated_because":  "new TSDB user2 status fixture and focused replay/diff tests were added",
+    "deterministic":  true
+}
