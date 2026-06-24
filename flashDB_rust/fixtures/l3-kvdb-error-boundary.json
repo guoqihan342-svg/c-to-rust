@@ -1,0 +1,13 @@
+{
+  "name": "l3-kvdb-error-boundary",
+  "operations": [
+    {"id":"kv-eb-001","op":"kv.get","key":"missing"},
+    {"id":"kv-eb-002","op":"kv.set","key":"","value":"bad-empty"},
+    {"id":"kv-eb-003","op":"kv.set","key":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","value":"bad-long"},
+    {"id":"kv-eb-004","op":"kv.set","key":"ok","value":"value"},
+    {"id":"kv-eb-005","op":"kv.get","key":"ok"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Error status, code, value, key identity, operation identity, and operation success are strict behavior fields.","fields":"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

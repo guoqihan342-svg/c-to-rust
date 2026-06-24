@@ -1,0 +1,15 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-error-boundary",
+    "status":  "recorded",
+    "secondary_only":  true,
+    "backend":  "file",
+    "operation_count":  5,
+    "elapsed_ms":  170,
+    "command":  "cargo run -- replay --fixture fixtures/l3-kvdb-error-boundary.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-error-boundary-performance-replay.json",
+    "toolchain_status":  "NOT_APPLICABLE_RUST_REPLAY",
+    "report_path":  "validation/evidence/flashdb/l3-kvdb-error-boundary-performance-replay.json",
+    "correctness_gate_replaced":  false
+}

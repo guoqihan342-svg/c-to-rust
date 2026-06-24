@@ -1,0 +1,80 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-error-boundary",
+    "status":  "passed",
+    "repo_commit":  "e7cc5a5e52775d3c0cf68b4f953bf6b9181b437d",
+    "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "fixture":  "flashDB_rust/fixtures/l3-kvdb-error-boundary.json",
+    "fixture_hash":  "607316b5",
+    "fixture_sha256":  "856123704ed77bbc78bb83d68a6dce2904b9c10b8e48497993301f670025a0a0",
+    "operation_count":  5,
+    "visible_error_scope":  [
+                                "kv.get missing key -\u003e ok/OK/value null",
+                                "kv.set empty key -\u003e error/INVALID_KEY",
+                                "kv.set overlong key -\u003e error/KEY_TOO_LONG",
+                                "valid kv.set/kv.get after errors -\u003e ok/OK/value"
+                            ],
+    "c_oracle_status":  "C_ORACLE_GENERATED",
+    "c_oracle_producer_marker":  "C_ORACLE_GENERATED",
+    "diff_status":  "passed",
+    "negative_diff_status":  "failed",
+    "negative_diff_first_mismatch":  "steps.kv-eb-003.code",
+    "rust_check_status":  "passed",
+    "rust_check_error_count":  0,
+    "unsafe_count":  0,
+    "unsafe_ratio":  0,
+    "performance_smoke":  {
+                              "status":  "recorded",
+                              "secondary_only":  true,
+                              "elapsed_ms":  170,
+                              "operation_count":  5
+                          },
+    "accepted_differences":  [
+                                 {
+                                     "id":  "layout-and-metadata",
+                                     "reason":  "C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Error status, code, value, key identity, operation identity, and operation success are strict behavior fields.",
+                                     "fields":  "image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"
+                                 }
+                             ],
+    "forbidden_behavior_fields":  [
+                                      "status",
+                                      "code",
+                                      "value",
+                                      "key",
+                                      "operation success",
+                                      "error semantics",
+                                      "steps.len",
+                                      "step id",
+                                      "op"
+                                  ],
+    "failures":  [
+
+                 ],
+    "non_goals":  [
+                      "No full FlashDB migration completion claim",
+                      "No byte-for-byte flash image layout equivalence",
+                      "No native GC, sector movement, power-loss, or capacity-pressure behavior claim",
+                      "No TSDB error-boundary claim",
+                      "No async runtime or multithreading change"
+                  ],
+    "next_slice_recommendation":  "tsdb-deleted-status-reopen or kvdb-delete-invalid-key can follow; choose tsdb-deleted-status-reopen if prioritizing already-supported TSDB state semantics, choose kvdb-delete-invalid-key if continuing error-boundary expansion.",
+    "evidence_paths":  [
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-context-pack.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-slice-contract.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-agent-roles.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-cache-metadata.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-local-toolchain-evidence.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-rust-report.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-c-oracle.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-c-oracle-producer-evidence.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-diff.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-mutated-code-or-status-oracle.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-negative-diff.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-rust-check.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-unsafe-scan.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-unsafe-ledger.json",
+                           "validation/evidence/flashdb/l3-kvdb-error-boundary-performance-smoke.json"
+                       ]
+}

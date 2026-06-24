@@ -108,6 +108,46 @@ fn l3_kvdb_compact_overwrite_fixture_replays_visible_behavior() {
 }
 
 #[test]
+fn l3_kvdb_error_boundary_fixture_replays_visible_errors() {
+    let report = temp_path("l3-kvdb-error-boundary-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-error-boundary.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-kvdb-error-boundary\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"kvdb-error-boundary\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains("\"id\":\"kv-eb-001\""));
+    assert!(out.contains("\"op\":\"kv.get\""));
+    assert!(out.contains("\"value\":null"));
+    assert!(out.contains("\"id\":\"kv-eb-002\""));
+    assert!(out.contains("\"op\":\"kv.set\""));
+    assert!(out.contains("\"status\":\"error\""));
+    assert!(out.contains("\"code\":\"INVALID_KEY\""));
+    assert!(out.contains("\"id\":\"kv-eb-003\""));
+    assert!(out.contains("\"code\":\"KEY_TOO_LONG\""));
+    assert!(out.contains("\"id\":\"kv-eb-004\""));
+    assert!(out.contains("\"status\":\"ok\""));
+    assert!(out.contains("\"id\":\"kv-eb-005\""));
+    assert!(out.contains("\"value\":\"value\""));
+    assert!(!out.contains("\"fields\":\"code\""));
+    assert!(!out.contains("\"fields\":\"status\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_append_query_status_fixture_replays_main_path() {
     let report = temp_path("l3-tsdb-append-query-status-report.json");
     let out = cli::run([
@@ -284,6 +324,51 @@ fn l3_diff_rejects_kvdb_compact_overwrite_value_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.kv-co-010.value"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_kvdb_error_boundary_code_regression() {
+    let actual = temp_path("l3-kvdb-error-boundary-actual-report.json");
+    let expected = temp_path("l3-kvdb-error-boundary-expected-report.json");
+    let diff_report = temp_path("l3-kvdb-error-boundary-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-error-boundary.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"kv-eb-003","op":"kv.set","status":"error","code":"KEY_TOO_LONG""#,
+        r#""id":"kv-eb-003","op":"kv.set","status":"error","code":"INVALID_KEY""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.kv-eb-003.code"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

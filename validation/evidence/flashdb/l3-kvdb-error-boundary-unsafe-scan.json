@@ -1,0 +1,37 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-error-boundary",
+    "command":  "cargo test --test unsafe_scan",
+    "status":  "passed",
+    "scanned_root":  "flashDB_rust/src",
+    "scanned_file_count":  11,
+    "scanned_files":  [
+                          "flashDB_rust/src/cli.rs",
+                          "flashDB_rust/src/config.rs",
+                          "flashDB_rust/src/ffi.rs",
+                          "flashDB_rust/src/flash.rs",
+                          "flashDB_rust/src/format.rs",
+                          "flashDB_rust/src/kvdb.rs",
+                          "flashDB_rust/src/lib.rs",
+                          "flashDB_rust/src/main.rs",
+                          "flashDB_rust/src/replay.rs",
+                          "flashDB_rust/src/tsdb.rs",
+                          "flashDB_rust/src/types.rs"
+                      ],
+    "ignored_paths":  [
+                          "flashDB_rust/target",
+                          "flashDB_rust/oracle/.work",
+                          "generated/vendor paths outside first-party src",
+                          "flashDB_rust/tests"
+                      ],
+    "unsafe_blocks":  0,
+    "unsafe_fns":  0,
+    "unsafe_count":  0,
+    "unsafe_ratio":  0,
+    "hard_limit_ratio":  0.1,
+    "findings":  [
+
+                 ]
+}

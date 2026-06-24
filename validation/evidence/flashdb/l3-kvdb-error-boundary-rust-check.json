@@ -1,0 +1,21 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-error-boundary",
+    "status":  "passed",
+    "command":  "cargo check --message-format=json",
+    "raw_jsonl":  "validation/evidence/flashdb/l3-kvdb-error-boundary-rust-check.raw.jsonl",
+    "stderr_log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-rust-check.stderr.log",
+    "error_count":  0,
+    "warning_count":  0,
+    "root_cause_keys":  [
+
+                        ],
+    "affected_items":  [
+
+                       ],
+    "build_finished_success":  true,
+    "rerun_command":  "cd flashDB_rust \u0026\u0026 cargo check --message-format=json",
+    "automatic_repair":  "not_needed"
+}

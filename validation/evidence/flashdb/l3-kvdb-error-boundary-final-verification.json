@@ -1,0 +1,49 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-error-boundary",
+    "status":  "recorded",
+    "commands":  [
+                     {
+                         "command":  "cargo fmt -- --check",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-cargo-fmt.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo test --test differential_replay kvdb_error_boundary",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-differential-replay-tests.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo check",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-cargo-check.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo test",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-cargo-test.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo run -- replay --fixture fixtures/l3-kvdb-error-boundary.json --backend file",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-cli-replay.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo run -- diff --rust-report ... --oracle-report ...",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-schema-diff.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo test --test unsafe_scan",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-unsafe-scan.log",
+                         "exit_code":  0
+                     },
+                     {
+                         "command":  "cargo run -- replay performance smoke",
+                         "log":  "validation/evidence/flashdb/l3-kvdb-error-boundary-final-performance-smoke.log",
+                         "exit_code":  0
+                     }
+                 ]
+}
