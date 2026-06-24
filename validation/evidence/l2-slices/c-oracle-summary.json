@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "command": "generate-l2-c-oracles",
+  "status": "passed",
+  "slice_count": 3,
+  "slices": [
+    {
+      "project_id": "sqlite",
+      "slice_id": "sqlite-varint",
+      "source_commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
+      "c_source_boundary": "sqlite3PutVarint/sqlite3GetVarint from sqlite3.c",
+      "compile_command": "cc -std=c99 -O2 -DSQLITE_PRIVATE= -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/storage-runtime/runs/run-20260624T011503Z/sqlite/sqlite3.c /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/sqlite-varint/sqlite_varint_oracle.c -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/sqlite-varint/sqlite_varint_oracle",
+      "fixture": "validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
+      "case_count": 38,
+      "status": "passed"
+    },
+    {
+      "project_id": "zlib-ng",
+      "slice_id": "zlib-adler32",
+      "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+      "c_source_boundary": "adler32_z from zlib-ng build/libz.a",
+      "compile_command": "cc /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zlib-adler32/zlib_adler32_oracle.c -std=c11 -O2 -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng/build -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng/build/libz.a -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zlib-adler32/zlib_adler32_oracle",
+      "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+      "case_count": 7,
+      "status": "passed"
+    },
+    {
+      "project_id": "zstd",
+      "slice_id": "zstd-xxh32",
+      "source_commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+      "c_source_boundary": "XXH32 from zstd lib/common/xxhash.c",
+      "compile_command": "cc -std=c99 -O2 -Wall -Wextra -DXXH_NAMESPACE=ZSTD_ -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd/lib/common /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zstd-xxh32/zstd_xxh32_oracle.c /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd/lib/common/xxhash.c -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zstd-xxh32/zstd_xxh32_oracle",
+      "fixture": "validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+      "case_count": 32,
+      "status": "passed"
+    }
+  ],
+  "reporting_boundary": "C oracle fixtures cover only the named slice functions and generated input corpus."
+}

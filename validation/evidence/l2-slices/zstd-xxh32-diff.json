@@ -1,0 +1,11 @@
+{
+  "case_count": 32,
+  "compared_fields": [
+    "value"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "zstd-xxh32",
+  "status": "passed"
+}

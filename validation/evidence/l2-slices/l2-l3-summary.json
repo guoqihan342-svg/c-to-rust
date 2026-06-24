@@ -1,0 +1,45 @@
+{
+  "diff_check": {
+    "slices": [
+      {
+        "case_count": 38,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "sqlite-varint"
+      },
+      {
+        "case_count": 7,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "zlib-adler32"
+      },
+      {
+        "case_count": 32,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "zstd-xxh32"
+      }
+    ],
+    "status": "passed"
+  },
+  "reporting_boundary": "This success applies only to the named slice functions, pinned upstream commits, and committed fixture input domains. It does not prove full-project migration or global semantic equivalence.",
+  "rust_check": {
+    "command": "cargo test",
+    "status": "passed",
+    "tested_modules": [
+      "validation/l2_slices/src/sqlite_varint.rs",
+      "validation/l2_slices/src/zlib_adler32.rs",
+      "validation/l2_slices/src/zstd_xxh32.rs"
+    ]
+  },
+  "safety_check": {
+    "crate": "validation/l2_slices",
+    "hits": [],
+    "schema_version": 1,
+    "scope": "first-party Rust source under validation/l2_slices/src",
+    "status": "passed",
+    "unsafe_count": 0
+  },
+  "schema_version": 1,
+  "status": "passed"
+}

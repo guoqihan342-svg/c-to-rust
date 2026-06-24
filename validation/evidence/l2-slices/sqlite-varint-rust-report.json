@@ -1,0 +1,320 @@
+{
+  "c_source_boundary": "sqlite3PutVarint/sqlite3GetVarint from sqlite3.c",
+  "case_count": 38,
+  "cases": [
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 0,
+      "encoded_hex": "00",
+      "id": "sqlite-varint-0",
+      "value": 0
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 1,
+      "encoded_hex": "01",
+      "id": "sqlite-varint-1",
+      "value": 1
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 2,
+      "encoded_hex": "02",
+      "id": "sqlite-varint-2",
+      "value": 2
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 10,
+      "encoded_hex": "0a",
+      "id": "sqlite-varint-3",
+      "value": 10
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 63,
+      "encoded_hex": "3f",
+      "id": "sqlite-varint-4",
+      "value": 63
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 64,
+      "encoded_hex": "40",
+      "id": "sqlite-varint-5",
+      "value": 64
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 65,
+      "encoded_hex": "41",
+      "id": "sqlite-varint-6",
+      "value": 65
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 126,
+      "encoded_hex": "7e",
+      "id": "sqlite-varint-7",
+      "value": 126
+    },
+    {
+      "bytes_used": 1,
+      "decoded_bytes": 1,
+      "decoded_value": 127,
+      "encoded_hex": "7f",
+      "id": "sqlite-varint-8",
+      "value": 127
+    },
+    {
+      "bytes_used": 2,
+      "decoded_bytes": 2,
+      "decoded_value": 128,
+      "encoded_hex": "8100",
+      "id": "sqlite-varint-9",
+      "value": 128
+    },
+    {
+      "bytes_used": 2,
+      "decoded_bytes": 2,
+      "decoded_value": 129,
+      "encoded_hex": "8101",
+      "id": "sqlite-varint-10",
+      "value": 129
+    },
+    {
+      "bytes_used": 2,
+      "decoded_bytes": 2,
+      "decoded_value": 16383,
+      "encoded_hex": "ff7f",
+      "id": "sqlite-varint-11",
+      "value": 16383
+    },
+    {
+      "bytes_used": 3,
+      "decoded_bytes": 3,
+      "decoded_value": 16384,
+      "encoded_hex": "818000",
+      "id": "sqlite-varint-12",
+      "value": 16384
+    },
+    {
+      "bytes_used": 3,
+      "decoded_bytes": 3,
+      "decoded_value": 16385,
+      "encoded_hex": "818001",
+      "id": "sqlite-varint-13",
+      "value": 16385
+    },
+    {
+      "bytes_used": 3,
+      "decoded_bytes": 3,
+      "decoded_value": 2097151,
+      "encoded_hex": "ffff7f",
+      "id": "sqlite-varint-14",
+      "value": 2097151
+    },
+    {
+      "bytes_used": 4,
+      "decoded_bytes": 4,
+      "decoded_value": 2097152,
+      "encoded_hex": "81808000",
+      "id": "sqlite-varint-15",
+      "value": 2097152
+    },
+    {
+      "bytes_used": 4,
+      "decoded_bytes": 4,
+      "decoded_value": 2097153,
+      "encoded_hex": "81808001",
+      "id": "sqlite-varint-16",
+      "value": 2097153
+    },
+    {
+      "bytes_used": 4,
+      "decoded_bytes": 4,
+      "decoded_value": 268435455,
+      "encoded_hex": "ffffff7f",
+      "id": "sqlite-varint-17",
+      "value": 268435455
+    },
+    {
+      "bytes_used": 5,
+      "decoded_bytes": 5,
+      "decoded_value": 268435456,
+      "encoded_hex": "8180808000",
+      "id": "sqlite-varint-18",
+      "value": 268435456
+    },
+    {
+      "bytes_used": 5,
+      "decoded_bytes": 5,
+      "decoded_value": 268435457,
+      "encoded_hex": "8180808001",
+      "id": "sqlite-varint-19",
+      "value": 268435457
+    },
+    {
+      "bytes_used": 5,
+      "decoded_bytes": 5,
+      "decoded_value": 4294967295,
+      "encoded_hex": "8fffffff7f",
+      "id": "sqlite-varint-20",
+      "value": 4294967295
+    },
+    {
+      "bytes_used": 5,
+      "decoded_bytes": 5,
+      "decoded_value": 4294967296,
+      "encoded_hex": "9080808000",
+      "id": "sqlite-varint-21",
+      "value": 4294967296
+    },
+    {
+      "bytes_used": 5,
+      "decoded_bytes": 5,
+      "decoded_value": 34359738367,
+      "encoded_hex": "ffffffff7f",
+      "id": "sqlite-varint-22",
+      "value": 34359738367
+    },
+    {
+      "bytes_used": 6,
+      "decoded_bytes": 6,
+      "decoded_value": 34359738368,
+      "encoded_hex": "818080808000",
+      "id": "sqlite-varint-23",
+      "value": 34359738368
+    },
+    {
+      "bytes_used": 6,
+      "decoded_bytes": 6,
+      "decoded_value": 34359738369,
+      "encoded_hex": "818080808001",
+      "id": "sqlite-varint-24",
+      "value": 34359738369
+    },
+    {
+      "bytes_used": 6,
+      "decoded_bytes": 6,
+      "decoded_value": 4398046511103,
+      "encoded_hex": "ffffffffff7f",
+      "id": "sqlite-varint-25",
+      "value": 4398046511103
+    },
+    {
+      "bytes_used": 7,
+      "decoded_bytes": 7,
+      "decoded_value": 4398046511104,
+      "encoded_hex": "81808080808000",
+      "id": "sqlite-varint-26",
+      "value": 4398046511104
+    },
+    {
+      "bytes_used": 7,
+      "decoded_bytes": 7,
+      "decoded_value": 4398046511105,
+      "encoded_hex": "81808080808001",
+      "id": "sqlite-varint-27",
+      "value": 4398046511105
+    },
+    {
+      "bytes_used": 7,
+      "decoded_bytes": 7,
+      "decoded_value": 562949953421311,
+      "encoded_hex": "ffffffffffff7f",
+      "id": "sqlite-varint-28",
+      "value": 562949953421311
+    },
+    {
+      "bytes_used": 8,
+      "decoded_bytes": 8,
+      "decoded_value": 562949953421312,
+      "encoded_hex": "8180808080808000",
+      "id": "sqlite-varint-29",
+      "value": 562949953421312
+    },
+    {
+      "bytes_used": 8,
+      "decoded_bytes": 8,
+      "decoded_value": 562949953421313,
+      "encoded_hex": "8180808080808001",
+      "id": "sqlite-varint-30",
+      "value": 562949953421313
+    },
+    {
+      "bytes_used": 8,
+      "decoded_bytes": 8,
+      "decoded_value": 72057594037927935,
+      "encoded_hex": "ffffffffffffff7f",
+      "id": "sqlite-varint-31",
+      "value": 72057594037927935
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 72057594037927936,
+      "encoded_hex": "80c080808080808000",
+      "id": "sqlite-varint-32",
+      "value": 72057594037927936
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 72057594037927937,
+      "encoded_hex": "80c080808080808001",
+      "id": "sqlite-varint-33",
+      "value": 72057594037927937
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 9223372036854775807,
+      "encoded_hex": "bfffffffffffffffff",
+      "id": "sqlite-varint-34",
+      "value": 9223372036854775807
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 9223372036854775808,
+      "encoded_hex": "c08080808080808000",
+      "id": "sqlite-varint-35",
+      "value": 9223372036854775808
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 18446744073709551614,
+      "encoded_hex": "fffffffffffffffffe",
+      "id": "sqlite-varint-36",
+      "value": 18446744073709551614
+    },
+    {
+      "bytes_used": 9,
+      "decoded_bytes": 9,
+      "decoded_value": 18446744073709551615,
+      "encoded_hex": "ffffffffffffffffff",
+      "id": "sqlite-varint-37",
+      "value": 18446744073709551615
+    }
+  ],
+  "command": "cargo test",
+  "fixture": "validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
+  "fixture_input_description": "Boundary u64 values around SQLite varint width transitions and 64-bit extremes.",
+  "level": "L2",
+  "project_id": "sqlite",
+  "rust_module_path": "validation/l2_slices/src/sqlite_varint.rs",
+  "schema_version": 1,
+  "slice_id": "sqlite-varint",
+  "source_commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
+  "status": "passed"
+}

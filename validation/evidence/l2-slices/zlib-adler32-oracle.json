@@ -1,0 +1,10 @@
+{
+  "project_id": "zlib-ng",
+  "slice_id": "zlib-adler32",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "c_source_boundary": "adler32_z from zlib-ng build/libz.a",
+  "compile_command": "cc /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zlib-adler32/zlib_adler32_oracle.c -std=c11 -O2 -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng/build -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zlib-ng/build/libz.a -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zlib-adler32/zlib_adler32_oracle",
+  "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+  "case_count": 7,
+  "status": "passed"
+}

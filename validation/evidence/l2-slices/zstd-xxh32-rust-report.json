@@ -1,0 +1,240 @@
+{
+  "c_source_boundary": "XXH32 from zstd lib/common/xxhash.c",
+  "case_count": 32,
+  "cases": [
+    {
+      "id": "empty_seed_00000000",
+      "input_len": 0,
+      "seed": 0,
+      "value": 46947589,
+      "value_hex": "0x02cc5d05"
+    },
+    {
+      "id": "empty_seed_00000001",
+      "input_len": 0,
+      "seed": 1,
+      "value": 187479954,
+      "value_hex": "0x0b2cb792"
+    },
+    {
+      "id": "empty_seed_9e3779b1",
+      "input_len": 0,
+      "seed": 2654435761,
+      "value": 917998311,
+      "value_hex": "0x36b78ae7"
+    },
+    {
+      "id": "empty_seed_ffffffff",
+      "input_len": 0,
+      "seed": 4294967295,
+      "value": 2422332061,
+      "value_hex": "0x9061da9d"
+    },
+    {
+      "id": "one_seed_00000000",
+      "input_len": 1,
+      "seed": 0,
+      "value": 3479547966,
+      "value_hex": "0xcf65b03e"
+    },
+    {
+      "id": "one_seed_00000001",
+      "input_len": 1,
+      "seed": 1,
+      "value": 47929707,
+      "value_hex": "0x02db596b"
+    },
+    {
+      "id": "one_seed_9e3779b1",
+      "input_len": 1,
+      "seed": 2654435761,
+      "value": 3025427108,
+      "value_hex": "0xb4545aa4"
+    },
+    {
+      "id": "one_seed_ffffffff",
+      "input_len": 1,
+      "seed": 4294967295,
+      "value": 913333537,
+      "value_hex": "0x36705d21"
+    },
+    {
+      "id": "fifteen_seed_00000000",
+      "input_len": 15,
+      "seed": 0,
+      "value": 1472208590,
+      "value_hex": "0x57c01ece"
+    },
+    {
+      "id": "fifteen_seed_00000001",
+      "input_len": 15,
+      "seed": 1,
+      "value": 3567065030,
+      "value_hex": "0xd49d17c6"
+    },
+    {
+      "id": "fifteen_seed_9e3779b1",
+      "input_len": 15,
+      "seed": 2654435761,
+      "value": 2558270838,
+      "value_hex": "0x987c1d76"
+    },
+    {
+      "id": "fifteen_seed_ffffffff",
+      "input_len": 15,
+      "seed": 4294967295,
+      "value": 3101711706,
+      "value_hex": "0xb8e05d5a"
+    },
+    {
+      "id": "sixteen_seed_00000000",
+      "input_len": 16,
+      "seed": 0,
+      "value": 3072866292,
+      "value_hex": "0xb72837f4"
+    },
+    {
+      "id": "sixteen_seed_00000001",
+      "input_len": 16,
+      "seed": 1,
+      "value": 3327804270,
+      "value_hex": "0xc65a436e"
+    },
+    {
+      "id": "sixteen_seed_9e3779b1",
+      "input_len": 16,
+      "seed": 2654435761,
+      "value": 800975603,
+      "value_hex": "0x2fbdeaf3"
+    },
+    {
+      "id": "sixteen_seed_ffffffff",
+      "input_len": 16,
+      "seed": 4294967295,
+      "value": 431694221,
+      "value_hex": "0x19bb218d"
+    },
+    {
+      "id": "seventeen_seed_00000000",
+      "input_len": 17,
+      "seed": 0,
+      "value": 2088218050,
+      "value_hex": "0x7c77adc2"
+    },
+    {
+      "id": "seventeen_seed_00000001",
+      "input_len": 17,
+      "seed": 1,
+      "value": 3459146128,
+      "value_hex": "0xce2e6190"
+    },
+    {
+      "id": "seventeen_seed_9e3779b1",
+      "input_len": 17,
+      "seed": 2654435761,
+      "value": 1593698838,
+      "value_hex": "0x5efdea16"
+    },
+    {
+      "id": "seventeen_seed_ffffffff",
+      "input_len": 17,
+      "seed": 4294967295,
+      "value": 3872083253,
+      "value_hex": "0xe6cb4d35"
+    },
+    {
+      "id": "ascii_seed_00000000",
+      "input_len": 21,
+      "seed": 0,
+      "value": 873341565,
+      "value_hex": "0x340e227d"
+    },
+    {
+      "id": "ascii_seed_00000001",
+      "input_len": 21,
+      "seed": 1,
+      "value": 2605558158,
+      "value_hex": "0x9b4da98e"
+    },
+    {
+      "id": "ascii_seed_9e3779b1",
+      "input_len": 21,
+      "seed": 2654435761,
+      "value": 2486707053,
+      "value_hex": "0x9438236d"
+    },
+    {
+      "id": "ascii_seed_ffffffff",
+      "input_len": 21,
+      "seed": 4294967295,
+      "value": 1356010045,
+      "value_hex": "0x50d3123d"
+    },
+    {
+      "id": "inc_128_seed_00000000",
+      "input_len": 128,
+      "seed": 0,
+      "value": 1835111607,
+      "value_hex": "0x6d6194b7"
+    },
+    {
+      "id": "inc_128_seed_00000001",
+      "input_len": 128,
+      "seed": 1,
+      "value": 1987068829,
+      "value_hex": "0x7670439d"
+    },
+    {
+      "id": "inc_128_seed_9e3779b1",
+      "input_len": 128,
+      "seed": 2654435761,
+      "value": 3230049488,
+      "value_hex": "0xc086a4d0"
+    },
+    {
+      "id": "inc_128_seed_ffffffff",
+      "input_len": 128,
+      "seed": 4294967295,
+      "value": 1299700198,
+      "value_hex": "0x4d77d9e6"
+    },
+    {
+      "id": "lcg_1024_seed_00000000",
+      "input_len": 1024,
+      "seed": 0,
+      "value": 1300784924,
+      "value_hex": "0x4d88671c"
+    },
+    {
+      "id": "lcg_1024_seed_00000001",
+      "input_len": 1024,
+      "seed": 1,
+      "value": 4131731701,
+      "value_hex": "0xf64538f5"
+    },
+    {
+      "id": "lcg_1024_seed_9e3779b1",
+      "input_len": 1024,
+      "seed": 2654435761,
+      "value": 1414957534,
+      "value_hex": "0x545689de"
+    },
+    {
+      "id": "lcg_1024_seed_ffffffff",
+      "input_len": 1024,
+      "seed": 4294967295,
+      "value": 3468516642,
+      "value_hex": "0xcebd5d22"
+    }
+  ],
+  "command": "cargo test",
+  "fixture": "validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+  "fixture_input_description": "Length boundaries around the 16-byte XXH32 block path with seeds 0, 1, PRIME32_1, and u32::MAX.",
+  "level": "L2",
+  "project_id": "zstd",
+  "rust_module_path": "validation/l2_slices/src/zstd_xxh32.rs",
+  "schema_version": 1,
+  "slice_id": "zstd-xxh32",
+  "source_commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+  "status": "passed"
+}

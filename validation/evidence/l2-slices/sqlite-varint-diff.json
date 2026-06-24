@@ -1,0 +1,14 @@
+{
+  "case_count": 38,
+  "compared_fields": [
+    "encoded_hex",
+    "bytes_used",
+    "decoded_value",
+    "decoded_bytes"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "sqlite-varint",
+  "status": "passed"
+}

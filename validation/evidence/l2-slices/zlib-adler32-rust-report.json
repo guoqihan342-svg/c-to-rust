@@ -1,0 +1,58 @@
+{
+  "c_source_boundary": "adler32_z from zlib-ng build/libz.a",
+  "case_count": 7,
+  "cases": [
+    {
+      "id": "empty",
+      "input_len": 0,
+      "value": 1,
+      "value_hex": "0x00000001"
+    },
+    {
+      "id": "ascii",
+      "input_len": 21,
+      "value": 1503070284,
+      "value_hex": "0x5997084c"
+    },
+    {
+      "id": "inc_256",
+      "input_len": 256,
+      "value": 2918612865,
+      "value_hex": "0xadf67f81"
+    },
+    {
+      "id": "nmax_5552",
+      "input_len": 5552,
+      "value": 2043458111,
+      "value_hex": "0x79ccb23f"
+    },
+    {
+      "id": "nmax_plus_1",
+      "input_len": 5553,
+      "value": 751481583,
+      "value_hex": "0x2ccab2ef"
+    },
+    {
+      "id": "lcg_32768",
+      "input_len": 32768,
+      "value": 2554800525,
+      "value_hex": "0x9847298d"
+    },
+    {
+      "id": "ff_128",
+      "input_len": 128,
+      "value": 572555137,
+      "value_hex": "0x22207f81"
+    }
+  ],
+  "command": "cargo test",
+  "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+  "fixture_input_description": "Empty, ASCII, NMAX boundary, repeated byte, incrementing byte, and deterministic LCG byte buffers.",
+  "level": "L2",
+  "project_id": "zlib-ng",
+  "rust_module_path": "validation/l2_slices/src/zlib_adler32.rs",
+  "schema_version": 1,
+  "slice_id": "zlib-adler32",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "passed"
+}

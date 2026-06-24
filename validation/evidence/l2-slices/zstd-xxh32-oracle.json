@@ -1,0 +1,10 @@
+{
+  "project_id": "zstd",
+  "slice_id": "zstd-xxh32",
+  "source_commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+  "c_source_boundary": "XXH32 from zstd lib/common/xxhash.c",
+  "compile_command": "cc -std=c99 -O2 -Wall -Wextra -DXXH_NAMESPACE=ZSTD_ -I /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd/lib/common /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zstd-xxh32/zstd_xxh32_oracle.c /mnt/c/Users/Administrator/Documents/c-to-rust-l1-work/compression-image/run-20260624-091638/zstd/lib/common/xxhash.c -o /mnt/c/Users/Administrator/Documents/c-to-rust-l2-work/zstd-xxh32/zstd_xxh32_oracle",
+  "fixture": "validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+  "case_count": 32,
+  "status": "passed"
+}

@@ -1,0 +1,8 @@
+{
+  "crate": "validation/l2_slices",
+  "hits": [],
+  "schema_version": 1,
+  "scope": "first-party Rust source under validation/l2_slices/src",
+  "status": "passed",
+  "unsafe_count": 0
+}

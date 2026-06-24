@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "status": "recorded",
+  "command": "cargo test",
+  "crate": "validation/l2_slices",
+  "red_phases": [
+    {
+      "phase": "missing_modules",
+      "expected_failure": "Compilation failed because tests referenced sqlite_varint, zlib_adler32, and zstd_xxh32 modules before implementation."
+    },
+    {
+      "phase": "missing_oracle_fixtures",
+      "expected_failure": "Compilation failed because fixture-driven tests referenced C oracle JSON files before oracle generation."
+    },
+    {
+      "phase": "stub_behavior_mismatch",
+      "expected_failure": "Tests compiled but failed because stub Rust implementations returned empty or zero outputs that differed from C oracle values."
+    }
+  ],
+  "green_followup": "After implementing safe Rust slice logic and generating C oracle fixtures, cargo test passed for all three fixture-driven tests."
+}
