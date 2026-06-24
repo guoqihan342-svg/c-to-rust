@@ -42,7 +42,81 @@ function ConvertTo-JsonLine {
 
 function Add-JsonLine {
     param([Parameter(Mandatory = $true)] $Value)
-    ConvertTo-JsonLine $Value | Add-Content -LiteralPath $EventsPath -Encoding UTF8
+    Add-SharedTextLine -Path $EventsPath -Line (ConvertTo-JsonLine $Value)
+}
+
+function Add-SharedTextLine {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)][string] $Line
+    )
+
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            $stream = [System.IO.FileStream]::new(
+                $Path,
+                [System.IO.FileMode]::Append,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::ReadWrite
+            )
+            try {
+                $writer = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
+                $stream = $null
+                try {
+                    $writer.WriteLine($Line)
+                } finally {
+                    $writer.Dispose()
+                }
+            } finally {
+                if ($null -ne $stream) {
+                    $stream.Dispose()
+                }
+            }
+            return
+        } catch [System.IO.IOException] {
+            if ($attempt -eq 20) {
+                throw
+            }
+            Start-Sleep -Milliseconds (100 * $attempt)
+        }
+    }
+}
+
+function Set-SharedText {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)][string] $Text
+    )
+
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        try {
+            $stream = [System.IO.FileStream]::new(
+                $Path,
+                [System.IO.FileMode]::Create,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::ReadWrite
+            )
+            try {
+                $writer = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
+                $stream = $null
+                try {
+                    $writer.Write($Text)
+                } finally {
+                    $writer.Dispose()
+                }
+            } finally {
+                if ($null -ne $stream) {
+                    $stream.Dispose()
+                }
+            }
+            return
+        } catch [System.IO.IOException] {
+            if ($attempt -eq 20) {
+                throw
+            }
+            Start-Sleep -Milliseconds (100 * $attempt)
+        }
+    }
 }
 
 function New-Step {
@@ -288,7 +362,7 @@ $summary = [ordered]@{
     }
 }
 
-$summary | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+Set-SharedText -Path $SummaryPath -Text ($summary | ConvertTo-Json -Depth 16)
 Add-JsonLine ([ordered]@{
     schema_version = 1
     event = "run_finished"
