@@ -96,6 +96,7 @@ where
         ),
         "inspect-image" => inspect_image(options),
         "unsafe-scan" => unsafe_scan(Path::new("src")),
+        "version-manifest" => version_manifest(options.report.as_deref()),
         other => Err(Error::Cli(format!("unknown command {other}"))),
     }
 }
@@ -427,6 +428,148 @@ fn inspect_image(options: Options) -> Result<String> {
     ))
 }
 
+fn version_manifest(report_path: Option<&Path>) -> Result<String> {
+    let cargo_lock_hash = file_sha256(&manifest_path("Cargo.lock"))?;
+    let cargo_toml_hash = file_sha256(&manifest_path("Cargo.toml"))?;
+    let rustc_version = command_version("rustc", &["--version"]);
+    let cargo_version = command_version("cargo", &["--version"]);
+    let git_version = command_version("git", &["--version"]);
+    let openspec_version = command_version_any(&["openspec", "openspec.cmd"], &["--version"]);
+    let branch = command_version("git", &["branch", "--show-current"]);
+    let repo_commit = command_version("git", &["rev-parse", "HEAD"]);
+    let json = format!(
+        concat!(
+            "{{",
+            "\"command\":\"version-manifest\",",
+            "\"schema_version\":1,",
+            "\"agent_contract_version\":\"0.1.0\",",
+            "\"context_schema_version\":\"0.1.0\",",
+            "\"patch_plan_schema_version\":\"0.1.0\",",
+            "\"fixture_schema_version\":1,",
+            "\"evidence_schema_version\":1,",
+            "\"package_name\":\"{}\",",
+            "\"package_version\":\"{}\",",
+            "\"edition\":\"2021\",",
+            "\"cargo_toml_sha256\":\"{}\",",
+            "\"cargo_lock_sha256\":\"{}\",",
+            "\"rustc_version\":\"{}\",",
+            "\"cargo_version\":\"{}\",",
+            "\"git_version\":\"{}\",",
+            "\"openspec_version\":\"{}\",",
+            "\"rust_toolchain_file\":null,",
+            "\"host_os\":\"{}\",",
+            "\"workspace_branch\":\"{}\",",
+            "\"workspace_commit\":\"{}\",",
+            "\"flashdb_source_clone_url\":\"https://gitcode.com/xwxf/FlashDB.git\",",
+            "\"flashdb_source_commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\",",
+            "\"flashdb_source_tag\":null,",
+            "\"flashdb_feature_matrix\":{{",
+            "\"FDB_USING_KVDB\":true,",
+            "\"FDB_USING_TSDB\":true,",
+            "\"FDB_USING_FILE_POSIX_MODE\":true,",
+            "\"FDB_WRITE_GRAN\":1",
+            "}},",
+            "\"cache_key_inputs\":[",
+            "\"agent_contract_version\",",
+            "\"context_schema_version\",",
+            "\"patch_plan_schema_version\",",
+            "\"fixture_schema_version\",",
+            "\"evidence_schema_version\",",
+            "\"package_version\",",
+            "\"cargo_toml_sha256\",",
+            "\"cargo_lock_sha256\",",
+            "\"rustc_version\",",
+            "\"cargo_version\",",
+            "\"openspec_version\",",
+            "\"flashdb_source_commit\",",
+            "\"flashdb_feature_matrix\",",
+            "\"command_arguments\",",
+            "\"fixture_sha256\",",
+            "\"ai_metadata\"",
+            "]",
+            "}}"
+        ),
+        escape_json(env!("CARGO_PKG_NAME")),
+        escape_json(env!("CARGO_PKG_VERSION")),
+        cargo_toml_hash,
+        cargo_lock_hash,
+        escape_json(&rustc_version),
+        escape_json(&cargo_version),
+        escape_json(&git_version),
+        escape_json(&openspec_version),
+        escape_json(std::env::consts::OS),
+        escape_json(&branch),
+        escape_json(&repo_commit)
+    );
+    if let Some(path) = report_path {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &json)?;
+    }
+    Ok(json)
+}
+
+fn manifest_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(name)
+}
+
+fn command_version_any(commands: &[&str], args: &[&str]) -> String {
+    commands
+        .iter()
+        .map(|command| command_version(command, args))
+        .find(|version| version != "NOT_FOUND")
+        .unwrap_or_else(|| "NOT_FOUND".to_string())
+}
+
+fn command_version(command: &str, args: &[&str]) -> String {
+    std::process::Command::new(command)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "NOT_FOUND".to_string())
+}
+
+fn file_sha256(path: &Path) -> Result<String> {
+    let path_text = path.to_str().unwrap_or_default();
+    if let Some(hash) = std::process::Command::new("sha256sum")
+        .arg(path_text)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .and_then(|value| value.split_whitespace().next().map(str::to_string))
+        .filter(|value| is_sha256_hex(value))
+    {
+        return Ok(hash.to_ascii_lowercase());
+    }
+    if let Some(hash) = std::process::Command::new("certutil")
+        .args(["-hashfile", path_text, "SHA256"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .and_then(|value| {
+            value
+                .lines()
+                .map(str::trim)
+                .find(|line| is_sha256_hex(line))
+                .map(str::to_string)
+        })
+    {
+        return Ok(hash.to_ascii_lowercase());
+    }
+    Ok("NOT_FOUND".to_string())
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 fn unsafe_scan(path: &Path) -> Result<String> {
     let mut findings = Vec::new();
     scan_dir_for_unsafe(path, &mut findings)?;
@@ -572,6 +715,7 @@ fn help() -> String {
         "  diff-report --actual file --expected file [--report path]  # CI-compatible alias",
         "  inspect-image --path file",
         "  unsafe-scan",
+        "  version-manifest [--report path]",
         "",
         "Long run example:",
         "  cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/stress-10000.json",

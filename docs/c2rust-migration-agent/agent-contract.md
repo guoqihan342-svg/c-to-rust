@@ -32,6 +32,16 @@ Phases:
 - `audit`: review evidence, unsafe ledger, cache correctness, version records, and traceability.
 - `archive`: archive a completed OpenSpec change only after all gates pass.
 
+Version manifest gate:
+
+```bash
+flashdb-rust version-manifest --report validation/evidence/flashdb/<slice>-version-manifest.json
+```
+
+The audit phase MUST compare this manifest with cache metadata before accepting cached ContextPacks, PatchPlans, C oracle reports, schema-aware diffs, or AI-generated candidate patches.
+
+中文：每个 L3 切片在实现前必须生成 `version-manifest`，并把 manifest path/hash 放入最终证据。若版本 manifest 中的源码 commit、crate version、Cargo.lock hash、schema version、toolchain version 或 feature matrix 与缓存记录不一致，Agent 必须先失效缓存或重新生成证据。
+
 ## Runtime Input
 
 ```json
@@ -59,6 +69,15 @@ Required input fields: `runtime`, `phase`, `change`, `target_repo`, `output_crat
 
 Optional fields: `allowed_paths`, `context_pack`, `feature_matrix`, `ai_policy`, `cache_policy`, `verification_profile`.
 
+Version fields:
+
+- `version_manifest_path`: path to the current per-slice version manifest generated before edits.
+- `agent_contract_version`: current agent contract version; initial value `0.1.0`.
+- `context_schema_version`: context store schema version; initial value `0.1.0`.
+- `patch_plan_schema_version`: PatchPlan schema version; initial value `0.1.0`.
+- `fixture_schema_version`: fixture schema version; initial value `1`.
+- `evidence_schema_version`: evidence schema version; initial value `1`.
+
 ## Runtime Output
 
 ```json
@@ -76,6 +95,13 @@ Optional fields: `allowed_paths`, `context_pack`, `feature_matrix`, `ai_policy`,
     "cargo_check": "passed",
     "cargo_test": "passed",
     "differential": "passed"
+  },
+  "version_manifest": {
+    "path": "validation/evidence/flashdb/<slice>-version-manifest.json",
+    "hash": "<sha256-or-recorded-hash>",
+    "agent_contract_version": "0.1.0",
+    "context_schema_version": "0.1.0",
+    "patch_plan_schema_version": "0.1.0"
   },
   "unsafe_budget": {
     "ratio": 0.04,

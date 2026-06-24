@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "change": "add-versioned-migration-governance",
+  "generated_at": "2026-06-24T18:38:00+08:00",
+  "version_manifest": {
+    "path": "validation/evidence/flashdb/version-governance-manifest.json",
+    "sha256": "c676278f841eaa79c97d5444b6be219682873e82d0ee9aeadd709266760cb4fa",
+    "openspec_version": "1.4.1",
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo_version": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "flashdb_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "package_version": "0.1.0"
+  },
+  "tdd": {
+    "red_test_log": "validation/evidence/flashdb/version-governance-red-test.log",
+    "red_test_failure": "unknown command version-manifest",
+    "green_test": "cargo test --test cli_smoke cli_version_manifest_writes_version_governance_report -- --nocapture"
+  },
+  "agent_findings": "validation/evidence/flashdb/version-governance-agent-findings.json",
+  "scoped_decision": "Add an executable version-manifest command and future L3 requirements; do not bulk-migrate historical fixture/evidence schemas in this slice.",
+  "cache_policy": "Any drift in cache_key_inputs requires regenerating or explicitly reviewing ContextPack, PatchPlan, AI candidate patches, C oracle reports, and schema-aware diff conclusions before reuse."
+}
