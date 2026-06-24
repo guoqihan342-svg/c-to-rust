@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "slice_id": "tsdb-non-monotonic-timestamp",
+  "level": "L3",
+  "target_id": "flashdb",
+  "source": {
+    "clone_url": "https://gitcode.com/xwxf/FlashDB.git",
+    "commit": "93d175549da579b8abac07bd175ce4c3f9dde829"
+  },
+  "workspace_commit_before_slice": "d9a91c11b56e82a3e6acdb901be792bb5e74fdc7",
+  "prior_slices": [
+    "tsdb-append-query-status",
+    "tsdb-error-boundary",
+    "tsdb-payload-boundary",
+    "tsdb-over-limit-payload-error",
+    "tsdb-reverse-query-reopen",
+    "tsdb-status-transition"
+  ],
+  "active_change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "context_files": [
+    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/proposal.md",
+    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/design.md",
+    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
+    "openspec/changes/run-flashdb-tsdb-non-monotonic-timestamp-l3-loop/tasks.md"
+  ],
+  "c_semantic_anchor": "FlashDB src/fdb_tsdb.c tsl_append rejects cur_time <= db->last_time with FDB_WRITE_ERR before writing a TSL."
+}

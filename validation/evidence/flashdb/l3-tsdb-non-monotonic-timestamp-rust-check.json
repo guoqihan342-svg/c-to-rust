@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "command": "cargo check --message-format=json",
+  "status": "passed",
+  "exit_code": 0,
+  "self_healing_needed": false,
+  "raw_jsonl": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-rust-check.raw.jsonl",
+  "stderr_log": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-rust-check.stderr.log"
+}

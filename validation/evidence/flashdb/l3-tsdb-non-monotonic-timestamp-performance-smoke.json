@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "command": "cargo run --quiet -- replay --fixture fixtures/l3-tsdb-non-monotonic-timestamp.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-performance-replay.json",
+  "status": "passed",
+  "exit_code": 0,
+  "elapsed_ms": 412,
+  "operation_count": 11,
+  "secondary_only": true,
+  "report_path": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-performance-replay.json",
+  "log_path": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-performance-smoke.log"
+}

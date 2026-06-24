@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "unsafe_budget": {
+    "max_percent": 10,
+    "first_party_non_test_target": 0
+  },
+  "scan": {
+    "unsafe_blocks": 0,
+    "unsafe_fns": 0,
+    "findings": []
+  },
+  "status": "passed",
+  "evidence": "validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-unsafe-scan.json"
+}

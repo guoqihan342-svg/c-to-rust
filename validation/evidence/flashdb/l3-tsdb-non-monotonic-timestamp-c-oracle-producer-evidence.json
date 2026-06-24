@@ -1,0 +1,6 @@
+{
+  "marker": "C_ORACLE_GENERATED",
+  "status": "passed",
+  "detail": "report=../validation/evidence/flashdb/l3-tsdb-non-monotonic-timestamp-c-oracle.json fixture=fixtures/l3-tsdb-non-monotonic-timestamp.json",
+  "timestamp_utc": "2026-06-24T09:43:11Z"
+}

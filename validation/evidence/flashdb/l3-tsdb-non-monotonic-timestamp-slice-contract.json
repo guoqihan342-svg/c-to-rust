@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "slice_id": "tsdb-non-monotonic-timestamp",
+  "validates": [
+    "duplicate TSDB timestamp append rejection",
+    "decreasing TSDB timestamp append rejection",
+    "append steps report status error and code FDB_WRITE_ERR",
+    "rejected timestamp-order appends are not visible in query results",
+    "written count excludes failed appends",
+    "next successful append uses the next contiguous successful entry_id",
+    "query/count behavior remains stable after reopen"
+  ],
+  "strict_behavior_fields": [
+    "step.id",
+    "step.op",
+    "step.status",
+    "step.code",
+    "entry_id",
+    "timestamp",
+    "entries",
+    "count",
+    "error semantics"
+  ],
+  "accepted_metadata_fields": [
+    "image_hash",
+    "message",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "non_goals": [
+    "timestamp overflow",
+    "negative timestamp policy",
+    "64-bit timestamp builds",
+    "capacity pressure",
+    "sector rollover/full",
+    "clean/GC",
+    "physical deletion",
+    "byte-for-byte layout",
+    "corrupt-image reopen",
+    "payload-size behavior",
+    "async/threading",
+    "power-loss behavior"
+  ]
+}

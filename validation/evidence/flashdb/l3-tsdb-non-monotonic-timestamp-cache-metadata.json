@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "cache_key_scope": "tsdb-non-monotonic-timestamp",
+  "invalidation_inputs": [
+    {
+      "file": "flashDB_rust/fixtures/l3-tsdb-non-monotonic-timestamp.json",
+      "sha256": "05137833e85ea8b404dccd75338384b1914902d810f1e1622bad2c549afdc295"
+    },
+    {
+      "file": "flashDB_rust/tests/differential_replay.rs",
+      "sha256": "2d7ec0c05769249b26f1a3b42302aaa06c0c62b4dcda73bb34aef4d82f1a95c3"
+    },
+    {
+      "file": "flashDB_rust/src/types.rs",
+      "sha256": "0b5d094e4eb63433c9275b2fe88f3ee4808538a72e99997ca635f943e3bf828f"
+    },
+    {
+      "file": "flashDB_rust/src/tsdb.rs",
+      "sha256": "4e5e944748d4b8e269695c6de05e1469df601e511f5776fc8e6c11372fa62cf0"
+    },
+    {
+      "file": "flashDB_rust/src/replay.rs",
+      "sha256": "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+    },
+    {
+      "file": "flashDB_rust/oracle/flashdb_c_oracle.c",
+      "sha256": "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+    }
+  ],
+  "invalidated_because": "new TSDB timestamp-order fixture, focused replay/diff tests, and Rust TSDB strict timestamp-order enforcement were added",
+  "deterministic": true
+}

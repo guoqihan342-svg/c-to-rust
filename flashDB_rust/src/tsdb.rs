@@ -78,6 +78,14 @@ impl<D: FlashDevice> TsDb<D> {
                 MAX_TSDB_PAYLOAD_LEN
             )));
         }
+        if let Some(last) = self.entries.last() {
+            if timestamp <= last.timestamp {
+                return Err(Error::WriteError(format!(
+                    "TSDB timestamp {timestamp} must be greater than last timestamp {}",
+                    last.timestamp
+                )));
+            }
+        }
         let id = self.next_id;
         let entry = TsEntry {
             id,

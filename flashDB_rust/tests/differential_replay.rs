@@ -534,6 +534,70 @@ fn l3_tsdb_over_limit_payload_error_fixture_replays_visible_error_and_recovery()
 }
 
 #[test]
+fn l3_tsdb_non_monotonic_timestamp_fixture_replays_visible_error_and_recovery() {
+    let report = temp_path("l3-tsdb-non-monotonic-timestamp-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-non-monotonic-timestamp.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-non-monotonic-timestamp\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-non-monotonic-timestamp\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-001\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":1,\"timestamp\":10,\"value\":\"control\""
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-002\",\"op\":\"ts.append\",\"status\":\"error\",\"code\":\"FDB_WRITE_ERR\""
+    ));
+    assert!(!step_json_for(&out, "ts-nmt-002").contains("\"entry_id\""));
+    assert!(!step_json_for(&out, "ts-nmt-002").contains("duplicate"));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-003\",\"op\":\"ts.append\",\"status\":\"error\",\"code\":\"FDB_WRITE_ERR\""
+    ));
+    assert!(!step_json_for(&out, "ts-nmt-003").contains("\"entry_id\""));
+    assert!(!step_json_for(&out, "ts-nmt-003").contains("before"));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-004\",\"op\":\"ts.append\",\"status\":\"ok\",\"code\":\"OK\",\"entry_id\":2,\"timestamp\":20,\"value\":\"after\""
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-005\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"control\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"after\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-006\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"control\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-007\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":2"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-008\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains("\"id\":\"ts-nmt-009\""));
+    assert!(out.contains("\"op\":\"ts.reopen\""));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-010\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"written\",\"value\":\"control\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"after\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-nmt-011\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":2"
+    ));
+    assert!(!out.contains("\"fields\":\"code\""));
+    assert!(!out.contains("\"fields\":\"status\""));
+    assert!(!out.contains("\"fields\":\"entries\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_reverse_query_reopen_fixture_replays_reverse_order() {
     let report = temp_path("l3-tsdb-reverse-query-reopen-report.json");
     let out = cli::run([
@@ -1090,6 +1154,51 @@ fn l3_diff_rejects_tsdb_over_limit_payload_error_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.ts-ol-002.code"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_tsdb_non_monotonic_timestamp_regression() {
+    let actual = temp_path("l3-tsdb-non-monotonic-timestamp-actual-report.json");
+    let expected = temp_path("l3-tsdb-non-monotonic-timestamp-expected-report.json");
+    let diff_report = temp_path("l3-tsdb-non-monotonic-timestamp-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-non-monotonic-timestamp.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"ts-nmt-002","op":"ts.append","status":"error","code":"FDB_WRITE_ERR""#,
+        r#""id":"ts-nmt-002","op":"ts.append","status":"ok","code":"OK""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.ts-nmt-002.code"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

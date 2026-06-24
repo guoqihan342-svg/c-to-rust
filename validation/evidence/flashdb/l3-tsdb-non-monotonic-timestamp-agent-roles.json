@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
+  "roles": [
+    {
+      "agent": "019ef8fa-04bb-77a0-adad-e736a7bd8901",
+      "role": "next-slice recommendation review",
+      "result": "Recommended KVDB delete-missing as a low-risk next slice; noted TSDB timestamp ordering as a higher semantic-risk candidate."
+    },
+    {
+      "agent": "019ef8fa-2a37-7401-9f75-00e711552adf",
+      "role": "C oracle supported-boundary review",
+      "result": "Recommended TSDB timestamp-order boundary and confirmed duplicate and non-monotonic timestamps share the C cur_time <= last_time rejection rule."
+    },
+    {
+      "agent": "019ef8fa-50a8-7092-bc55-82ec29cb2641",
+      "role": "Rust implementation gap review",
+      "result": "Recommended KVDB missing-delete as a next bugfix; also identified timestamp integer-width as a later risk. This slice records KVDB missing-delete as follow-up, not current scope."
+    },
+    {
+      "agent": "main",
+      "role": "implementation coordinator",
+      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+    }
+  ]
+}
