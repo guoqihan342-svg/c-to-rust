@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "slice_id": "tsdb-status-transition",
+  "contract": {
+    "fixture_name": "l3-tsdb-status-transition",
+    "fixture_path": "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+    "step_status_field": "status",
+    "business_ts_status_field": "ts_status",
+    "query_entry_status_field": "status",
+    "primary_gate": "latest status wins across count, query, and reopen",
+    "secondary_gate": "intermediate user1 and user2 counts are zero after final deleted transition"
+  },
+  "must_hold": [
+    "The fixture appends two TSDB records.",
+    "Entry 1 transitions through user1, user2, and deleted.",
+    "Entry 2 remains written.",
+    "Final deleted count is 1.",
+    "Final written count is 1.",
+    "Final user1 and user2 counts are 0.",
+    "Query shows entry 1 as deleted and entry 2 as written.",
+    "Reopen preserves the same final visible statuses.",
+    "Schema-aware diff treats count and query entry status as strict behavior fields."
+  ],
+  "must_not_claim": [
+    "new TSDB storage semantics",
+    "native FlashDB clean or GC semantics",
+    "sector full or rollover behavior",
+    "byte-for-byte layout equivalence",
+    "payload limit behavior",
+    "power-loss behavior"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "roles": [
+    {
+      "agent": "019ef8c8-1f82-7c32-bbfd-3ec348f1f34a",
+      "role": "TSDB next-slice feasibility review",
+      "result": "Assigned read-only review of TSDB candidate slices and Rust implementation boundaries."
+    },
+    {
+      "agent": "019ef8c8-435a-7ee2-9e73-aa5b4eb1f025",
+      "role": "C oracle behavior review",
+      "result": "Assigned read-only review of C oracle support for candidate TSDB slices."
+    },
+    {
+      "agent": "019ef8c8-6c54-7242-9ad5-be60d5d3c9fb",
+      "role": "OpenSpec and evidence review",
+      "result": "Assigned read-only review of existing L3 specs, evidence names, and non-duplicate task shape."
+    },
+    {
+      "agent": "main",
+      "role": "implementation coordinator",
+      "result": "Owns TDD patch, fixture integration, verification evidence, OpenSpec task updates, commit, archive, and push."
+    }
+  ]
+}

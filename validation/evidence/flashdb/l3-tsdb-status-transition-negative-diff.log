@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-status-transition-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-status-transition-mutated-query-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-status-transition-negative-diff.json`
+cli error: diff mismatch: ts-tr-013 at steps.ts-tr-013.entries
+error: process didn't exit successfully: `target\debug\flashdb-rust.exe diff --rust-report ..\validation\evidence\flashdb\l3-tsdb-status-transition-rust-report.json --oracle-report ..\validation\evidence\flashdb\l3-tsdb-status-transition-mutated-query-oracle.json --report ..\validation\evidence\flashdb\l3-tsdb-status-transition-negative-diff.json` (exit code: 1)

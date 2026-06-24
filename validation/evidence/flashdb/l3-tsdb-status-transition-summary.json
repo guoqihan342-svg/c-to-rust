@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "tsdb-status-transition",
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "status": "passed",
+  "repo_commit_before_slice": "bdb8c696d232372c9c2a00fb19d5e247952a1f90",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+    "fixture_hash": "9353686b",
+    "sha256": "d34e751396348bd1244a26c9edc7080d2299dc3c07f3a8248c5665ae9ed313f5",
+    "operation_count": 17
+  },
+  "visible_status_scope": [
+    "append two TSDB records",
+    "transition entry 1 through user1, user2, and deleted",
+    "keep entry 2 written",
+    "count user1 as 0 after final deleted transition",
+    "count user2 as 0 after final deleted transition",
+    "count deleted as 1",
+    "count written as 1",
+    "query entry 1 as status:\"deleted\" and entry 2 as status:\"written\"",
+    "reopen and verify the same final visible statuses"
+  ],
+  "c_oracle": {
+    "status": "passed",
+    "marker": "C_ORACLE_GENERATED",
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle.json",
+    "producer_evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle-producer-evidence.json"
+  },
+  "diff": {
+    "status": "passed",
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-diff.json"
+  },
+  "negative_diff": {
+    "status": "expected_failed",
+    "mutation": "final query entry 1 status deleted -> user2",
+    "first_mismatch": "steps.ts-tr-013.entries",
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-negative-diff.json"
+  },
+  "rust_check": {
+    "status": "passed",
+    "compiler_errors": 0,
+    "compiler_warnings": 0,
+    "self_healing_needed": false,
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-rust-check.json"
+  },
+  "unsafe": {
+    "status": "passed",
+    "first_party_non_test_unsafe_count": 0,
+    "unsafe_ratio": 0,
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-unsafe-scan.json"
+  },
+  "performance_smoke": {
+    "status": "passed",
+    "elapsed_ms": 387,
+    "secondary_only": true,
+    "report": "validation/evidence/flashdb/l3-tsdb-status-transition-performance-smoke.json"
+  },
+  "accepted_differences": [
+    "image_hash",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "known_gaps": [
+    "No clean or GC semantics claimed.",
+    "No sector rollover/full or capacity-pressure behavior claimed.",
+    "No byte-for-byte image equivalence claimed.",
+    "No corrupt-image reopen or power-loss behavior claimed.",
+    "No payload-boundary behavior claimed.",
+    "No async runtime, internal multithreading, public API, or unsafe policy change."
+  ],
+  "evidence_paths": [
+    "validation/evidence/flashdb/l3-tsdb-status-transition-context-pack.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-slice-contract.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-impact-set.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-agent-roles.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-rust-report.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-negative-diff.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-rust-check.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-unsafe-scan.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-performance-smoke.json",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-final-verification.json"
+  ],
+  "next_slice_recommendation": "Use tsdb-payload-boundary next: validate empty and 128-byte ASCII payload visibility without capacity, rollover, binary payload, or over-limit claims."
+}

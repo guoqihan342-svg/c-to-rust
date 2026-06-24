@@ -1,0 +1,15 @@
+﻿{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-status-transition-l3-loop",
+    "command":  "cargo check --message-format=json",
+    "status":  "passed",
+    "compiler_errors":  0,
+    "compiler_warnings":  0,
+    "stderr_empty":  false,
+    "self_healing_needed":  false,
+    "self_healing_patches":  [
+
+                             ],
+    "raw_jsonl":  "validation/evidence/flashdb/l3-tsdb-status-transition-rust-check.raw.jsonl",
+    "stderr":  "validation/evidence/flashdb/l3-tsdb-status-transition-rust-check.stderr.log"
+}

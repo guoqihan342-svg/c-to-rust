@@ -328,6 +328,91 @@ fn l3_tsdb_user2_status_fixture_replays_visible_counts() {
 }
 
 #[test]
+fn l3_tsdb_status_transition_fixture_replays_latest_status() {
+    let report = temp_path("l3-tsdb-status-transition-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-status-transition.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-tsdb-status-transition\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"tsdb-status-transition\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+    assert!(out.contains("\"id\":\"ts-tr-001\""));
+    assert!(out.contains("\"op\":\"ts.append\""));
+    assert!(out.contains("\"entry_id\":1"));
+    assert!(out.contains("\"id\":\"ts-tr-002\""));
+    assert!(out.contains("\"entry_id\":2"));
+
+    let user1_step = step_json_for(&out, "ts-tr-003");
+    assert!(user1_step.contains("\"op\":\"ts.set_status\""));
+    assert!(user1_step.contains("\"status\":\"ok\""));
+    assert!(user1_step.contains("\"code\":\"OK\""));
+    assert!(user1_step.contains("\"entry_id\":1"));
+    assert!(user1_step.contains("\"ts_status\":\"user1\""));
+
+    let user2_step = step_json_for(&out, "ts-tr-005");
+    assert!(user2_step.contains("\"op\":\"ts.set_status\""));
+    assert!(user2_step.contains("\"entry_id\":1"));
+    assert!(user2_step.contains("\"ts_status\":\"user2\""));
+
+    let deleted_step = step_json_for(&out, "ts-tr-008");
+    assert!(deleted_step.contains("\"op\":\"ts.set_status\""));
+    assert!(deleted_step.contains("\"entry_id\":1"));
+    assert!(deleted_step.contains("\"ts_status\":\"deleted\""));
+
+    assert!(out.contains(
+        "\"id\":\"ts-tr-004\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-006\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":0"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-007\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-009\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-010\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":0"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-011\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":0"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-012\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-013\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"deleted\",\"value\":\"alpha\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"beta\"}]"
+    ));
+    assert!(out.contains("\"id\":\"ts-tr-014\""));
+    assert!(out.contains("\"op\":\"ts.reopen\""));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-015\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-016\",\"op\":\"ts.count_status\",\"status\":\"ok\",\"code\":\"OK\",\"count\":1"
+    ));
+    assert!(out.contains(
+        "\"id\":\"ts-tr-017\",\"op\":\"ts.query\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"entry_id\":1,\"timestamp\":10,\"status\":\"deleted\",\"value\":\"alpha\"},{\"entry_id\":2,\"timestamp\":20,\"status\":\"written\",\"value\":\"beta\"}]"
+    ));
+    assert!(!out.contains("\"fields\":\"count\""));
+    assert!(!out.contains("\"fields\":\"status\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_error_boundary_fixture_replays_visible_errors() {
     let report = temp_path("l3-tsdb-error-boundary-report.json");
     let out = cli::run([
@@ -696,6 +781,51 @@ fn l3_diff_rejects_tsdb_user2_status_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.ts-u2-003.ts_status"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_tsdb_status_transition_query_regression() {
+    let actual = temp_path("l3-tsdb-status-transition-actual-report.json");
+    let expected = temp_path("l3-tsdb-status-transition-expected-report.json");
+    let diff_report = temp_path("l3-tsdb-status-transition-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-tsdb-status-transition.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"ts-tr-013","op":"ts.query","status":"ok","code":"OK","entries":[{"entry_id":1,"timestamp":10,"status":"deleted","value":"alpha"}"#,
+        r#""id":"ts-tr-013","op":"ts.query","status":"ok","code":"OK","entries":[{"entry_id":1,"timestamp":10,"status":"user2","value":"alpha"}"#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(failure.contains("steps.ts-tr-013.entries"));
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

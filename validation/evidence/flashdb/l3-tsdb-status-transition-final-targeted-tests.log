@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 2 tests
+test l3_tsdb_status_transition_fixture_replays_latest_status ... ok
+test l3_diff_rejects_tsdb_status_transition_query_regression ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.27s

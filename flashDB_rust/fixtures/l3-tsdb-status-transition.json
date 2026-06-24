@@ -1,0 +1,25 @@
+{
+  "name": "l3-tsdb-status-transition",
+  "operations": [
+    {"id":"ts-tr-001","op":"ts.append","timestamp":10,"value":"alpha"},
+    {"id":"ts-tr-002","op":"ts.append","timestamp":20,"value":"beta"},
+    {"id":"ts-tr-003","op":"ts.set_status","entry_id":1,"status":"user1"},
+    {"id":"ts-tr-004","op":"ts.count_status","from":10,"to":20,"status":"user1"},
+    {"id":"ts-tr-005","op":"ts.set_status","entry_id":1,"status":"user2"},
+    {"id":"ts-tr-006","op":"ts.count_status","from":10,"to":20,"status":"user1"},
+    {"id":"ts-tr-007","op":"ts.count_status","from":10,"to":20,"status":"user2"},
+    {"id":"ts-tr-008","op":"ts.set_status","entry_id":1,"status":"deleted"},
+    {"id":"ts-tr-009","op":"ts.count_status","from":10,"to":20,"status":"deleted"},
+    {"id":"ts-tr-010","op":"ts.count_status","from":10,"to":20,"status":"user2"},
+    {"id":"ts-tr-011","op":"ts.count_status","from":10,"to":20,"status":"user1"},
+    {"id":"ts-tr-012","op":"ts.count_status","from":10,"to":20,"status":"written"},
+    {"id":"ts-tr-013","op":"ts.query","from":10,"to":20},
+    {"id":"ts-tr-014","op":"ts.reopen"},
+    {"id":"ts-tr-015","op":"ts.count_status","from":10,"to":20,"status":"deleted"},
+    {"id":"ts-tr-016","op":"ts.count_status","from":10,"to":20,"status":"written"},
+    {"id":"ts-tr-017","op":"ts.query","from":10,"to":20}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Latest status, entry id, timestamp, value, count, operation identity, and operation success are strict behavior fields.","fields":"image_hash,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

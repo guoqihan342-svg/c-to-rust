@@ -1,0 +1,98 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src\lib.rs (target\debug\deps\flashdb_rust-7502dfe4a53072df.exe)
+
+running 8 tests
+test flash::tests::memory_flash_read_write_erase_and_bounds ... ok
+test format::tests::align_helpers_work ... ok
+test format::tests::crc32_matches_standard_vector ... ok
+test format::tests::record_round_trips_and_rejects_corruption ... ok
+test replay::tests::fixture_parser_reads_operations_and_accepted_differences ... ok
+test cli::tests::inspect_image_reports_hash ... ok
+test flash::tests::file_flash_reopens ... ok
+test cli::tests::stress_report_contains_counts ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running unittests src\main.rs (target\debug\deps\flashdb_rust-9acfd5877b294dd7.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\abnormal_data.rs (target\debug\deps\abnormal_data-cd3faa20bcb14538.exe)
+
+running 2 tests
+test decoder_rejects_truncated_and_crc_corrupt_records ... ok
+test kvdb_rejects_invalid_keys_and_capacity ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\cli_smoke.rs (target\debug\deps\cli_smoke-f28576640ae7b137.exe)
+
+running 2 tests
+test cli_smoke_writes_json_report ... ok
+test cli_stress_small_loop_reports_all_scenarios ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+
+     Running tests\differential_replay.rs (target\debug\deps\differential_replay-369427295517e334.exe)
+
+running 21 tests
+test diff_does_not_allow_accepted_differences_to_hide_behavior_fields ... ok
+test diff_ignores_metadata_but_rejects_behavior_difference ... ok
+test l3_diff_rejects_kvdb_error_boundary_code_regression ... ok
+test l3_diff_rejects_tsdb_error_boundary_code_regression ... ok
+test l3_kvdb_error_boundary_fixture_replays_visible_errors ... ok
+test l3_tsdb_error_boundary_fixture_replays_visible_errors ... ok
+test l3_tsdb_set_status_report_schema_uses_ts_status_for_business_status ... ok
+test l3_diff_rejects_tsdb_status_transition_query_regression ... ok
+test l3_kvdb_lifecycle_fixture_replays_main_path ... ok
+test l3_diff_rejects_tsdb_user2_status_regression ... ok
+test l3_diff_rejects_tsdb_deleted_status_reopen_count_regression ... ok
+test l3_tsdb_append_query_status_fixture_replays_main_path ... ok
+test l3_diff_rejects_tsdb_count_regression ... ok
+test l3_diff_rejects_kvdb_lifecycle_value_regression ... ok
+test l3_tsdb_deleted_status_reopen_fixture_replays_visible_counts ... ok
+test l3_tsdb_status_transition_fixture_replays_latest_status ... ok
+test l3_kvdb_compact_overwrite_fixture_replays_visible_behavior ... ok
+test l3_tsdb_user2_status_fixture_replays_visible_counts ... ok
+test l3_diff_rejects_kvdb_compact_overwrite_value_regression ... ok
+test diff_passes_for_matching_reports_and_fails_with_first_mismatch ... ok
+test replay_fixture_writes_per_step_report_with_error_codes ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+     Running tests\kvdb_main_paths.rs (target\debug\deps\kvdb_main_paths-fbd82d342cd52a82.exe)
+
+running 1 test
+test kvdb_set_get_delete_iterate_compact_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\persistence.rs (target\debug\deps\persistence-c4cbafdf7cfb0ddd.exe)
+
+running 2 tests
+test file_kvdb_reopen_preserves_committed_values ... ok
+test file_tsdb_reopen_preserves_entries ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\tsdb_basic_paths.rs (target\debug\deps\tsdb_basic_paths-d0516359a59e3ae7.exe)
+
+running 1 test
+test tsdb_append_query_count_status_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\unsafe_scan.rs (target\debug\deps\unsafe_scan-1c8533b420f4cced.exe)
+
+running 1 test
+test first_party_non_test_sources_do_not_use_unsafe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests flashdb_rust
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

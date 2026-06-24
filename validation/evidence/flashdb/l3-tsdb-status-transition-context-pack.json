@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "slice_id": "tsdb-status-transition",
+  "target_id": "flashdb",
+  "branch": "codex/flashdb-rust-skeleton",
+  "base_commit": "bdb8c696d232372c9c2a00fb19d5e247952a1f90",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "problem": "Existing TSDB L3 evidence validates individual statuses but not repeated status transitions on the same public TS entry.",
+  "strict_behavior_fields": [
+    "id",
+    "op",
+    "status",
+    "code",
+    "entry_id",
+    "timestamp",
+    "value",
+    "ts_status",
+    "count",
+    "entries"
+  ],
+  "allowed_metadata_differences": [
+    "image_hash",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path"
+  ],
+  "affected_files": [
+    "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+    "flashDB_rust/tests/differential_replay.rs",
+    "validation/evidence/flashdb/l3-tsdb-status-transition-*"
+  ],
+  "context_files_read": [
+    "openspec/changes/run-flashdb-tsdb-status-transition-l3-loop/proposal.md",
+    "openspec/changes/run-flashdb-tsdb-status-transition-l3-loop/design.md",
+    "openspec/changes/run-flashdb-tsdb-status-transition-l3-loop/specs/flashdb-l3-agent-migration-loop/spec.md",
+    "openspec/changes/run-flashdb-tsdb-status-transition-l3-loop/tasks.md",
+    "flashDB_rust/src/tsdb.rs",
+    "flashDB_rust/src/replay.rs",
+    "flashDB_rust/oracle/flashdb_c_oracle.c",
+    "flashDB_rust/tests/differential_replay.rs"
+  ],
+  "out_of_scope": [
+    "TSDB storage layout",
+    "FlashDB C semantic behavior changes",
+    "query ordering semantics beyond the fixed two-entry fixture",
+    "clean or GC semantics",
+    "sector rollover or capacity pressure",
+    "byte-for-byte image equivalence",
+    "corrupt-image reopen",
+    "payload limit behavior",
+    "power-loss behavior",
+    "async runtime",
+    "internal multithreading",
+    "unsafe introduction"
+  ]
+}

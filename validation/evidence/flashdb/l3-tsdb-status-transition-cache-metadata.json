@@ -1,0 +1,29 @@
+﻿{
+    "schema_version":  1,
+    "change":  "run-flashdb-tsdb-status-transition-l3-loop",
+    "cache_key_scope":  "tsdb-status-transition",
+    "invalidation_inputs":  [
+                                {
+                                    "file":  "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+                                    "sha256":  "d34e751396348bd1244a26c9edc7080d2299dc3c07f3a8248c5665ae9ed313f5"
+                                },
+                                {
+                                    "file":  "flashDB_rust/tests/differential_replay.rs",
+                                    "sha256":  "16213055c5651fcee0b0c44356f151e3f4b12dedf4fcc18bbf47a81f0dbd0c59"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/tsdb.rs",
+                                    "sha256":  "55b999c2911eafe638889e78afe63a08b038aa8a1ba9d9d48fc713883e909a1e"
+                                },
+                                {
+                                    "file":  "flashDB_rust/src/replay.rs",
+                                    "sha256":  "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+                                },
+                                {
+                                    "file":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                                    "sha256":  "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+                                }
+                            ],
+    "invalidated_because":  "new TSDB repeated status-transition fixture and focused replay/diff tests were added",
+    "deterministic":  true
+}

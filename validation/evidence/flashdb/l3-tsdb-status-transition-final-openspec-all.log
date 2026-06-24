@@ -1,0 +1,18 @@
+- Validating...
+✓ change/add-flashdb-oracle-differential-harness
+✓ change/add-multi-project-validation-catalog
+✓ change/add-schema-aware-c-rust-diff
+✓ change/build-flashdb-rust-skeleton
+✓ change/classify-l1-native-failures
+✓ change/design-c2rust-migration-agent
+✓ change/expand-supercomplex-c-validation-targets
+✓ change/expand-supercomplex-c-validation-wave2
+✓ spec/flashdb-l3-agent-migration-loop
+✓ spec/l1-native-low-cost-remediation
+✓ change/require-ci-c-oracle-generation
+✓ change/run-flashdb-tsdb-status-transition-l3-loop
+✓ change/run-remaining-catalog-l1-native-validation
+✓ change/run-supercomplex-l1-native-validation
+✓ change/run-supercomplex-l2-slice-validation
+✓ change/run-supercomplex-wave2-l1-native-validation
+Totals: 16 passed, 0 failed (16 items)

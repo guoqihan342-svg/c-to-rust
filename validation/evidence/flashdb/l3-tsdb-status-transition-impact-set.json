@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "implementation_impact": [
+    {
+      "path": "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+      "reason": "Adds the focused repeated status-transition scenario for Rust and C replay."
+    },
+    {
+      "path": "flashDB_rust/tests/differential_replay.rs",
+      "reason": "Locks latest-status count/query/reopen behavior and negative diff coverage."
+    },
+    {
+      "path": "validation/evidence/flashdb/l3-tsdb-status-transition-*",
+      "reason": "Persists machine-readable evidence for the L3 C/Rust oracle loop."
+    }
+  ],
+  "semantic_impact": {
+    "public_rust_api": "unchanged",
+    "storage_layout": "unchanged",
+    "tsdb_status_values": "unchanged",
+    "fixture_input_schema": "unchanged",
+    "report_schema": "unchanged",
+    "unsafe_policy": "unchanged"
+  }
+}

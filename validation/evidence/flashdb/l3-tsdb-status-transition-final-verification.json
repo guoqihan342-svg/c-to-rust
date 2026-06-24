@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "change": "run-flashdb-tsdb-status-transition-l3-loop",
+  "status": "passed",
+  "repo_commit_before_slice": "bdb8c696d232372c9c2a00fb19d5e247952a1f90",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-tsdb-status-transition.json",
+    "fixture_hash": "9353686b",
+    "sha256": "d34e751396348bd1244a26c9edc7080d2299dc3c07f3a8248c5665ae9ed313f5",
+    "operation_count": 17
+  },
+  "commands": [
+    {
+      "name": "red_test",
+      "command": "cargo test --test differential_replay l3_tsdb_status_transition_fixture -- --nocapture",
+      "status": "expected_failed_before_fixture",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-red-test.log"
+    },
+    {
+      "name": "green_test",
+      "command": "cargo test --test differential_replay status_transition -- --nocapture",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-green-test.log"
+    },
+    {
+      "name": "rust_replay",
+      "command": "cargo run -- replay --fixture fixtures/l3-tsdb-status-transition.json --backend file --report ../validation/evidence/flashdb/l3-tsdb-status-transition-rust-report.json",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-rust-report.json"
+    },
+    {
+      "name": "c_oracle",
+      "command": "wsl bash -lc \"cd /mnt/c/Users/Administrator/Documents/c-to-rust-flashdb/flashDB_rust && sh oracle/generate_c_oracle.sh --fixture fixtures/l3-tsdb-status-transition.json --report ../validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle.json --evidence ../validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle-producer-evidence.json\"",
+      "status": "passed",
+      "marker": "C_ORACLE_GENERATED",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle.json"
+    },
+    {
+      "name": "schema_diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-status-transition-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-status-transition-c-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-status-transition-diff.json",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-diff.json"
+    },
+    {
+      "name": "negative_diff",
+      "command": "cargo run -- diff --rust-report ../validation/evidence/flashdb/l3-tsdb-status-transition-rust-report.json --oracle-report ../validation/evidence/flashdb/l3-tsdb-status-transition-mutated-query-oracle.json --report ../validation/evidence/flashdb/l3-tsdb-status-transition-negative-diff.json",
+      "status": "expected_failed",
+      "first_mismatch": "steps.ts-tr-013.entries",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-negative-diff.json"
+    },
+    {
+      "name": "cargo_check",
+      "command": "cargo check --message-format=json",
+      "status": "passed",
+      "compiler_errors": 0,
+      "compiler_warnings": 0,
+      "self_healing_needed": false,
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-rust-check.json"
+    },
+    {
+      "name": "cargo_fmt",
+      "command": "cargo fmt -- --check",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-cargo-fmt.log"
+    },
+    {
+      "name": "targeted_tests",
+      "command": "cargo test --test differential_replay status_transition -- --nocapture",
+      "status": "passed",
+      "tests": "2 passed, 0 failed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-targeted-tests.log"
+    },
+    {
+      "name": "cargo_test",
+      "command": "cargo test",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-cargo-test.log"
+    },
+    {
+      "name": "unsafe_scan",
+      "command": "cargo run -- unsafe-scan",
+      "status": "passed",
+      "unsafe_blocks": 0,
+      "unsafe_fns": 0,
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-unsafe-scan.log"
+    },
+    {
+      "name": "openspec_change_strict",
+      "command": "openspec validate run-flashdb-tsdb-status-transition-l3-loop --strict",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-openspec-change-strict.log"
+    },
+    {
+      "name": "openspec_all",
+      "command": "openspec validate --all",
+      "status": "passed",
+      "items": "16 passed, 0 failed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-openspec-all.log"
+    },
+    {
+      "name": "git_diff_check",
+      "command": "git diff --check",
+      "status": "passed",
+      "evidence": "validation/evidence/flashdb/l3-tsdb-status-transition-final-git-diff-check.log"
+    }
+  ]
+}
