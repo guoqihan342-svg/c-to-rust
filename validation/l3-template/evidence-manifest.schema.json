@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "L3 Slice Evidence Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "level",
+    "target_id",
+    "slice_id",
+    "status",
+    "source_commit",
+    "repo_commit",
+    "fixture",
+    "evidence",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "level": {
+      "const": "L3"
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "incomplete"
+      ]
+    },
+    "source_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "repo_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "fixture": {
+      "type": "object",
+      "required": [
+        "path",
+        "hash"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "slice_contract",
+        "context_pack",
+        "cache_metadata",
+        "c_oracle",
+        "rust_report",
+        "schema_diff",
+        "negative_diff",
+        "rust_check",
+        "unsafe_scan",
+        "unsafe_ledger",
+        "performance_smoke",
+        "final_verification",
+        "summary",
+        "version_or_config_binding"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/evidenceRef"
+      },
+      "properties": {
+        "negative_diff": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/evidenceRef"
+            },
+            {
+              "type": "object",
+              "required": [
+                "mutation_detected"
+              ],
+              "properties": {
+                "mutation_detected": {
+                  "const": true
+                },
+                "expected_failure": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "performance_smoke": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/evidenceRef"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "secondary_only": {
+                  "const": true
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "claim_boundary": {
+      "type": "object",
+      "required": [
+        "scope",
+        "behavior_fields_checked",
+        "accepted_metadata_differences",
+        "known_gaps",
+        "must_not_claim"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "behavior_fields_checked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accepted_metadata_differences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "known_gaps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "must_not_claim": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "evidenceRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "status"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
+

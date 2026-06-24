@@ -84,6 +84,7 @@ Evidence:
 - `validation/evidence/<target>/l3-rust-report.json`
 - `validation/evidence/<target>/l3-diff.json`
 - `validation/evidence/<target>/l3-performance-smoke.json`
+- Slice-specific artifact names and required statuses may be declared through `validation/l3-template/evidence-manifest.json`.
 
 ## Reporting Rules
 

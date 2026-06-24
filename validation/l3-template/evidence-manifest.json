@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "template_id": "l3-validation-template",
+  "description": "Reusable evidence manifest for bounded C-to-Rust L3 migration slices.",
+  "claim_scope": {
+    "required_fields": [
+      "target_id",
+      "slice_id",
+      "source_commit",
+      "repo_commit",
+      "fixture.path",
+      "fixture.sha256_or_hash_short",
+      "semantic_equivalence_claim.scope",
+      "semantic_equivalence_claim.boundary",
+      "known_gaps"
+    ],
+    "forbidden_without_separate_evidence": [
+      "full-project migration",
+      "byte-for-byte image equivalence",
+      "GC or sector-layout parity",
+      "power-loss recovery",
+      "capacity-pressure behavior",
+      "unrelated slices",
+      "async or multithreaded runtime semantics",
+      "runtime cache semantics"
+    ]
+  },
+  "required_artifacts": [
+    {
+      "id": "slice_contract",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-slice-contract.json",
+      "expected_status": "frozen_or_recorded",
+      "purpose": "Declares selected C/Rust boundary, fixture, accepted differences, and non-goals."
+    },
+    {
+      "id": "context_pack",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-context-pack.json",
+      "expected_status": "recorded",
+      "purpose": "Captures direct modules, call relationships, tests, unsafe status, cache/version facts, and rollback id."
+    },
+    {
+      "id": "c_oracle",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-c-oracle.json",
+      "expected_status": "passed",
+      "required_markers": [
+        "C_ORACLE_GENERATED"
+      ],
+      "purpose": "Records C behavior generated from pinned source and the same fixture input."
+    },
+    {
+      "id": "rust_report",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-rust-report.json",
+      "expected_status": "passed",
+      "purpose": "Records Rust replay behavior for the same fixture input."
+    },
+    {
+      "id": "schema_diff",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-diff.json",
+      "expected_status": "passed",
+      "required_fields": [
+        "first_mismatch"
+      ],
+      "purpose": "Compares C and Rust behavior fields and rejects forbidden behavior differences."
+    },
+    {
+      "id": "negative_diff",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-negative-diff.json",
+      "expected_status": "expected_failed_or_failed_with_expected_failure_true",
+      "purpose": "Mutates behavior evidence and proves the diff gate catches the mismatch."
+    },
+    {
+      "id": "rust_check",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-rust-check.json",
+      "expected_status": "passed",
+      "purpose": "Records compile/test status and automatic patch attempt count."
+    },
+    {
+      "id": "unsafe_evidence",
+      "path_patterns": [
+        "validation/evidence/<target>/l3-<slice>-unsafe-scan.json",
+        "validation/evidence/<target>/l3-<slice>-unsafe-ledger.json"
+      ],
+      "expected_status": "passed",
+      "purpose": "Records first-party non-test unsafe count, ratio, scanned paths, and ledger entries."
+    },
+    {
+      "id": "performance_smoke",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-performance-smoke.json",
+      "expected_status": "recorded_or_passed",
+      "secondary_only": true,
+      "purpose": "Records timing or operation counters without replacing correctness gates."
+    },
+    {
+      "id": "summary",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-summary.json",
+      "expected_status": "passed",
+      "purpose": "Records claim scope, evidence links, accepted differences, known gaps, and next-slice recommendation."
+    },
+    {
+      "id": "version_or_config_binding",
+      "path_patterns": [
+        "validation/evidence/<target>/l3-<slice>-version-manifest.json",
+        "validation/evidence/<target>/version-governance-manifest.json",
+        "validation/evidence/<target>/l3-<slice>-cache-metadata.json",
+        "validation/evidence/<target>/l3-<slice>-local-toolchain-evidence.json"
+      ],
+      "expected_status": "recorded",
+      "purpose": "Binds evidence to source commit, fixture hash, toolchain, feature/macro matrix, and cache invalidation keys."
+    },
+    {
+      "id": "final_verification",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-final-verification.json",
+      "expected_status": "passed",
+      "purpose": "Records final command evidence before reporting, archiving, commit, or push."
+    }
+  ],
+  "optional_artifacts": [
+    {
+      "id": "impact_set",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-impact-set.json",
+      "purpose": "Records affected Rust modules, tests, fixtures, and APIs."
+    },
+    {
+      "id": "agent_roles",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-agent-roles.json",
+      "purpose": "Records bounded parallel agent roles and write boundaries."
+    },
+    {
+      "id": "summary_markdown",
+      "path_pattern": "validation/evidence/<target>/l3-<slice>-summary.md",
+      "purpose": "Human-readable bilingual summary."
+    }
+  ],
+  "example_slices": [
+    {
+      "slice_id": "kvdb-lifecycle",
+      "summary": "validation/evidence/flashdb/l3-kvdb-lifecycle-summary.json"
+    },
+    {
+      "slice_id": "kvdb-compact-overwrite",
+      "summary": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json"
+    },
+    {
+      "slice_id": "tsdb-user2-status",
+      "summary": "validation/evidence/flashdb/l3-tsdb-user2-status-summary.json"
+    }
+  ],
+  "legacy_notes": [
+    "Some historical FlashDB L3 slices predate this template and may miss future-required artifacts such as per-slice version manifests or final verification reports.",
+    "Future L3 slices should satisfy every required_artifacts entry before claiming L3 semantic equivalence."
+  ]
+}

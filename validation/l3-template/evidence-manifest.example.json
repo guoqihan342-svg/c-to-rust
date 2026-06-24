@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "status": "passed",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+    "hash": "78e5ef24",
+    "operation_count": 14
+  },
+  "evidence": {
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-slice-contract.json",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
+      "status": "recorded"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
+      "status": "recorded"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "status": "passed",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+      "status": "passed",
+      "first_mismatch": null
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "status": "expected_failed",
+      "expected_failure": true,
+      "mutation_detected": true
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-check.json",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-scan.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json",
+      "status": "passed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-smoke.json",
+      "status": "recorded",
+      "secondary_only": true
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
+      "status": "passed"
+    },
+    "summary": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/flashdb/version-governance-manifest.json",
+      "status": "recorded"
+    }
+  },
+  "claim_boundary": {
+    "scope": "Only the named kvdb-compact-overwrite slice and visible behavior fields exercised by l3-kvdb-compact-overwrite.json.",
+    "behavior_fields_checked": [
+      "value",
+      "entries",
+      "key",
+      "status",
+      "code",
+      "operation success",
+      "error semantics"
+    ],
+    "accepted_metadata_differences": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "known_gaps": [
+      "No native GC/sector-layout proof.",
+      "No byte-for-byte flash image equivalence.",
+      "No capacity-pressure compaction, power-loss recovery, wear, binary/blob encoding, or invalid-key matrix in this slice."
+    ],
+    "must_not_claim": [
+      "full FlashDB migration",
+      "byte-for-byte image equivalence",
+      "power-loss recovery",
+      "unrelated TSDB behavior",
+      "runtime cache semantics"
+    ]
+  }
+}
