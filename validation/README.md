@@ -21,6 +21,7 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
 - `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
 - `pointer-graph-template/`: reusable pointer dependency graph template for pointer-bearing L2/L3 migration slices.
+- `test-translation-template/`: reusable code-test translation manifest template for mapping C tests, fixtures, or oracle expectations to Rust tests and invalidation keys.
 
 ## Fast Commands
 

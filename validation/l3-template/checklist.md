@@ -13,6 +13,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] C config header path and hash are recorded.
 - [ ] C defines, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend, and toolchain inputs are recorded.
 - [ ] Pointer dependency graph is recorded for pointer-bearing slices, or marked `not_applicable` with a reason for pure value slices.
+- [ ] Code-test translation manifest path and status are recorded.
 - [ ] Non-goals and accepted differences are written before the pass claim.
 
 ## Required Evidence
@@ -22,6 +23,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Impact set or equivalent boundary evidence exists.
 - [ ] Config profile exists or equivalent version/cache evidence records all required profile fields.
 - [ ] Pointer dependency graph exists for pointer-bearing slices or records a `not_applicable` reason.
+- [ ] Code-test translation evidence exists and maps C tests, fixtures, or oracle expectations to Rust test files, test names, cargo commands, coverage categories, negative cases, and known gaps.
 - [ ] C oracle report exists and records generated status from a real C toolchain.
 - [ ] Rust replay report exists.
 - [ ] C and Rust reports use the same fixture hash.
@@ -48,6 +50,15 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Graph changes invalidate ContextPack, PatchPlan, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, performance smoke, cache metadata, and summary evidence.
 - [ ] Graph is described as dependency evidence, not complete alias safety proof.
 
+## Code-Test Translation
+
+- [ ] Manifest maps source fixtures, C tests, or oracle expectations to Rust test files and test names.
+- [ ] Generated oracle fixtures are allowed as source mappings when no direct upstream C test name exists.
+- [ ] Main-path, error-path, and negative/regression coverage entries are listed.
+- [ ] Negative cases link to Rust test names and diff evidence when behavior-diff gates exist.
+- [ ] Invalidation keys include source commit, repo commit, fixture hashes, Rust test file hashes, test names, cargo command, accepted differences, profile ids, and schema version.
+- [ ] Manifest is described as traceability/cache evidence, not as semantic-equivalence proof.
+
 ## Claim Boundary
 
 - [ ] Summary states the named slice and fixture input domain.
@@ -66,6 +77,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Diff command is recorded.
 - [ ] Negative diff command or mutation is recorded.
 - [ ] Rust check/test command is recorded.
+- [ ] Test translation manifest and cargo test commands are recorded.
 - [ ] Unsafe scan command is recorded.
 - [ ] OpenSpec validation is recorded when a change is involved.
 - [ ] `git diff --check` or equivalent whitespace check is recorded before commit.

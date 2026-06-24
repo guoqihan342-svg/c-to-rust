@@ -18,6 +18,7 @@ Every L3 slice must provide:
 - context pack: direct modules, callers/callees, tests, unsafe status, rollback/cache/version facts.
 - config profile: normalized C config header hash, `#define` values, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, and cache invalidation keys.
 - pointer dependency graph: C pointer nodes, dependency edges, ownership/lifetime assumptions, external mutable state, Rust mapping strategy, and invalidation keys for pointer-bearing slices; pure value slices record `not_applicable` with a reason.
+- test translation: source C tests, fixtures, or oracle expectations mapped to Rust test files, Rust test names, cargo commands, main/error path coverage, negative cases, evidence links, known gaps, and cache invalidation keys.
 - C oracle report: generated from pinned C source and the same fixture input.
 - Rust replay report: generated from the migrated Rust implementation and the same fixture input.
 - schema-aware diff: compares behavior fields and records `first_mismatch`.
@@ -44,6 +45,14 @@ Pointer dependency graph evidence is required for future L3 slices that carry C 
 The pointer graph is not an alias proof. It does not prove whole-program pointer coverage or safe Rust soundness. It records dependency context, risk boundaries, and cache invalidation inputs.
 
 中文：后续 L3 切片只要包含 C 指针参数、指针返回、struct 指针字段、buffer、opaque handle、callback、手动分配、外部可变状态或 alias-sensitive state，就必须提供 pointer dependency graph 证据。该图应在实现编辑前记录，确保 Rust ownership 与 unsafe 决策能看到跨文件指针上下文。它不是 alias 证明，只是依赖上下文、风险边界和缓存失效输入。
+
+## Code-Test Translation Gate
+
+Code-test translation evidence is required for future L3 slices. It records how source-side tests, generated fixtures, or oracle expectations map to Rust tests and replay commands. A generated oracle fixture is a valid source mapping when no direct upstream C test name exists.
+
+This evidence is not a semantic-equivalence proof. If C oracle, Rust replay, schema diff, or negative diff evidence is missing or stale, the L3 claim remains incomplete even when test translation evidence is present.
+
+中文：code-test translation evidence 用于证明测试映射可追溯，而不是证明完整语义等价。没有直接上游 C test 名称时，可以用生成的 oracle fixture 或 oracle expectation 作为 source mapping；但它不能替代 C oracle、Rust replay、schema diff 或 negative diff。
 
 ## Pass Semantics
 
@@ -76,6 +85,7 @@ Machine-readable template files:
 - `validation/l3-template/config-profile.schema.json`: schema for future config-profile evidence.
 - `validation/l3-template/config-profile.example.json`: example config profile using the current FlashDB oracle config.
 - `validation/pointer-graph-template/`: schema, checklist, and example for pointer dependency graph evidence.
+- `validation/test-translation-template/`: schema, checklist, and example for code-test translation evidence.
 
 ## Non-Goal Language
 

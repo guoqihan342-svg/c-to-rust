@@ -52,6 +52,7 @@ Pass criteria:
 - Slice scope is declared before migration.
 - C function/file boundaries and callers/callees are recorded.
 - Pointer dependency graph evidence is recorded before translation when the slice has C pointer parameters, pointer returns, struct pointer fields, buffers, opaque handles, callbacks, manual allocation, external mutable state, or alias-sensitive state. Pure value slices record `not_applicable` with a reason.
+- Code-test translation evidence maps C tests, fixtures, or oracle expectations to Rust test files, Rust test names, cargo commands, coverage categories, negative cases, evidence links, and known gaps. A generated oracle fixture can serve as the source mapping when no direct upstream C test name exists.
 - Rust translation compiles.
 - First-party unsafe usage is counted and recorded in an unsafe ledger, even when the count is zero.
 - At least one L2 negative diff proves the diff gate catches an intentional mismatch.
@@ -61,6 +62,7 @@ Evidence:
 
 - `validation/evidence/<target>/l2-slice-plan.json`
 - `validation/evidence/<target>/l2-<slice>-pointer-graph.json` or `not_applicable` pointer graph evidence with a reason
+- `validation/evidence/<target>/l2-<slice>-test-translation.json` or `not_applicable` test translation evidence with a reason
 - `validation/evidence/<target>/l2-rust-check.json`
 - C oracle fixture and Rust replay report for each slice.
 - Schema-aware diff report for each slice.
@@ -78,6 +80,7 @@ Pass criteria:
 - C oracle or golden fixture is generated from the same input sequence.
 - Pointer dependency graph evidence is recorded for pointer-bearing slices or explicitly marked `not_applicable` for pure value slices.
 - Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
+- Code-test translation evidence maps the source fixtures, C tests, or oracle expectations to Rust tests, main/error path coverage, negative cases, evidence links, and cache invalidation keys.
 - Rust output is compared against C/golden output by schema-aware diff.
 - Negative regression counterexample fails as expected.
 - Performance smoke records timing or operation counters without replacing correctness gates.
@@ -90,6 +93,7 @@ Evidence:
 - `validation/evidence/<target>/l3-performance-smoke.json`
 - `validation/evidence/<target>/l3-config-profile.json` or equivalent version/cache profile evidence
 - `validation/evidence/<target>/l3-<slice>-pointer-graph.json` or `not_applicable` pointer graph evidence with a reason
+- `validation/evidence/<target>/l3-<slice>-test-translation.json` or equivalent code-test translation evidence
 - Slice-specific artifact names and required statuses may be declared through `validation/l3-template/evidence-manifest.json`.
 
 Config profile is a traceability and invalidation gate, not a full macro solver. A profile change invalidates affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless those artifacts are regenerated or explicitly invalidated.
@@ -98,13 +102,15 @@ Config profile is a traceability and invalidation gate, not a full macro solver.
 
 Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
 
+Code-test translation evidence is a traceability and invalidation gate, not a semantic-equivalence proof. It complements C oracle, Rust replay, schema diff, negative diff, unsafe, pointer, config, and final verification evidence; it never replaces them.
+
 中文：pointer dependency graph 是上下文与风险边界门禁，不是全程序 alias 证明。graph 变化时，受影响的 ContextPack、PatchPlan、C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
 ## Reporting Rules
 
 - L0 passed: catalog target is eligible for deeper validation.
 - L1 passed: native C baseline is reproducible.
-- L2 passed: a bounded Rust migration slice compiles and has required L2 safety/diff-gate evidence.
-- L3 passed: the bounded slice has behavior evidence.
+- L2 passed: a bounded Rust migration slice compiles and has required L2 safety, diff-gate, and code-test translation evidence.
+- L3 passed: the bounded slice has behavior evidence plus synchronized code-test translation evidence.
 
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.

@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "level": "L3",
+  "status": "recorded",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "8f19693ec1afd518f8f4706758e7a0bd94a7135c",
+  "source_test_inputs": {
+    "oracle_strategy": "Replay a fixture against pinned C FlashDB oracle output and compare visible behavior against Rust replay output.",
+    "fixtures": [
+      {
+        "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+        "name": "l3-kvdb-compact-overwrite",
+        "hash": "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
+        "operation_count": 14,
+        "source_kind": "fixture"
+      }
+    ],
+    "c_tests": [],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+        "status": "passed"
+      }
+    ]
+  },
+  "rust_tests": [
+    {
+      "file": "flashDB_rust/tests/differential_replay.rs",
+      "file_hash": "45d681dec4dc88e31580233c8305bd8f5d33a9509702e011b0f9c07aca5c39eb",
+      "test_names": [
+        "l3_kvdb_compact_overwrite_fixture_replays_visible_behavior",
+        "l3_diff_rejects_kvdb_compact_overwrite_value_regression"
+      ],
+      "cargo_command": "cargo test --test differential_replay",
+      "framework": "cargo test"
+    },
+    {
+      "file": "flashDB_rust/tests/kvdb_main_paths.rs",
+      "test_names": [
+        "kvdb_set_get_delete_iterate_compact_reopen"
+      ],
+      "cargo_command": "cargo test --test kvdb_main_paths",
+      "framework": "cargo test"
+    }
+  ],
+  "coverage": {
+    "main_paths": [
+      "set alpha to one",
+      "set beta to keep",
+      "overwrite alpha to two",
+      "get latest alpha value before compact",
+      "list visible entries",
+      "compact",
+      "get alpha after compact",
+      "reopen",
+      "get alpha and beta after reopen",
+      "delete alpha",
+      "get deleted alpha as missing"
+    ],
+    "error_paths": [
+      "missing get after delete returns a not-found visible behavior"
+    ],
+    "negative_cases": [
+      "mutating the expected latest value is rejected by l3-kvdb-compact-overwrite negative diff"
+    ]
+  },
+  "translation_mappings": [
+    {
+      "source": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+      "rust_test": "flashDB_rust/tests/differential_replay.rs::l3_kvdb_compact_overwrite_fixture_replays_visible_behavior",
+      "behavior_fields": [
+        "value",
+        "entries",
+        "key",
+        "status",
+        "code",
+        "operation success",
+        "error semantics"
+      ],
+      "coverage_kind": "oracle_replay",
+      "status": "mapped",
+      "evidence": [
+        {
+          "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "source": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "rust_test": "flashDB_rust/tests/differential_replay.rs::l3_diff_rejects_kvdb_compact_overwrite_value_regression",
+      "behavior_fields": [
+        "value"
+      ],
+      "coverage_kind": "negative_case",
+      "status": "mapped",
+      "evidence": [
+        {
+          "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+          "status": "expected_failed"
+        }
+      ]
+    },
+    {
+      "source": "FlashDB KVDB lifecycle main path",
+      "rust_test": "flashDB_rust/tests/kvdb_main_paths.rs::kvdb_set_get_delete_iterate_compact_reopen",
+      "behavior_fields": [
+        "set",
+        "get",
+        "delete",
+        "iterate",
+        "compact",
+        "reopen"
+      ],
+      "coverage_kind": "main_path",
+      "status": "mapped",
+      "evidence": [
+        {
+          "path": "flashDB_rust/tests/kvdb_main_paths.rs",
+          "status": "recorded"
+        }
+      ]
+    }
+  ],
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json",
+      "status": "passed"
+    },
+    "config_profile": {
+      "path": "validation/l3-template/config-profile.example.json",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/pointer-graph-template/pointer-graph.example.json",
+      "status": "recorded"
+    }
+  },
+  "known_gaps": [
+    "Does not prove byte-for-byte flash image layout.",
+    "Does not prove native GC, sector rollover, capacity pressure, wear, or power-loss recovery.",
+    "Does not prove async, multithreaded, or runtime-cache semantics."
+  ],
+  "cache_invalidation_keys": [
+    "schema_version",
+    "source_commit",
+    "repo_commit",
+    "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json:sha256=4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
+    "flashDB_rust/tests/differential_replay.rs:sha256=45d681dec4dc88e31580233c8305bd8f5d33a9509702e011b0f9c07aca5c39eb",
+    "cargo test --test differential_replay",
+    "cargo test --test kvdb_main_paths",
+    "accepted_differences:layout-and-metadata",
+    "config_profile:flashdb-file-kvdb-tsdb-fdb-cfg-fb3cde1a",
+    "pointer_dependency_graph:validation/pointer-graph-template/pointer-graph.example.json"
+  ]
+}
+

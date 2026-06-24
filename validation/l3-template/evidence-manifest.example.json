@@ -33,6 +33,10 @@
       "path": "validation/pointer-graph-template/pointer-graph.example.json",
       "status": "recorded"
     },
+    "test_translation": {
+      "path": "validation/test-translation-template/test-translation.example.json",
+      "status": "recorded"
+    },
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
       "status": "passed",

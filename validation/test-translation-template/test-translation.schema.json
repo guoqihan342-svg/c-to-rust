@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Code-Test Translation Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "level",
+    "status",
+    "source_commit",
+    "repo_commit",
+    "source_test_inputs",
+    "rust_tests",
+    "coverage",
+    "translation_mappings",
+    "evidence_links",
+    "cache_invalidation_keys"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "level": {
+      "enum": [
+        "L2",
+        "L3"
+      ]
+    },
+    "status": {
+      "enum": [
+        "recorded",
+        "not_applicable",
+        "stale",
+        "incomplete"
+      ]
+    },
+    "not_applicable_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "repo_commit": {
+      "type": "string",
+      "minLength": 7
+    },
+    "source_test_inputs": {
+      "type": "object",
+      "required": [
+        "oracle_strategy"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "oracle_strategy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/testInput"
+          }
+        },
+        "c_tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/testInput"
+          }
+        },
+        "oracle_reports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/evidenceRef"
+          }
+        }
+      }
+    },
+    "rust_tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "test_names",
+          "cargo_command",
+          "framework"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "test_names": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "cargo_command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "framework": {
+            "type": "string",
+            "minLength": 1
+          },
+          "file_hash": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": [
+        "main_paths",
+        "error_paths",
+        "negative_cases"
+      ],
+      "properties": {
+        "main_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "negative_cases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "translation_mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "rust_test",
+          "coverage_kind",
+          "status"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rust_test": {
+            "type": "string",
+            "minLength": 1
+          },
+          "behavior_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "coverage_kind": {
+            "enum": [
+              "main_path",
+              "error_path",
+              "negative_case",
+              "oracle_replay",
+              "not_applicable"
+            ]
+          },
+          "status": {
+            "enum": [
+              "mapped",
+              "not_applicable",
+              "gap"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/evidenceRef"
+            }
+          }
+        }
+      }
+    },
+    "evidence_links": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/evidenceRef"
+      }
+    },
+    "known_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cache_invalidation_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_applicable"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "not_applicable_reason"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "recorded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rust_tests": {
+            "minItems": 1
+          },
+          "translation_mappings": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "testInput": {
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "operation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_kind": {
+          "enum": [
+            "fixture",
+            "c_test",
+            "oracle_report",
+            "generated_golden"
+          ]
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "status"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

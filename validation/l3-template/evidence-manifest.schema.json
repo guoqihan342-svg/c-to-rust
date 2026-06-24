@@ -75,6 +75,7 @@
         "cache_metadata",
         "config_profile",
         "pointer_dependency_graph",
+        "test_translation",
         "c_oracle",
         "rust_report",
         "schema_diff",
@@ -147,6 +148,21 @@
           ]
         },
         "pointer_dependency_graph": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/evidenceRef"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "not_applicable_reason": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "test_translation": {
           "allOf": [
             {
               "$ref": "#/definitions/evidenceRef"

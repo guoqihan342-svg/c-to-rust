@@ -13,6 +13,7 @@
       "evidence.config_profile.path",
       "evidence.config_profile.profile_id",
       "evidence.pointer_dependency_graph.path",
+      "evidence.test_translation.path",
       "semantic_equivalence_claim.scope",
       "semantic_equivalence_claim.boundary",
       "known_gaps"
@@ -60,6 +61,16 @@
       ],
       "expected_status": "recorded_or_not_applicable_with_reason",
       "purpose": "Records pointer nodes, dependency edges, ownership/lifetime assumptions, external state, Rust mapping strategy, and invalidation keys for pointer-bearing slices."
+    },
+    {
+      "id": "test_translation",
+      "path_patterns": [
+        "validation/evidence/<target>/l3-<slice>-test-translation.json",
+        "validation/evidence/<target>/l2-<slice>-test-translation.json",
+        "validation/test-translation-template/test-translation.example.json"
+      ],
+      "expected_status": "recorded_or_not_applicable_with_reason",
+      "purpose": "Binds C tests, fixtures, or oracle expectations to Rust test files, Rust test names, cargo commands, coverage paths, negative cases, evidence links, known gaps, and invalidation keys."
     },
     {
       "id": "c_oracle",
