@@ -23,4 +23,4 @@
 - [x] 4.3 Run `openspec validate "add-multi-project-validation-catalog" --strict`.
 - [x] 4.4 Run `openspec validate --all`.
 - [x] 4.5 Run `git diff --check`.
-- [ ] 4.6 Commit and push the branch.
+- [x] 4.6 Commit and push the branch.
