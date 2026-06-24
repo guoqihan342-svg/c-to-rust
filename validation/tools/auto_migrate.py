@@ -15,6 +15,32 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
+TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
+CACHE_INPUT_FIELDS = [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+]
+CACHE_INVALIDATED_ARTIFACTS = [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "diff",
+    "summary",
+]
 
 
 def main() -> int:
@@ -95,8 +121,8 @@ def run_translator(slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
         str(evidence_dir),
     ]
     result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
-    write_text(evidence_dir / "translator-command.stdout.log", result.stdout)
-    write_text(evidence_dir / "translator-command.stderr.log", result.stderr)
+    write_log_text(evidence_dir / "translator-command.stdout.log", result.stdout)
+    write_log_text(evidence_dir / "translator-command.stderr.log", result.stderr)
     if result.returncode != 0:
         raise SystemExit(f"translator failed with exit code {result.returncode}; see {evidence_dir}")
     return json.loads(result.stdout)
@@ -236,6 +262,8 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
             "mutability": "write_only" if node.get("role") == "out_param" else "read_only",
             "nullability": "unknown",
             "ownership_role": "out_param" if node.get("role") == "out_param" else "borrowed",
+            "read_effects": node.get("read_effects", []),
+            "write_effects": node.get("write_effects", []),
         }
         for idx, node in enumerate(raw_nodes)
     ]
@@ -481,16 +509,16 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
         first = rust_check_once(path)
-        write_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
-        write_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+        write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
+        write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
         patch = write_no_patch_required(spec, evidence_dir, path)
         final = first
         if first["returncode"] != 0:
             patch = try_safe_self_heal(spec, evidence_dir, path, first)
             if patch.get("self_heal_applied"):
                 final = rust_check_once(path)
-        write_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
-        write_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
+        write_log_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
+        write_log_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
         payload = {
             "schema_version": 1,
             "status": "passed" if final["returncode"] == 0 else "failed",
@@ -717,27 +745,14 @@ def write_blocked_patch(
 
 
 def emit_cache_metadata(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+    identity = cache_identity(spec, slice_spec)
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": spec.get("slice_id"),
-        "source_commit": spec.get("source_commit"),
-        "slice_spec_sha256": sha256(slice_spec),
-        "fixture_hash": spec.get("fixture_hash"),
-        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
-        "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
-        "command_arguments": [],
-        "invalidates": [
-            "context_pack",
-            "type_map",
-            "cfg",
-            "pointer_graph",
-            "rust_draft",
-            "patch_plan",
-            "c_oracle",
-            "diff",
-            "summary",
-        ],
+        **identity,
+        "cache_input_fields": CACHE_INPUT_FIELDS,
+        "invalidates": CACHE_INVALIDATED_ARTIFACTS,
     }
     write_json(evidence_dir / f"l3-{spec.get('slice_id')}-auto-cache-metadata.json", payload)
     return payload
@@ -1253,6 +1268,92 @@ def cache_keys(spec: dict[str, Any], slice_spec_path: Path) -> list[str]:
     ]
 
 
+def cache_identity(spec: dict[str, Any], slice_spec_path: Path) -> dict[str, Any]:
+    return {
+        "source_commit": source_commit(spec),
+        "source_file_hashes": source_file_hashes(spec),
+        "slice_spec_sha256": sha256(slice_spec_path),
+        "fixture_hash": fixture_hash(spec),
+        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "cargo_lock_hash": sha256(TRANSLATOR_LOCK) if TRANSLATOR_LOCK.exists() else "missing",
+        "tool_versions": tool_versions(),
+        "schema_versions": {
+            "auto_cache_metadata": 1,
+            "auto_translation_plan": 1,
+            "cfg": 1,
+            "evidence_manifest": 1,
+            "pointer_graph": 1,
+            "type_map": 1,
+        },
+        "translator_version": "0.1.0",
+        "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
+        "command_arguments": ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)],
+    }
+
+
+def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    drifted_keys = [
+        key for key in CACHE_INPUT_FIELDS if previous.get(key) != current.get(key)
+    ]
+    if not drifted_keys:
+        return {
+            "schema_version": 1,
+            "status": "reusable",
+            "reuse_allowed": True,
+            "drifted_keys": [],
+            "invalidated_artifacts": [],
+        }
+    return {
+        "schema_version": 1,
+        "status": "drift_detected",
+        "reuse_allowed": False,
+        "drifted_keys": drifted_keys,
+        "invalidated_artifacts": CACHE_INVALIDATED_ARTIFACTS,
+        "required_action": "regenerate artifacts or attach explicit evidence review before reuse",
+    }
+
+
+def source_file_hashes(spec: dict[str, Any]) -> dict[str, str]:
+    files = [item["path"] for item in spec.get("c_boundary", {}).get("files", []) if item.get("path")]
+    files.extend(str(item) for item in spec.get("source_files", []))
+    result: dict[str, str] = {}
+    for file_name in sorted(set(files)):
+        path = REPO_ROOT / file_name
+        result[file_name] = sha256(path) if path.exists() and path.is_file() else "missing"
+    return result
+
+
+def tool_versions() -> dict[str, str]:
+    return {
+        "python": command_version(["python", "--version"]),
+        "rustc": command_version(["rustc", "--version"]),
+        "cargo": command_version(["cargo", "--version"]),
+        "openspec": command_version(
+            ["openspec", "--version"],
+            fallback=["powershell", "-NoProfile", "-Command", "openspec --version"],
+        ),
+    }
+
+
+def command_version(cmd: list[str], fallback: list[str] | None = None) -> str:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        if fallback is None:
+            return "unavailable"
+        return command_version(fallback)
+    text = (result.stdout or result.stderr).strip()
+    if result.returncode != 0 and not text:
+        return f"unavailable:{result.returncode}"
+    return text.splitlines()[0] if text else "unknown"
+
+
 def type_mapping_kind(c_type: str) -> str:
     if "*" in c_type:
         return "pointer"
@@ -1342,6 +1443,13 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def write_log_text(path: Path, text: str) -> None:
+    if text:
+        write_text(path, text)
+    elif path.exists():
+        path.unlink()
 
 
 def sha256(path: Path) -> str:

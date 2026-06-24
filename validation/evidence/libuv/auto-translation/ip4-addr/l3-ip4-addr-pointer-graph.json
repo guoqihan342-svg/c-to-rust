@@ -31,7 +31,9 @@
       "mutability": "read_only",
       "nullability": "unknown",
       "ownership_role": "borrowed",
-      "symbol": "ip"
+      "read_effects": [],
+      "symbol": "ip",
+      "write_effects": []
     },
     {
       "c_type": "struct sockaddr_in*",
@@ -40,10 +42,16 @@
       "mutability": "write_only",
       "nullability": "unknown",
       "ownership_role": "out_param",
-      "symbol": "addr"
+      "read_effects": [
+        "addr->sin_family = AF_INET"
+      ],
+      "symbol": "addr",
+      "write_effects": [
+        "addr->sin_family"
+      ]
     }
   ],
-  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
   "risk_summary": {
     "blocked_reasons": [],
     "known_gaps": [

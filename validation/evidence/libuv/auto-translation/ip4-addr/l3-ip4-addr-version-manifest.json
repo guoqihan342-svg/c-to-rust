@@ -1,7 +1,25 @@
 {
   "cache": {
     "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
-    "command_arguments": [],
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/libuv-ip4-addr.json"
+    ],
     "fixture_hash": "libuv-ip4-addr-fixture",
     "invalidates": [
       "context_pack",
@@ -10,18 +28,40 @@
       "pointer_graph",
       "rust_draft",
       "patch_plan",
+      "ai_candidate",
       "c_oracle",
       "diff",
       "summary"
     ],
     "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
     "slice_id": "ip4-addr",
     "slice_spec_sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
     "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "source_file_hashes": {
+      "include/uv.h": "missing",
+      "src/inet.c": "missing",
+      "src/uv-common.c": "missing",
+      "validation/l2_slices/fixtures/libuv-ip4-addr-input.json": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea"
+    },
     "target_id": "libuv",
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df"
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
   },
-  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",

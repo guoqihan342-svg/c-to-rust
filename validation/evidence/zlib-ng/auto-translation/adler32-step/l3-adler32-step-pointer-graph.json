@@ -16,7 +16,7 @@
   "context_pack_ref": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
   "schema_version": 1,
   "slice_id": "adler32-step",
   "source_boundary": {

@@ -9,7 +9,7 @@
 ## 2. Translator Core
 
 - [x] 2.1 Create the bounded translator crate or module with a slice-level API driven by slice spec, build profile, and evidence context rather than raw `c_source` alone.
-- [ ] 2.2 Implement parsing/extraction for the MVP C subset: function signature, primitive declarations, assignments, returns, simple calls, if/while/for, and supported pointer input/output forms.
+- [x] 2.2 Implement parsing/extraction for the MVP C subset: function signature, primitive declarations, assignments, returns, simple calls, if/while/for, and supported pointer input/output forms.
 - [x] 2.3 Record clang/compile profile availability and treat unresolved typedef, macro, ABI, struct layout, implicit cast, or declaration ambiguity as unsupported evidence.
 - [x] 2.4 Emit type-map, CFG, pointer graph decisions, unsupported node records, and translation rule ids before any Rust draft is accepted.
 - [x] 2.5 Implement Rust draft generation for one pure-value function and one pointer-bearing out-parameter function while keeping public Rust boundaries safe by default.
@@ -44,7 +44,7 @@
 - [x] 6.1 Implement AI candidate manifest emission without requiring AI for the default local pipeline.
 - [x] 6.2 Ensure prompts, when used, are bounded to slice spec, source spans, type/CFG/pointer excerpts, direct caller/callee facts, and current verification deltas.
 - [x] 6.3 Add cache metadata keys for source commit, file hashes, slice spec hash, fixture hash, build profile hash, Cargo.lock hash, tool versions, schema versions, translator version, and command arguments.
-- [ ] 6.4 Add tests that cache drift invalidates context pack, type map, CFG, pointer graph, Rust draft, PatchPlan, oracle, diff, and summary reuse.
+- [x] 6.4 Add tests that cache drift invalidates context pack, type map, CFG, pointer graph, Rust draft, PatchPlan, oracle, diff, and summary reuse.
 
 ## 7. Documentation
 

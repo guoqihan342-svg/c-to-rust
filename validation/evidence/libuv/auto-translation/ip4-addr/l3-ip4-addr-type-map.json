@@ -55,7 +55,7 @@
       "translation_rule_id": "supported MVP C subset mapping"
     }
   ],
-  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "repo_commit": "2bd2fb8b6d1aa340aad41b8ccd85312020778f2b",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "slice_spec_ref": {

@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import subprocess
 import tempfile
 import unittest
@@ -7,6 +8,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
+
+
+def load_auto_migrate_module():
+    spec = importlib.util.spec_from_file_location("auto_migrate_under_test", AUTO_MIGRATE)
+    if spec is None or spec.loader is None:
+        raise AssertionError("could not load auto_migrate module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class AutoMigrateTests(unittest.TestCase):
@@ -158,6 +168,55 @@ class AutoMigrateTests(unittest.TestCase):
                 / "l3-keyword-param-rust-draft.rs"
             ).read_text(encoding="utf-8")
             self.assertIn("r#match", draft)
+
+    def test_cache_drift_invalidates_reusable_translation_artifacts(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        previous = {
+            "source_commit": "source-a",
+            "source_file_hashes": {"src/file.c": "hash-a"},
+            "slice_spec_sha256": "slice-a",
+            "fixture_hash": "fixture-a",
+            "build_profile_hash": "profile-a",
+            "cargo_lock_hash": "lock-a",
+            "tool_versions": {"rustc": "rustc-a"},
+            "schema_versions": {"cfg": 1},
+            "translator_version": "0.1.0",
+            "translator_manifest_sha256": "manifest-a",
+            "command_arguments": ["auto_migrate.py", "--slice-spec", "slice.json"],
+        }
+
+        reusable = auto_migrate.cache_drift_report(previous, dict(previous))
+
+        self.assertEqual(reusable["status"], "reusable")
+        self.assertTrue(reusable["reuse_allowed"])
+        self.assertEqual(reusable["invalidated_artifacts"], [])
+
+        current = dict(previous)
+        current["source_commit"] = "source-b"
+        current["build_profile_hash"] = "profile-b"
+        current["fixture_hash"] = "fixture-b"
+        current["source_file_hashes"] = {"src/file.c": "hash-b"}
+
+        drifted = auto_migrate.cache_drift_report(previous, current)
+
+        self.assertEqual(drifted["status"], "drift_detected")
+        self.assertFalse(drifted["reuse_allowed"])
+        self.assertIn("source_commit", drifted["drifted_keys"])
+        self.assertIn("source_file_hashes", drifted["drifted_keys"])
+        self.assertIn("fixture_hash", drifted["drifted_keys"])
+        self.assertIn("build_profile_hash", drifted["drifted_keys"])
+        for artifact in [
+            "context_pack",
+            "type_map",
+            "cfg",
+            "pointer_graph",
+            "rust_draft",
+            "patch_plan",
+            "c_oracle",
+            "diff",
+            "summary",
+        ]:
+            self.assertIn(artifact, drifted["invalidated_artifacts"])
 
 
 if __name__ == "__main__":
