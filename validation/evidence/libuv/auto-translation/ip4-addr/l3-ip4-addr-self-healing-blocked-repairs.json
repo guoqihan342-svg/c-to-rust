@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "fixture_hash=libuv-ip4-addr-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "status": "none",
+  "target_id": "libuv"
+}

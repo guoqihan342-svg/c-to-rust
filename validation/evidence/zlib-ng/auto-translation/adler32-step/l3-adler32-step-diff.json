@@ -1,0 +1,9 @@
+{
+  "first_mismatch": null,
+  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "adler32-step",
+  "status": "incomplete",
+  "target_id": "zlib-ng"
+}

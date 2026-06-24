@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "C Control Flow Graph Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "target_id", "slice_id", "level", "status", "source_commit", "repo_commit", "slice_spec_ref", "functions", "unsupported_control_flow", "cache_invalidation_keys"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string"},
+    "slice_id": {"type": "string"},
+    "level": {"enum": ["L2", "L3"]},
+    "status": {"enum": ["recorded", "blocked", "stale", "incomplete"]},
+    "source_commit": {"type": "string", "minLength": 7},
+    "repo_commit": {"type": "string", "minLength": 7},
+    "slice_spec_ref": {"$ref": "#/definitions/evidenceRef"},
+    "functions": {"type": "array", "minItems": 1, "items": {"$ref": "#/definitions/functionCfg"}},
+    "unsupported_control_flow": {"type": "array", "items": {"$ref": "#/definitions/unsupportedControlFlow"}},
+    "cache_invalidation_keys": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  },
+  "definitions": {
+    "evidenceRef": {"type": "object", "required": ["path", "status"], "properties": {"path": {"type": "string"}, "status": {"type": "string"}, "sha256": {"type": "string"}}},
+    "sourceSpan": {"type": "object", "required": ["file", "line_start", "line_end"], "properties": {"file": {"type": "string"}, "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1}}},
+    "functionCfg": {"type": "object", "required": ["name", "entry_block", "exit_blocks", "basic_blocks", "edges", "returns", "structured_control_flow"], "properties": {"name": {"type": "string"}, "signature": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}, "entry_block": {"type": "string"}, "exit_blocks": {"type": "array", "items": {"type": "string"}}, "basic_blocks": {"type": "array", "items": {"$ref": "#/definitions/basicBlock"}}, "edges": {"type": "array", "items": {"$ref": "#/definitions/cfgEdge"}}, "branches": {"type": "array", "items": {"$ref": "#/definitions/branch"}}, "returns": {"type": "array", "items": {"$ref": "#/definitions/returnNode"}}, "structured_control_flow": {"type": "object", "required": ["if_count", "loop_count", "has_goto", "has_switch", "relooper_required"], "properties": {"if_count": {"type": "integer", "minimum": 0}, "loop_count": {"type": "integer", "minimum": 0}, "has_goto": {"type": "boolean"}, "has_switch": {"type": "boolean"}, "relooper_required": {"type": "boolean"}}}}},
+    "basicBlock": {"type": "object", "required": ["id", "kind", "statements", "source_span"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["entry", "body", "branch", "loop_header", "return", "exit", "unsupported"]}, "statements": {"type": "array", "items": {"type": "string"}}, "source_span": {"$ref": "#/definitions/sourceSpan"}}},
+    "cfgEdge": {"type": "object", "required": ["from", "to", "kind"], "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "kind": {"enum": ["fallthrough", "true_branch", "false_branch", "loop_back", "return", "break", "continue", "unsupported"]}, "condition": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}}},
+    "branch": {"type": "object", "required": ["id", "kind", "condition", "source_span"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["if", "while", "for", "switch", "ternary"]}, "condition": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}}},
+    "returnNode": {"type": "object", "required": ["block", "expression", "source_span"], "properties": {"block": {"type": "string"}, "expression": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}}},
+    "unsupportedControlFlow": {"type": "object", "required": ["id", "kind", "reason", "source_span", "translation_effect"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["goto", "computed_goto", "switch_fallthrough", "setjmp_longjmp", "inline_asm", "multi_entry_loop", "unknown"]}, "reason": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}, "translation_effect": {"enum": ["block_rust_draft", "requires_relooper", "requires_review"]}}}
+  }
+}

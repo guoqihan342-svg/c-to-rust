@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "fixture_hash=zlib-adler32-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "status": "none",
+  "target_id": "zlib-ng"
+}

@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "uv_ip4_addr",
+  "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "fixture_hash": "libuv-ip4-addr-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/libuv/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": "<pinned-libuv-root>",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "source_file_hashes": {}
+  },
+  "c_boundary": {
+    "files": [
+      {"path": "include/uv.h", "role": "header"},
+      {"path": "src/uv-common.c", "role": "source"},
+      {"path": "src/inet.c", "role": "source"},
+      {"path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json", "role": "fixture"}
+    ],
+    "functions": ["uv_ip4_addr"],
+    "signatures": [
+      {
+        "function": "uv_ip4_addr",
+        "return_type": "int",
+        "parameters": [
+          {"name": "ip", "c_type": "const char*", "direction": "input"},
+          {"name": "port", "c_type": "int", "direction": "input"},
+          {"name": "addr", "c_type": "struct sockaddr_in*", "direction": "output"}
+        ],
+        "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }"
+      }
+    ],
+    "direct_dependencies": [
+      {"kind": "type", "name": "struct sockaddr_in", "source": "include/uv.h"},
+      {"kind": "callee", "name": "uv_inet_pton", "source": "src/uv-common.c"},
+      {"kind": "macro", "name": "AF_INET", "source": "platform headers"}
+    ]
+  },
+  "build_profile": {
+    "profile_id": "libuv-ip4-addr-linux-gnu",
+    "compiler_command_source": "validation/evidence/libuv/l1-native-build.json",
+    "include_paths": ["<pinned-libuv-root>/include"],
+    "defines": ["_GNU_SOURCE", "AF_INET=2"],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "big",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "clang": "NOT_REQUIRED_FOR_MVP",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": []
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "libuv-ip4-addr-fixture",
+    "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "hash": "libuv-ip4-addr-fixture",
+    "cases": [
+      {"id": "loopback", "input_ref": "cases[0]", "expected_ref": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json"},
+      {"id": "invalid", "input_ref": "cases[3]", "expected_ref": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json"}
+    ],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "family",
+      "port_host",
+      "port_bytes_hex",
+      "addr_bytes_hex"
+    ],
+    "input": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
+    "rust_report": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "family",
+      "port_host",
+      "port_bytes_hex",
+      "addr_bytes_hex"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/libuv_ip4_addr.rs",
+    "public_api": [
+      {"name": "uv_ip4_addr", "visibility": "public", "boundary_kind": "safe_wrapper"}
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/libuv_ip4_addr.rs",
+    "api_name": "uv_ip4_addr",
+    "test_file": "validation/l2_slices/tests/libuv_ip4_addr.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full libuv migration claim.",
+      "No IPv6 or event-loop behavior.",
+      "No null pointer execution.",
+      "No whole-program alias proof."
+    ],
+    "must_not_claim": [
+      "full libuv migration",
+      "event-loop migration",
+      "IPv6 behavior",
+      "whole-program alias safety"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full libuv migration claim.",
+    "No IPv6 or event-loop behavior.",
+    "No null pointer execution.",
+    "No whole-program alias proof."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

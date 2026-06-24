@@ -1,0 +1,132 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "fixture_hash=zlib-adler32-fixture",
+    "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-cfg.json",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/zlib-adler32-step.json",
+      "sha256": "c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "draft_generated",
+  "target_id": "zlib-ng",
+  "translation_summary": {
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "structured-return-expression"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_node_count": 0
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

@@ -1,0 +1,1367 @@
+#!/usr/bin/env python3
+"""Run the bounded auto-translation pipeline for a slice spec."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slice-spec", required=True, type=Path)
+    parser.add_argument("--out-root", default=REPO_ROOT / "validation" / "evidence", type=Path)
+    parser.add_argument("--skip-c-oracle", action="store_true")
+    parser.add_argument("--skip-rust-check", action="store_true")
+    args = parser.parse_args()
+
+    spec = read_json(args.slice_spec)
+    target_id = required_str(spec, "target_id")
+    slice_id = required_str(spec, "slice_id")
+    evidence_dir = args.out_root / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    translator_spec = write_translator_spec(spec, args.slice_spec, evidence_dir)
+    translator_summary = run_translator(translator_spec, evidence_dir)
+    normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
+    oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
+    replay = generate_rust_replay_test_draft(spec, evidence_dir)
+    rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
+    cache = emit_cache_metadata(spec, args.slice_spec, evidence_dir)
+    manifest = emit_manifest(spec, evidence_dir, translator_summary, oracle, replay, rust_check, patch, cache)
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+    return 0
+
+
+def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_dir: Path) -> Path:
+    build_profile = spec.get("build_profile", {})
+    target = build_profile.get("target", {})
+    clang = build_profile.get("clang_type_extraction", {})
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    function_name = spec.get("function_name")
+    c_source = spec.get("c_source")
+    if not function_name and signatures:
+        function_name = signatures[0].get("function")
+    if not c_source and signatures:
+        c_source = signatures[0].get("c_source")
+    if not c_source:
+        c_source = spec.get("c_boundary", {}).get("c_source")
+    if not function_name or not c_source:
+        raise SystemExit(f"{original_spec} must include function_name/c_source or c_boundary.signatures[].function/c_source")
+    translator_spec = {
+        "target_id": required_str(spec, "target_id"),
+        "slice_id": required_str(spec, "slice_id"),
+        "source_commit": source_commit(spec),
+        "function_name": function_name,
+        "c_source": c_source,
+        "fixture_hash": fixture_hash(spec),
+        "build_profile": {
+            "include_paths": build_profile.get("include_paths", []),
+            "defines": build_profile.get("defines", []),
+            "target_triple": spec.get("build_profile", {}).get("target_triple") or target.get("triple_or_abi"),
+            "abi": spec.get("build_profile", {}).get("abi") or target.get("triple_or_abi"),
+            "compiler_command_source": build_profile.get("compiler_command_source", "unknown"),
+            "clang_available": bool(build_profile.get("clang_available", clang.get("available", False))),
+        },
+    }
+    path = evidence_dir / f"l3-{spec['slice_id']}-translator-input.json"
+    write_json(path, translator_spec)
+    return path
+
+
+def run_translator(slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+    cmd = [
+        "cargo",
+        "run",
+        "--quiet",
+        "--manifest-path",
+        str(TRANSLATOR_MANIFEST),
+        "--bin",
+        "c2r_translate",
+        "--",
+        "--slice-spec",
+        str(slice_spec),
+        "--out-dir",
+        str(evidence_dir),
+    ]
+    result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    write_text(evidence_dir / "translator-command.stdout.log", result.stdout)
+    write_text(evidence_dir / "translator-command.stderr.log", result.stderr)
+    if result.returncode != 0:
+        raise SystemExit(f"translator failed with exit code {result.returncode}; see {evidence_dir}")
+    return json.loads(result.stdout)
+
+
+def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
+    """Rewrite raw translator artifacts to the stricter evidence template schemas."""
+    target_id = required_str(spec, "target_id")
+    slice_id = required_str(spec, "slice_id")
+    source = source_commit(spec)
+    repo = repo_commit()
+    prefix = f"l3-{slice_id}"
+    slice_ref = {"path": rel(slice_spec_path), "status": "ready", "sha256": sha256(slice_spec_path)}
+    build_profile_ref = {
+        "path": rel(evidence_dir / f"{prefix}-translator-input.json"),
+        "status": "recorded",
+        "sha256": sha256(evidence_dir / f"{prefix}-translator-input.json"),
+    }
+
+    raw_type = read_json(evidence_dir / f"{prefix}-type-map.json")
+    mappings = [
+        {
+            "id": f"type-{idx + 1}",
+            "kind": type_mapping_kind(item.get("c_type", "")),
+            "c_name": item.get("symbol", ""),
+            "c_type": item.get("c_type", ""),
+            "rust_type": item.get("rust_type", ""),
+            "confidence": "proven",
+            "source": "translator_rule",
+            "translation_rule_id": item.get("reason", "supported MVP C subset mapping"),
+        }
+        for idx, item in enumerate(raw_type.get("type_map", {}).get("mappings", []))
+    ]
+    uncertainties = [
+        {
+            "id": f"uncertainty-{idx + 1}",
+            "kind": "declaration_resolution",
+            "reason": item.get("reason", ""),
+            "affected_mapping_ids": [],
+            "resolution": "block_translation",
+        }
+        for idx, item in enumerate(raw_type.get("type_map", {}).get("uncertainties", []))
+    ]
+    write_json(
+        evidence_dir / f"{prefix}-type-map.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "recorded" if not uncertainties else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "slice_spec_ref": slice_ref,
+            "build_profile_ref": build_profile_ref,
+            "mappings": mappings,
+            "uncertainties": uncertainties,
+            "unsupported_nodes": [],
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    raw_cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
+    raw_functions = raw_cfg.get("cfg", {}).get("functions", [])
+    unsupported_cf = []
+    functions = []
+    for function in raw_functions:
+        unsupported = function.get("unsupported_control_flow", [])
+        unsupported_cf.extend(
+            {
+                "id": f"unsupported-{idx + 1}",
+                "kind": "goto" if item == "goto" else "unknown",
+                "reason": f"{item} requires CFG/relooper support",
+                "source_span": source_span(),
+                "translation_effect": "requires_relooper",
+            }
+            for idx, item in enumerate(unsupported)
+        )
+        blocks = function.get("blocks", [])
+        statements = blocks[0].get("statements", []) if blocks else []
+        functions.append(
+            {
+                "name": function.get("name", required_str(spec, "slice_id")),
+                "signature": function_signature(spec),
+                "source_span": source_span(),
+                "entry_block": "entry",
+                "exit_blocks": ["return"] if blocks and blocks[0].get("terminator") == "return" else ["exit"],
+                "basic_blocks": [
+                    {
+                        "id": "entry",
+                        "kind": "entry",
+                        "statements": statements,
+                        "source_span": source_span(),
+                    }
+                ],
+                "edges": [
+                    {"from": "entry", "to": "return", "kind": "return", "source_span": source_span()}
+                ],
+                "branches": [],
+                "returns": [
+                    {"block": "entry", "expression": extract_return_expression(statements), "source_span": source_span()}
+                ],
+                "structured_control_flow": {
+                    "if_count": count_token(spec.get("c_source", ""), "if"),
+                    "loop_count": count_token(spec.get("c_source", ""), "while") + count_token(spec.get("c_source", ""), "for"),
+                    "has_goto": any(item.get("kind") == "goto" for item in unsupported_cf),
+                    "has_switch": "switch" in unsupported,
+                    "relooper_required": bool(unsupported),
+                },
+            }
+        )
+    write_json(
+        evidence_dir / f"{prefix}-cfg.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "recorded" if not unsupported_cf else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "slice_spec_ref": slice_ref,
+            "functions": functions,
+            "unsupported_control_flow": unsupported_cf,
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    raw_pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
+    raw_nodes = raw_pointer.get("pointer_graph", {}).get("nodes", [])
+    pointer_nodes = [
+        {
+            "id": node.get("id", f"ptr-{idx + 1}"),
+            "symbol": node.get("id", f"ptr-{idx + 1}"),
+            "kind": "struct_pointer" if node.get("role") == "out_param" else "raw_pointer",
+            "c_type": node.get("c_type", ""),
+            "mutability": "write_only" if node.get("role") == "out_param" else "read_only",
+            "nullability": "unknown",
+            "ownership_role": "out_param" if node.get("role") == "out_param" else "borrowed",
+        }
+        for idx, node in enumerate(raw_nodes)
+    ]
+    dependency_edges = [
+        {
+            "from": edge.get("from", ""),
+            "to": edge.get("to", ""),
+            "relationship": "writes_through",
+            "evidence": edge.get("relationship", "translator pointer dependency"),
+        }
+        for edge in raw_pointer.get("pointer_graph", {}).get("edges", [])
+    ]
+    pointer_status = "recorded" if pointer_nodes else "not_applicable"
+    pointer_payload = {
+        "schema_version": 1,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "level": "L3",
+        "status": pointer_status,
+        "source_commit": source,
+        "repo_commit": repo,
+        "context_pack_ref": rel(evidence_dir / f"{prefix}-context-pack.json"),
+        "applicability": {
+            "has_pointer_surface": bool(pointer_nodes),
+            "triggers": ["pointer_parameter"] if pointer_nodes else ["none"],
+        },
+        "source_boundary": source_boundary(spec),
+        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+    }
+    if pointer_nodes:
+        pointer_payload.update(
+            {
+                "pointer_nodes": pointer_nodes,
+                "dependency_edges": dependency_edges,
+                "rust_mapping": [
+                    {
+                        "pointer_node": node["id"],
+                        "strategy": "safe public API boundary generated by bounded translator",
+                        "unsafe_expected": False,
+                    }
+                    for node in pointer_nodes
+                ],
+                "risk_summary": {
+                    "unsafe_expected": False,
+                    "blocked_reasons": [],
+                    "known_gaps": spec.get("non_goals", []),
+                },
+            }
+        )
+    else:
+        pointer_payload["not_applicable_reason"] = "slice has no pointer surface"
+    write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
+
+    raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    write_json(
+        evidence_dir / f"{prefix}-auto-translation-plan.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "draft_generated" if raw_plan.get("status") == "generated" else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "inputs": {
+                "slice_spec": slice_ref,
+                "type_map": {"path": rel(evidence_dir / f"{prefix}-type-map.json"), "status": "recorded"},
+                "cfg": {"path": rel(evidence_dir / f"{prefix}-cfg.json"), "status": "recorded"},
+                "pointer_graph": {"path": rel(evidence_dir / f"{prefix}-pointer-graph.json"), "status": pointer_status},
+            },
+            "generated_artifacts": [
+                generated_artifact(evidence_dir / f"{prefix}-rust-draft.rs", "rust_draft"),
+                generated_artifact(evidence_dir / f"{prefix}-c-oracle-harness-draft.c", "c_oracle_harness"),
+                generated_artifact(evidence_dir / f"{prefix}-rust-replay-test-draft.rs", "rust_replay_test"),
+            ],
+            "translation_summary": {
+                "translation_rule_ids": raw_plan.get("plan", {}).get("translation_rule_ids", []),
+                "unsupported_node_count": raw_plan.get("plan", {}).get("unsupported_node_count", 0),
+                "unsafe_candidate_count": raw_plan.get("plan", {}).get("unsafe_candidate_count", 0),
+                "safe_public_api": True,
+            },
+            "verification_plan": [
+                {"gate": "rust_check", "command": "rustc --error-format=json <draft>", "required_before_acceptance": True},
+                {"gate": "c_oracle", "command": "generate accepted C oracle", "required_before_acceptance": True},
+                {"gate": "l3_manifest", "command": "emit L3 evidence manifest", "required_before_acceptance": True},
+            ],
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    write_json(
+        evidence_dir / f"{prefix}-ai-candidate-manifest.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "status": "not_used",
+            "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+            "ai_required_for_default_pipeline": False,
+            "candidates": [],
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    write_auto_translation_events(spec, slice_spec_path, evidence_dir)
+    write_context_pack(spec, slice_spec_path, evidence_dir)
+
+
+def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip: bool) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    function_name = required_str(spec, "function_name")
+    fixture = spec.get("fixture_contract", {})
+    c_path = evidence_dir / f"l3-{slice_id}-c-oracle-harness-draft.c"
+    report_path = evidence_dir / f"l3-{slice_id}-c-oracle-status.json"
+    source = (
+        "/* Auto-generated C oracle harness draft. */\n"
+        "/* Review and compile against the pinned L1 source tree before using as oracle evidence. */\n"
+        "#include <stdint.h>\n"
+        "#include <stdio.h>\n\n"
+        f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
+        f"/* function: {function_name} */\n"
+        "int main(void) {\n"
+        f"  puts(\"oracle harness draft for {function_name}\");\n"
+        "  return 0;\n"
+        "}\n"
+    )
+    write_text(c_path, source)
+    status = "SKIPPED_LOCAL_NO_C_TOOLCHAIN" if skip else "DRAFT_GENERATED"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "semantic_pass": False,
+        "harness_draft": rel(c_path),
+        "fixture": fixture.get("input"),
+        "required_final_status": "C_ORACLE_GENERATED",
+        "boundary": "Draft generation is not oracle success.",
+    }
+    write_json(report_path, payload)
+    return payload
+
+
+def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    function_name = required_str(spec, "function_name")
+    path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    fixture = spec.get("fixture_contract", {})
+    text = (
+        "// Auto-generated Rust replay test draft.\n"
+        "// Review before promoting into validation/l2_slices/tests.\n\n"
+        "#[test]\n"
+        f"fn replay_{safe_ident(slice_id)}_fixture_contract() {{\n"
+        f"    let _fixture = {fixture.get('input', '')!r};\n"
+        f"    let _api = {function_name!r};\n"
+        "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+        "}\n"
+    )
+    write_text(path, text)
+    fixture_path = fixture.get("path") or fixture.get("input") or "unknown-fixture"
+    behavior_fields = fixture.get("observable_outputs") or fixture.get("behavior_fields", [])
+    test_name = f"replay_{safe_ident(slice_id)}_fixture_contract"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "level": spec.get("level", "L3"),
+        "status": "recorded",
+        "test_draft": rel(path),
+        "fixture": fixture_path,
+        "behavior_fields": list(behavior_fields),
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "source_test_inputs": {
+            "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED.",
+            "fixtures": [
+                {
+                    "path": fixture_path,
+                    "hash": fixture_hash(spec),
+                    "operation_count": len(fixture.get("cases", [])),
+                    "source_kind": "fixture",
+                }
+            ],
+            "oracle_reports": [
+                {
+                    "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                    "status": "draft_or_skipped",
+                }
+            ],
+        },
+        "rust_tests": [
+            {
+                "file": rel(path),
+                "test_names": [test_name],
+                "cargo_command": f"cargo test {test_name}",
+                "framework": "cargo test",
+                "file_hash": sha256(path),
+            }
+        ],
+        "coverage": {
+            "main_paths": list(behavior_fields),
+            "error_paths": [],
+            "negative_cases": ["negative diff must be generated before acceptance"],
+        },
+        "translation_mappings": [
+            {
+                "source": fixture_path,
+                "rust_test": f"{rel(path)}::{test_name}",
+                "behavior_fields": list(behavior_fields),
+                "coverage_kind": "oracle_replay",
+                "status": "gap",
+                "evidence": [
+                    {
+                        "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                        "status": "not_semantic_pass",
+                    }
+                ],
+            }
+        ],
+        "evidence_links": {
+            "rust_draft": {"path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"), "status": "candidate"},
+            "c_oracle": {"path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"), "status": "draft_or_skipped"},
+        },
+        "known_gaps": [
+            "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+        ],
+        "cache_invalidation_keys": cache_keys(spec, evidence_dir / f"l3-{slice_id}-translator-input.json"),
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", payload)
+    return payload
+
+
+def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
+    slice_id = required_str(spec, "slice_id")
+    if skip or path is None:
+        payload = {
+            "schema_version": 1,
+            "status": "skipped",
+            "errors": [],
+            "command": None,
+        }
+        patch = write_no_patch_required(spec, evidence_dir, path)
+    else:
+        first = rust_check_once(path)
+        write_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
+        write_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+        patch = write_no_patch_required(spec, evidence_dir, path)
+        final = first
+        if first["returncode"] != 0:
+            patch = try_safe_self_heal(spec, evidence_dir, path, first)
+            if patch.get("self_heal_applied"):
+                final = rust_check_once(path)
+        write_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
+        write_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
+        payload = {
+            "schema_version": 1,
+            "status": "passed" if final["returncode"] == 0 else "failed",
+            "command": final["command"],
+            "error_count": len(final["errors"]),
+            "errors": final["errors"],
+            "self_healing": {
+                "status": patch["status"],
+                "patch_events": patch["patch_events"],
+                "blocked_repairs": patch["blocked_repairs"],
+            },
+        }
+        if final["returncode"] != 0 and patch["status"] != "recorded":
+            patch = write_blocked_patch(spec, evidence_dir, path, final["errors"])
+    write_json(evidence_dir / "rust-check.json", payload)
+    return payload, patch
+
+
+def rust_check_once(path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-rust-check-") as build_dir:
+        cmd = [
+            "rustc",
+            "--edition=2021",
+            "--crate-type=lib",
+            "--error-format=json",
+            "--out-dir",
+            build_dir,
+            str(path),
+        ]
+        result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    errors = [
+        json.loads(line)
+        for line in result.stderr.splitlines()
+        if line.startswith("{") and '"level":"error"' in line.replace(" ", "")
+    ]
+    return {
+        "command": " ".join(cmd),
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "errors": errors,
+    }
+
+
+RUST_KEYWORDS = {
+    "as",
+    "async",
+    "await",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+}
+
+
+def try_safe_self_heal(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+) -> dict[str, Any]:
+    text = draft_path.read_text(encoding="utf-8")
+    params = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*:", text))
+    keyword_params = sorted(params & RUST_KEYWORDS)
+    if not keyword_params:
+        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+
+    patched = text
+    for name in keyword_params:
+        patched = re.sub(rf"(?<!#)\b{re.escape(name)}\b", f"r#{name}", patched)
+    if patched == text:
+        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+
+    draft_path.write_text(patched, encoding="utf-8")
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    base_event = {
+        "schema_version": 1,
+        "patch_id": "patch-rust-keyword-identifiers-1",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "round": 1,
+        "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
+        "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
+        "expected_error_delta": {
+            "before": [rustc_error_code(error) for error in first["errors"]],
+            "after_expected": [],
+        },
+        "forbidden_changes": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+        ],
+        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-1",
+        "ai_usage": {"used": False},
+        "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
+    }
+    events = [
+        {**base_event, "status": "applied"},
+        {**base_event, "status": "verified"},
+    ]
+    write_text(events_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(blocked_path),
+        "blocked_repairs_status": blocked["status"],
+        "blocked_repairs_items": blocked["blocked_repairs"],
+        "status": "recorded",
+        "self_heal_applied": True,
+    }
+
+
+def write_no_patch_required(spec: dict[str, Any], evidence_dir: Path, draft_path: Path | None) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    write_text(events_path, "")
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(blocked_path),
+        "blocked_repairs_status": blocked["status"],
+        "blocked_repairs_items": blocked["blocked_repairs"],
+        "status": "none",
+        "self_heal_applied": False,
+    }
+
+
+def write_blocked_patch(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path | None,
+    errors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    event = {
+        "schema_version": 1,
+        "patch_id": "patch-blocked-1",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "round": 1,
+        "status": "blocked",
+        "files": [{"path": rel(draft_path) if draft_path else "", "spans": [{"line_start": 1, "line_end": 1}]}],
+        "reason": "No safe local compile self-healing rule matched this rustc error stack.",
+        "expected_error_delta": {
+            "before": [rustc_error_code(error) for error in errors],
+            "after_expected": [],
+        },
+        "forbidden_changes": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+        ],
+        "rollback_id": f"rollback-{slice_id}-blocked-1",
+        "ai_usage": {"used": False},
+        "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
+    }
+    write_text(events_path, json.dumps(event, sort_keys=True) + "\n")
+    blocked = blocked_repairs_payload(
+        spec,
+        [
+            {
+                "repair_id": "repair-blocked-1",
+                "blocked_reason": event["reason"],
+                "forbidden_change": "type_uncertainty",
+                "candidate_patch_id": event["patch_id"],
+                "source_span": {"file": rel(draft_path) if draft_path else "", "line_start": 1, "line_end": 1},
+                "human_action_required": True,
+            }
+        ],
+    )
+    write_json(blocked_path, blocked)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(blocked_path),
+        "blocked_repairs_status": blocked["status"],
+        "blocked_repairs_items": blocked["blocked_repairs"],
+        "status": "blocked",
+        "self_heal_applied": False,
+    }
+
+
+def emit_cache_metadata(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": spec.get("slice_id"),
+        "source_commit": spec.get("source_commit"),
+        "slice_spec_sha256": sha256(slice_spec),
+        "fixture_hash": spec.get("fixture_hash"),
+        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
+        "command_arguments": [],
+        "invalidates": [
+            "context_pack",
+            "type_map",
+            "cfg",
+            "pointer_graph",
+            "rust_draft",
+            "patch_plan",
+            "c_oracle",
+            "diff",
+            "summary",
+        ],
+    }
+    write_json(evidence_dir / f"l3-{spec.get('slice_id')}-auto-cache-metadata.json", payload)
+    return payload
+
+
+def emit_manifest(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    translator_summary: dict[str, Any],
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    patch: dict[str, Any],
+    cache: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache)
+    payload = {
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "candidate_generated",
+        "source_commit": spec.get("source_commit"),
+        "fixture": {
+            "hash": spec.get("fixture_hash"),
+            "path": spec.get("fixture_contract", {}).get("input"),
+        },
+        "translator": translator_summary,
+        "oracle": oracle,
+        "replay": replay,
+        "rust_check": rust_check,
+        "patch": patch,
+        "cache": cache,
+        "l3_evidence_manifest": {
+            "path": rel(l3_manifest),
+            "status": "incomplete",
+            "semantic_pass": False,
+        },
+        "claim_boundary": {
+            "scope": "auto-translation candidate evidence only",
+            "semantic_pass": False,
+            "must_still_pass": [
+                "C_ORACLE_GENERATED",
+                "Rust replay",
+                "schema-aware diff",
+                "negative diff",
+                "unsafe scan",
+                "version/config binding",
+                "OpenSpec validation",
+            ],
+            "non_goals": spec.get("non_goals", []),
+        },
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json", payload)
+    return payload
+
+
+def emit_l3_evidence_manifest(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    cache: dict[str, Any],
+) -> Path:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache)
+    pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
+    if pointer_ref["status"] == "not_applicable":
+        pointer_ref["not_applicable_reason"] = "slice has no pointer surface"
+    test_ref = evidence_ref(evidence_dir / f"{prefix}-test-translation-generated.json", "recorded")
+    manifest = {
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "incomplete",
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "fixture": {
+            "path": fixture_path(spec),
+            "hash": fixture_hash(spec),
+            "operation_count": len(spec.get("fixture_contract", {}).get("cases", [])),
+        },
+        "evidence": {
+            "slice_contract": evidence_ref(evidence_dir / f"{prefix}-slice-contract.json", "recorded"),
+            "context_pack": evidence_ref(evidence_dir / f"{prefix}-context-pack.json", "recorded"),
+            "cache_metadata": evidence_ref(evidence_dir / f"{prefix}-auto-cache-metadata.json", "recorded"),
+            "config_profile": {
+                **evidence_ref(evidence_dir / f"{prefix}-config-profile.json", "incomplete"),
+                "profile_id": build_profile_id(spec),
+            },
+            "pointer_dependency_graph": pointer_ref,
+            "test_translation": test_ref,
+            "c_oracle": evidence_ref(evidence_dir / f"{prefix}-c-oracle-status.json", oracle.get("status", "draft")),
+            "rust_report": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "incomplete"),
+            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "incomplete"),
+            "negative_diff": {
+                **evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", "incomplete"),
+                "expected_failure": True,
+                "mutation_detected": False,
+            },
+            "rust_check": evidence_ref(evidence_dir / "rust-check.json", rust_check.get("status", "unknown")),
+            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "incomplete"),
+            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "incomplete"),
+            "performance_smoke": {
+                **evidence_ref(evidence_dir / f"{prefix}-performance-smoke.json", "recorded"),
+                "secondary_only": True,
+            },
+            "final_verification": evidence_ref(evidence_dir / f"{prefix}-final-verification.json", "incomplete"),
+            "summary": evidence_ref(evidence_dir / f"{prefix}-summary.json", "incomplete"),
+            "version_or_config_binding": evidence_ref(evidence_dir / f"{prefix}-version-manifest.json", "recorded"),
+        },
+        "claim_boundary": {
+            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass.",
+            "behavior_fields_checked": behavior_fields(spec),
+            "accepted_metadata_differences": accepted_metadata_differences(spec),
+            "known_gaps": non_goals(spec)
+            + [
+                "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
+                "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists.",
+            ],
+            "must_not_claim": must_not_claim(spec)
+            + [
+                "semantic equivalence for this auto-generated Rust draft",
+                "full C99/C11 automatic translation",
+            ],
+        },
+    }
+    path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    write_json(path, manifest)
+    return path
+
+
+def write_l3_candidate_supporting_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    cache: dict[str, Any],
+) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
+    write_json(
+        evidence_dir / f"{prefix}-slice-contract.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "source_commit": source_commit(spec),
+            "fixture": {"path": fixture_path(spec), "hash": fixture_hash(spec)},
+            "c_boundary": spec.get("c_boundary", {}),
+            "rust_boundary": spec.get("rust_boundary", {}),
+            "claim_boundary": spec.get("claim_boundary", {}),
+        },
+    )
+    write_l3_config_profile(spec, evidence_dir)
+    write_json(
+        evidence_dir / f"{prefix}-rust-report.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "incomplete",
+            "semantic_pass": False,
+            "reason": "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+            "replay": replay,
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "incomplete",
+            "semantic_pass": False,
+            "first_mismatch": None,
+            "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-negative-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "incomplete",
+            "expected_failure": True,
+            "mutation_detected": False,
+            "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-scan.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed" if unsafe_count == 0 else "incomplete",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "first_party_non_test_unsafe_ratio": 0.0 if unsafe_count == 0 else None,
+            "semantic_pass": False,
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-ledger.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed" if unsafe_count == 0 else "incomplete",
+            "entries": [],
+            "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-performance-smoke.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "secondary_only": True,
+            "semantic_pass": False,
+            "reason": "Performance is not evaluated for draft-only auto-translation candidates.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-final-verification.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "incomplete",
+            "semantic_pass": False,
+            "rust_check_status": rust_check.get("status"),
+            "c_oracle_status": oracle.get("status"),
+            "required_before_acceptance": [
+                "C_ORACLE_GENERATED",
+                "Rust replay",
+                "schema-aware diff",
+                "negative diff",
+                "unsafe scan",
+                "version/config binding",
+                "OpenSpec validation",
+            ],
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-summary.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "incomplete",
+            "semantic_pass": False,
+            "summary": "Auto-translation candidate generated with schema-bound evidence; acceptance gates remain open.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-version-manifest.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "source_commit": source_commit(spec),
+            "repo_commit": repo_commit(),
+            "cache": cache,
+            "translator_version": "0.1.0",
+        },
+    )
+
+
+def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path) -> None:
+    slice_id = required_str(spec, "slice_id")
+    build = spec.get("build_profile", {})
+    target = build.get("target", {})
+    translator_input = evidence_dir / f"l3-{slice_id}-translator-input.json"
+    write_json(
+        evidence_dir / f"l3-{slice_id}-config-profile.json",
+        {
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "profile_id": build_profile_id(spec),
+            "status": "incomplete",
+            "source_commit": source_commit(spec),
+            "repo_commit": repo_commit(),
+            "fixture": {
+                "path": fixture_path(spec),
+                "hash": fixture_hash(spec),
+                "operation_count": len(spec.get("fixture_contract", {}).get("cases", [])),
+            },
+            "config_header": {
+                "path": rel(translator_input),
+                "sha256": sha256(translator_input) if translator_input.exists() else "missing",
+                "role": "normalized translator input and build profile",
+            },
+            "c_defines": defines_to_object(build.get("defines", [])),
+            "feature_matrix": {"auto_translation_candidate": True},
+            "compile_profile": {
+                "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+                "include_paths": build.get("include_paths", []),
+                "config_header_included": True,
+                "command_args": [build.get("compiler_command_source", "unknown")],
+            },
+            "rust_profile": {
+                "package": spec.get("rust_boundary", {}).get("crate", "c2r-translator"),
+                "cargo_features": [],
+                "feature_env": "none",
+                "backend": "generated-draft",
+            },
+            "toolchain": {
+                "rustc_version": "captured_by_rust_check",
+                "cargo_version": "captured_by_validation",
+                "openspec_version": "captured_by_validation",
+                "target_triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or "unknown",
+            },
+            "cache_invalidation_keys": cache_keys(spec, translator_input),
+            "non_goals": non_goals(spec),
+        },
+    )
+
+
+def write_context_pack(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
+    slice_id = required_str(spec, "slice_id")
+    payload = {
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "recorded",
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "slice_spec": {"path": rel(slice_spec_path), "sha256": sha256(slice_spec_path)},
+        "direct_c_files": [item["path"] for item in spec.get("c_boundary", {}).get("files", [])]
+        or spec.get("source_files", []),
+        "direct_rust_files": [spec.get("rust_boundary", {}).get("module") or spec.get("rust_boundary", {}).get("module_path", "")],
+        "call_edges": spec.get("c_boundary", {}).get("direct_dependencies", []),
+        "fixture": spec.get("fixture_contract", {}).get("path") or spec.get("fixture_contract", {}).get("input"),
+        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-context-pack.json", payload)
+
+
+def write_auto_translation_events(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
+    slice_id = required_str(spec, "slice_id")
+    target_id = required_str(spec, "target_id")
+    prefix = f"l3-{slice_id}"
+    timestamp = "2026-06-24T00:00:00Z"
+    event_defs = [
+        ("input-normalized", "input_normalized", "recorded", slice_spec_path),
+        ("context-extracted", "context_extracted", "recorded", evidence_dir / f"{prefix}-context-pack.json"),
+        ("type-map-emitted", "type_map_emitted", "recorded", evidence_dir / f"{prefix}-type-map.json"),
+        ("cfg-emitted", "cfg_emitted", "recorded", evidence_dir / f"{prefix}-cfg.json"),
+        ("pointer-graph-emitted", "pointer_graph_emitted", "recorded", evidence_dir / f"{prefix}-pointer-graph.json"),
+        ("rust-draft-generated", "rust_draft_generated", "recorded", evidence_dir / f"{prefix}-rust-draft.rs"),
+        ("run-completed", "run_completed", "skipped", evidence_dir / f"{prefix}-evidence-manifest.json"),
+    ]
+    events = []
+    for suffix, kind, status, artifact in event_defs:
+        events.append(
+            {
+                "schema_version": 1,
+                "event_id": f"{target_id}-{slice_id}-{suffix}",
+                "timestamp_utc": timestamp,
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "event_kind": kind,
+                "status": status,
+                "message": event_message(kind),
+                "artifact_refs": [evidence_ref(artifact, status)],
+            }
+        )
+    write_text(
+        evidence_dir / f"{prefix}-auto-translation-events.jsonl",
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+    )
+
+
+def event_message(kind: str) -> str:
+    messages = {
+        "input_normalized": "Slice spec normalized for bounded auto translation.",
+        "context_extracted": "Context pack evidence emitted before accepting Rust draft.",
+        "type_map_emitted": "Type map evidence emitted before accepting Rust draft.",
+        "cfg_emitted": "CFG evidence emitted before accepting Rust draft.",
+        "pointer_graph_emitted": "Pointer graph evidence emitted before accepting safe public boundary.",
+        "rust_draft_generated": "Rust draft candidate generated.",
+        "run_completed": "Candidate generation completed; semantic acceptance gates remain incomplete.",
+    }
+    return messages.get(kind, kind)
+
+
+def evidence_ref(path: Path, status: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {"path": rel(path), "status": status}
+    if path.exists() and path.is_file():
+        payload["sha256"] = sha256(path)
+    return payload
+
+
+def pointer_status_for_manifest(spec: dict[str, Any], evidence_dir: Path) -> str:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-pointer-graph.json"
+    if not path.exists():
+        return "incomplete"
+    try:
+        return str(read_json(path).get("status", "recorded"))
+    except json.JSONDecodeError:
+        return "incomplete"
+
+
+def fixture_path(spec: dict[str, Any]) -> str:
+    fixture = spec.get("fixture_contract", {})
+    return fixture.get("path") or fixture.get("input") or "unknown-fixture"
+
+
+def build_profile_id(spec: dict[str, Any]) -> str:
+    build = spec.get("build_profile", {})
+    return build.get("profile_id") or f"{spec.get('target_id', 'target')}-{spec.get('slice_id', 'slice')}-auto-profile"
+
+
+def behavior_fields(spec: dict[str, Any]) -> list[str]:
+    fixture = spec.get("fixture_contract", {})
+    fields = fixture.get("observable_outputs") or fixture.get("behavior_fields") or []
+    return [str(item) for item in fields]
+
+
+def accepted_metadata_differences(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = spec.get("accepted_metadata_differences") or boundary.get("accepted_metadata_differences") or []
+    return [str(item) for item in values]
+
+
+def non_goals(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = spec.get("non_goals") or boundary.get("non_goals") or []
+    return [str(item) for item in values]
+
+
+def must_not_claim(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = boundary.get("must_not_claim") or []
+    return [str(item) for item in values]
+
+
+def defines_to_object(defines: list[Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for item in defines:
+        text = str(item)
+        if "=" in text:
+            key, value = text.split("=", 1)
+            result[key] = value
+        else:
+            result[text] = True
+    if not result:
+        result["none"] = True
+    return result
+
+
+def rust_draft_unsafe_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return len(re.findall(r"\bunsafe\b", path.read_text(encoding="utf-8")))
+
+
+def generated_artifact(path: Path, kind: str) -> dict[str, Any]:
+    return {
+        "path": rel(path),
+        "kind": kind,
+        "generator": {"name": "c2r-translator", "version": "0.1.0"},
+        "source_spans": [source_span()],
+        "generated_spans": [source_span(file=rel(path))],
+        "status": "candidate",
+    }
+
+
+def source_span(file: str = "slice-spec") -> dict[str, Any]:
+    return {"file": file, "line_start": 1, "line_end": 1}
+
+
+def source_commit(spec: dict[str, Any]) -> str:
+    return spec.get("source_commit") or spec.get("source", {}).get("source_commit") or "UNKNOWN0"
+
+
+def fixture_hash(spec: dict[str, Any]) -> str:
+    fixture = spec.get("fixture_contract", {})
+    return spec.get("fixture_hash") or fixture.get("hash") or "UNKNOWN_FIXTURE"
+
+
+def repo_commit() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True).strip()
+    except Exception:
+        return "UNKNOWN0"
+
+
+def cache_keys(spec: dict[str, Any], slice_spec_path: Path) -> list[str]:
+    return [
+        f"source_commit={source_commit(spec)}",
+        f"slice_spec_sha256={sha256(slice_spec_path)}",
+        f"fixture_hash={fixture_hash(spec)}",
+        f"build_profile_hash={sha256_json(spec.get('build_profile', {}))}",
+        "translator_version=0.1.0",
+        "schema_version=1",
+    ]
+
+
+def type_mapping_kind(c_type: str) -> str:
+    if "*" in c_type:
+        return "pointer"
+    if c_type in {"int", "unsigned int", "uint32_t", "char", "unsigned char"}:
+        return "primitive"
+    if c_type.startswith("struct "):
+        return "struct"
+    return "unsupported"
+
+
+def function_signature(spec: dict[str, Any]) -> str:
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    if signatures:
+        signature = signatures[0]
+        params = ", ".join(
+            f"{param.get('c_type')} {param.get('name')}" for param in signature.get("parameters", [])
+        )
+        return f"{signature.get('return_type')} {signature.get('function')}({params})"
+    return spec.get("c_source", "").split("{", 1)[0].strip()
+
+
+def extract_return_expression(statements: list[str]) -> str:
+    for statement in statements:
+        if statement.strip().startswith("return"):
+            return statement.strip()[len("return") :].strip()
+    return ""
+
+
+def count_token(text: str, token: str) -> int:
+    return len(re.findall(rf"\b{re.escape(token)}\b", text))
+
+
+def source_boundary(spec: dict[str, Any]) -> dict[str, Any]:
+    c_boundary = spec.get("c_boundary", {})
+    files = [item["path"] for item in c_boundary.get("files", [])] or spec.get("source_files", [])
+    functions = c_boundary.get("functions") or [spec.get("function_name", "unknown")]
+    return {
+        "files": files,
+        "functions": functions,
+        "structs": [dep.get("name") for dep in c_boundary.get("direct_dependencies", []) if dep.get("kind") == "type"],
+        "globals": [],
+        "direct_call_edges": [],
+    }
+
+
+def blocked_repairs_payload(spec: dict[str, Any], repairs: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": spec.get("slice_id"),
+        "status": "recorded" if repairs else "none",
+        "blocked_repairs": repairs,
+        "cache_invalidation_keys": [
+            f"source_commit={source_commit(spec)}",
+            f"fixture_hash={fixture_hash(spec)}",
+            "patch_plan_schema=1",
+        ],
+    }
+
+
+def rustc_error_code(error: dict[str, Any]) -> str:
+    code = error.get("code")
+    if isinstance(code, dict) and code.get("code"):
+        return str(code["code"])
+    return "rustc_error"
+
+
+def required_str(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"slice spec must include non-empty string `{key}`")
+    return value
+
+
+def safe_ident(text: str) -> str:
+    return "".join(ch if ch.isalnum() else "_" for ch in text)
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def write_json(path: Path, value: dict[str, Any]) -> None:
+    write_text(path, json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sha256_json(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

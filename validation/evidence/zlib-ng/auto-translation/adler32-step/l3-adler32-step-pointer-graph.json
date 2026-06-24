@@ -1,0 +1,39 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "fixture_hash=zlib-adler32-fixture",
+    "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "context_pack_ref": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "slice has no pointer surface",
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "adler32.c",
+      "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json"
+    ],
+    "functions": [
+      "adler32_step"
+    ],
+    "globals": [],
+    "structs": [
+      "uint32_t"
+    ]
+  },
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "not_applicable",
+  "target_id": "zlib-ng"
+}

@@ -1,0 +1,8 @@
+{
+  "entries": [],
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "status": "passed",
+  "target_id": "libuv"
+}

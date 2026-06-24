@@ -104,7 +104,7 @@
               ],
               "properties": {
                 "mutation_detected": {
-                  "const": true
+                  "type": "boolean"
                 },
                 "expected_failure": {
                   "type": "boolean"
@@ -220,6 +220,35 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence": {
+            "properties": {
+              "negative_diff": {
+                "properties": {
+                  "mutation_detected": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "mutation_detected"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "evidenceRef": {
       "type": "object",

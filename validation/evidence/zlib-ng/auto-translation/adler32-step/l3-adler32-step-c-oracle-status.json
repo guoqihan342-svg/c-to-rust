@@ -1,0 +1,11 @@
+{
+  "boundary": "Draft generation is not oracle success.",
+  "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+  "harness_draft": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
+  "required_final_status": "C_ORACLE_GENERATED",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "adler32-step",
+  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "target_id": "zlib-ng"
+}

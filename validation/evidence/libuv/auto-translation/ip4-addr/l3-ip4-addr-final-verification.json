@@ -1,0 +1,18 @@
+{
+  "c_oracle_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "required_before_acceptance": [
+    "C_ORACLE_GENERATED",
+    "Rust replay",
+    "schema-aware diff",
+    "negative diff",
+    "unsafe scan",
+    "version/config binding",
+    "OpenSpec validation"
+  ],
+  "rust_check_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "ip4-addr",
+  "status": "incomplete",
+  "target_id": "libuv"
+}

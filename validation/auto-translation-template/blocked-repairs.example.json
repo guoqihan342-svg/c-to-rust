@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "kvdb-lifecycle",
+  "status": "recorded",
+  "blocked_repairs": [{"repair_id": "blocked-0001", "blocked_reason": "Candidate patch changes fixture expected behavior to make the generated Rust draft pass.", "forbidden_change": "fixture_expected_behavior", "candidate_patch_id": "patch-0002", "source_span": {"file": "validation/l2_slices/fixtures/flashdb-kvdb-lifecycle.json", "line_start": 12, "line_end": 18}, "human_action_required": true}],
+  "cache_invalidation_keys": ["fixture:example-fixture-hash", "patch:patch-0002", "schema:blocked-repairs:1"]
+}

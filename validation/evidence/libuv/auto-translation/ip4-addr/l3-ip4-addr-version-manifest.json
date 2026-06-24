@@ -1,0 +1,31 @@
+{
+  "cache": {
+    "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
+    "command_arguments": [],
+    "fixture_hash": "libuv-ip4-addr-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "c_oracle",
+      "diff",
+      "summary"
+    ],
+    "schema_version": 1,
+    "slice_id": "ip4-addr",
+    "slice_spec_sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "target_id": "libuv",
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df"
+  },
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "recorded",
+  "target_id": "libuv",
+  "translator_version": "0.1.0"
+}

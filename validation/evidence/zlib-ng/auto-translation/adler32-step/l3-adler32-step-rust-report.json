@@ -1,0 +1,97 @@
+{
+  "reason": "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+  "replay": {
+    "behavior_fields": [
+      "value"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+      "slice_spec_sha256=5ff53c9c76f38a59873e5cbc167825f18eddd862a8022f7afed48377c0acd09c",
+      "fixture_hash=zlib-adler32-fixture",
+      "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "value"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
+        "status": "draft_or_skipped"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs",
+        "status": "candidate"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+    "known_gaps": [
+      "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+    ],
+    "level": "L3",
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test replay_adler32_step_fixture_contract",
+        "file": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs",
+        "file_hash": "b79f861a5486827fa5b238e160926b02bc31f60152b86d0369a863d23403469c",
+        "framework": "cargo test",
+        "test_names": [
+          "replay_adler32_step_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "adler32-step",
+    "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "zlib-adler32-fixture",
+          "operation_count": 1,
+          "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
+          "status": "draft_or_skipped"
+        }
+      ],
+      "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED."
+    },
+    "status": "recorded",
+    "target_id": "zlib-ng",
+    "test_draft": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "value"
+        ],
+        "coverage_kind": "oracle_replay",
+        "evidence": [
+          {
+            "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
+            "status": "not_semantic_pass"
+          }
+        ],
+        "rust_test": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-replay-test-draft.rs::replay_adler32_step_fixture_contract",
+        "source": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+        "status": "gap"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "adler32-step",
+  "status": "incomplete",
+  "target_id": "zlib-ng"
+}

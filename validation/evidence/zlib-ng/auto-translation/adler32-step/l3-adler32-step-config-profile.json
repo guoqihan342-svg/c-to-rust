@@ -1,0 +1,60 @@
+{
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "slice_spec_sha256=5ff53c9c76f38a59873e5cbc167825f18eddd862a8022f7afed48377c0acd09c",
+    "fixture_hash=zlib-adler32-fixture",
+    "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/evidence/zlib-ng/l1-native-build.json"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "<pinned-zlib-ng-root>"
+    ]
+  },
+  "config_header": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "5ff53c9c76f38a59873e5cbc167825f18eddd862a8022f7afed48377c0acd09c"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "zlib-adler32-fixture",
+    "operation_count": 1,
+    "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
+    "No pointer/buffer ownership proof."
+  ],
+  "profile_id": "zlib-adler32-step-linux-gnu",
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "incomplete",
+  "target_id": "zlib-ng",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

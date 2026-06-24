@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "level": "L3",
+  "status": "recorded",
+  "source_commit": "0123456789abcdef",
+  "repo_commit": "89abcdef01234567",
+  "slice_spec_ref": {"path": "validation/evidence/libuv/l3-ip4-addr-slice-spec.json", "status": "ready", "sha256": "example-slice-spec-hash"},
+  "build_profile_ref": {"path": "validation/evidence/libuv/l3-ip4-addr-config-profile.json", "status": "recorded", "sha256": "example-build-profile-hash"},
+  "mappings": [
+    {"id": "tm-return-int", "kind": "primitive", "c_name": "return", "c_type": "int", "rust_type": "i32", "confidence": "proven", "source": "compile_profile", "width_bits": 32, "signedness": "signed", "translation_rule_id": "rule.primitive.int.i32"},
+    {"id": "tm-ip", "kind": "pointer", "c_name": "ip", "c_type": "const char *", "rust_type": "&CStr", "confidence": "proven", "source": "clang_ast", "source_span": {"file": "src/inet.c", "line_start": 41, "line_end": 41}, "pointer": {"mutability": "read_only", "nullability": "unknown", "ownership_role": "borrowed", "pointer_graph_node": "ptr-ip"}, "translation_rule_id": "rule.pointer.const-char.input"},
+    {"id": "tm-addr", "kind": "struct", "c_name": "addr", "c_type": "struct sockaddr_in *", "rust_type": "&mut SockAddrIn", "confidence": "assumed", "source": "clang_ast", "pointer": {"mutability": "write_only", "nullability": "unknown", "ownership_role": "out_param", "pointer_graph_node": "ptr-addr"}, "translation_rule_id": "rule.pointer.out-param.struct"},
+    {"id": "tm-port-cast", "kind": "implicit_cast", "c_name": "port", "c_type": "int", "rust_type": "u16", "confidence": "uncertain", "source": "translator_rule", "implicit_cast": {"from_c_type": "int", "to_c_type": "uint16_t network byte order", "rust_strategy": "checked_conversion"}, "translation_rule_id": "rule.cast.port.htons"}
+  ],
+  "uncertainties": [{"id": "unc-nullability-ip", "kind": "pointer_mutability", "reason": "C signature does not encode whether ip can be null.", "affected_mapping_ids": ["tm-ip"], "resolution": "requires_review"}],
+  "unsupported_nodes": [],
+  "cache_invalidation_keys": ["source_commit:0123456789abcdef", "build_profile:example-build-profile-hash", "slice_spec:example-slice-spec-hash", "schema:type-map:1"]
+}

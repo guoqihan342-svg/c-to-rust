@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Blocked Repairs Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "target_id", "slice_id", "status", "blocked_repairs", "cache_invalidation_keys"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string"},
+    "slice_id": {"type": "string"},
+    "status": {"enum": ["none", "recorded", "stale", "incomplete"]},
+    "blocked_repairs": {"type": "array", "items": {"$ref": "#/definitions/blockedRepair"}},
+    "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
+  },
+  "definitions": {
+    "blockedRepair": {"type": "object", "required": ["repair_id", "blocked_reason", "forbidden_change", "candidate_patch_id", "human_action_required"], "properties": {"repair_id": {"type": "string"}, "blocked_reason": {"type": "string"}, "forbidden_change": {"enum": ["c_oracle_contract", "fixture_expected_behavior", "accepted_metadata_differences", "public_api_outside_impact_set", "source_slice_boundary", "unsafe_budget_policy", "missing_l1_evidence", "unsupported_control_flow", "type_uncertainty"]}, "candidate_patch_id": {"type": "string"}, "source_span": {"type": "object", "properties": {"file": {"type": "string"}, "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1}}}, "human_action_required": {"type": "boolean"}}}
+  }
+}

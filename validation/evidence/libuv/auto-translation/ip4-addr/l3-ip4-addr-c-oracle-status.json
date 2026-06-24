@@ -1,0 +1,11 @@
+{
+  "boundary": "Draft generation is not oracle success.",
+  "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+  "harness_draft": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-harness-draft.c",
+  "required_final_status": "C_ORACLE_GENERATED",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "ip4-addr",
+  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "target_id": "libuv"
+}

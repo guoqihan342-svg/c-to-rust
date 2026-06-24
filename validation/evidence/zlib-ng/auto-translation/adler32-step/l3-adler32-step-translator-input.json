@@ -1,0 +1,18 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": true,
+    "compiler_command_source": "validation/evidence/zlib-ng/l1-native-build.json",
+    "defines": [],
+    "include_paths": [
+      "<pinned-zlib-ng-root>"
+    ],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
+  "fixture_hash": "zlib-adler32-fixture",
+  "function_name": "adler32_step",
+  "slice_id": "adler32-step",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "target_id": "zlib-ng"
+}

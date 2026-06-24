@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "C To Rust Type Map Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "target_id", "slice_id", "level", "status", "source_commit", "repo_commit", "slice_spec_ref", "build_profile_ref", "mappings", "uncertainties", "unsupported_nodes", "cache_invalidation_keys"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string"},
+    "slice_id": {"type": "string"},
+    "level": {"enum": ["L2", "L3"]},
+    "status": {"enum": ["recorded", "blocked", "stale", "incomplete"]},
+    "source_commit": {"type": "string", "minLength": 7},
+    "repo_commit": {"type": "string", "minLength": 7},
+    "slice_spec_ref": {"$ref": "#/definitions/evidenceRef"},
+    "build_profile_ref": {"$ref": "#/definitions/evidenceRef"},
+    "mappings": {"type": "array", "items": {"$ref": "#/definitions/typeMapping"}},
+    "uncertainties": {"type": "array", "items": {"$ref": "#/definitions/uncertainty"}},
+    "unsupported_nodes": {"type": "array", "items": {"$ref": "#/definitions/unsupportedNode"}},
+    "cache_invalidation_keys": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  },
+  "definitions": {
+    "evidenceRef": {"type": "object", "required": ["path", "status"], "properties": {"path": {"type": "string"}, "status": {"type": "string"}, "sha256": {"type": "string"}}},
+    "sourceSpan": {"type": "object", "required": ["file", "line_start", "line_end"], "properties": {"file": {"type": "string"}, "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1}}},
+    "typeMapping": {"type": "object", "required": ["id", "kind", "c_name", "c_type", "rust_type", "confidence", "source"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["primitive", "struct", "enum", "pointer", "integer_width", "implicit_cast", "typedef", "function_signature", "array", "unsupported"]}, "c_name": {"type": "string"}, "c_type": {"type": "string"}, "rust_type": {"type": "string"}, "confidence": {"enum": ["proven", "assumed", "uncertain", "blocked"]}, "source": {"enum": ["clang_ast", "compile_profile", "manual_slice_spec", "translator_rule", "fallback_assumption"]}, "source_span": {"$ref": "#/definitions/sourceSpan"}, "width_bits": {"type": "integer"}, "signedness": {"enum": ["signed", "unsigned", "not_integer", "unknown"]}, "pointer": {"type": "object", "properties": {"mutability": {"enum": ["read_only", "write_only", "read_write", "unknown"]}, "nullability": {"enum": ["nullable", "non_null", "unknown"]}, "ownership_role": {"enum": ["borrowed", "out_param", "inout_param", "owner", "observer", "unknown"]}, "pointer_graph_node": {"type": "string"}}}, "implicit_cast": {"type": "object", "properties": {"from_c_type": {"type": "string"}, "to_c_type": {"type": "string"}, "rust_strategy": {"enum": ["as_cast", "try_from", "checked_conversion", "blocked", "not_applicable"]}}}, "translation_rule_id": {"type": "string"}}},
+    "uncertainty": {"type": "object", "required": ["id", "kind", "reason", "affected_mapping_ids", "resolution"], "properties": {"id": {"type": "string"}, "kind": {"enum": ["typedef", "macro", "integer_width", "struct_layout", "enum_value", "pointer_mutability", "implicit_cast", "abi", "declaration_resolution"]}, "reason": {"type": "string"}, "affected_mapping_ids": {"type": "array", "items": {"type": "string"}}, "resolution": {"enum": ["block_translation", "requires_review", "accepted_assumption", "not_applicable"]}}},
+    "unsupportedNode": {"type": "object", "required": ["id", "kind", "reason", "source_span"], "properties": {"id": {"type": "string"}, "kind": {"type": "string"}, "reason": {"type": "string"}, "source_span": {"$ref": "#/definitions/sourceSpan"}, "required_future_capability": {"type": "string"}}}
+  }
+}

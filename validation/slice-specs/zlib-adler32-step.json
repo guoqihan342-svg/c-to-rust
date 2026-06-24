@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "target_id": "zlib-ng",
+  "slice_id": "adler32-step",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "adler32_step",
+  "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "fixture_hash": "zlib-adler32-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/zlib-ng/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": "<pinned-zlib-ng-root>",
+    "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "source_file_hashes": {}
+  },
+  "c_boundary": {
+    "files": [
+      {"path": "adler32.c", "role": "source"},
+      {"path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json", "role": "fixture"}
+    ],
+    "functions": ["adler32_step"],
+    "signatures": [
+      {
+        "function": "adler32_step",
+        "return_type": "uint32_t",
+        "parameters": [
+          {"name": "s1", "c_type": "uint32_t", "direction": "input"}
+        ],
+        "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }"
+      }
+    ],
+    "direct_dependencies": [
+      {"kind": "type", "name": "uint32_t", "source": "stdint.h"}
+    ]
+  },
+  "build_profile": {
+    "profile_id": "zlib-adler32-step-linux-gnu",
+    "compiler_command_source": "validation/evidence/zlib-ng/l1-native-build.json",
+    "include_paths": ["<pinned-zlib-ng-root>"],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "clang": "NOT_REQUIRED_FOR_MVP",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": []
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "zlib-adler32-fixture",
+    "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+    "hash": "zlib-adler32-fixture",
+    "cases": [
+      {"id": "empty", "input_ref": "cases[0]", "expected_ref": "validation/evidence/l2-slices/zlib-adler32-oracle.json"}
+    ],
+    "observable_outputs": ["value"],
+    "input": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+    "c_oracle": "validation/evidence/l2-slices/zlib-adler32-oracle.json",
+    "rust_report": "validation/evidence/l2-slices/zlib-adler32-rust-report.json",
+    "behavior_fields": ["value"]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/zlib_adler32.rs",
+    "public_api": [
+      {"name": "adler32_step", "visibility": "public", "boundary_kind": "safe_wrapper"}
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/zlib_adler32.rs",
+    "api_name": "adler32",
+    "test_file": "validation/l2_slices/tests/oracle_fixtures.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
+      "No pointer/buffer ownership proof."
+    ],
+    "must_not_claim": [
+      "full zlib-ng migration",
+      "full adler32_z coverage",
+      "buffer ownership proof"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
+    "No pointer/buffer ownership proof."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

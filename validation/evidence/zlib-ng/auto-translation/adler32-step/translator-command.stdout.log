@@ -1,0 +1,15 @@
+{
+  "target_id": "zlib-ng",
+  "slice_id": "adler32-step",
+  "status": "generated",
+  "artifact_paths": [
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-translation-plan.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-translation-events.jsonl",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-type-map.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-cfg.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-pointer-graph.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-ai-candidate-manifest.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-blocked-repairs.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs"
+  ]
+}

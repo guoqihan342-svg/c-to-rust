@@ -1,0 +1,63 @@
+{
+  "c_defines": {
+    "AF_INET": "2",
+    "_GNU_SOURCE": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "slice_spec_sha256=6edff2164a9bfd9af9a81956c2f8fd9d80b9845cd2eca28d55ee1a31c81e1b5a",
+    "fixture_hash=libuv-ip4-addr-fixture",
+    "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/evidence/libuv/l1-native-build.json"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "<pinned-libuv-root>/include"
+    ]
+  },
+  "config_header": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "6edff2164a9bfd9af9a81956c2f8fd9d80b9845cd2eca28d55ee1a31c81e1b5a"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "libuv-ip4-addr-fixture",
+    "operation_count": 2,
+    "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full libuv migration claim.",
+    "No IPv6 or event-loop behavior.",
+    "No null pointer execution.",
+    "No whole-program alias proof."
+  ],
+  "profile_id": "libuv-ip4-addr-linux-gnu",
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "incomplete",
+  "target_id": "libuv",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

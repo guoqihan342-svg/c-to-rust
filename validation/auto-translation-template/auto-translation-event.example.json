@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "event_id": "evt-0003",
+  "timestamp_utc": "2026-06-24T00:00:00Z",
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "event_kind": "rust_draft_generated",
+  "status": "recorded",
+  "message": "Generated Rust draft candidate after slice spec, type map, CFG, and pointer graph were recorded.",
+  "artifact_refs": [{"path": "validation/l2_slices/src/libuv_ip4_addr.rs", "status": "candidate", "sha256": "example-rust-draft-hash"}],
+  "source_span": {"file": "src/inet.c", "line_start": 41, "line_end": 88},
+  "translation_rule_id": "rule.signature.safe-wrapper"
+}

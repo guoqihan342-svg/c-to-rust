@@ -1,0 +1,48 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "fixture_hash=libuv-ip4-addr-fixture",
+    "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "struct sockaddr_in",
+      "source": "include/uv.h"
+    },
+    {
+      "kind": "callee",
+      "name": "uv_inet_pton",
+      "source": "src/uv-common.c"
+    },
+    {
+      "kind": "macro",
+      "name": "AF_INET",
+      "source": "platform headers"
+    }
+  ],
+  "direct_c_files": [
+    "include/uv.h",
+    "src/uv-common.c",
+    "src/inet.c",
+    "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/libuv_ip4_addr.rs"
+  ],
+  "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+  "level": "L3",
+  "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "slice_spec": {
+    "path": "validation/slice-specs/libuv-ip4-addr.json",
+    "sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6"
+  },
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "status": "recorded",
+  "target_id": "libuv"
+}

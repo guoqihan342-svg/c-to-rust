@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Auto Translation Event JSONL Record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "event_id", "timestamp_utc", "target_id", "slice_id", "event_kind", "status", "message"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "event_id": {"type": "string"},
+    "timestamp_utc": {"type": "string", "format": "date-time"},
+    "target_id": {"type": "string"},
+    "slice_id": {"type": "string"},
+    "event_kind": {"enum": ["input_normalized", "context_extracted", "type_map_emitted", "cfg_emitted", "pointer_graph_emitted", "rust_draft_generated", "unsupported_node", "rust_check_failed", "patch_plan_generated", "patch_applied", "patch_blocked", "verification_rerun", "run_blocked", "run_completed"]},
+    "status": {"enum": ["started", "recorded", "passed", "failed", "blocked", "skipped"]},
+    "message": {"type": "string"},
+    "artifact_refs": {"type": "array", "items": {"$ref": "#/definitions/evidenceRef"}},
+    "source_span": {"type": "object", "properties": {"file": {"type": "string"}, "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1}}},
+    "root_cause_key": {"type": "string"},
+    "translation_rule_id": {"type": "string"}
+  },
+  "definitions": {
+    "evidenceRef": {"type": "object", "required": ["path", "status"], "properties": {"path": {"type": "string"}, "status": {"type": "string"}, "sha256": {"type": "string"}}}
+  }
+}

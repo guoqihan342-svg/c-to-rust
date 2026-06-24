@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "level": "L3",
+  "status": "ready",
+  "l1_evidence": {"path": "validation/evidence/libuv/l1-native-build.json", "status": "passed", "accepted": true, "sha256": "example-l1-hash"},
+  "source": {"source_root": "third_party/libuv", "source_commit": "0123456789abcdef", "repo_commit": "89abcdef01234567", "source_file_hashes": {"src/inet.c": "example-source-hash"}},
+  "c_boundary": {
+    "files": [{"path": "src/inet.c", "role": "source", "sha256": "example-source-hash"}, {"path": "include/uv.h", "role": "header", "sha256": "example-header-hash"}],
+    "functions": ["uv_ip4_addr"],
+    "signatures": [{"function": "uv_ip4_addr", "return_type": "int", "parameters": [{"name": "ip", "c_type": "const char *", "direction": "input"}, {"name": "port", "c_type": "int", "direction": "input"}, {"name": "addr", "c_type": "struct sockaddr_in *", "direction": "output"}]}],
+    "direct_dependencies": [{"kind": "callee", "name": "inet_pton", "source": "system libc"}]
+  },
+  "build_profile": {
+    "profile_id": "libuv-linux-x86_64-clang",
+    "compiler_command_source": "compile_commands.json",
+    "include_paths": ["include", "src"],
+    "defines": ["_GNU_SOURCE"],
+    "target": {"triple_or_abi": "x86_64-unknown-linux-gnu", "endianness": "little", "int_width": 32, "long_width": 64, "pointer_width": 64},
+    "preprocessing_mode": "compile_commands",
+    "tool_versions": {"clang": "example-clang-version", "openspec": "example-openspec-version"},
+    "clang_type_extraction": {"available": true, "diagnostics": []}
+  },
+  "fixture_contract": {"fixture_id": "libuv-ip4-addr-basic", "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json", "hash": "example-fixture-hash", "cases": [{"id": "localhost-80", "input_ref": "$.cases[0].input", "expected_ref": "$.cases[0].expected"}], "observable_outputs": ["return_code", "addr.sin_family", "addr.sin_port", "addr.sin_addr"]},
+  "rust_boundary": {"crate": "validation/l2_slices", "module": "libuv_ip4_addr", "public_api": [{"name": "ip4_addr", "visibility": "public", "boundary_kind": "safe_wrapper"}], "raw_pointer_policy": "internal_only", "unsafe_policy": {"max_first_party_non_test_ratio": 0.1, "ledger_required": true}},
+  "claim_boundary": {"accepted_metadata_differences": ["platform-specific errno text is metadata only"], "non_goals": ["does not claim general C99 translation", "does not claim whole-program alias safety"], "must_not_claim": ["Rust draft correctness before C oracle and diff pass", "AI candidate output as correctness evidence"]},
+  "cache_invalidation_keys": ["source_commit:0123456789abcdef", "fixture:example-fixture-hash", "build_profile:libuv-linux-x86_64-clang", "schema:slice-spec:1"]
+}

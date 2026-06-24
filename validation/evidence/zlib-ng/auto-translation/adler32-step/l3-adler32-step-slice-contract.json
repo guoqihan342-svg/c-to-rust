@@ -1,0 +1,78 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "uint32_t",
+        "source": "stdint.h"
+      }
+    ],
+    "files": [
+      {
+        "path": "adler32.c",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "adler32_step"
+    ],
+    "signatures": [
+      {
+        "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
+        "function": "adler32_step",
+        "parameters": [
+          {
+            "c_type": "uint32_t",
+            "direction": "input",
+            "name": "s1"
+          }
+        ],
+        "return_type": "uint32_t"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full zlib-ng migration",
+      "full adler32_z coverage",
+      "buffer ownership proof"
+    ],
+    "non_goals": [
+      "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",
+      "No pointer/buffer ownership proof."
+    ]
+  },
+  "fixture": {
+    "hash": "zlib-adler32-fixture",
+    "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "adler32",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/zlib_adler32.rs",
+    "module_path": "validation/l2_slices/src/zlib_adler32.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "adler32_step",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/oracle_fixtures.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "recorded",
+  "target_id": "zlib-ng"
+}

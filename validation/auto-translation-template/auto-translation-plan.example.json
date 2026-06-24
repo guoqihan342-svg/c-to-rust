@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "level": "L3",
+  "status": "draft_generated",
+  "source_commit": "0123456789abcdef",
+  "repo_commit": "89abcdef01234567",
+  "inputs": {
+    "slice_spec": {"path": "validation/evidence/libuv/l3-ip4-addr-slice-spec.json", "status": "ready", "sha256": "example-slice-spec-hash"},
+    "type_map": {"path": "validation/evidence/libuv/l3-ip4-addr-type-map.json", "status": "recorded", "sha256": "example-type-map-hash"},
+    "cfg": {"path": "validation/evidence/libuv/l3-ip4-addr-cfg.json", "status": "recorded", "sha256": "example-cfg-hash"},
+    "pointer_graph": {"path": "validation/evidence/libuv/l3-ip4-addr-pointer-graph.json", "status": "recorded", "sha256": "example-pointer-graph-hash"}
+  },
+  "generated_artifacts": [{"path": "validation/l2_slices/src/libuv_ip4_addr.rs", "kind": "rust_draft", "generator": {"name": "c2r-translator", "version": "0.1.0"}, "source_spans": [{"file": "src/inet.c", "line_start": 41, "line_end": 88}], "generated_spans": [{"file": "validation/l2_slices/src/libuv_ip4_addr.rs", "line_start": 1, "line_end": 120}], "status": "candidate"}],
+  "translation_summary": {"translation_rule_ids": ["rule.signature.safe-wrapper", "rule.pointer.out-param.struct"], "unsupported_node_count": 0, "unsafe_candidate_count": 1, "safe_public_api": true},
+  "verification_plan": [{"gate": "rust_check", "command": "cargo check --message-format=json", "required_before_acceptance": true}, {"gate": "c_oracle_and_replay", "command": "cargo test libuv_ip4_addr", "required_before_acceptance": true}],
+  "cache_invalidation_keys": ["source_commit:0123456789abcdef", "slice_spec:example-slice-spec-hash", "type_map:example-type-map-hash", "cfg:example-cfg-hash", "pointer_graph:example-pointer-graph-hash", "schema:auto-translation-plan:1"]
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "patch_id": "patch-0001",
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "round": 1,
+  "status": "planned",
+  "files": [{"path": "validation/l2_slices/src/libuv_ip4_addr.rs", "spans": [{"line_start": 42, "line_end": 45}]}],
+  "reason": "rustc E0308: convert generated port expression before passing to network-order helper.",
+  "expected_error_delta": {"before": ["E0308"], "after_expected": []},
+  "forbidden_changes": ["c_oracle_contract", "fixture_expected_behavior", "accepted_metadata_differences", "public_api_outside_impact_set", "source_slice_boundary", "unsafe_budget_policy"],
+  "rollback_id": "rollback-patch-0001",
+  "ai_usage": {"used": false},
+  "verification_commands": ["cargo check --message-format=json", "cargo test libuv_ip4_addr"]
+}

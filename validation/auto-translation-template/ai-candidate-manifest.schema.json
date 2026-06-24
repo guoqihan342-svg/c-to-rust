@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "AI Candidate Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "target_id", "slice_id", "status", "ai_required_for_default_pipeline", "candidates", "cache_invalidation_keys"],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string"},
+    "slice_id": {"type": "string"},
+    "status": {"enum": ["not_used", "recorded", "stale", "incomplete"]},
+    "ai_required_for_default_pipeline": {"const": false},
+    "candidates": {"type": "array", "items": {"$ref": "#/definitions/candidate"}},
+    "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
+  },
+  "definitions": {
+    "candidate": {"type": "object", "required": ["candidate_id", "purpose", "prompt_scope", "input_artifact_hashes", "output_hash", "applied", "accepted_by_gates"], "properties": {"candidate_id": {"type": "string"}, "purpose": {"enum": ["rust_draft", "patch_plan", "repair_candidate", "explanation"]}, "provider_label": {"type": "string"}, "model_label": {"type": "string"}, "prompt_scope": {"type": "array", "items": {"enum": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "direct_caller_callee_facts", "verification_delta", "two_hop_expansion"]}}, "two_hop_expansion_justification": {"type": "string"}, "input_artifact_hashes": {"type": "object", "additionalProperties": {"type": "string"}}, "output_hash": {"type": "string"}, "applied": {"type": "boolean"}, "accepted_by_gates": {"type": "array", "items": {"type": "string"}}, "rejected_by_gates": {"type": "array", "items": {"type": "string"}}}}
+  }
+}

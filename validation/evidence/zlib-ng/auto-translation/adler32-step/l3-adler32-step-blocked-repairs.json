@@ -1,0 +1,7 @@
+{
+  "blocked": [],
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "status": "none",
+  "target_id": "zlib-ng"
+}

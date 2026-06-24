@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "status": "recorded",
+  "ai_required_for_default_pipeline": false,
+  "candidates": [{"candidate_id": "ai-patch-0001", "purpose": "repair_candidate", "provider_label": "optional-local-or-remote-ai", "model_label": "example-model-label", "prompt_scope": ["slice_spec", "root_cause_summary", "source_spans", "type_map_excerpt", "cfg_excerpt", "pointer_graph_excerpt", "verification_delta"], "input_artifact_hashes": {"slice_spec": "example-slice-spec-hash", "rust_check": "example-rust-check-hash"}, "output_hash": "example-ai-output-hash", "applied": false, "accepted_by_gates": [], "rejected_by_gates": ["not_applied_local_rule_patch_available"]}],
+  "cache_invalidation_keys": ["slice_spec:example-slice-spec-hash", "rust_check:example-rust-check-hash", "schema:ai-candidate-manifest:1"]
+}

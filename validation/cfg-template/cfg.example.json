@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "target_id": "zlib",
+  "slice_id": "adler32",
+  "level": "L2",
+  "status": "recorded",
+  "source_commit": "0123456789abcdef",
+  "repo_commit": "89abcdef01234567",
+  "slice_spec_ref": {"path": "validation/evidence/zlib/l2-adler32-slice-spec.json", "status": "ready", "sha256": "example-slice-spec-hash"},
+  "functions": [{
+    "name": "adler32",
+    "signature": "uLong adler32(uLong adler, const Bytef *buf, uInt len)",
+    "source_span": {"file": "adler32.c", "line_start": 63, "line_end": 148},
+    "entry_block": "bb0",
+    "exit_blocks": ["bb3"],
+    "basic_blocks": [
+      {"id": "bb0", "kind": "entry", "statements": ["if (buf == Z_NULL) return 1L;"], "source_span": {"file": "adler32.c", "line_start": 67, "line_end": 67}},
+      {"id": "bb1", "kind": "loop_header", "statements": ["while (len > 0)"], "source_span": {"file": "adler32.c", "line_start": 91, "line_end": 120}},
+      {"id": "bb2", "kind": "body", "statements": ["sum2 += sum1 += *buf++;", "len--;"], "source_span": {"file": "adler32.c", "line_start": 96, "line_end": 100}},
+      {"id": "bb3", "kind": "return", "statements": ["return sum1 | (sum2 << 16);"], "source_span": {"file": "adler32.c", "line_start": 147, "line_end": 147}}
+    ],
+    "edges": [{"from": "bb0", "to": "bb1", "kind": "fallthrough"}, {"from": "bb1", "to": "bb2", "kind": "true_branch", "condition": "len > 0"}, {"from": "bb2", "to": "bb1", "kind": "loop_back"}, {"from": "bb1", "to": "bb3", "kind": "false_branch", "condition": "len == 0"}],
+    "branches": [{"id": "br-null", "kind": "if", "condition": "buf == Z_NULL", "source_span": {"file": "adler32.c", "line_start": 67, "line_end": 67}}, {"id": "br-loop", "kind": "while", "condition": "len > 0", "source_span": {"file": "adler32.c", "line_start": 91, "line_end": 120}}],
+    "returns": [{"block": "bb3", "expression": "sum1 | (sum2 << 16)", "source_span": {"file": "adler32.c", "line_start": 147, "line_end": 147}}],
+    "structured_control_flow": {"if_count": 1, "loop_count": 1, "has_goto": false, "has_switch": false, "relooper_required": false}
+  }],
+  "unsupported_control_flow": [],
+  "cache_invalidation_keys": ["source_commit:0123456789abcdef", "slice_spec:example-slice-spec-hash", "schema:cfg:1"]
+}

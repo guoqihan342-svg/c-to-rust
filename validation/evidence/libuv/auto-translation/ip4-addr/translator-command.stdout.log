@@ -1,0 +1,15 @@
+{
+  "target_id": "libuv",
+  "slice_id": "ip4-addr",
+  "status": "generated",
+  "artifact_paths": [
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-plan.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-events.jsonl",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-type-map.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-cfg.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-pointer-graph.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-ai-candidate-manifest.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-blocked-repairs.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-draft.rs"
+  ]
+}

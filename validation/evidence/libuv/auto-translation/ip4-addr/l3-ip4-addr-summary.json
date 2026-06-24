@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "ip4-addr",
+  "status": "incomplete",
+  "summary": "Auto-translation candidate generated with schema-bound evidence; acceptance gates remain open.",
+  "target_id": "libuv"
+}

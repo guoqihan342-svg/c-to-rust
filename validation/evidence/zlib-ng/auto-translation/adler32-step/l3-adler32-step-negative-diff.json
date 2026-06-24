@@ -1,0 +1,9 @@
+{
+  "expected_failure": true,
+  "mutation_detected": false,
+  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+  "schema_version": 1,
+  "slice_id": "adler32-step",
+  "status": "incomplete",
+  "target_id": "zlib-ng"
+}
