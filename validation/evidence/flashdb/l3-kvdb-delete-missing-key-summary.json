@@ -1,0 +1,24 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "status":  "passed",
+    "scope":  "valid but missing KVDB delete returns FDB_KV_NAME_ERR; missing get remains OK/null",
+    "fixture":  "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
+    "fixture_hash":  "7b2db3e1",
+    "rust_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-rust-report.json",
+    "c_oracle_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-c-oracle.json",
+    "diff_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-diff.json",
+    "negative_diff_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-negative-diff.json",
+    "rust_check_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-rust-check.json",
+    "unsafe_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-unsafe-ledger.json",
+    "performance_report":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-performance-smoke.json",
+    "c_oracle_status":  "C_ORACLE_GENERATED",
+    "diff_status":  "passed",
+    "negative_diff_first_mismatch":  "steps.kv-dmk-001.code",
+    "unsafe_ratio":  0,
+    "accepted_difference_fields":  "image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path",
+    "failures":  [
+                     "red test before fix failed at kv-dmk-001 status because Rust delete was idempotent"
+                 ],
+    "next_slice_recommendation":  "KVDB invalid delete key boundary or KVDB capacity/GC sector-layout slice, but only with a new OpenSpec design."
+}

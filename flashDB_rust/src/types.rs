@@ -9,6 +9,7 @@ pub enum Error {
         len: usize,
         max: usize,
     },
+    KvNameError(String),
     WriteError(String),
     InvalidRange(String),
     OutOfBounds {
@@ -35,6 +36,7 @@ impl fmt::Display for Error {
         match self {
             Error::InvalidKey => write!(f, "key must not be empty"),
             Error::KeyTooLong { len, max } => write!(f, "key length {len} exceeds max {max}"),
+            Error::KvNameError(msg) => write!(f, "kv name error: {msg}"),
             Error::WriteError(msg) => write!(f, "write error: {msg}"),
             Error::InvalidRange(msg) => write!(f, "invalid range: {msg}"),
             Error::OutOfBounds { addr, size, len } => {
@@ -62,6 +64,7 @@ impl Error {
         match self {
             Error::InvalidKey => "INVALID_KEY",
             Error::KeyTooLong { .. } => "KEY_TOO_LONG",
+            Error::KvNameError(_) => "FDB_KV_NAME_ERR",
             Error::WriteError(_) => "FDB_WRITE_ERR",
             Error::InvalidRange(_) => "INVALID_RANGE",
             Error::OutOfBounds { .. } => "OUT_OF_BOUNDS",

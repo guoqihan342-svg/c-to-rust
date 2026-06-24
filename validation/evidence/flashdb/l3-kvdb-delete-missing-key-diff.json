@@ -1,0 +1,1 @@
+{"command":"diff","schema_version":1,"status":"passed","rust_report":"..\\validation\\evidence\\flashdb\\l3-kvdb-delete-missing-key-rust-report.json","oracle_report":"..\\validation\\evidence\\flashdb\\l3-kvdb-delete-missing-key-c-oracle.json","rust_report_hash":"40c41582","oracle_report_hash":"7de839a4","toolchain_status":"SKIPPED_LOCAL_NO_C_TOOLCHAIN","first_mismatch":null}

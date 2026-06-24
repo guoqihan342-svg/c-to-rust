@@ -1,0 +1,18 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "status":  "passed",
+    "backend":  "file",
+    "operation_count":  13,
+    "operation_counters":  {
+                               "kv_delete":  3,
+                               "kv_get":  5,
+                               "kv_set":  1,
+                               "kv_entries":  3,
+                               "kv_reopen":  1
+                           },
+    "elapsed_ms":  307.6683,
+    "command":  "cargo run -- replay --fixture fixtures/l3-kvdb-delete-missing-key.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-delete-missing-key-performance-replay.json",
+    "report_path":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-performance-replay.json",
+    "toolchain_status":  "NOT_APPLICABLE_RUST_REPLAY"
+}

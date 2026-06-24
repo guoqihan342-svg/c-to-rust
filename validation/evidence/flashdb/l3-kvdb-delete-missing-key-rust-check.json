@@ -1,0 +1,22 @@
+{
+    "schema_version":  1,
+    "level":  "L3",
+    "target_id":  "flashdb",
+    "slice_id":  "kvdb-delete-missing-key",
+    "command":  "cargo check --message-format=json",
+    "status":  "passed",
+    "success":  true,
+    "error_count":  0,
+    "warning_count":  0,
+    "root_cause_keys":  [
+
+                        ],
+    "affected_items":  [
+
+                       ],
+    "rustc_version":  "rustc 1.95.0 (59807616e 2026-04-14)",
+    "raw_output":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-rust-check.raw.jsonl",
+    "stderr_log":  "validation/evidence/flashdb/l3-kvdb-delete-missing-key-rust-check.stderr.log",
+    "rerun_command":  "cd flashDB_rust \u0026\u0026 cargo check --message-format=json",
+    "workspace_commit":  "8c3816a6e70835e5822cebc564a8a87fe02893ec"
+}

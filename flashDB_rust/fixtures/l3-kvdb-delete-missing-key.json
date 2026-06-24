@@ -1,0 +1,21 @@
+{
+  "name": "l3-kvdb-delete-missing-key",
+  "operations": [
+    {"id":"kv-dmk-001","op":"kv.delete","key":"ghost"},
+    {"id":"kv-dmk-002","op":"kv.get","key":"ghost"},
+    {"id":"kv-dmk-003","op":"kv.entries"},
+    {"id":"kv-dmk-004","op":"kv.set","key":"alpha","value":"one"},
+    {"id":"kv-dmk-005","op":"kv.get","key":"alpha"},
+    {"id":"kv-dmk-006","op":"kv.entries"},
+    {"id":"kv-dmk-007","op":"kv.delete","key":"alpha"},
+    {"id":"kv-dmk-008","op":"kv.delete","key":"alpha"},
+    {"id":"kv-dmk-009","op":"kv.get","key":"alpha"},
+    {"id":"kv-dmk-010","op":"kv.reopen"},
+    {"id":"kv-dmk-011","op":"kv.get","key":"alpha"},
+    {"id":"kv-dmk-012","op":"kv.get","key":"ghost"},
+    {"id":"kv-dmk-013","op":"kv.entries"}
+  ],
+  "accepted_differences": [
+    {"id":"layout-and-metadata","reason":"C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Diagnostic message text may differ, but missing-delete status/code, operation identity, value, entries, and operation success are strict behavior fields.","fields":"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"}
+  ]
+}

@@ -158,6 +158,76 @@ fn l3_kvdb_error_boundary_fixture_replays_visible_errors() {
 }
 
 #[test]
+fn l3_kvdb_delete_missing_key_fixture_replays_visible_error_and_recovery() {
+    let report = temp_path("l3-kvdb-delete-missing-key-report.json");
+    let out = cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-delete-missing-key.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        report.display().to_string(),
+    ])
+    .unwrap();
+
+    assert!(out.contains("\"fixture_name\":\"l3-kvdb-delete-missing-key\""));
+    assert!(out.contains("\"level\":\"L3\""));
+    assert!(out.contains("\"target_id\":\"flashdb\""));
+    assert!(out.contains("\"slice_id\":\"kvdb-delete-missing-key\""));
+    assert!(out.contains("\"commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\""));
+    assert!(out.contains("\"id\":\"layout-and-metadata\""));
+    assert!(out.contains("\"fields\":\"image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path\""));
+
+    let first_missing_delete = step_json_for(&out, "kv-dmk-001");
+    assert!(first_missing_delete.contains("\"op\":\"kv.delete\""));
+    assert!(first_missing_delete.contains("\"status\":\"error\""));
+    assert!(first_missing_delete.contains("\"code\":\"FDB_KV_NAME_ERR\""));
+
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-002\",\"op\":\"kv.get\",\"status\":\"ok\",\"code\":\"OK\",\"value\":null"
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-003\",\"op\":\"kv.entries\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-005\",\"op\":\"kv.get\",\"status\":\"ok\",\"code\":\"OK\",\"value\":\"one\""
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-006\",\"op\":\"kv.entries\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[{\"key\":\"alpha\",\"value\":\"one\"}]"
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-007\",\"op\":\"kv.delete\",\"status\":\"ok\",\"code\":\"OK\",\"key\":\"alpha\""
+    ));
+
+    let second_missing_delete = step_json_for(&out, "kv-dmk-008");
+    assert!(second_missing_delete.contains("\"op\":\"kv.delete\""));
+    assert!(second_missing_delete.contains("\"status\":\"error\""));
+    assert!(second_missing_delete.contains("\"code\":\"FDB_KV_NAME_ERR\""));
+
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-009\",\"op\":\"kv.get\",\"status\":\"ok\",\"code\":\"OK\",\"value\":null"
+    ));
+    assert!(out.contains("\"id\":\"kv-dmk-010\""));
+    assert!(out.contains("\"op\":\"kv.reopen\""));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-011\",\"op\":\"kv.get\",\"status\":\"ok\",\"code\":\"OK\",\"value\":null"
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-012\",\"op\":\"kv.get\",\"status\":\"ok\",\"code\":\"OK\",\"value\":null"
+    ));
+    assert!(out.contains(
+        "\"id\":\"kv-dmk-013\",\"op\":\"kv.entries\",\"status\":\"ok\",\"code\":\"OK\",\"entries\":[]"
+    ));
+    assert!(!out.contains("\"fields\":\"code\""));
+    assert!(!out.contains("\"fields\":\"status\""));
+    assert!(!out.contains("\"fields\":\"value\""));
+    assert!(!out.contains("\"fields\":\"entries\""));
+    assert!(report.exists());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
 fn l3_tsdb_set_status_report_schema_uses_ts_status_for_business_status() {
     let report = temp_path("l3-tsdb-set-status-report-schema-report.json");
     let out = cli::run([
@@ -876,6 +946,53 @@ fn l3_diff_rejects_kvdb_error_boundary_code_regression() {
     let failure = fs::read_to_string(&diff_report).unwrap();
     assert!(failure.contains("\"status\":\"failed\""));
     assert!(failure.contains("steps.kv-eb-003.code"));
+
+    let _ = fs::remove_file(actual);
+    let _ = fs::remove_file(expected);
+    let _ = fs::remove_file(diff_report);
+}
+
+#[test]
+fn l3_diff_rejects_kvdb_delete_missing_key_code_regression() {
+    let actual = temp_path("l3-kvdb-delete-missing-key-actual-report.json");
+    let expected = temp_path("l3-kvdb-delete-missing-key-expected-report.json");
+    let diff_report = temp_path("l3-kvdb-delete-missing-key-negative-diff.json");
+
+    cli::run([
+        "replay".to_string(),
+        "--fixture".to_string(),
+        "fixtures/l3-kvdb-delete-missing-key.json".to_string(),
+        "--backend".to_string(),
+        "file".to_string(),
+        "--report".to_string(),
+        actual.display().to_string(),
+    ])
+    .unwrap();
+    fs::copy(&actual, &expected).unwrap();
+
+    let mut mutated = fs::read_to_string(&expected).unwrap();
+    mutated = mutated.replace(
+        r#""id":"kv-dmk-001","op":"kv.delete","status":"error","code":"FDB_KV_NAME_ERR""#,
+        r#""id":"kv-dmk-001","op":"kv.delete","status":"ok","code":"OK""#,
+    );
+    fs::write(&expected, mutated).unwrap();
+
+    let err = cli::run([
+        "diff".to_string(),
+        "--rust-report".to_string(),
+        actual.display().to_string(),
+        "--oracle-report".to_string(),
+        expected.display().to_string(),
+        "--report".to_string(),
+        diff_report.display().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(err.code(), "CLI");
+    let failure = fs::read_to_string(&diff_report).unwrap();
+    assert!(failure.contains("\"status\":\"failed\""));
+    assert!(
+        failure.contains("steps.kv-dmk-001.status") || failure.contains("steps.kv-dmk-001.code")
+    );
 
     let _ = fs::remove_file(actual);
     let _ = fs::remove_file(expected);

@@ -1,0 +1,104 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "generated_at":  "2026-06-24T18:10:20.1512807+08:00",
+    "workspace_commit_before_final_commit":  "8c3816a6e70835e5822cebc564a8a87fe02893ec",
+    "flashdb_source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "fixture_hash":  "7b2db3e1",
+    "commands":  [
+                     {
+                         "name":  "cargo fmt -- --check",
+                         "status":  "passed"
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "cargo test --test differential_replay kvdb_delete_missing_key -- --nocapture",
+                         "tests":  "2 passed"
+                     },
+                     {
+                         "name":  "cargo check",
+                         "status":  "passed"
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "cargo test",
+                         "tests":  "48 passed"
+                     },
+                     {
+                         "name":  "cargo run -- replay --fixture fixtures/l3-kvdb-delete-missing-key.json --backend file --report ../validation/evidence/flashdb/l3-kvdb-delete-missing-key-rust-report.json",
+                         "status":  "completed"
+                     },
+                     {
+                         "marker":  "C_ORACLE_GENERATED",
+                         "status":  "passed",
+                         "name":  "wsl sh oracle/generate_c_oracle.sh --fixture fixtures/l3-kvdb-delete-missing-key.json"
+                     },
+                     {
+                         "first_mismatch":  null,
+                         "status":  "passed",
+                         "name":  "cargo run -- diff --rust-report ... --oracle-report ..."
+                     },
+                     {
+                         "status":  "passed",
+                         "unsafe_blocks":  0,
+                         "name":  "cargo run -- unsafe-scan",
+                         "unsafe_fns":  0
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "performance smoke replay",
+                         "operation_count":  13,
+                         "elapsed_ms":  307.6683
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "cargo check --message-format=json",
+                         "warning_count":  0,
+                         "error_count":  0
+                     },
+                     {
+                         "name":  "openspec validate run-flashdb-kvdb-delete-missing-key-l3-loop --strict",
+                         "status":  "passed"
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "openspec validate --all",
+                         "items":  "16 passed, 0 failed"
+                     },
+                     {
+                         "status":  "passed",
+                         "name":  "git diff --check",
+                         "note":  "CRLF warnings only, no whitespace errors"
+                     }
+                 ],
+    "behavior_assertions":  [
+                                {
+                                    "step":  "kv-dmk-001",
+                                    "rust_code":  "FDB_KV_NAME_ERR",
+                                    "c_code":  "FDB_KV_NAME_ERR",
+                                    "behavior":  "never-existing delete"
+                                },
+                                {
+                                    "step":  "kv-dmk-008",
+                                    "rust_code":  "FDB_KV_NAME_ERR",
+                                    "c_code":  "FDB_KV_NAME_ERR",
+                                    "behavior":  "delete-after-delete"
+                                },
+                                {
+                                    "step":  "kv-dmk-013",
+                                    "entries_count":  0,
+                                    "behavior":  "final entries"
+                                }
+                            ],
+    "c_oracle_status":  "C_ORACLE_GENERATED",
+    "diff_status":  "passed",
+    "negative_diff_status":  "failed",
+    "unsafe_ratio":  0,
+    "accepted_differences":  [
+                                 {
+                                     "id":  "layout-and-metadata",
+                                     "reason":  "C FlashDB and Rust seed layout metadata differ before byte-for-byte layout migration. Diagnostic message text may differ, but missing-delete status/code, operation identity, value, entries, and operation success are strict behavior fields.",
+                                     "fields":  "image_hash,message,backend,toolchain_status,source,fixture,fixture_hash,report_path"
+                                 }
+                             ]
+}

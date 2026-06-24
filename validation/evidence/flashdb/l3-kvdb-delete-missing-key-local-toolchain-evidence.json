@@ -1,0 +1,11 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "generated_at":  "2026-06-24T18:05:59.2289084+08:00",
+    "host":  "windows",
+    "gcc_available":  false,
+    "make_available":  false,
+    "msvc_cl_available":  false,
+    "toolchain_status":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "note":  "L3 semantic pass requires WSL/Linux/CI C_ORACLE_GENERATED even when local Windows toolchain is unavailable."
+}

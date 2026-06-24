@@ -1,0 +1,26 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "agents":  [
+                   {
+                       "result":  "FDB_KV_NAME_ERR confirmed for missing fdb_kv_del",
+                       "name":  "Hooke",
+                       "id":  "019ef910-6362-7581-b9c0-ae28ac19ecb6",
+                       "role":  "read-only C semantic review"
+                   },
+                   {
+                       "result":  "types.rs error mapping and kvdb.rs delete guard identified",
+                       "name":  "Ohm",
+                       "id":  "019ef910-9165-70c1-8d39-a953bdd80f49",
+                       "role":  "read-only Rust impact review"
+                   },
+                   {
+                       "result":  "slice/evidence names, strict fields, non-goals defined",
+                       "name":  "Maxwell",
+                       "id":  "019ef910-b945-7d90-a366-34b8f32d5d6b",
+                       "role":  "read-only evidence naming and boundary review"
+                   }
+               ],
+    "single_writer":  "main Codex agent",
+    "conflict_policy":  "parallel agents may inspect and review; code and task edits are applied serially by the main agent"
+}

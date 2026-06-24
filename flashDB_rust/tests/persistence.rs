@@ -18,6 +18,7 @@ fn file_kvdb_reopen_preserves_committed_values() {
     let path = temp_path("kvdb");
     let mut db = KvDb::create(FileFlash::create(&path, 4096).unwrap()).unwrap();
     db.set("persist", b"value").unwrap();
+    db.set("gone", b"old").unwrap();
     db.delete("gone").unwrap();
     drop(db);
 

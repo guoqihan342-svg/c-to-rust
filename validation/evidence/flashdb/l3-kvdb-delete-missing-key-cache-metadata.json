@@ -1,0 +1,63 @@
+{
+    "schema_version":  1,
+    "slice_id":  "kvdb-delete-missing-key",
+    "generated_at":  "2026-06-24T18:17:55.7304127+08:00",
+    "workspace_commit":  "8c3816a6e70835e5822cebc564a8a87fe02893ec",
+    "flashdb_source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "rustc_version":  "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo_lock_hash":  "8bf2cc252a9fc8a4dae3656276816fc74590cac086fd75210c1922e0fadc7f40",
+    "file_hashes":  [
+                        {
+                            "path":  "flashDB_rust/src/types.rs",
+                            "sha256":  "cbb947e1cfe361aa1dadb614bb953d620758049c69432418901eae812acdfcfc"
+                        },
+                        {
+                            "path":  "flashDB_rust/src/kvdb.rs",
+                            "sha256":  "b6c54e53bf49427bd88b3577f445bf9a64cf442890dec0a55ae2b463f9b73091"
+                        },
+                        {
+                            "path":  "flashDB_rust/src/replay.rs",
+                            "sha256":  "56e47dae044076de1811bff2da8a11ff2c4c2ca043e61262e32ca8dc84e0fecc"
+                        },
+                        {
+                            "path":  "flashDB_rust/tests/differential_replay.rs",
+                            "sha256":  "43dce0b3e0258e3cac864f782e308f77251a40d5cc3188238a358c09c01aa64b"
+                        },
+                        {
+                            "path":  "flashDB_rust/tests/persistence.rs",
+                            "sha256":  "b1bae297a4395edbb8bf452ab91c0211e52f5e01b417bc935bb9cb5631461644"
+                        },
+                        {
+                            "path":  "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
+                            "sha256":  "da5ddfd4c127e41e431b83e302f02a228007e429562da7809d611975f36ba010"
+                        },
+                        {
+                            "path":  "flashDB_rust/oracle/flashdb_c_oracle.c",
+                            "sha256":  "8576b7a1f082eb8ca794ddb1e699b624c8f3816a803034a05f66bf521dc2ee96"
+                        },
+                        {
+                            "path":  "flashDB_rust/oracle/.work/FlashDB/src/fdb_kvdb.c",
+                            "sha256":  "df8c9022ef8b4dab4bab5dbb79d3544a2943f2eefc0d5c65257ff51f494e5d7b"
+                        }
+                    ],
+    "command_args":  [
+                         "replay --fixture fixtures/l3-kvdb-delete-missing-key.json --backend file",
+                         "diff --rust-report ... --oracle-report ...",
+                         "unsafe-scan",
+                         "cargo check --message-format=json"
+                     ],
+    "feature_env":  {
+                        "cargo_features":  "default",
+                        "backend":  "file",
+                        "host_os":  "windows",
+                        "c_oracle_host":  "wsl"
+                    },
+    "context_schema_version":  1,
+    "invalidates":  [
+                        "ContextPack",
+                        "error classification",
+                        "PatchPlan suggestions",
+                        "diff conclusions",
+                        "unsafe ledger"
+                    ]
+}

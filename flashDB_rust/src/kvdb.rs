@@ -73,6 +73,9 @@ impl<D: FlashDevice> KvDb<D> {
 
     pub fn delete(&mut self, key: &str) -> Result<()> {
         validate_key(key)?;
+        if !self.entries.contains_key(key) {
+            return Err(Error::KvNameError(format!("key '{key}' not found")));
+        }
         let record = encode_record(RecordKind::KvDelete, 0, 0, key.as_bytes(), &[])?;
         self.append_record(record)?;
         self.entries.remove(key);
