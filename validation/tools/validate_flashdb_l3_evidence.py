@@ -229,7 +229,9 @@ def resolve_evidence_path(root: Path, value: str) -> Path:
     candidate = REPO_ROOT / path
     if candidate.exists():
         return candidate
-    return root / path.name
+    if len(parts) == 1:
+        return root / path.name
+    return candidate
 
 
 def require_negative_diff(slice_id: str, summary: dict[str, Any], negative_report: dict[str, Any]) -> None:

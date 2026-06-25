@@ -41,6 +41,17 @@ class ValidateFlashDbVersionBindingTests(unittest.TestCase):
 
             self.assertIn("cargo_toml_sha256", str(raised.exception))
 
+    def test_rejects_cargo_lock_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="version-binding-test-") as tmp:
+            root = Path(tmp)
+            cargo = self._write_cargo_toml(root, version="0.1.0")
+            manifest = self._write_manifest(root, cargo, cargo_lock_sha256="b" * 64)
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_version_binding(manifest, cargo)
+
+            self.assertIn("cargo_lock_sha256", str(raised.exception))
+
     def test_accepts_complete_version_manifest(self) -> None:
         with tempfile.TemporaryDirectory(prefix="version-binding-test-") as tmp:
             root = Path(tmp)
@@ -61,6 +72,7 @@ class ValidateFlashDbVersionBindingTests(unittest.TestCase):
         package_version: str = "0.1.0",
         include_cache_keys: bool = True,
         cargo_toml_sha256: str | None = None,
+        cargo_lock_sha256: str | None = None,
     ) -> Path:
         cargo_lock = cargo_toml.with_name("Cargo.lock")
         payload = {
@@ -74,7 +86,7 @@ class ValidateFlashDbVersionBindingTests(unittest.TestCase):
             "package_name": "flashdb_rust",
             "package_version": package_version,
             "cargo_toml_sha256": cargo_toml_sha256 or self._sha256(cargo_toml),
-            "cargo_lock_sha256": self._sha256(cargo_lock),
+            "cargo_lock_sha256": cargo_lock_sha256 or self._sha256(cargo_lock),
             "rustc_version": "rustc 1.95.0",
             "cargo_version": "cargo 1.95.0",
             "openspec_version": "OpenSpec 1.4.1",

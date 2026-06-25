@@ -85,6 +85,22 @@ class ValidateFlashDbL3EvidenceTests(unittest.TestCase):
 
             self.assertIn("version manifest", str(raised.exception))
 
+    def test_rejects_declared_evidence_path_with_wrong_directory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            prefix = "l3-demo-slice"
+            self._write_package(root, prefix)
+            summary_path = root / "flashdb" / f"{prefix}-summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary["c_oracle"]["report"] = f"wrong/evidence/{prefix}-c-oracle.json"
+            self._write_json(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("c-oracle", str(raised.exception))
+            self.assertIn("missing", str(raised.exception))
+
     def _write_package(
         self,
         root: Path,
