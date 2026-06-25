@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "status": "passed",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_commit": "demo-store-add-one-20260625",
+  "scope": "Demo store_add_one C helper compiled and executed with WSL gcc.",
+  "commands": [
+    {
+      "command": "python -B validation/l2_slices/tools/generate_store_add_one_oracle.py",
+      "status": "passed"
+    }
+  ],
+  "evidence": {
+    "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+    "producer": "validation/evidence/demo/l3-store-add-one-c-oracle-producer-evidence.json"
+  }
+}

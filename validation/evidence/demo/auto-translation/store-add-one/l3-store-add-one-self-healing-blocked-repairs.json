@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-store-add-one-20260625",
+    "fixture_hash=store-add-one-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "status": "none",
+  "target_id": "demo"
+}

@@ -1,0 +1,93 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+      "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
+      "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+      "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+      "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+      "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+      "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+      "version_manifest": "4e3f1f90e868b49a15b1d779c0287e030454d9a13d04e445429b69837038d7e8"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+      "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json"
+    },
+    "slice_id": "store-add-one",
+    "source_commit": "demo-store-add-one-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-store-add-one-20260625",
+    "slice_spec_sha256=2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+    "fixture_hash=store-add-one-fixture",
+    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "store-add-one-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No support for NULL out pointers.",
+    "No support for INT_MAX because signed C overflow is undefined behavior.",
+    "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
+  ],
+  "profile_id": "demo-store-add-one-wsl-gcc",
+  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

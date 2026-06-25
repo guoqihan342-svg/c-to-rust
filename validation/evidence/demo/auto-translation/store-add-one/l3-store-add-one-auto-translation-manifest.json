@@ -1,0 +1,335 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+      "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
+      "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+      "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+      "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+      "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+      "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+      "version_manifest": "4e3f1f90e868b49a15b1d779c0287e030454d9a13d04e445429b69837038d7e8"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+      "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json"
+    },
+    "slice_id": "store-add-one",
+    "source_commit": "demo-store-add-one-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-store-add-one.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "store-add-one-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "diff",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "store-add-one",
+    "slice_spec_sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "source_commit": "demo-store-add-one-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py": "37a053e53bea8bb00c59a243b3c7f76b7d6c09fabbcac9e95039703f943f8bf4"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "claim_boundary": {
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL out pointers.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
+    ],
+    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "semantic_pass": true
+  },
+  "fixture": {
+    "hash": "store-add-one-fixture",
+    "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+  },
+  "l3_evidence_manifest": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-evidence-manifest.json",
+    "semantic_pass": true,
+    "status": "passed"
+  },
+  "level": "L3",
+  "oracle": {
+    "accepted_oracle": {
+      "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+      "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 6,
+    "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "harness_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+    "schema_version": 1,
+    "semantic_pass": true,
+    "slice_id": "store-add-one",
+    "source_commit": "demo-store-add-one-20260625",
+    "source_slice_id": "store-add-one",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "patch": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-self-healing-blocked-repairs.json",
+    "blocked_repairs_items": [],
+    "blocked_repairs_status": "none",
+    "patch_events": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-patch-events.jsonl",
+    "self_heal_applied": false,
+    "status": "none"
+  },
+  "replay": {
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "out0"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-store-add-one-20260625",
+      "slice_spec_sha256=2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+      "fixture_hash=store-add-one-fixture",
+      "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_code",
+        "status",
+        "out0"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+        "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+        "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+        "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+        "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml store_add_one",
+        "file": "validation/l2_slices/tests/store_add_one.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_store_add_one_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_store_add_one_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_store_add_one_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "store-add-one",
+    "source_commit": "demo-store-add-one-20260625",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+          "operation_count": 3,
+          "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+          "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+          "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "out0"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+            "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+            "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+            "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/store_add_one.rs::accepted_store_add_one_replay",
+        "source": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "out0"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+            "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_store_add_one_negative_diff",
+        "source": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "rust_check": {
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-m9v1l_dg C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\store-add-one\\l3-store-add-one-rust-draft.rs",
+    "error_count": 0,
+    "errors": [],
+    "schema_version": 1,
+    "self_healing": {
+      "blocked_repairs": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-self-healing-blocked-repairs.json",
+      "patch_events": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-patch-events.jsonl",
+      "status": "none"
+    },
+    "status": "passed"
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "accepted_evidence_bound",
+  "target_id": "demo",
+  "translator": {
+    "artifact_paths": [
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-translation-plan.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-translation-events.jsonl",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-type-map.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-ai-candidate-manifest.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-blocked-repairs.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs"
+    ],
+    "slice_id": "store-add-one",
+    "status": "generated",
+    "target_id": "demo"
+  }
+}

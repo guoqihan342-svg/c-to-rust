@@ -1,0 +1,19 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+    "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "int-min",
+    "field": "out0",
+    "mutated_c_value": -2147483646,
+    "rust_value": -2147483647
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

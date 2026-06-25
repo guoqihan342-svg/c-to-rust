@@ -1,0 +1,36 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-store-add-one-20260625",
+    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "fixture_hash=store-add-one-fixture",
+    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/store_add_one.rs"
+  ],
+  "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+  "level": "L3",
+  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-store-add-one.json",
+    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

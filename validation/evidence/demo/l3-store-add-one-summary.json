@@ -1,0 +1,16 @@
+{
+  "generated_draft_semantic_pass": false,
+  "known_gaps": [
+    "No NULL out pointer execution.",
+    "No INT_MAX signed overflow case.",
+    "No aliasing or unbounded pointer index claim."
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "passed",
+  "summary": "store_add_one out[0] pointer-output demo has accepted C oracle, Rust replay, diff, negative diff, unsafe, and version evidence.",
+  "target_id": "demo"
+}

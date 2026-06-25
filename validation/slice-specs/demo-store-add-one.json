@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "store-add-one",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "store_add_one",
+  "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+  "source_commit": "demo-store-add-one-20260625",
+  "fixture_hash": "store-add-one-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": "<demo-slice>",
+    "source_commit": "demo-store-add-one-20260625",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py": "generated-at-validation"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "signatures": [
+      {
+        "function": "store_add_one",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input"
+          },
+          {
+            "name": "out",
+            "c_type": "int*",
+            "direction": "output"
+          }
+        ],
+        "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ]
+  },
+  "build_profile": {
+    "profile_id": "demo-store-add-one-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "store-add-one-fixture",
+    "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "hash": "store-add-one-fixture",
+    "cases": [
+      {
+        "id": "int-min",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-store-add-one-c-oracle.json"
+      },
+      {
+        "id": "zero",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-store-add-one-c-oracle.json"
+      },
+      {
+        "id": "int-max-minus-one",
+        "input_ref": "cases[5]",
+        "expected_ref": "validation/evidence/demo/l3-store-add-one-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "out0"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+    "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json",
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "out0"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/store_add_one.rs",
+    "public_api": [
+      {
+        "name": "store_add_one",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/store_add_one.rs",
+    "api_name": "store_add_one",
+    "test_file": "validation/l2_slices/tests/store_add_one.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL out pointers.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "NULL pointer equivalence",
+      "signed overflow equivalence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No support for NULL out pointers.",
+    "No support for INT_MAX because signed C overflow is undefined behavior.",
+    "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

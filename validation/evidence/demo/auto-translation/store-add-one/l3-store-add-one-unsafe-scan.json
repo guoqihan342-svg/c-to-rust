@@ -1,0 +1,15 @@
+{
+  "accepted_unsafe_scan": {
+    "path": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+    "sha256": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+    "status": "passed"
+  },
+  "first_party_non_test_unsafe_count": 0,
+  "first_party_non_test_unsafe_ratio": 0.0,
+  "generated_draft_unsafe_count": 0,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "store-add-one",
+  "status": "passed",
+  "target_id": "demo"
+}

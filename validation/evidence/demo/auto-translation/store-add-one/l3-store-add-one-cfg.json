@@ -1,0 +1,106 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-store-add-one-20260625",
+    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "fixture_hash=store-add-one-fixture",
+    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "out[0] = value + 1",
+              "statement_index": 0,
+              "translation_rule_id": "bounded-pointer-index-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "bounded_pointer_index",
+            "none"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "pointer_write",
+            "return"
+          ],
+          "statements": [
+            "out[0] = value + 1",
+            "return 0"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "store_add_one",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "0",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int store_add_one(int value, int* out)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-store-add-one.json",
+    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "status": "ready"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

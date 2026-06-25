@@ -1247,12 +1247,22 @@ def promote_accepted_test_translation(
                     "source": fixture_path(spec),
                     "rust_test": f"{test_file}::{test_name}",
                     "behavior_fields": behavior_fields(spec),
-                    "coverage_kind": "oracle_replay",
+                    "coverage_kind": "main_path",
                     "status": "mapped",
                     "evidence": [
                         evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
                         evidence_ref(REPO_ROOT / accepted["paths"]["rust_report"], "passed"),
                         evidence_ref(REPO_ROOT / accepted["paths"]["diff"], "passed"),
+                    ],
+                },
+                {
+                    "source": accepted["paths"]["negative_diff"],
+                    "rust_test": f"validation/l2_slices/src/bin/emit_reports.rs::emit_{safe_ident(slice_id)}_negative_diff",
+                    "behavior_fields": behavior_fields(spec),
+                    "coverage_kind": "negative_case",
+                    "status": "mapped",
+                    "evidence": [
+                        evidence_ref(REPO_ROOT / accepted["paths"]["negative_diff"], "passed"),
                     ],
                 }
             ],

@@ -1,0 +1,106 @@
+{
+  "cache_invalidation_keys": [
+    "schema_version",
+    "source_commit",
+    "fixture=validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "cargo test --manifest-path validation/l2_slices/Cargo.toml --test store_add_one"
+  ],
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "negative input",
+      "zero input",
+      "positive input"
+    ],
+    "negative_cases": [
+      "out0 mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "Generated Rust draft remains a candidate; accepted semantics are bound to the checked Rust replay evidence.",
+    "No NULL out pointer execution.",
+    "No INT_MAX signed overflow case."
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test store_add_one",
+      "file": "validation/l2_slices/tests/store_add_one.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "store_add_one_matches_c_oracle_with_safe_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "store-add-one-fixture",
+        "operation_count": 6,
+        "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "out0"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/store_add_one.rs::store_add_one_matches_c_oracle_with_safe_boundary",
+      "source": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "out0"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_store_add_one_negative_diff",
+      "source": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

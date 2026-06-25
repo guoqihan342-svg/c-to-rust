@@ -1,0 +1,69 @@
+{
+  "c_source_boundary": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "out0": -2147483647,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "out0": -1,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -2
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-one",
+      "out0": 0,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "out0": 1,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "out0": 2,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max-minus-one",
+      "out0": 2147483647,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 2147483646
+    }
+  ],
+  "command": "cargo run --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/store_add_one.rs",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+    "sha256": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "store-add-one",
+  "status": "recorded",
+  "target_id": "demo"
+}

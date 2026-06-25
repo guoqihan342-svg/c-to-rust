@@ -1,0 +1,61 @@
+{
+  "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-store-add-one.json",
+    "--accept-existing-evidence"
+  ],
+  "fixture_hash": "store-add-one-fixture",
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "diff",
+    "summary"
+  ],
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 1,
+    "type_map": 1
+  },
+  "slice_id": "store-add-one",
+  "slice_spec_sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+  "source_commit": "demo-store-add-one-20260625",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "validation/l2_slices/tools/generate_store_add_one_oracle.py": "37a053e53bea8bb00c59a243b3c7f76b7d6c09fabbcac9e95039703f943f8bf4"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_version": "0.1.0"
+}

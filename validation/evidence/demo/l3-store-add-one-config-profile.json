@@ -1,0 +1,39 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "python -B validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "command_args": [
+      "wsl",
+      "gcc",
+      "-std=c99",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "config_header_included": false,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": null,
+    "role": "not_required"
+  },
+  "level": "L3",
+  "profile_id": "demo-store-add-one-wsl-gcc",
+  "repo_commit": "workspace",
+  "rust_profile": {
+    "backend": "safe-rust-validation-slice",
+    "cargo_features": [],
+    "package": "c-to-rust-l2-slices"
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

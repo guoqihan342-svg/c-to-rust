@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror store_add_one_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+  "helper_stdout_sha256": "acd676cacb0a4ba1a4e12d5a30c40d23c6d682f055a7d427e77da44d1cad8ee5",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./store_add_one_oracle",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "source_hashes": {
+    "c_helper": "a8ef21f2a423c7443752f2bd3c221bec347312c2e1e86ca510cc866ccf58a5e1",
+    "generator": "37a053e53bea8bb00c59a243b3c7f76b7d6c09fabbcac9e95039703f943f8bf4"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

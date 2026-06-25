@@ -1,0 +1,18 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+    "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "out0"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "store-add-one",
+  "status": "passed",
+  "target_id": "demo"
+}

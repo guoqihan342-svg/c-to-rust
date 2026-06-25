@@ -158,12 +158,16 @@ def validate_slice(evidence_root: Path, l2_root: Path, slice_id: str) -> dict[st
 def evidence_location(evidence_root: Path, l2_root: Path, slice_id: str) -> tuple[Path, str, str]:
     if slice_id == "libuv-ip4-addr":
         return evidence_root / "libuv", "l3-ip4-addr", "L3"
+    if slice_id == "demo-store-add-one":
+        return evidence_root / "demo", "l3-store-add-one", "L3"
     return l2_root, slice_id, "L2"
 
 
 def expected_negative_report_path(slice_id: str) -> str:
     if slice_id == "libuv-ip4-addr":
         return "validation/evidence/libuv/l3-ip4-addr-negative-diff.json"
+    if slice_id == "demo-store-add-one":
+        return "validation/evidence/demo/l3-store-add-one-negative-diff.json"
     return f"validation/evidence/l2-slices/{slice_id}-negative-diff.json"
 
 

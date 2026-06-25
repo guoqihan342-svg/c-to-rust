@@ -1,0 +1,18 @@
+{
+  "case_id": "int-min",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "int-min",
+    "field": "out0",
+    "mutated_c_value": -2147483646,
+    "rust_value": -2147483647
+  },
+  "level": "L3",
+  "mutation": "first oracle case out0 is changed by +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

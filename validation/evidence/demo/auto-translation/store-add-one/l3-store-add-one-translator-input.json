@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+  "fixture_hash": "store-add-one-fixture",
+  "function_name": "store_add_one",
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "target_id": "demo"
+}

@@ -1,0 +1,86 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "signatures": [
+      {
+        "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+        "function": "store_add_one",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          },
+          {
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "NULL pointer equivalence",
+      "signed overflow equivalence"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL out pointers.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
+    ]
+  },
+  "fixture": {
+    "hash": "store-add-one-fixture",
+    "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "store_add_one",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/store_add_one.rs",
+    "module_path": "validation/l2_slices/src/store_add_one.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "store_add_one",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/store_add_one.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

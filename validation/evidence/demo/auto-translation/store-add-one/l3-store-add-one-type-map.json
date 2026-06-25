@@ -1,0 +1,61 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
+    "sha256": "2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-store-add-one-20260625",
+    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "fixture_hash=store-add-one-fixture",
+    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "IntOutReport",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-store-add-one.json",
+    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "status": "ready"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

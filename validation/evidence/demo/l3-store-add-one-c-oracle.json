@@ -1,0 +1,80 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "out0": -2147483647,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "out0": -1,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -2
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-one",
+      "out0": 0,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "out0": 1,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "out0": 2,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max-minus-one",
+      "out0": 2147483647,
+      "return_code": 0,
+      "source_write": "out[0]",
+      "status": "ok",
+      "value": 2147483646
+    }
+  ],
+  "compared_fields": [
+    "return_code",
+    "status",
+    "out0"
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "signature": "int store_add_one(int value, int* out)"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -1,0 +1,35 @@
+{
+  "cache_inputs": [
+    "fixture=validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+    "rust_module=validation/l2_slices/src/store_add_one.rs",
+    "rust_test=validation/l2_slices/tests/store_add_one.rs"
+  ],
+  "call_edges": [
+    {
+      "from": "C oracle helper",
+      "to": "store_add_one"
+    },
+    {
+      "from": "Rust emit_reports",
+      "to": "store_add_one::store_add_one"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/store_add_one.rs",
+    "validation/l2_slices/tests/store_add_one.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/store_add_one.rs::store_add_one_matches_c_oracle_with_safe_boundary"
+  ],
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

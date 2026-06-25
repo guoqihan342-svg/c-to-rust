@@ -1,0 +1,103 @@
+{
+  "alias_sets": [],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "pointer_nodes",
+    "pointer_decisions",
+    "schema_version"
+  ],
+  "config_profile_ref": "validation/evidence/demo/l3-store-add-one-config-profile.json",
+  "context_pack_ref": "validation/evidence/demo/l3-store-add-one-context-pack.json",
+  "dependency_edges": [
+    {
+      "evidence": "out[0] = value + 1",
+      "from": "value",
+      "relationship": "writes_through",
+      "to": "out"
+    }
+  ],
+  "external_state": [],
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_pointer_index",
+      "index": 0,
+      "pointer_node": "out",
+      "unsafe_expected": false,
+      "write_effect": "out[0]"
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index"
+      ],
+      "c_type": "int*",
+      "cross_file_exposure": false,
+      "id": "out",
+      "kind": "raw_pointer",
+      "lifetime_owner": "caller",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [],
+      "symbol": "out",
+      "write_effects": [
+        "out[0]"
+      ]
+    }
+  ],
+  "repo_commit": "workspace",
+  "risk_summary": {
+    "blocked_reasons": [],
+    "known_gaps": [
+      "NULL out pointer is not executed.",
+      "INT_MAX is excluded because signed C overflow is undefined behavior.",
+      "No aliasing claim."
+    ],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "pointer_node": "out",
+      "strategy": "Map C out[0] write to owned StoreAddOneReport.out0 return field.",
+      "unsafe_expected": false
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "validation_coverage": {
+    "fixtures": [
+      "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+    ],
+    "oracle_reports": [
+      "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+      "validation/evidence/demo/l3-store-add-one-rust-report.json"
+    ],
+    "tests": [
+      "validation/l2_slices/tests/store_add_one.rs"
+    ]
+  }
+}

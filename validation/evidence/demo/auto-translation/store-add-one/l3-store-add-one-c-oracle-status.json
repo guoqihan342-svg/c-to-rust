@@ -1,0 +1,21 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+    "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 6,
+  "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+  "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+  "harness_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "source_slice_id": "store-add-one",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -275,6 +275,7 @@ function Get-RoundSteps {
     $steps.Add((New-Step "auto-migrate-unit-tests" "auto_translation_tests" "." @("python", "-B", "-m", "unittest", "validation.tools.test_auto_migrate", "-v")))
     $steps.Add((New-Step "libuv-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "libuv", "--slice-id", "ip4-addr", "--require-semantic-pass")))
     $steps.Add((New-Step "zlib-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "zlib-ng", "--slice-id", "adler32-step", "--require-semantic-pass")))
+    $steps.Add((New-Step "demo-store-add-one-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "demo", "--slice-id", "store-add-one", "--require-semantic-pass")))
     $steps.Add((New-Step "test-translation-coverage" "test_translation_coverage" "." @("python", "-B", "validation/tools/validate_test_translation_coverage.py", "--evidence-root", "validation/evidence", "--report", $testTranslationCoverageReport)))
     $steps.Add((New-Step "flashdb-fmt" "flashdb_build" "flashDB_rust" @("cargo", "fmt", "--", "--check")))
     $steps.Add((New-Step "flashdb-check" "flashdb_build" "flashDB_rust" @("cargo", "check")))

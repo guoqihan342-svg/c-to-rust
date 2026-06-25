@@ -1,0 +1,41 @@
+{
+  "accepted_differences": [],
+  "behavior_fields": [
+    "return_code",
+    "status",
+    "out0"
+  ],
+  "fixture": {
+    "case_count": 6,
+    "hash": "store-add-one-fixture",
+    "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No NULL out pointer execution.",
+    "No INT_MAX signed overflow case.",
+    "No unbounded pointer index, pointer arithmetic, aliasing, or struct field writes.",
+    "No full project migration claim."
+  ],
+  "repo_commit": "workspace",
+  "rust_boundary": {
+    "api": "pub fn store_add_one(value: i32) -> StoreAddOneReport",
+    "module": "validation/l2_slices/src/store_add_one.rs",
+    "raw_pointer_exposed": false,
+    "safe_rust": true
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "signature": "int store_add_one(int value, int* out)"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}
