@@ -1,0 +1,21 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-sum-i32-buffer-diff.json",
+    "sha256": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "source_write"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-buffer",
+  "status": "passed",
+  "target_id": "demo"
+}

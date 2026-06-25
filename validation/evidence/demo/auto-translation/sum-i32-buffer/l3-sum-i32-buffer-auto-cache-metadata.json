@@ -1,0 +1,61 @@
+{
+  "build_profile_hash": "076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-sum-i32-buffer.json",
+    "--accept-existing-evidence"
+  ],
+  "fixture_hash": "sum-i32-buffer-fixture",
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "diff",
+    "summary"
+  ],
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 1,
+    "type_map": 1
+  },
+  "slice_id": "sum-i32-buffer",
+  "slice_spec_sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+    "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_version": "0.1.0"
+}

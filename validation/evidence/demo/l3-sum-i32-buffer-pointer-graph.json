@@ -1,0 +1,126 @@
+{
+  "alias_sets": [],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "buffer"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "context_pack_ref": "validation/evidence/demo/l3-sum-i32-buffer-context-pack.json",
+  "dependency_edges": [
+    {
+      "evidence": "for (i = 0; i < len; i++)",
+      "from": "len",
+      "relationship": "borrows",
+      "to": "values"
+    },
+    {
+      "evidence": "out[0] = total",
+      "from": "values",
+      "relationship": "writes_through",
+      "to": "out"
+    }
+  ],
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_input_buffer",
+      "length_companion": "len",
+      "pointer_node": "values",
+      "read_effect": "values[i]",
+      "translation_rule_id": "bounded-input-buffer-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_index",
+      "index": 0,
+      "pointer_node": "out",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false,
+      "write_effect": "out[0]"
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_input_buffer"
+      ],
+      "buffer_role": "input",
+      "c_type": "const int*",
+      "id": "values",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "read_only",
+      "nullability": "unknown",
+      "ownership_role": "borrowed",
+      "read_effects": [
+        "values[i]"
+      ],
+      "symbol": "values",
+      "write_effects": []
+    },
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index"
+      ],
+      "c_type": "int*",
+      "id": "out",
+      "kind": "struct_pointer",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [],
+      "symbol": "out",
+      "write_effects": [
+        "out[0]"
+      ]
+    }
+  ],
+  "repo_commit": "workspace",
+  "risk_summary": {
+    "known_gaps": [
+      "NULL pointers are not executed.",
+      "Aliasing is not proven.",
+      "Signed overflow cases are excluded."
+    ],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "pointer_node": "values",
+      "strategy": "Map const int* plus len to safe Rust slice input.",
+      "unsafe_expected": false
+    },
+    {
+      "pointer_node": "out",
+      "strategy": "Map C out[0] write to owned SumI32BufferReport.sum field.",
+      "unsafe_expected": false
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+      "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
+    ],
+    "functions": [
+      "sum_i32_buffer"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

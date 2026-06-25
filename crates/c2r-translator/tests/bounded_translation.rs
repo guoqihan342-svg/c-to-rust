@@ -214,6 +214,83 @@ fn bounded_pointer_index_compound_assignment_records_decision() {
 }
 
 #[test]
+fn bounded_input_buffer_read_generates_safe_slice_boundary_and_decisions() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "sum-i32-buffer".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "sum_i32_buffer".to_string(),
+        c_source: "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn sum_i32_buffer(values: &[i32], len: i32)"));
+    assert!(result
+        .rust_code
+        .contains("total = total + values[i as usize];"));
+    assert!(!result.rust_code.contains("*const"));
+    assert!(!result.rust_code.contains("*mut"));
+    let values = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "values")
+        .expect("values pointer node");
+    assert_eq!(values.role, "borrowed_input");
+    assert!(values.read_effects.contains(&"values[i]".to_string()));
+    assert!(values
+        .boundary_decisions
+        .contains(&"bounded_input_buffer".to_string()));
+    let out = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "out")
+        .expect("out pointer node");
+    assert_eq!(out.role, "out_param");
+    assert!(out.write_effects.contains(&"out[0]".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-input-buffer-read".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-pointer-index-write".to_string()));
+}
+
+#[test]
+fn unproven_input_buffer_read_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-buffer-read".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_buffer_read".to_string(),
+        c_source: "int bad_buffer_read(const int* values, int i, int* out) { out[0] = values[i]; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.rust_code.is_empty());
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "unsupported_syntax"),
+        "{:?}",
+        result.errors
+    );
+}
+
+#[test]
 fn unsupported_complex_lvalues_block_without_false_success() {
     for (slice_id, function_name, c_source) in [
         (

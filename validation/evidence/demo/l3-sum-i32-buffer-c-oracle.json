@@ -1,0 +1,122 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "empty",
+      "id": "empty",
+      "len": 0,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": []
+    },
+    {
+      "coverage_kind": "single",
+      "id": "single-positive",
+      "len": 1,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 7,
+      "values": [
+        7
+      ]
+    },
+    {
+      "coverage_kind": "multi",
+      "id": "multi-positive",
+      "len": 4,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 10,
+      "values": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "coverage_kind": "negative_values",
+      "id": "mixed-negative",
+      "len": 4,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": [
+        -5,
+        2,
+        -3,
+        6
+      ]
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "zero-sum",
+      "len": 3,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": [
+        -10,
+        10,
+        0
+      ]
+    },
+    {
+      "coverage_kind": "boundary_safe",
+      "id": "boundary-safe",
+      "len": 3,
+      "return_code": 0,
+      "source_reads": "values[i] under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 2147483645,
+      "values": [
+        1073741823,
+        1073741823,
+        -1
+      ]
+    }
+  ],
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "source_write"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No NULL pointer execution.",
+    "No negative len execution.",
+    "No aliasing proof between values and out.",
+    "No signed overflow cases.",
+    "No pointer arithmetic form such as *(values + i)."
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py"
+    ],
+    "functions": [
+      "sum_i32_buffer"
+    ],
+    "signature": "int sum_i32_buffer(const int* values, int len, int* out)"
+  },
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

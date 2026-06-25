@@ -1,0 +1,18 @@
+{
+  "case_count": 6,
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "source_write"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,105 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+    "fixture_sha256": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+      "diff": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
+      "final_verification": "a536b160cd60ad9e924640e3527fe06545699563a389fe48599a158f61d50fd1",
+      "negative_diff": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
+      "performance_smoke": "b34e2540d923a257a6b56308d7d68152315f3e172c8f58e45e87a655e9302090",
+      "rust_report": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
+      "unsafe_ledger": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
+      "unsafe_scan": "ae27e61fd0032da3fac64d277dd48b5646e434e4a1cd62b5349abf75ebf47d16",
+      "version_manifest": "ab5e43714e8a35232df5e8d966009877c93a647b5a258eed9fb6e76a0d5f3e0e"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-sum-i32-buffer-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-sum-i32-buffer-diff.json",
+      "final_verification": "validation/evidence/demo/l3-sum-i32-buffer-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-sum-i32-buffer-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-sum-i32-buffer-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-sum-i32-buffer-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-sum-i32-buffer-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-sum-i32-buffer-version-manifest.json"
+    },
+    "slice_id": "sum-i32-buffer",
+    "source_commit": "demo-sum-i32-buffer-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "build_profile_hash": "076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-sum-i32-buffer.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "sum-i32-buffer-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "diff",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "sum-i32-buffer",
+    "slice_spec_sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "source_commit": "demo-sum-i32-buffer-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

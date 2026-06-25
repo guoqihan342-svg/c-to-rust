@@ -1,0 +1,22 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "fixture": {
+    "hash": "sum-i32-buffer-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

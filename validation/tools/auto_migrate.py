@@ -272,21 +272,25 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
 
     raw_pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
     raw_nodes = raw_pointer.get("pointer_graph", {}).get("nodes", [])
-    pointer_nodes = [
-        {
+    pointer_nodes = []
+    for idx, node in enumerate(raw_nodes):
+        kind = pointer_node_kind(node)
+        pointer_node = {
             "id": node.get("id", f"ptr-{idx + 1}"),
             "symbol": node.get("id", f"ptr-{idx + 1}"),
-            "kind": "struct_pointer" if node.get("role") == "out_param" else "raw_pointer",
+            "kind": kind,
             "c_type": node.get("c_type", ""),
             "mutability": "write_only" if node.get("role") == "out_param" else "read_only",
             "nullability": "unknown",
-            "ownership_role": "out_param" if node.get("role") == "out_param" else "borrowed",
+            "ownership_role": pointer_ownership_role(node),
             "read_effects": node.get("read_effects", []),
             "write_effects": node.get("write_effects", []),
             "boundary_decisions": node.get("boundary_decisions", []),
         }
-        for idx, node in enumerate(raw_nodes)
-    ]
+        if kind == "buffer":
+            pointer_node["buffer_role"] = "input"
+            pointer_node["length_companion"] = input_buffer_length_companion(spec, str(pointer_node["id"]))
+        pointer_nodes.append(pointer_node)
     dependency_edges = [
         {
             "from": edge.get("from", ""),
@@ -410,6 +414,38 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
 
     write_auto_translation_events(spec, slice_spec_path, evidence_dir)
     write_context_pack(spec, slice_spec_path, evidence_dir)
+
+
+def pointer_node_kind(node: dict[str, Any]) -> str:
+    if node.get("role") == "out_param":
+        return "struct_pointer"
+    if str(node.get("c_type", "")).strip() == "const int*":
+        return "buffer"
+    return "raw_pointer"
+
+
+def pointer_ownership_role(node: dict[str, Any]) -> str:
+    role = str(node.get("role") or "borrowed")
+    return {
+        "borrowed_input": "borrowed",
+        "out_param": "out_param",
+        "inout_param": "inout_param",
+        "global": "global",
+        "owner": "owner",
+        "observer": "observer",
+    }.get(role, "borrowed")
+
+
+def input_buffer_length_companion(spec: dict[str, Any], pointer_id: str) -> str:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    for item in pointer_contract.get("input_buffers", []):
+        if item.get("name") == pointer_id and item.get("length_companion"):
+            return str(item["length_companion"])
+    for signature in spec.get("c_boundary", {}).get("signatures", []):
+        for param in signature.get("parameters", []):
+            if param.get("name") == pointer_id and param.get("buffer_length_parameter"):
+                return str(param["buffer_length_parameter"])
+    return "len"
 
 
 def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip: bool) -> dict[str, Any]:
@@ -1757,6 +1793,7 @@ def lvalue_decision_for_kind(kind: str) -> str:
         "pointer_field": "safe_wrapper",
         "deref_identifier": "safe_wrapper",
         "bounded_pointer_index": "bounded_pointer_index",
+        "bounded_input_buffer": "bounded_input_buffer",
         "unsupported_lvalue": "unsupported_lvalue",
     }.get(kind, "unknown")
 
@@ -1767,6 +1804,7 @@ def lvalue_translation_rule(kind: str) -> str:
         "pointer_field": "pointer-field-write",
         "deref_identifier": "pointer-deref-write",
         "bounded_pointer_index": "bounded-pointer-index-write",
+        "bounded_input_buffer": "bounded-input-buffer-read",
         "unsupported_lvalue": "unsupported-lvalue-block",
     }.get(kind, "unknown-lvalue")
 
@@ -1779,18 +1817,40 @@ def pointer_decisions(pointer_nodes: list[dict[str, Any]]) -> list[dict[str, Any
                 {
                     "id": f"pointer-decision-{len(decisions) + 1}",
                     "pointer_node": node.get("id", ""),
-                    "source_statement": node.get("write_effects", [""])[0] if node.get("write_effects") else "",
-                    "lvalue_kind": "bounded_pointer_index" if decision == "bounded_pointer_index" else "pointer_write",
+                    "source_statement": pointer_decision_source_statement(node),
+                    "lvalue_kind": pointer_decision_lvalue_kind(decision),
                     "decision": decision,
                     "reason": "bounded translator pointer/lvalue decision",
-                    "translation_rule_id": "bounded-pointer-index-write"
-                    if decision == "bounded_pointer_index"
-                    else "pointer-field-write",
+                    "translation_rule_id": pointer_decision_translation_rule(decision),
                     "unsafe_expected": False,
                     "source_span": source_span(),
                 }
             )
     return decisions
+
+
+def pointer_decision_source_statement(node: dict[str, Any]) -> str:
+    if node.get("write_effects"):
+        return str(node["write_effects"][0])
+    if node.get("read_effects"):
+        return str(node["read_effects"][0])
+    return ""
+
+
+def pointer_decision_lvalue_kind(decision: str) -> str:
+    if decision == "bounded_pointer_index":
+        return "bounded_pointer_index"
+    if decision == "bounded_input_buffer":
+        return "bounded_input_buffer"
+    return "pointer_write"
+
+
+def pointer_decision_translation_rule(decision: str) -> str:
+    if decision == "bounded_pointer_index":
+        return "bounded-pointer-index-write"
+    if decision == "bounded_input_buffer":
+        return "bounded-input-buffer-read"
+    return "pointer-field-write"
 
 
 def count_occurrences(values: Any) -> dict[str, int]:

@@ -1,0 +1,15 @@
+{
+  "target_id": "demo",
+  "slice_id": "sum-i32-buffer",
+  "status": "generated",
+  "artifact_paths": [
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-translation-plan.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-translation-events.jsonl",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-type-map.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-cfg.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-ai-candidate-manifest.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-blocked-repairs.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-draft.rs"
+  ]
+}

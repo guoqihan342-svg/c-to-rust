@@ -1,0 +1,12 @@
+{
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-_19iypwy C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-buffer\\l3-sum-i32-buffer-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed"
+}

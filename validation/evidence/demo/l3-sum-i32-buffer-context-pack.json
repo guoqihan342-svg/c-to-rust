@@ -1,0 +1,34 @@
+{
+  "cache_inputs": [
+    "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+    "validation/l2_slices/src/sum_i32_buffer.rs"
+  ],
+  "call_edges": [
+    {
+      "from": "C oracle helper",
+      "to": "sum_i32_buffer"
+    },
+    {
+      "from": "Rust emit_reports",
+      "to": "sum_i32_buffer::sum_i32_buffer"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/sum_i32_buffer.rs",
+    "validation/l2_slices/tests/sum_i32_buffer.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/sum_i32_buffer.rs::sum_i32_buffer_matches_c_oracle_with_safe_boundary"
+  ],
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -82,6 +82,64 @@ class ValidateL2EvidenceSummaryTests(unittest.TestCase):
             self.assertEqual(report["slices"][0]["slice_id"], "sqlite-varint")
             self.assertEqual(report["slices"][0]["negative_diff"], "passed")
 
+    def test_accepts_sum_i32_buffer_l3_demo_location(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="l2-evidence-test-") as tmp:
+            root = Path(tmp)
+            self._write_complete_slice(
+                root,
+                "demo-sum-i32-buffer",
+                negative_report_path="validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+            )
+            demo = root / "demo"
+            demo.mkdir(parents=True)
+            self._write_json(demo / "l3-sum-i32-buffer-rust-report.json", {"status": "passed"})
+            self._write_json(
+                demo / "l3-sum-i32-buffer-diff.json",
+                {"status": "passed", "first_mismatch": None},
+            )
+            self._write_json(
+                demo / "l3-sum-i32-buffer-negative-diff.json",
+                {"status": "passed", "detected": True, "first_mismatch": {"field": "sum"}},
+            )
+            self._write_json(
+                demo / "l3-sum-i32-buffer-test-translation.json",
+                {
+                    "status": "recorded",
+                    "coverage": {
+                        "main_paths": ["empty input", "multi input"],
+                        "error_paths": [],
+                        "negative_cases": ["sum mutation rejected"],
+                    },
+                    "translation_mappings": [
+                        {
+                            "source": "oracle fixture",
+                            "rust_test": "cargo test",
+                            "coverage_kind": "main_path",
+                            "status": "mapped",
+                        },
+                        {
+                            "source": "negative diff",
+                            "rust_test": "emit_reports",
+                            "coverage_kind": "negative_case",
+                            "status": "mapped",
+                        },
+                    ],
+                    "evidence_links": {
+                        "negative_diff": {
+                            "path": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+                            "status": "passed",
+                        }
+                    },
+                },
+            )
+
+            report = validate_l2_evidence(root)
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["slice_count"], 1)
+            self.assertEqual(report["slices"][0]["slice_id"], "demo-sum-i32-buffer")
+            self.assertEqual(report["slices"][0]["level"], "L3")
+
     def _write_complete_slice(
         self,
         root: Path,

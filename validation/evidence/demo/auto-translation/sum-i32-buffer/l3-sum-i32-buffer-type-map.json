@@ -1,0 +1,81 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-translator-input.json",
+    "sha256": "0dd4b316e396168d65be86fe711a81446125480fbd96c1a975ddc513fa38d35e",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-sum-i32-buffer-20260625",
+    "slice_spec_sha256=5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "fixture_hash=sum-i32-buffer-fixture",
+    "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "values",
+      "c_type": "const int*",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&[i32]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "len",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "IntOutReport",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "total",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sum-i32-buffer.json",
+    "sha256": "5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
+    "status": "ready"
+  },
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

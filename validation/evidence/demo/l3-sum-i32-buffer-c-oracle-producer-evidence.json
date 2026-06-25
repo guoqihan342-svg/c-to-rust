@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror sum_i32_buffer_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-sum-i32-buffer-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+  "helper_stdout_sha256": "d631d8b22d12f9cbe65d64ddf2d680f175c176f3653a879e8d0c074e3f37486c",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./sum_i32_buffer_oracle",
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "source_hashes": {
+    "c_helper": "9373fb6d714b903df98b24211e6554718a282f5331106eef03f28294f6082832",
+    "generator": "947b4eee8403ddc7f6165b1e324628838b1dd0920ba099894193005a00bc0e7f"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -1,0 +1,18 @@
+{
+  "case_id": "single-positive",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "single-positive",
+    "field": "sum",
+    "mutated_c_value": 8,
+    "rust_value": 7
+  },
+  "level": "L3",
+  "mutation": "first non-empty oracle case sum is changed by +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

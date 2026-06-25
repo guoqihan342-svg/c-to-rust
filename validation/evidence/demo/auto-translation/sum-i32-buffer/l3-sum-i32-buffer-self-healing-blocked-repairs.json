@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-sum-i32-buffer-20260625",
+    "fixture_hash=sum-i32-buffer-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "status": "none",
+  "target_id": "demo"
+}

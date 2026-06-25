@@ -163,6 +163,7 @@ enum StatementKind {
     If,
     While,
     For,
+    BoundedInputBufferRead,
     PointerWrite,
     UnsupportedLValue,
     Expression,
@@ -233,14 +234,8 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
                 .iter()
                 .map(|statement| statement.text.clone())
                 .collect(),
-            statement_kinds: statements
-                .iter()
-                .map(|statement| statement.kind.label().to_string())
-                .collect(),
-            lvalue_kinds: statements
-                .iter()
-                .map(|statement| statement_lvalue_kind(statement).to_string())
-                .collect(),
+            statement_kinds: statement_kind_labels(&statements),
+            lvalue_kinds: statement_lvalue_kinds(&statements),
             terminator: if statements
                 .iter()
                 .any(|statement| statement.kind == StatementKind::Return)
@@ -267,6 +262,7 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
     }
 
     record_unsupported_statements(&statements, &mut result);
+    record_unbounded_buffer_reads(&statements, &mut result);
     if result
         .errors
         .iter()
@@ -645,6 +641,34 @@ fn classify_lvalue_statement(target: &str, simple_kind: StatementKind) -> Statem
     }
 }
 
+fn statement_kind_labels(statements: &[ParsedStatement]) -> Vec<String> {
+    let mut labels = Vec::new();
+    for statement in statements {
+        push_unique(&mut labels, statement.kind.label());
+        if statement_has_bounded_input_buffer_read(statement) {
+            push_unique(&mut labels, StatementKind::BoundedInputBufferRead.label());
+        }
+    }
+    labels
+}
+
+fn statement_lvalue_kinds(statements: &[ParsedStatement]) -> Vec<String> {
+    let mut kinds = Vec::new();
+    for statement in statements {
+        push_unique(&mut kinds, statement_lvalue_kind(statement));
+        if statement_has_bounded_input_buffer_read(statement) {
+            push_unique(&mut kinds, "bounded_input_buffer");
+        }
+    }
+    kinds
+}
+
+fn push_unique(values: &mut Vec<String>, value: &str) {
+    if !values.iter().any(|item| item == value) {
+        values.push(value.to_string());
+    }
+}
+
 impl StatementKind {
     fn label(&self) -> &'static str {
         match self {
@@ -657,6 +681,7 @@ impl StatementKind {
             Self::If => "if",
             Self::While => "while",
             Self::For => "for",
+            Self::BoundedInputBufferRead => "bounded_input_buffer_read",
             Self::PointerWrite => "pointer_write",
             Self::UnsupportedLValue => "unsupported_lvalue",
             Self::Expression => "expression",
@@ -874,6 +899,20 @@ fn statement_lvalue_kind(statement: &ParsedStatement) -> &'static str {
         .as_ref()
         .map(lvalue_kind)
         .unwrap_or("none")
+}
+
+fn statement_has_bounded_input_buffer_read(statement: &ParsedStatement) -> bool {
+    if statement.kind != StatementKind::For {
+        return false;
+    }
+    let Some((_, condition, _, body)) = parse_for_parts(&statement.text) else {
+        return false;
+    };
+    let nested = parse_statements(&body);
+    nested
+        .iter()
+        .flat_map(|nested| bounded_input_buffer_reads(&nested.text))
+        .any(|read| loop_condition_bounds_index(&condition, &read.index, "len"))
 }
 
 fn parse_declaration(text: &str) -> Option<Declaration> {
@@ -1142,6 +1181,51 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
     }
 }
 
+fn record_unbounded_buffer_reads(statements: &[ParsedStatement], result: &mut TranslationResult) {
+    record_unbounded_buffer_reads_with_bounds(statements, &[], result);
+}
+
+fn record_unbounded_buffer_reads_with_bounds(
+    statements: &[ParsedStatement],
+    bounds: &[(&str, &str)],
+    result: &mut TranslationResult,
+) {
+    for statement in statements {
+        if statement.kind == StatementKind::For {
+            if let Some((_, condition, _, body)) = parse_for_parts(&statement.text) {
+                let nested = parse_statements(&body);
+                let nested_reads = nested
+                    .iter()
+                    .flat_map(|nested| bounded_input_buffer_reads(&nested.text))
+                    .collect::<Vec<_>>();
+                let mut nested_bounds = bounds.to_vec();
+                for read in &nested_reads {
+                    if loop_condition_bounds_index(&condition, &read.index, "len") {
+                        nested_bounds.push((read.base.as_str(), read.index.as_str()));
+                    }
+                }
+                record_unbounded_buffer_reads_with_bounds(&nested, &nested_bounds, result);
+            }
+            continue;
+        }
+        for read in bounded_input_buffer_reads(&statement.text) {
+            let allowed = bounds
+                .iter()
+                .any(|(base, index)| *base == read.base && *index == read.index);
+            if !allowed {
+                result.errors.push(TranslationError {
+                    kind: "unsupported_syntax".to_string(),
+                    message: format!(
+                        "input buffer read `{}[{}]` is not proven by a bounded length companion",
+                        read.base, read.index
+                    ),
+                    source_span: Some(statement.text.clone()),
+                });
+            }
+        }
+    }
+}
+
 fn parse_simple_call(text: &str) -> Option<(&str, &str)> {
     let trimmed = text.trim().trim_end_matches(';').trim();
     let open = trimmed.find('(')?;
@@ -1222,6 +1306,7 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
         "unsigned char" => Some("u8"),
         "char" => Some("u8"),
         "const char*" => Some("&str"),
+        "const int*" => Some("&[i32]"),
         "int*" => Some("IntOutReport"),
         "struct sockaddr_in*" => Some("Ip4AddrReport"),
         "void" => Some("()"),
@@ -1243,7 +1328,9 @@ fn emit_pointer_graph(
         } else {
             "out_param"
         };
-        let rust_boundary = if role == "borrowed_input" {
+        let rust_boundary = if normalize_type(&param.c_type) == "const int*" {
+            "&[i32]"
+        } else if role == "borrowed_input" {
             "&str"
         } else {
             "owned safe report"
@@ -1283,11 +1370,95 @@ fn emit_pointer_graph(
 }
 
 fn pointer_read_effects(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
+    let mut effects = Vec::new();
+    collect_pointer_read_effects(name, statements, &mut effects);
+    effects
+}
+
+fn collect_pointer_read_effects(
+    name: &str,
+    statements: &[ParsedStatement],
+    effects: &mut Vec<String>,
+) {
+    for statement in statements {
+        match statement.kind {
+            StatementKind::For => {
+                if let Some((_, condition, _, body)) = parse_for_parts(&statement.text) {
+                    let nested = parse_statements(&body);
+                    collect_pointer_read_effects(name, &nested, effects);
+                    if bounded_buffer_read_in_loop(name, &condition, &nested)
+                        && !effects.iter().any(|item| item == &format!("{name}[i]"))
+                    {
+                        effects.push(format!("{name}[i]"));
+                    }
+                }
+            }
+            _ if contains_token(&statement.text, name) => {
+                let effect = if statement.text.contains(&format!("{name}[i]")) {
+                    format!("{name}[i]")
+                } else {
+                    statement.text.clone()
+                };
+                if !effects.iter().any(|item| item == &effect) {
+                    effects.push(effect);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn bounded_buffer_read_in_loop(
+    name: &str,
+    condition: &str,
+    statements: &[ParsedStatement],
+) -> bool {
     statements
         .iter()
-        .filter(|statement| contains_token(&statement.text, name))
-        .map(|statement| statement.text.clone())
-        .collect()
+        .flat_map(|statement| bounded_input_buffer_reads(&statement.text))
+        .any(|read| read.base == name && loop_condition_bounds_index(condition, &read.index, "len"))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct BufferRead {
+    base: String,
+    index: String,
+}
+
+fn bounded_input_buffer_reads(text: &str) -> Vec<BufferRead> {
+    let mut reads = Vec::new();
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] != b'[' {
+            index += 1;
+            continue;
+        }
+        let base_start = text[..index]
+            .rfind(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+            .map(|pos| pos + 1)
+            .unwrap_or(0);
+        let base = text[base_start..index].trim();
+        let Some(close_offset) = text[index + 1..].find(']') else {
+            break;
+        };
+        let close = index + 1 + close_offset;
+        let subscript = text[index + 1..close].trim();
+        if is_simple_identifier(base) && is_simple_identifier(subscript) {
+            reads.push(BufferRead {
+                base: base.to_string(),
+                index: subscript.to_string(),
+            });
+        }
+        index = close + 1;
+    }
+    reads
+}
+
+fn loop_condition_bounds_index(condition: &str, index_name: &str, len_name: &str) -> bool {
+    let normalized = condition.split_whitespace().collect::<String>();
+    normalized == format!("{index_name}<{len_name}")
+        || normalized == format!("0<={index_name}&&{index_name}<{len_name}")
 }
 
 fn pointer_write_effects(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
@@ -1308,6 +1479,15 @@ fn pointer_write_effects(name: &str, statements: &[ParsedStatement]) -> Vec<Stri
 fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
     let mut decisions = Vec::new();
     for statement in statements {
+        if statement.kind == StatementKind::For {
+            if let Some((_, condition, _, body)) = parse_for_parts(&statement.text) {
+                if bounded_buffer_read_in_loop(name, &condition, &parse_statements(&body))
+                    && !decisions.iter().any(|item| item == "bounded_input_buffer")
+                {
+                    decisions.push("bounded_input_buffer".to_string());
+                }
+            }
+        }
         if statement.kind != StatementKind::PointerWrite {
             continue;
         }
@@ -1401,6 +1581,28 @@ fn param_is_mutated(param: &Param, statements: &[ParsedStatement]) -> bool {
         .any(|statement| statement_mutates_target(statement, &param.name))
 }
 
+fn supports_pointer_body_translation(
+    function: &ParsedFunction,
+    statements: &[ParsedStatement],
+) -> bool {
+    let has_const_i32_input = function
+        .params
+        .iter()
+        .any(|param| normalize_type(&param.c_type) == "const int*");
+    let has_out = function
+        .params
+        .iter()
+        .any(|param| normalize_type(&param.c_type) == "int*");
+    has_const_i32_input
+        && has_out
+        && statements
+            .iter()
+            .any(statement_has_bounded_input_buffer_read)
+        && statements.iter().any(|statement| {
+            pointer_lvalue_rule(&statement.text) == Some("bounded-pointer-index-write")
+        })
+}
+
 fn emit_rust(
     function: &ParsedFunction,
     statements: &[ParsedStatement],
@@ -1416,6 +1618,29 @@ fn emit_rust(
             .translation_rule_ids
             .push("safe-wrapper-for-pointer-out-param".to_string());
         record_statement_rules(statements, result);
+        if supports_pointer_body_translation(function, statements) {
+            let rust_params = function
+                .params
+                .iter()
+                .filter(|param| param.c_type.starts_with("const ") || !param.c_type.contains('*'))
+                .map(|param| format!("{}: {}", param.name, public_param_type(&param.c_type)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let body_lines = emit_safe_pointer_body(statements, 1);
+            return format!(
+                "pub fn {}({rust_params}) -> i32 {{\n{}\n}}\n",
+                function.name,
+                body_lines
+                    .into_iter()
+                    .map(|line| if line.is_empty() {
+                        "    0".to_string()
+                    } else {
+                        line
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+        }
         let rust_params = function
             .params
             .iter()
@@ -1484,6 +1709,34 @@ fn emit_rust(
     )
 }
 
+fn emit_safe_pointer_body(statements: &[ParsedStatement], indent_level: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut output_return_emitted = false;
+    for statement in statements {
+        if output_return_emitted && statement.kind == StatementKind::Return {
+            continue;
+        }
+        if statement.kind == StatementKind::PointerWrite {
+            if let Some(assignment) = parse_assignment(&statement.text) {
+                if matches!(
+                    parse_lvalue(&assignment.target),
+                    LValue::BoundedPointerIndex { .. }
+                ) {
+                    lines.push(format!(
+                        "{}return {};",
+                        indent(indent_level),
+                        translate_expr(&assignment.value)
+                    ));
+                    output_return_emitted = true;
+                    continue;
+                }
+            }
+        }
+        lines.extend(emit_rust_statement(statement, indent_level));
+    }
+    lines
+}
+
 fn record_statement_rules(statements: &[ParsedStatement], result: &mut TranslationResult) {
     for statement in statements {
         let rule = match statement.kind {
@@ -1495,7 +1748,16 @@ fn record_statement_rules(statements: &[ParsedStatement], result: &mut Translati
             StatementKind::SimpleCall => Some("simple-call"),
             StatementKind::If => Some("structured-if"),
             StatementKind::While => Some("structured-while"),
-            StatementKind::For => Some("structured-for"),
+            StatementKind::For => {
+                if statement_has_bounded_input_buffer_read(statement) {
+                    push_rule_once(
+                        &mut result.plan.translation_rule_ids,
+                        "bounded-input-buffer-read",
+                    );
+                }
+                Some("structured-for")
+            }
+            StatementKind::BoundedInputBufferRead => Some("bounded-input-buffer-read"),
             StatementKind::PointerWrite => {
                 push_rule_once(
                     &mut result.plan.translation_rule_ids,
@@ -1569,6 +1831,9 @@ fn emit_rust_statement(statement: &ParsedStatement, indent_level: usize) -> Vec<
                     )]
                 })
                 .unwrap_or_else(|| vec![format!("{prefix}{};", translate_expr(&statement.text))])
+        }
+        StatementKind::BoundedInputBufferRead => {
+            vec![format!("{prefix}{};", translate_expr(&statement.text))]
         }
         StatementKind::CompoundAssignment => parse_compound_assignment(&statement.text)
             .map(|assignment| {
@@ -1830,5 +2095,12 @@ fn report_type_name(function_name: &str) -> String {
 }
 
 fn translate_expr(expr: &str) -> String {
-    expr.trim().to_string()
+    let mut out = expr.trim().to_string();
+    for read in bounded_input_buffer_reads(expr) {
+        out = out.replace(
+            &format!("{}[{}]", read.base, read.index),
+            &format!("{}[{} as usize]", read.base, read.index),
+        );
+    }
+    out
 }

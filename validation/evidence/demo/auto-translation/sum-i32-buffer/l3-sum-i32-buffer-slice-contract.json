@@ -1,0 +1,123 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "sum_i32_buffer"
+    ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "input_buffers": [
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "values",
+          "read_effects": [
+            "values[i]"
+          ]
+        }
+      ],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "name": "out",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }",
+        "function": "sum_i32_buffer",
+        "parameters": [
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "values"
+          },
+          {
+            "bounds": {
+              "maximum": "fixture-bound",
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "len"
+          },
+          {
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "NULL pointer equivalence",
+      "signed overflow equivalence"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL values or out pointers.",
+      "No support for negative len values.",
+      "No support for signed overflow; fixture sums remain inside C int defined range.",
+      "No support for arbitrary pointer arithmetic such as *(values + i).",
+      "No aliasing proof between values and out."
+    ]
+  },
+  "fixture": {
+    "hash": "sum-i32-buffer-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "sum_i32_buffer",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/sum_i32_buffer.rs",
+    "module_path": "validation/l2_slices/src/sum_i32_buffer.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "input": "&[i32]",
+        "name": "sum_i32_buffer",
+        "output": "SumI32BufferReport",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/sum_i32_buffer.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

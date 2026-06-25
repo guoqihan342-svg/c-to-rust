@@ -1,0 +1,14 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-sum-i32-buffer-unsafe-ledger.json",
+    "sha256": "0c8131dd244961634f9cd5db31cfc91eabc768accb1a70d0e1ce2c5ed0ae0f53",
+    "status": "passed"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "status": "passed",
+  "target_id": "demo"
+}

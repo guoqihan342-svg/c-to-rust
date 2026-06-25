@@ -1,0 +1,46 @@
+{
+  "accepted_differences": [],
+  "behavior_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "source_write"
+  ],
+  "fixture": {
+    "case_count": 6,
+    "hash": "sum-i32-buffer-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No NULL pointer execution.",
+    "No negative len execution.",
+    "No aliasing proof between values and out.",
+    "No signed overflow cases.",
+    "No pointer arithmetic form such as *(values + i).",
+    "No full project migration claim."
+  ],
+  "repo_commit": "workspace",
+  "rust_boundary": {
+    "api": "pub fn sum_i32_buffer(values: &[i32]) -> SumI32BufferReport",
+    "module": "validation/l2_slices/src/sum_i32_buffer.rs",
+    "raw_pointer_exposed": false,
+    "safe_rust": true
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py"
+    ],
+    "functions": [
+      "sum_i32_buffer"
+    ],
+    "signature": "int sum_i32_buffer(const int* values, int len, int* out)"
+  },
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

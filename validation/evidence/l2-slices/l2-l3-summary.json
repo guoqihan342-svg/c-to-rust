@@ -30,6 +30,12 @@
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "demo-store-add-one"
+      },
+      {
+        "case_count": 6,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "demo-sum-i32-buffer"
       }
     ],
     "status": "passed"
@@ -60,6 +66,11 @@
         "report": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
         "slice_id": "demo-store-add-one",
         "status": "passed"
+      },
+      {
+        "report": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+        "slice_id": "demo-sum-i32-buffer",
+        "status": "passed"
       }
     ],
     "status": "passed"
@@ -72,6 +83,7 @@
       "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/store_add_one.rs",
+      "validation/l2_slices/src/sum_i32_buffer.rs",
       "validation/l2_slices/src/zlib_adler32.rs",
       "validation/l2_slices/src/zstd_xxh32.rs"
     ]
@@ -91,6 +103,8 @@
     "audited_modules": [
       "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
+      "validation/l2_slices/src/store_add_one.rs",
+      "validation/l2_slices/src/sum_i32_buffer.rs",
       "validation/l2_slices/src/zlib_adler32.rs",
       "validation/l2_slices/src/zstd_xxh32.rs"
     ],

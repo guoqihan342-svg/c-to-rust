@@ -1,0 +1,32 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "python -B validation/l2_slices/tools/generate_sum_i32_buffer_oracle.py",
+    "command_args": [
+      "wsl",
+      "gcc",
+      "-std=c99",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "include_paths": []
+  },
+  "level": "L3",
+  "profile_id": "demo-sum-i32-buffer-wsl-gcc",
+  "repo_commit": "workspace",
+  "rust_profile": {
+    "cargo_features": [],
+    "package": "c-to-rust-l2-slices"
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

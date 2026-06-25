@@ -160,6 +160,8 @@ def evidence_location(evidence_root: Path, l2_root: Path, slice_id: str) -> tupl
         return evidence_root / "libuv", "l3-ip4-addr", "L3"
     if slice_id == "demo-store-add-one":
         return evidence_root / "demo", "l3-store-add-one", "L3"
+    if slice_id == "demo-sum-i32-buffer":
+        return evidence_root / "demo", "l3-sum-i32-buffer", "L3"
     return l2_root, slice_id, "L2"
 
 
@@ -168,6 +170,8 @@ def expected_negative_report_path(slice_id: str) -> str:
         return "validation/evidence/libuv/l3-ip4-addr-negative-diff.json"
     if slice_id == "demo-store-add-one":
         return "validation/evidence/demo/l3-store-add-one-negative-diff.json"
+    if slice_id == "demo-sum-i32-buffer":
+        return "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json"
     return f"validation/evidence/l2-slices/{slice_id}-negative-diff.json"
 
 

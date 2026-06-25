@@ -1,0 +1,168 @@
+{
+  "behavior_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "source_write"
+  ],
+  "cache_invalidation_keys": [
+    "source_commit=demo-sum-i32-buffer-20260625",
+    "slice_spec_sha256=0dd4b316e396168d65be86fe711a81446125480fbd96c1a975ddc513fa38d35e",
+    "fixture_hash=sum-i32-buffer-fixture",
+    "build_profile_hash=076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "return_code",
+      "status",
+      "len",
+      "sum",
+      "source_reads",
+      "source_write"
+    ],
+    "negative_cases": [
+      "negative diff must be generated before acceptance"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-sum-i32-buffer-c-oracle.json",
+      "sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+      "sha256": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-draft.rs",
+      "status": "candidate"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-sum-i32-buffer-rust-report.json",
+      "sha256": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-sum-i32-buffer-diff.json",
+      "sha256": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
+      "status": "passed"
+    }
+  },
+  "fixture": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+  "known_gaps": [
+    "Generated replay draft is not itself the accepted replay implementation.",
+    "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+  ],
+  "level": "L3",
+  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml sum_i32_buffer",
+      "file": "validation/l2_slices/tests/sum_i32_buffer.rs",
+      "framework": "cargo test",
+      "source": "accepted replay evidence",
+      "test_names": [
+        "accepted_sum_i32_buffer_replay"
+      ]
+    },
+    {
+      "cargo_command": "cargo test replay_sum_i32_buffer_fixture_contract",
+      "file": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-replay-test-draft.rs",
+      "framework": "cargo test",
+      "status": "generated_draft",
+      "test_names": [
+        "replay_sum_i32_buffer_fixture_contract"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "95f649a00e72cb52b0f2540a3b3d2f2df4c203a202980a38635952d5f4d62149",
+        "operation_count": 4,
+        "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-sum-i32-buffer-c-oracle.json",
+        "sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-sum-i32-buffer-rust-report.json",
+        "sha256": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "test_draft": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-replay-test-draft.rs",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "len",
+        "sum",
+        "source_reads",
+        "source_write"
+      ],
+      "coverage_kind": "main_path",
+      "evidence": [
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-buffer-c-oracle.json",
+          "sha256": "2ad1734fceba9c9af63d6f5d7a6a0bcc8be037c022dad86f340b8d57e9d10d3c",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-buffer-rust-report.json",
+          "sha256": "841bd73c29d2d7d4fb66e78baea53ca1cb2e907c78a0c720d8e0c4f951cfade5",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-buffer-diff.json",
+          "sha256": "c3a0cb8240370b50eeefa5715df4b144deef40a840291c9e5032647307085c43",
+          "status": "passed"
+        }
+      ],
+      "rust_test": "validation/l2_slices/tests/sum_i32_buffer.rs::accepted_sum_i32_buffer_replay",
+      "source": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "len",
+        "sum",
+        "source_reads",
+        "source_write"
+      ],
+      "coverage_kind": "negative_case",
+      "evidence": [
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+          "sha256": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
+          "status": "passed"
+        }
+      ],
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_sum_i32_buffer_negative_diff",
+      "source": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

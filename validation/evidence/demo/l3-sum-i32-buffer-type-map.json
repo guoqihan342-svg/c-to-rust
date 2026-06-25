@@ -1,0 +1,83 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/l3-sum-i32-buffer-config-profile.json",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "values",
+      "c_type": "const int*",
+      "confidence": "proven",
+      "decision": "safe_slice_boundary",
+      "id": "type-1",
+      "kind": "pointer",
+      "length_companion": "len",
+      "mutability": "read_only",
+      "role": "input_buffer",
+      "rust_type": "&[i32]",
+      "source": "translator_rule",
+      "symbol": "values"
+    },
+    {
+      "bounds": "fixture domain requires len >= 0 and values valid for len elements",
+      "c_name": "len",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "role": "input_length",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "symbol": "len"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "confidence": "proven",
+      "decision": "owned_report_field",
+      "id": "type-3",
+      "kind": "pointer",
+      "mutability": "write_only",
+      "role": "output_pointer",
+      "rust_type": "SumI32BufferReport.sum",
+      "source": "translator_rule",
+      "symbol": "out"
+    },
+    {
+      "c_name": "total",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "primitive",
+      "role": "local_accumulator",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "symbol": "total"
+    }
+  ],
+  "repo_commit": "workspace",
+  "safe_boundary": {
+    "public_api": "pub fn sum_i32_buffer(values: &[i32]) -> SumI32BufferReport",
+    "raw_pointer_exposed": false,
+    "unsafe_required": false
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sum-i32-buffer.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-sum-i32-buffer-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": [],
+  "unsupported_types": []
+}

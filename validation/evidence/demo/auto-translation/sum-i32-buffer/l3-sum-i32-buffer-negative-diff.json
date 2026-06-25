@@ -1,0 +1,19 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json",
+    "sha256": "b029ac2fb53d89b83b9a0c684232e6282713c7a63e9be82e3ab61b1f5ea1b3d6",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "single-positive",
+    "field": "sum",
+    "mutated_c_value": 8,
+    "rust_value": 7
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "status": "expected_failed",
+  "target_id": "demo"
+}
