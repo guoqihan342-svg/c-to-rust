@@ -115,6 +115,78 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn("compound_assignment", statement_kinds)
             self.assertIn("inc_dec", statement_kinds)
 
+    def test_call_expression_evidence_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "call-expression",
+            "source_commit": "1234567",
+            "function_name": "call_expression",
+            "c_source": "int call_expression(int value) { int first = call_expression(value); value = call_expression(first); return call_expression(value); }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "call-expression.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "call-expression"
+            plan = json.loads(
+                (evidence_dir / "l3-call-expression-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            cfg = json.loads((evidence_dir / "l3-call-expression-cfg.json").read_text(encoding="utf-8"))
+            context_pack = json.loads(
+                (evidence_dir / "l3-call-expression-context-pack.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("call_expression", cfg["functions"][0]["basic_blocks"][0]["statement_kinds"])
+            self.assertIn("bounded-call-expression", plan["translation_summary"]["translation_rule_ids"])
+            self.assertEqual(len(plan["translation_summary"]["call_expressions"]), 3)
+            self.assertEqual(plan["translation_summary"]["call_expressions"][0]["callee"], "call_expression")
+            self.assertEqual(
+                context_pack["direct_call_edges"][0],
+                {
+                    "callee": "call_expression",
+                    "arguments": ["value"],
+                    "source_expression": "call_expression(value)",
+                    "statement_context": "declaration_initializer",
+                },
+            )
+
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {
             "target_id": "demo",

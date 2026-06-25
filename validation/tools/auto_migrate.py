@@ -359,6 +359,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
 
     raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
     lvalue_decision_counts = count_occurrences(
         lvalue_decision_for_kind(kind)
         for function in functions
@@ -404,6 +405,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "unsupported_lvalue_count": unsupported_lvalue_count,
                 "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
                 "alias_gate": alias_gate["summary"],
+                "call_expressions": call_expressions,
             },
             "verification_plan": [
                 {"gate": "rust_check", "command": "rustc --error-format=json <draft>", "required_before_acceptance": True},
@@ -429,7 +431,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     )
 
     write_auto_translation_events(spec, slice_spec_path, evidence_dir)
-    write_context_pack(spec, slice_spec_path, evidence_dir)
+    write_context_pack(spec, slice_spec_path, evidence_dir, call_expressions)
 
 
 def pointer_node_kind(node: dict[str, Any]) -> str:
@@ -1776,7 +1778,12 @@ def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path) -> None:
     )
 
 
-def write_context_pack(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
+def write_context_pack(
+    spec: dict[str, Any],
+    slice_spec_path: Path,
+    evidence_dir: Path,
+    call_expressions: list[dict[str, Any]] | None = None,
+) -> None:
     slice_id = required_str(spec, "slice_id")
     payload = {
         "schema_version": 1,
@@ -1791,6 +1798,7 @@ def write_context_pack(spec: dict[str, Any], slice_spec_path: Path, evidence_dir
         or spec.get("source_files", []),
         "direct_rust_files": [spec.get("rust_boundary", {}).get("module") or spec.get("rust_boundary", {}).get("module_path", "")],
         "call_edges": spec.get("c_boundary", {}).get("direct_dependencies", []),
+        "direct_call_edges": call_expressions or [],
         "fixture": spec.get("fixture_contract", {}).get("path") or spec.get("fixture_contract", {}).get("input"),
         "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
     }

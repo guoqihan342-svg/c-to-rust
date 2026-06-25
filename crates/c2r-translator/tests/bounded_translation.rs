@@ -751,6 +751,87 @@ fn translates_simple_call_expression_and_records_call_rule() {
 }
 
 #[test]
+fn translates_direct_call_expressions_and_records_callee_evidence() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "call-expression".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "call_expression".to_string(),
+        c_source: "int call_expression(int value) { int first = helper(value); value = helper(first); return helper(value); }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("let mut first: i32 = helper(value);"));
+    assert!(result.rust_code.contains("value = helper(first);"));
+    assert!(result.rust_code.contains("return helper(value);"));
+    assert!(result.cfg.functions[0].blocks[0]
+        .statement_kinds
+        .contains(&"call_expression".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-call-expression".to_string()));
+
+    let plan = serde_json::to_value(&result.plan).unwrap();
+    let calls = plan["call_expressions"].as_array().unwrap();
+    assert_eq!(calls.len(), 3);
+    assert_eq!(calls[0]["callee"], "helper");
+    assert_eq!(calls[0]["arguments"], serde_json::json!(["value"]));
+    assert_eq!(calls[1]["source_expression"], "helper(first)");
+    assert_eq!(calls[2]["statement_context"], "return");
+}
+
+#[test]
+fn blocks_unsupported_call_expressions_without_rust_draft() {
+    for (slice_id, c_source) in [
+        (
+            "nested-call-expression",
+            "int nested_call_expression(int value) { return helper(other(value)); }",
+        ),
+        (
+            "function-pointer-call-expression",
+            "int function_pointer_call_expression(int value) { return (*fp)(value); }",
+        ),
+        (
+            "side-effect-call-argument",
+            "int side_effect_call_argument(int value) { return helper(value++); }",
+        ),
+    ] {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: slice_id.to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: slice_id.replace('-', "_"),
+            c_source: c_source.to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            build_profile: profile(true),
+        };
+
+        let result = translate_slice(&spec);
+
+        assert!(
+            result.rust_code.is_empty(),
+            "{slice_id}: {}",
+            result.rust_code
+        );
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.kind == "unsupported_syntax"),
+            "{slice_id}: {:?}",
+            result.errors
+        );
+    }
+}
+
+#[test]
 fn translates_compound_assignment_statement_and_records_rule() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),

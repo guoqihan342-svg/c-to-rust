@@ -120,8 +120,18 @@ pub struct TranslationPlan {
     pub slice_id: String,
     pub function_name: String,
     pub translation_rule_ids: Vec<String>,
+    #[serde(default)]
+    pub call_expressions: Vec<CallExpressionEvidence>,
     pub unsupported_node_count: usize,
     pub unsafe_candidate_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CallExpressionEvidence {
+    pub callee: String,
+    pub arguments: Vec<String>,
+    pub source_expression: String,
+    pub statement_context: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -292,6 +302,7 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
 
     emit_type_map(&function, &statements, spec, &mut result);
     emit_pointer_graph(&function, &statements, &mut result);
+    record_call_expression_evidence(&statements, &mut result);
 
     if !result.errors.is_empty() {
         result.plan.unsupported_node_count = result.errors.len();
@@ -670,6 +681,9 @@ fn statement_kind_labels(statements: &[ParsedStatement]) -> Vec<String> {
     let mut labels = Vec::new();
     for statement in statements {
         push_unique(&mut labels, statement.kind.label());
+        if statement_has_bounded_call_expression(statement) {
+            push_unique(&mut labels, "call_expression");
+        }
         if statement_has_bounded_input_buffer_read(statement) {
             push_unique(&mut labels, StatementKind::BoundedInputBufferRead.label());
         }
@@ -1148,6 +1162,15 @@ fn push_unsupported_expression_value(
     expression: &str,
     result: &mut TranslationResult,
 ) {
+    if let Err(reason) = parse_bounded_direct_call_expression(expression, "expression") {
+        result.errors.push(TranslationError {
+            kind: "unsupported_syntax".to_string(),
+            message: format!(
+                "call expression `{expression}` is outside the bounded MVP C subset: {reason}"
+            ),
+            source_span: Some(statement.text.clone()),
+        });
+    }
     if contains_inc_dec_operator(expression) {
         result.errors.push(TranslationError {
             kind: "unsupported_syntax".to_string(),
@@ -1414,6 +1437,166 @@ fn parse_simple_call(text: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((callee, trimmed[open + 1..trimmed.len() - 1].trim()))
+}
+
+fn parse_bounded_direct_call_expression(
+    expression: &str,
+    statement_context: &str,
+) -> Result<Option<CallExpressionEvidence>, String> {
+    let trimmed = expression.trim().trim_end_matches(';').trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let Some((callee, arguments_text)) = parse_simple_call(trimmed) else {
+        return if contains_call_like_syntax(trimmed) {
+            Err("callee is not a direct identifier call".to_string())
+        } else {
+            Ok(None)
+        };
+    };
+    let arguments = split_call_arguments(arguments_text)?;
+    for argument in &arguments {
+        if contains_inc_dec_operator(argument) {
+            return Err(
+                "call arguments cannot use increment/decrement value semantics".to_string(),
+            );
+        }
+        if contains_call_like_syntax(argument) {
+            return Err("nested call expressions are outside the bounded subset".to_string());
+        }
+    }
+    Ok(Some(CallExpressionEvidence {
+        callee: callee.to_string(),
+        arguments,
+        source_expression: trimmed.to_string(),
+        statement_context: statement_context.to_string(),
+    }))
+}
+
+fn split_call_arguments(arguments_text: &str) -> Result<Vec<String>, String> {
+    let trimmed = arguments_text.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut arguments = Vec::new();
+    for raw in split_top_level(trimmed, b',') {
+        let argument = raw.trim();
+        if argument.is_empty() {
+            return Err("empty call argument".to_string());
+        }
+        arguments.push(argument.to_string());
+    }
+    Ok(arguments)
+}
+
+fn contains_call_like_syntax(expression: &str) -> bool {
+    let trimmed = expression.trim();
+    if trimmed.starts_with("(*") || trimmed.contains(")(") {
+        return true;
+    }
+    for (index, byte) in trimmed.as_bytes().iter().enumerate() {
+        if *byte != b'(' {
+            continue;
+        }
+        let before = trimmed[..index].trim_end();
+        if before.is_empty() {
+            continue;
+        }
+        let previous = before.as_bytes()[before.len() - 1];
+        if previous == b')' || previous.is_ascii_alphanumeric() || previous == b'_' {
+            return true;
+        }
+    }
+    false
+}
+
+fn call_expression_evidence_for_statement(
+    statement: &ParsedStatement,
+) -> Vec<CallExpressionEvidence> {
+    let mut evidence = Vec::new();
+    for (context, expression) in call_expression_contexts(statement) {
+        if let Ok(Some(call)) = parse_bounded_direct_call_expression(&expression, &context) {
+            evidence.push(call);
+        }
+    }
+    evidence
+}
+
+fn call_expression_contexts(statement: &ParsedStatement) -> Vec<(String, String)> {
+    match statement.kind {
+        StatementKind::PrimitiveDeclaration => parse_declaration(&statement.text)
+            .and_then(|declaration| {
+                declaration
+                    .initializer
+                    .map(|initializer| ("declaration_initializer".to_string(), initializer))
+            })
+            .into_iter()
+            .collect(),
+        StatementKind::Assignment | StatementKind::PointerWrite => {
+            parse_assignment(&statement.text)
+                .map(|assignment| vec![("assignment".to_string(), assignment.value)])
+                .unwrap_or_default()
+        }
+        StatementKind::Return => vec![(
+            "return".to_string(),
+            strip_keyword(&statement.text, "return").to_string(),
+        )],
+        _ => Vec::new(),
+    }
+}
+
+fn statement_has_bounded_call_expression(statement: &ParsedStatement) -> bool {
+    !call_expression_evidence_for_statement(statement).is_empty()
+}
+
+fn record_call_expression_evidence(statements: &[ParsedStatement], result: &mut TranslationResult) {
+    for statement in statements {
+        for call in call_expression_evidence_for_statement(statement) {
+            if !result.plan.call_expressions.iter().any(|item| {
+                item.source_expression == call.source_expression
+                    && item.statement_context == call.statement_context
+            }) {
+                result.plan.call_expressions.push(call);
+            }
+        }
+        match statement.kind {
+            StatementKind::If => {
+                if let Some((_, then_body, else_body)) = parse_if_parts(&statement.text) {
+                    record_call_expression_evidence(&parse_statements(&then_body), result);
+                    if let Some(else_body) = else_body {
+                        record_call_expression_evidence(&parse_statements(&else_body), result);
+                    }
+                }
+            }
+            StatementKind::While => {
+                if let Some((_, body)) = parse_loop_parts(&statement.text, "while") {
+                    record_call_expression_evidence(&parse_statements(&body), result);
+                }
+            }
+            StatementKind::For => {
+                if let Some((init, _, step, body)) = parse_for_parts(&statement.text) {
+                    let mut nested = parse_statements(&body);
+                    if !init.trim().is_empty() {
+                        nested.insert(
+                            0,
+                            ParsedStatement {
+                                kind: classify_statement(&init),
+                                text: init,
+                            },
+                        );
+                    }
+                    if !step.trim().is_empty() {
+                        nested.push(ParsedStatement {
+                            kind: classify_statement(&step),
+                            text: step,
+                        });
+                    }
+                    record_call_expression_evidence(&nested, result);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn emit_type_map(
@@ -2237,6 +2420,12 @@ fn emit_safe_pointer_body(statements: &[ParsedStatement], indent_level: usize) -
 
 fn record_statement_rules(statements: &[ParsedStatement], result: &mut TranslationResult) {
     for statement in statements {
+        if statement_has_bounded_call_expression(statement) {
+            push_rule_once(
+                &mut result.plan.translation_rule_ids,
+                "bounded-call-expression",
+            );
+        }
         let rule = match statement.kind {
             StatementKind::PrimitiveDeclaration => Some("primitive-declaration"),
             StatementKind::Assignment => Some("assignment"),
