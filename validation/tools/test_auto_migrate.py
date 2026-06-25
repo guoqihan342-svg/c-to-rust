@@ -52,6 +52,69 @@ class AutoMigrateTests(unittest.TestCase):
                 (out_root / "zlib-ng" / "auto-translation" / "adler32-step" / "l3-adler32-step-type-map.json").exists()
             )
 
+    def test_compound_and_increment_translation_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "compound-inc-dec",
+            "source_commit": "1234567",
+            "function_name": "compound_inc_dec",
+            "c_source": "int compound_inc_dec(int value) { value += 1; value++; --value; return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "compound-inc-dec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "compound-inc-dec"
+            draft = (evidence_dir / "l3-compound-inc-dec-rust-draft.rs").read_text(encoding="utf-8")
+            plan = json.loads(
+                (evidence_dir / "l3-compound-inc-dec-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            cfg = json.loads((evidence_dir / "l3-compound-inc-dec-cfg.json").read_text(encoding="utf-8"))
+            statement_kinds = cfg["functions"][0]["basic_blocks"][0]["statement_kinds"]
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("value += 1;", draft)
+            self.assertIn("value -= 1;", draft)
+            self.assertIn("compound-assignment", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn("increment-decrement", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn("compound_assignment", statement_kinds)
+            self.assertIn("inc_dec", statement_kinds)
+
     def test_compile_failure_records_blocked_patch_evidence(self) -> None:
         spec = {
             "target_id": "demo",

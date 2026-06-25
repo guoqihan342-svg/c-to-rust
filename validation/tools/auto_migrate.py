@@ -217,6 +217,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         )
         blocks = function.get("blocks", [])
         statements = blocks[0].get("statements", []) if blocks else []
+        statement_kinds = blocks[0].get("statement_kinds", []) if blocks else []
         functions.append(
             {
                 "name": function.get("name", required_str(spec, "slice_id")),
@@ -229,6 +230,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                         "id": "entry",
                         "kind": "entry",
                         "statements": statements,
+                        "statement_kinds": statement_kinds,
                         "source_span": source_span(),
                     }
                 ],

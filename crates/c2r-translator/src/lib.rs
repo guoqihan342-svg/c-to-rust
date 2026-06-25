@@ -152,6 +152,8 @@ struct ParsedStatement {
 enum StatementKind {
     PrimitiveDeclaration,
     Assignment,
+    CompoundAssignment,
+    IncDec,
     Return,
     SimpleCall,
     If,
@@ -172,6 +174,19 @@ struct Declaration {
 struct Assignment {
     target: String,
     value: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CompoundAssignment {
+    target: String,
+    operator: String,
+    value: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct IncDecStatement {
+    target: String,
+    delta_operator: &'static str,
 }
 
 pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
@@ -593,6 +608,12 @@ fn classify_statement(text: &str) -> StatementKind {
         }
         return StatementKind::Assignment;
     }
+    if parse_compound_assignment(trimmed).is_some() {
+        return StatementKind::CompoundAssignment;
+    }
+    if parse_inc_dec_statement(trimmed).is_some() {
+        return StatementKind::IncDec;
+    }
     if parse_simple_call(trimmed).is_some() {
         return StatementKind::SimpleCall;
     }
@@ -604,6 +625,8 @@ impl StatementKind {
         match self {
             Self::PrimitiveDeclaration => "primitive_declaration",
             Self::Assignment => "assignment",
+            Self::CompoundAssignment => "compound_assignment",
+            Self::IncDec => "inc_dec",
             Self::Return => "return",
             Self::SimpleCall => "simple_call",
             Self::If => "if",
@@ -719,6 +742,15 @@ fn is_ident_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
+fn is_simple_identifier(text: &str) -> bool {
+    let trimmed = text.trim();
+    let mut bytes = trimmed.bytes();
+    let Some(first) = bytes.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == b'_') && bytes.all(is_ident_byte)
+}
+
 fn parse_declaration(text: &str) -> Option<Declaration> {
     let trimmed = text.trim().trim_end_matches(';').trim();
     let (declaration, initializer) = match trimmed.split_once('=') {
@@ -766,9 +798,123 @@ fn parse_assignment(text: &str) -> Option<Assignment> {
     None
 }
 
+fn parse_compound_assignment(text: &str) -> Option<CompoundAssignment> {
+    let trimmed = text.trim().trim_end_matches(';').trim();
+    for operator in ["<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^="] {
+        let Some(index) = find_operator_outside_parens(trimmed, operator) else {
+            continue;
+        };
+        let target = trimmed[..index].trim();
+        let value = trimmed[index + operator.len()..].trim();
+        if !is_simple_assignment_target(target) || value.is_empty() {
+            return None;
+        }
+        return Some(CompoundAssignment {
+            target: target.to_string(),
+            operator: operator.to_string(),
+            value: value.to_string(),
+        });
+    }
+    None
+}
+
+fn parse_inc_dec_statement(text: &str) -> Option<IncDecStatement> {
+    let trimmed = text.trim().trim_end_matches(';').trim();
+    for (prefix, suffix, delta_operator) in [
+        ("++", "", "+="),
+        ("--", "", "-="),
+        ("", "++", "+="),
+        ("", "--", "-="),
+    ] {
+        let target = if let Some(target) =
+            trimmed.strip_prefix(prefix).filter(|_| !prefix.is_empty())
+        {
+            target.trim()
+        } else if let Some(target) = trimmed.strip_suffix(suffix).filter(|_| !suffix.is_empty()) {
+            target.trim()
+        } else {
+            continue;
+        };
+        if is_simple_assignment_target(target) {
+            return Some(IncDecStatement {
+                target: target.to_string(),
+                delta_operator,
+            });
+        }
+    }
+    None
+}
+
+fn find_operator_outside_parens(text: &str, operator: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let operator_bytes = operator.as_bytes();
+    let mut index = 0usize;
+    let mut paren_depth = 0usize;
+    while index + operator_bytes.len() <= bytes.len() {
+        match bytes[index] {
+            b'(' => paren_depth += 1,
+            b')' => paren_depth = paren_depth.saturating_sub(1),
+            _ => {}
+        }
+        if paren_depth == 0 && &bytes[index..index + operator_bytes.len()] == operator_bytes {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn is_simple_assignment_target(target: &str) -> bool {
+    is_simple_identifier(target)
+}
+
+fn contains_inc_dec_operator(text: &str) -> bool {
+    text.contains("++") || text.contains("--")
+}
+
+fn push_unsupported_expression_value(
+    statement: &ParsedStatement,
+    expression: &str,
+    result: &mut TranslationResult,
+) {
+    if contains_inc_dec_operator(expression) {
+        result.errors.push(TranslationError {
+            kind: "unsupported_syntax".to_string(),
+            message: format!(
+                "expression `{expression}` uses increment/decrement value semantics outside the bounded MVP C subset"
+            ),
+            source_span: Some(statement.text.clone()),
+        });
+    }
+}
+
 fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut TranslationResult) {
     for statement in statements {
         match statement.kind {
+            StatementKind::PrimitiveDeclaration => {
+                if let Some(declaration) = parse_declaration(&statement.text) {
+                    if let Some(initializer) = declaration.initializer.as_deref() {
+                        push_unsupported_expression_value(statement, initializer, result);
+                    }
+                }
+            }
+            StatementKind::Assignment | StatementKind::PointerWrite => {
+                if let Some(assignment) = parse_assignment(&statement.text) {
+                    push_unsupported_expression_value(statement, &assignment.value, result);
+                }
+            }
+            StatementKind::CompoundAssignment => {
+                if let Some(assignment) = parse_compound_assignment(&statement.text) {
+                    push_unsupported_expression_value(statement, &assignment.value, result);
+                }
+            }
+            StatementKind::Return => {
+                push_unsupported_expression_value(
+                    statement,
+                    strip_keyword(&statement.text, "return"),
+                    result,
+                );
+            }
             StatementKind::Expression => result.errors.push(TranslationError {
                 kind: "unsupported_syntax".to_string(),
                 message: format!(
@@ -778,7 +924,8 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                 source_span: Some(statement.text.clone()),
             }),
             StatementKind::If => {
-                if let Some((_, then_body, else_body)) = parse_if_parts(&statement.text) {
+                if let Some((condition, then_body, else_body)) = parse_if_parts(&statement.text) {
+                    push_unsupported_expression_value(statement, &condition, result);
                     record_unsupported_statements(&parse_statements(&then_body), result);
                     if let Some(else_body) = else_body {
                         record_unsupported_statements(&parse_statements(&else_body), result);
@@ -793,7 +940,8 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                 }
             }
             StatementKind::While => {
-                if let Some((_, body)) = parse_loop_parts(&statement.text, "while") {
+                if let Some((condition, body)) = parse_loop_parts(&statement.text, "while") {
+                    push_unsupported_expression_value(statement, &condition, result);
                     record_unsupported_statements(&parse_statements(&body), result);
                 } else {
                     result.errors.push(TranslationError {
@@ -805,7 +953,8 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                 }
             }
             StatementKind::For => {
-                if let Some((init, _, step, body)) = parse_for_parts(&statement.text) {
+                if let Some((init, condition, step, body)) = parse_for_parts(&statement.text) {
+                    push_unsupported_expression_value(statement, &condition, result);
                     let mut nested = parse_statements(&body);
                     if !init.trim().is_empty() {
                         nested.insert(
@@ -816,17 +965,23 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                             },
                         );
                     }
-                    if !step.trim().is_empty()
-                        && translate_for_step(&step) == translate_expr(&step)
-                        && classify_statement(&step) == StatementKind::Expression
-                    {
-                        result.errors.push(TranslationError {
-                            kind: "unsupported_syntax".to_string(),
-                            message: format!(
-                                "for step `{step}` is outside the bounded MVP C subset"
-                            ),
-                            source_span: Some(step),
-                        });
+                    if !step.trim().is_empty() {
+                        let step_statement = ParsedStatement {
+                            kind: classify_statement(&step),
+                            text: step.clone(),
+                        };
+                        if translate_for_step(&step) == translate_expr(&step)
+                            && step_statement.kind == StatementKind::Expression
+                        {
+                            result.errors.push(TranslationError {
+                                kind: "unsupported_syntax".to_string(),
+                                message: format!(
+                                    "for step `{step}` is outside the bounded MVP C subset"
+                                ),
+                                source_span: Some(step),
+                            });
+                        }
+                        record_unsupported_statements(&[step_statement], result);
                     }
                     record_unsupported_statements(&nested, result);
                 } else {
@@ -1007,6 +1162,76 @@ fn pointer_write_effects(name: &str, statements: &[ParsedStatement]) -> Vec<Stri
         .collect()
 }
 
+fn statement_mutates_target(statement: &ParsedStatement, target: &str) -> bool {
+    match statement.kind {
+        StatementKind::Assignment | StatementKind::PointerWrite => {
+            parse_assignment(&statement.text)
+                .map(|assignment| assignment.target == target)
+                .unwrap_or(false)
+        }
+        StatementKind::CompoundAssignment => parse_compound_assignment(&statement.text)
+            .map(|assignment| assignment.target == target)
+            .unwrap_or(false),
+        StatementKind::IncDec => parse_inc_dec_statement(&statement.text)
+            .map(|inc_dec| inc_dec.target == target)
+            .unwrap_or(false),
+        StatementKind::If => parse_if_parts(&statement.text)
+            .map(|(_, then_body, else_body)| {
+                parse_statements(&then_body)
+                    .iter()
+                    .any(|nested| statement_mutates_target(nested, target))
+                    || else_body
+                        .as_deref()
+                        .map(|body| {
+                            parse_statements(body)
+                                .iter()
+                                .any(|nested| statement_mutates_target(nested, target))
+                        })
+                        .unwrap_or(false)
+            })
+            .unwrap_or(false),
+        StatementKind::While => parse_loop_parts(&statement.text, "while")
+            .map(|(_, body)| {
+                parse_statements(&body)
+                    .iter()
+                    .any(|nested| statement_mutates_target(nested, target))
+            })
+            .unwrap_or(false),
+        StatementKind::For => parse_for_parts(&statement.text)
+            .map(|(init, _, step, body)| {
+                let init_mutates = !init.trim().is_empty()
+                    && statement_mutates_target(
+                        &ParsedStatement {
+                            kind: classify_statement(&init),
+                            text: init,
+                        },
+                        target,
+                    );
+                let step_mutates = !step.trim().is_empty()
+                    && statement_mutates_target(
+                        &ParsedStatement {
+                            kind: classify_statement(&step),
+                            text: step,
+                        },
+                        target,
+                    );
+                init_mutates
+                    || step_mutates
+                    || parse_statements(&body)
+                        .iter()
+                        .any(|nested| statement_mutates_target(nested, target))
+            })
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+fn param_is_mutated(param: &Param, statements: &[ParsedStatement]) -> bool {
+    statements
+        .iter()
+        .any(|statement| statement_mutates_target(statement, &param.name))
+}
+
 fn emit_rust(
     function: &ParsedFunction,
     statements: &[ParsedStatement],
@@ -1059,7 +1284,18 @@ fn emit_rust(
     let rust_params = function
         .params
         .iter()
-        .map(|param| format!("{}: {}", param.name, public_param_type(&param.c_type)))
+        .map(|param| {
+            let mutability = if param_is_mutated(param, statements) {
+                "mut "
+            } else {
+                ""
+            };
+            format!(
+                "{mutability}{}: {}",
+                param.name,
+                public_param_type(&param.c_type)
+            )
+        })
         .collect::<Vec<_>>()
         .join(", ");
     let body_lines = emit_rust_body(statements, 1);
@@ -1083,6 +1319,8 @@ fn record_statement_rules(statements: &[ParsedStatement], result: &mut Translati
         let rule = match statement.kind {
             StatementKind::PrimitiveDeclaration => Some("primitive-declaration"),
             StatementKind::Assignment => Some("assignment"),
+            StatementKind::CompoundAssignment => Some("compound-assignment"),
+            StatementKind::IncDec => Some("increment-decrement"),
             StatementKind::Return => Some("structured-return-expression"),
             StatementKind::SimpleCall => Some("simple-call"),
             StatementKind::If => Some("structured-if"),
@@ -1141,6 +1379,25 @@ fn emit_rust_statement(statement: &ParsedStatement, indent_level: usize) -> Vec<
                 })
                 .unwrap_or_else(|| vec![format!("{prefix}{};", translate_expr(&statement.text))])
         }
+        StatementKind::CompoundAssignment => parse_compound_assignment(&statement.text)
+            .map(|assignment| {
+                vec![format!(
+                    "{prefix}{} {} {};",
+                    translate_expr(&assignment.target),
+                    assignment.operator,
+                    translate_expr(&assignment.value)
+                )]
+            })
+            .unwrap_or_else(|| vec![format!("{prefix}{};", translate_expr(&statement.text))]),
+        StatementKind::IncDec => parse_inc_dec_statement(&statement.text)
+            .map(|inc_dec| {
+                vec![format!(
+                    "{prefix}{} {} 1;",
+                    translate_expr(&inc_dec.target),
+                    inc_dec.delta_operator
+                )]
+            })
+            .unwrap_or_else(|| vec![format!("{prefix}{};", translate_expr(&statement.text))]),
         StatementKind::Return => vec![format!(
             "{prefix}return {};",
             translate_expr(strip_keyword(&statement.text, "return"))
@@ -1336,17 +1593,20 @@ fn default_value_for_type(rust_type: &str) -> &'static str {
 
 fn translate_for_step(step: &str) -> String {
     let trimmed = step.trim();
-    if let Some(name) = trimmed.strip_suffix("++") {
-        return format!("{} += 1", translate_expr(name.trim()));
+    if let Some(inc_dec) = parse_inc_dec_statement(trimmed) {
+        return format!(
+            "{} {} 1",
+            translate_expr(&inc_dec.target),
+            inc_dec.delta_operator
+        );
     }
-    if let Some(name) = trimmed.strip_prefix("++") {
-        return format!("{} += 1", translate_expr(name.trim()));
-    }
-    if let Some(name) = trimmed.strip_suffix("--") {
-        return format!("{} -= 1", translate_expr(name.trim()));
-    }
-    if let Some(name) = trimmed.strip_prefix("--") {
-        return format!("{} -= 1", translate_expr(name.trim()));
+    if let Some(assignment) = parse_compound_assignment(trimmed) {
+        return format!(
+            "{} {} {}",
+            translate_expr(&assignment.target),
+            assignment.operator,
+            translate_expr(&assignment.value)
+        );
     }
     translate_expr(trimmed)
 }

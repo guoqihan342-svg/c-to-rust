@@ -252,6 +252,26 @@ fn translates_for_loop_by_lowering_to_bounded_while() {
 }
 
 #[test]
+fn translates_for_loop_with_compound_assignment_step() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "sum-for-compound-step".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "sum_for_compound_step".to_string(),
+        c_source: "int sum_for_compound_step(int limit) { int total = 0; for (int i = 0; i < limit; i += 1) { total = total + i; } return total; }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result.rust_code.contains("while i < limit {"));
+    assert!(result.rust_code.contains("i += 1;"));
+}
+
+#[test]
 fn translates_simple_call_expression_and_records_call_rule() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
@@ -277,13 +297,97 @@ fn translates_simple_call_expression_and_records_call_rule() {
 }
 
 #[test]
+fn translates_compound_assignment_statement_and_records_rule() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "compound-assignment".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "compound_assignment".to_string(),
+        c_source:
+            "int compound_assignment(int value) { value += 1; value-=1; value *= 2; return value; }"
+                .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn compound_assignment(mut value: i32) -> i32"));
+    assert!(result.rust_code.contains("value += 1;"));
+    assert!(result.rust_code.contains("value -= 1;"));
+    assert!(result.rust_code.contains("value *= 2;"));
+    assert!(result.cfg.functions[0].blocks[0]
+        .statement_kinds
+        .contains(&"compound_assignment".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"compound-assignment".to_string()));
+}
+
+#[test]
+fn translates_increment_and_decrement_statements_and_records_rule() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "inc-dec".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "inc_dec".to_string(),
+        c_source: "int inc_dec(int value) { value++; --value; ++value; value--; return value; }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn inc_dec(mut value: i32) -> i32"));
+    assert_eq!(result.rust_code.matches("value += 1;").count(), 2);
+    assert_eq!(result.rust_code.matches("value -= 1;").count(), 2);
+    assert!(result.cfg.functions[0].blocks[0]
+        .statement_kinds
+        .contains(&"inc_dec".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"increment-decrement".to_string()));
+}
+
+#[test]
+fn blocks_increment_expression_value_without_rust_draft() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "inc-expression".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "inc_expression".to_string(),
+        c_source: "int inc_expression(int value) { return value++; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.rust_code.is_empty());
+    assert!(result
+        .errors
+        .iter()
+        .any(|error| error.kind == "unsupported_syntax"));
+}
+
+#[test]
 fn blocks_unknown_or_unsupported_statement_without_rust_draft() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
         slice_id: "unsupported-stmt".to_string(),
         source_commit: "1234567".to_string(),
         function_name: "unsupported_stmt".to_string(),
-        c_source: "int unsupported_stmt(int value) { value += 1; return value; }".to_string(),
+        c_source: "int unsupported_stmt(int value) { value ? value : 0; return value; }"
+            .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
     };
