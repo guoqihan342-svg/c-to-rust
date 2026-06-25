@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from validation.tools.validate_flashdb_version_binding import validate_version_binding
+from validation.tools.validate_flashdb_version_binding import sha256, validate_version_binding
 
 
 def main() -> int:
@@ -158,6 +158,9 @@ def validate_package(root: Path, prefix: str, summary_path: Path, summary: dict[
         f"{slice_id} schema diff status {summary.get('diff_status')!r} not in ['passed']",
     )
     require_status(summary.get("diff", {}), slice_id, "schema diff", {"passed"}, optional_key="status")
+    require_positive_diff(slice_id, loaded["diff"])
+    require_final_verification(slice_id, loaded["final-verification"])
+    require_summary_evidence_hashes(slice_id, root, summary)
     require_negative_diff(slice_id, summary, loaded["negative-diff"])
     require_unsafe(slice_id, summary, loaded["unsafe-scan"], loaded["unsafe-ledger"])
     require_version_binding(slice_id, root, loaded["version-config-binding"])
@@ -174,6 +177,80 @@ def validate_package(root: Path, prefix: str, summary_path: Path, summary: dict[
         "strict_manifest_complete": True,
         "evidence": {label: rel(path) for label, path in required.items()},
     }
+
+
+def require_positive_diff(slice_id: str, diff_report: dict[str, Any]) -> None:
+    status = diff_report.get("status")
+    require(status == "passed", f"{slice_id} positive diff status must be passed: {status!r}")
+    mismatch = diff_report.get("first_mismatch")
+    require(not mismatch, f"{slice_id} positive diff recorded first_mismatch: {mismatch!r}")
+
+
+def require_final_verification(slice_id: str, final_report: dict[str, Any]) -> None:
+    status = final_report.get("status")
+    require(status == "passed", f"{slice_id} final verification status must be passed: {status!r}")
+
+    diff_status = final_report.get("diff_status")
+    if diff_status is not None:
+        require(diff_status == "passed", f"{slice_id} final verification diff_status must be passed: {diff_status!r}")
+
+    c_oracle_status = final_report.get("c_oracle_toolchain_status")
+    if c_oracle_status is not None:
+        require(
+            c_oracle_status == "C_ORACLE_GENERATED",
+            f"{slice_id} final verification c_oracle_toolchain_status must be C_ORACLE_GENERATED: {c_oracle_status!r}",
+        )
+
+    checks = final_report.get("checks")
+    if checks is None:
+        return
+    require(isinstance(checks, list), f"{slice_id} final verification checks must be a list")
+    for index, check in enumerate(checks):
+        require(isinstance(check, dict), f"{slice_id} final verification check {index} must be an object")
+        check_name = str(check.get("name") or check.get("id") or index)
+        check_status = check.get("status")
+        if check_status is not None:
+            require(
+                str(check_status) not in {"failed", "error", "blocked"},
+                f"{slice_id} final verification check {check_name} failed with status {check_status!r}",
+            )
+        exit_code = check.get("exit_code")
+        if exit_code is not None:
+            require(
+                int(exit_code) == 0,
+                f"{slice_id} final verification check {check_name} failed with exit_code {exit_code!r}",
+            )
+
+
+def require_summary_evidence_hashes(slice_id: str, root: Path, summary: dict[str, Any]) -> None:
+    for label, value in iter_summary_evidence_refs(summary.get("evidence"), []):
+        if not isinstance(value, dict):
+            continue
+        declared = value.get("sha256")
+        path_value = value.get("path") or value.get("report")
+        if not declared or not path_value:
+            continue
+        path = resolve_evidence_path(root, str(path_value))
+        require(path.exists(), f"{slice_id} evidence hash target is missing for {'.'.join(label)}: {path_value}")
+        actual = sha256(path)
+        require(
+            str(declared) == actual,
+            f"{slice_id} evidence sha256 mismatch for {'.'.join(label)}: declared {declared}, actual {actual}",
+        )
+
+
+def iter_summary_evidence_refs(value: Any, path: list[str]) -> list[tuple[list[str], Any]]:
+    if isinstance(value, dict):
+        refs = [(path, value)] if ("sha256" in value and ("path" in value or "report" in value)) else []
+        for key, child in value.items():
+            refs.extend(iter_summary_evidence_refs(child, [*path, str(key)]))
+        return refs
+    if isinstance(value, list):
+        refs = []
+        for index, child in enumerate(value):
+            refs.extend(iter_summary_evidence_refs(child, [*path, str(index)]))
+        return refs
+    return []
 
 
 def require_same_slice_binding(slice_id: str, summary: dict[str, Any], loaded: dict[str, dict[str, Any]]) -> None:

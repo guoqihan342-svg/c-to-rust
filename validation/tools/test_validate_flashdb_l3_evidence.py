@@ -54,6 +54,84 @@ class ValidateFlashDbL3EvidenceTests(unittest.TestCase):
             self.assertEqual(report["slices"][0]["slice_id"], "demo-slice")
             self.assertEqual(report["slices"][0]["negative_diff"], "passed")
 
+    def test_rejects_failed_positive_diff_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(root, "l3-demo-slice", positive_diff_status="failed")
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("positive diff", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
+    def test_rejects_positive_diff_with_first_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(
+                root,
+                "l3-demo-slice",
+                positive_diff_status="passed",
+                positive_diff_first_mismatch="steps.demo.value",
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("positive diff", str(raised.exception))
+            self.assertIn("first_mismatch", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
+    def test_rejects_failed_final_verification_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(root, "l3-demo-slice", final_verification_status="failed")
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("final verification", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
+    def test_rejects_failed_final_verification_diff_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(root, "l3-demo-slice", final_diff_status="failed")
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("final verification", str(raised.exception))
+            self.assertIn("diff_status", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
+    def test_rejects_failed_final_verification_check(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(
+                root,
+                "l3-demo-slice",
+                final_checks=[{"name": "schema-diff", "status": "failed", "exit_code": 1}],
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("final verification", str(raised.exception))
+            self.assertIn("schema-diff", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
+    def test_rejects_summary_declared_evidence_hash_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
+            root = Path(tmp)
+            self._write_package(root, "l3-demo-slice", summary_hash_mismatch=True)
+
+            with self.assertRaises(SystemExit) as raised:
+                validate_flashdb_l3_evidence(root)
+
+            self.assertIn("sha256", str(raised.exception))
+            self.assertIn("demo-slice", str(raised.exception))
+
     def test_rejects_incomplete_passed_summary_even_when_strict_package_exists(self) -> None:
         with tempfile.TemporaryDirectory(prefix="flashdb-l3-test-") as tmp:
             root = Path(tmp)
@@ -109,6 +187,13 @@ class ValidateFlashDbL3EvidenceTests(unittest.TestCase):
         negative_mismatch: bool = True,
         omit: str | None = None,
         invalid_version_manifest: bool = False,
+        positive_diff_status: str = "passed",
+        positive_diff_first_mismatch: str | None = None,
+        final_verification_status: str = "passed",
+        final_diff_status: str = "passed",
+        final_c_oracle_toolchain_status: str = "C_ORACLE_GENERATED",
+        final_checks: list[dict] | None = None,
+        summary_hash_mismatch: bool = False,
     ) -> None:
         flashdb = root / "flashdb"
         flashdb.mkdir(parents=True)
@@ -141,6 +226,24 @@ class ValidateFlashDbL3EvidenceTests(unittest.TestCase):
                     {
                         "status": "expected_failed",
                         "first_mismatch": "steps.demo.value" if negative_mismatch else None,
+                    }
+                )
+            if suffix == "diff":
+                payload.update(
+                    {
+                        "status": positive_diff_status,
+                        "first_mismatch": positive_diff_first_mismatch,
+                    }
+                )
+            if suffix == "final-verification":
+                payload.update(
+                    {
+                        "status": final_verification_status,
+                        "diff_status": final_diff_status,
+                        "c_oracle_toolchain_status": final_c_oracle_toolchain_status,
+                        "checks": final_checks
+                        if final_checks is not None
+                        else [{"name": "unit-test-check", "status": "passed", "exit_code": 0}],
                     }
                 )
             if suffix == "unsafe-scan":
@@ -189,51 +292,56 @@ class ValidateFlashDbL3EvidenceTests(unittest.TestCase):
                 )
             self._write_json(flashdb / f"{prefix}-{suffix}.json", payload)
 
-        self._write_json(
-            flashdb / f"{prefix}-summary.json",
-            {
-                "schema_version": 1,
-                "level": "L3",
-                "target_id": "flashdb",
-                "slice_id": slice_id,
-                "status": "passed",
-                "source_commit": "1234567",
-                "fixture": {
-                    "path": f"flashDB_rust/fixtures/{prefix}.json",
-                    "sha256": "abc123",
-                    "operation_count": 1,
-                },
-                "c_oracle": {
-                    "status": "passed",
-                    "marker": "C_ORACLE_GENERATED",
-                    "report": f"validation/evidence/flashdb/{prefix}-c-oracle.json",
-                },
-                "diff": {
-                    "status": "passed",
-                    "report": f"validation/evidence/flashdb/{prefix}-diff.json",
-                },
-                "negative_diff": {
-                    "status": "expected_failed",
-                    "first_mismatch": "steps.demo.value" if negative_mismatch else None,
-                    "report": f"validation/evidence/flashdb/{prefix}-negative-diff.json",
-                },
-                "rust_check": {
-                    "status": "passed",
-                    "report": f"validation/evidence/flashdb/{prefix}-rust-check.json",
-                },
-                "unsafe": {
-                    "status": "passed",
-                    "first_party_non_test_unsafe_count": 0,
-                    "unsafe_ratio": 0,
-                    "report": f"validation/evidence/flashdb/{prefix}-unsafe-scan.json",
-                },
-                "performance_smoke": {
-                    "status": "passed",
-                    "secondary_only": True,
-                    "report": f"validation/evidence/flashdb/{prefix}-performance-smoke.json",
-                },
+        summary = {
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "flashdb",
+            "slice_id": slice_id,
+            "status": "passed",
+            "source_commit": "1234567",
+            "fixture": {
+                "path": f"flashDB_rust/fixtures/{prefix}.json",
+                "sha256": "abc123",
+                "operation_count": 1,
             },
-        )
+            "c_oracle": {
+                "status": "passed",
+                "marker": "C_ORACLE_GENERATED",
+                "report": f"validation/evidence/flashdb/{prefix}-c-oracle.json",
+            },
+            "diff": {
+                "status": "passed",
+                "report": f"validation/evidence/flashdb/{prefix}-diff.json",
+            },
+            "negative_diff": {
+                "status": "expected_failed",
+                "first_mismatch": "steps.demo.value" if negative_mismatch else None,
+                "report": f"validation/evidence/flashdb/{prefix}-negative-diff.json",
+            },
+            "rust_check": {
+                "status": "passed",
+                "report": f"validation/evidence/flashdb/{prefix}-rust-check.json",
+            },
+            "unsafe": {
+                "status": "passed",
+                "first_party_non_test_unsafe_count": 0,
+                "unsafe_ratio": 0,
+                "report": f"validation/evidence/flashdb/{prefix}-unsafe-scan.json",
+            },
+            "performance_smoke": {
+                "status": "passed",
+                "secondary_only": True,
+                "report": f"validation/evidence/flashdb/{prefix}-performance-smoke.json",
+            },
+        }
+        if summary_hash_mismatch:
+            summary["evidence"] = {
+                "diff": {
+                    "path": f"validation/evidence/flashdb/{prefix}-diff.json",
+                    "sha256": "not-the-real-hash",
+                }
+            }
+        self._write_json(flashdb / f"{prefix}-summary.json", summary)
 
     def _write_version_manifest(self, flashdb: Path, *, invalid: bool) -> None:
         if invalid:

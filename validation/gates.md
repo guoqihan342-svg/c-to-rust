@@ -120,6 +120,7 @@ Pass criteria:
 - `cargo run -- unsafe-scan --report <path>` writes a machine-readable unsafe report with category counts and zero first-party non-test unsafe findings.
 - `validate_flashdb_version_binding.py` consumes `version-manifest` and checks Cargo package/version, schema/tool versions, source commit, feature matrix, and cache-key inputs.
 - `validate_flashdb_l3_evidence.py` validates consumable FlashDB L3 packages with final verification and negative diff evidence; older summaries without those entry points are reported as `legacy_incomplete` and cannot be used as full-regression manifest claims.
+- FlashDB L3 package validation reads positive diff and final verification report content, rejects failed or mismatched evidence, and verifies summary-declared evidence `sha256` values when present.
 - When `scripts/run-full-regression.ps1 -RequireCleanEvidence` is used, `evidence-cleanliness-check` verifies that tracked files under `validation/evidence/**` do not differ from `HEAD` and that no untracked files exist under `validation/evidence/**`.
 - OpenSpec validation and `git diff --check` still run after the evidence gates.
 
