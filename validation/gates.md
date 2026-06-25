@@ -120,6 +120,7 @@ Pass criteria:
 - `cargo run -- unsafe-scan --report <path>` writes a machine-readable unsafe report with category counts and zero first-party non-test unsafe findings.
 - `validate_flashdb_version_binding.py` consumes `version-manifest` and checks Cargo package/version, schema/tool versions, source commit, feature matrix, and cache-key inputs.
 - `validate_flashdb_l3_evidence.py` validates consumable FlashDB L3 packages with final verification and negative diff evidence; older summaries without those entry points are reported as `legacy_incomplete` and cannot be used as full-regression manifest claims.
+- When `scripts/run-full-regression.ps1 -RequireCleanEvidence` is used, `evidence-cleanliness-check` verifies that tracked files under `validation/evidence/**` were not changed by evidence generation.
 - OpenSpec validation and `git diff --check` still run after the evidence gates.
 
 Evidence:
@@ -137,6 +138,7 @@ Boundary:
 - Full regression does not prove production-data equivalence unless real or de-identified production fixtures are supplied to replay/diff.
 - Full regression does not claim llvm-cov percentage, symbolic path exhaustiveness, or full FlashDB C project migration.
 - Performance smoke remains secondary evidence and never replaces C/Rust behavior diff or negative controls.
+- Evidence cleanliness is an explicit reproducibility gate for committed evidence. It is not enabled by default during local development, and it does not inspect per-round reports under `target/full-regression/**`.
 
 ## Reporting Rules
 

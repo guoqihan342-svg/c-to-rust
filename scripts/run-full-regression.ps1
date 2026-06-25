@@ -13,6 +13,7 @@ param(
     [switch] $ContinueOnFailure,
     [switch] $SkipClippy,
     [switch] $SkipLongStress,
+    [switch] $RequireCleanEvidence,
     [switch] $ProbeRemoteCatalog
 )
 
@@ -293,6 +294,16 @@ function Get-RoundSteps {
         $steps.Add((New-Step "flashdb-release-stress-all" "production_abnormal_reliability_performance" "flashDB_rust" @("cargo", "run", "--release", "--", "stress", "--loops", "$StressLoops", "--seed", "$Round", "--backend", "file", "--scenario", "all", "--report", $flashStressReport)))
     }
     $steps.Add((New-Step "flashdb-evidence-search" "log_traceability" "flashDB_rust" @("cargo", "run", "--", "evidence-search", "--evidence-dir", $RoundDir, "--query", "passed", "--limit", "50", "--report", $flashSearchReport)))
+    if ($RequireCleanEvidence) {
+        $steps.Add((New-Step "evidence-cleanliness-check" "evidence_cleanliness" "." @(
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            '$changed = git diff --name-only -- validation/evidence; if ($changed) { $changed; git diff --exit-code -- validation/evidence }'
+        )))
+    }
     $steps.Add((New-Step "openspec-validate-all" "openspec_gates" "." @("openspec", "validate", "--all")))
     $steps.Add((New-Step "git-diff-check" "repository_integrity" "." @("git", "diff", "--check")))
     return $steps
@@ -311,6 +322,7 @@ Add-JsonLine ([ordered]@{
     stress_loops = $StressLoops
     skip_long_stress = [bool]$SkipLongStress
     skip_clippy = [bool]$SkipClippy
+    require_clean_evidence = [bool]$RequireCleanEvidence
     continue_on_failure = [bool]$ContinueOnFailure
     evidence_root = $RunRoot
     production_data_boundary = "Default coverage uses committed fixtures plus deterministic production-like stress; pass real/de-identified fixtures through the replay/diff gates before claiming production-data equivalence."
@@ -357,6 +369,7 @@ $summary = [ordered]@{
     stress_loops = $StressLoops
     skip_long_stress = [bool]$SkipLongStress
     skip_clippy = [bool]$SkipClippy
+    require_clean_evidence = [bool]$RequireCleanEvidence
     continue_on_failure = [bool]$ContinueOnFailure
     started_utc = $runStarted.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     ended_utc = $runEnded.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
