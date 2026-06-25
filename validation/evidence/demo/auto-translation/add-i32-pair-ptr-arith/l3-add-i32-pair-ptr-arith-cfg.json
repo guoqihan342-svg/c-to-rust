@@ -1,0 +1,135 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-i32-pair-ptr-arith-20260625",
+    "slice_spec_sha256=340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "fixture_hash=add-i32-pair-ptr-arith-fixture",
+    "build_profile_hash=94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "return 0",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_input_read",
+              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 2,
+              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_output_write",
+              "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 3,
+              "translation_rule_id": "bounded-pointer-arithmetic-output-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "none",
+            "bounded_input_buffer",
+            "bounded_pointer_arithmetic_input_buffer",
+            "bounded_pointer_arithmetic_output_buffer"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "for",
+            "bounded_input_buffer_read",
+            "bounded_pointer_arithmetic_input_read",
+            "bounded_pointer_arithmetic_output_write",
+            "return"
+          ],
+          "statements": [
+            "for (int i = 0; i < len; i++) { *(out + i) = *(lhs + i) + *(rhs + i); }",
+            "return 0"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "add_i32_pair_ptr_arith",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "0",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int add_i32_pair_ptr_arith(const int* lhs, const int* rhs, int len, int* out)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 1,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-add-i32-pair-ptr-arith.json",
+    "sha256": "340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "status": "ready"
+  },
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

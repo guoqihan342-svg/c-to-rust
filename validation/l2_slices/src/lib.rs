@@ -1,3 +1,4 @@
+pub mod add_i32_pair_ptr_arith;
 pub mod copy_i32_ptr_arith;
 pub mod libuv_ip4_addr;
 pub mod sqlite_varint;

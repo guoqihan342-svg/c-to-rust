@@ -1,4 +1,13 @@
 {
+  "alias_gate_identity": {
+    "alias_set_count": 1,
+    "aliasing_proven": false,
+    "decision": "requires_noalias_contract",
+    "precondition_count": 1,
+    "requires_noalias": true,
+    "risk_count": 1,
+    "risk_level": "unknown_alias"
+  },
   "build_profile_hash": "076d32e392f6a18e19179cd801a7464482b4b049dde5d4cb339ecb3bca018b61",
   "cache_input_fields": [
     "source_commit",
@@ -11,7 +20,8 @@
     "schema_versions",
     "translator_version",
     "translator_manifest_sha256",
-    "command_arguments"
+    "command_arguments",
+    "alias_gate_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
   "command_arguments": [
@@ -30,7 +40,11 @@
     "patch_plan",
     "ai_candidate",
     "c_oracle",
+    "rust_replay",
     "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
     "summary"
   ],
   "schema_version": 1,

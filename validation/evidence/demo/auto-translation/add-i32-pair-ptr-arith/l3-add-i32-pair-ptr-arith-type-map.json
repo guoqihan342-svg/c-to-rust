@@ -1,0 +1,81 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-translator-input.json",
+    "sha256": "2f2d79c62a01a0aacb07b8ba823b68f7ee60a3940f147a68f5e7a7a2b0155cc7",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-i32-pair-ptr-arith-20260625",
+    "slice_spec_sha256=340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "fixture_hash=add-i32-pair-ptr-arith-fixture",
+    "build_profile_hash=94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "lhs",
+      "c_type": "const int*",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&[i32]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "rhs",
+      "c_type": "const int*",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "&[i32]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "len",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "pointer",
+      "rust_type": "IntOutReport",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-add-i32-pair-ptr-arith.json",
+    "sha256": "340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "status": "ready"
+  },
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

@@ -61,7 +61,7 @@
     "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml sum_i32_buffer",

@@ -1,0 +1,26 @@
+{
+  "case_count": 8,
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "lhs",
+    "rhs",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count",
+    "safe_noalias_precondition",
+    "alias_case",
+    "alias_matrix"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

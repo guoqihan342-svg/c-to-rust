@@ -1,6 +1,7 @@
 {
   "audit_status": "passed",
   "audited_modules": [
+    "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
     "validation/l2_slices/src/libuv_ip4_addr.rs",
     "validation/l2_slices/src/sqlite_varint.rs",
     "validation/l2_slices/src/store_add_one.rs",

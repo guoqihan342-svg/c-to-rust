@@ -13,11 +13,33 @@
         {
           "id": "entry",
           "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "safe_wrapper",
+              "lvalue_kind": "pointer_field",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "addr->sin_family = AF_INET",
+              "statement_index": 0,
+              "translation_rule_id": "pointer-field-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "pointer_field",
+            "none"
+          ],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
             "line_start": 1
           },
+          "statement_kinds": [
+            "pointer_write",
+            "return"
+          ],
           "statements": [
             "addr->sin_family = AF_INET",
             "return 0"
@@ -69,7 +91,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "slice_spec_ref": {

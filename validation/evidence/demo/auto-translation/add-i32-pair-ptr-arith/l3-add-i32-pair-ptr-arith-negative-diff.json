@@ -1,0 +1,27 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+    "sha256": "4e4cb35e4c141bd5d42859b8b985e546f698ae038786a90a6b3556516d98d15a",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "lhs-rhs-read-alias",
+    "field": "alias_matrix",
+    "mutated_c_value": [
+      "lhs-rhs:disjoint",
+      "lhs-out:disjoint",
+      "rhs-out:disjoint"
+    ],
+    "rust_value": [
+      "lhs-rhs:read_read_alias_allowed",
+      "lhs-out:disjoint",
+      "rhs-out:disjoint"
+    ]
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

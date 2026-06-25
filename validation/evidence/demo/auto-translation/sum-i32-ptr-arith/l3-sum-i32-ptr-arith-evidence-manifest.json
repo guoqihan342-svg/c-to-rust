@@ -1,6 +1,25 @@
 {
   "claim_boundary": {
     "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "preconditions": [
+        {
+          "applies_to": [
+            "values",
+            "out"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "behavior_fields_checked": [
       "return_code",
       "status",
@@ -37,23 +56,23 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-cache-metadata.json",
-      "sha256": "113bea6de27104f274934ab297b06b039971a1d343a55fd3faf11f507554a2d7",
+      "sha256": "5093f8de4ac35b8808ad3d1b919f9292c3f7c6e569ca6abbbb5a53f902e7faff",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-config-profile.json",
       "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
-      "sha256": "1a1cfc2e2970b508529d3051485168aae9391e4bcdb9b645de8e591a26f9285d",
+      "sha256": "7f75632094287789e1c1fbf67fde445eadf9499a07f44e9202203906c9557262",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-context-pack.json",
-      "sha256": "7304efc44c62d89ffe7bc1ff5c24685e5fb84197145ebd7875218401f0a8e3ba",
+      "sha256": "61c4d85f601e8bb90b53d24e6e57d08174cc8cd49c22c375d74d55905ad34bd8",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-final-verification.json",
-      "sha256": "c0ab636452b829ac05eb789c2cdd1e7ee392bd33d1065837e723b8c3d0a51e17",
+      "sha256": "738d23f8cd194ad33f20dfebe2167ad5e3994e719e59350300f5a4dcd798e5e8",
       "status": "passed"
     },
     "negative_diff": {
@@ -71,17 +90,17 @@
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
-      "sha256": "12fe519e2d20f960accd796cc1970638205ad1d0a3d14bc978bea270804f203b",
+      "sha256": "a21dab68337f49c4ed5e161a5828caf0bc16bae0899f88c0a3e0d1edbd4c7876",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/rust-check.json",
-      "sha256": "6749c86961980e122606df5fea0be27ddc84906081dc26607febafe90688f6a7",
+      "sha256": "fe28f140bf113b3bcd69c573b3e37314646a2ef9f369b0fabbf3c8fba0546cbc",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-report.json",
-      "sha256": "f0d954d06e92ff642f3f3b826c58b2f31ddaf1515da45a3e147a2affaedb0187",
+      "sha256": "3d3e44ecf0ca9c23608e55cd85d17466495abc6efca45a96efb3e7fe66f43cb8",
       "status": "passed"
     },
     "schema_diff": {
@@ -101,7 +120,7 @@
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-test-translation-generated.json",
-      "sha256": "e73364b4dc33015c3ba9bddea59db140e307ad8f3aa6de46db3a768bd087ff1c",
+      "sha256": "0008f3f31d001141013e2e8d47a6c0a00cd34f5e489c9d4b1294c2b081ba9574",
       "status": "recorded"
     },
     "unsafe_ledger": {
@@ -116,7 +135,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-version-manifest.json",
-      "sha256": "be68139dab539201faf67480fce74dcf9a4abc091f9adc24bed8a4c159aac8b6",
+      "sha256": "3b19a0f358a733211926a7a159fdb84b6aef398922df7c2fee2ca22417542485",
       "status": "recorded"
     }
   },
@@ -126,7 +145,7 @@
     "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "source_commit": "demo-sum-i32-ptr-arith-20260625",

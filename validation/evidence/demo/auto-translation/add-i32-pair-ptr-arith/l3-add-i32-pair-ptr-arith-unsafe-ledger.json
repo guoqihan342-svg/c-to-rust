@@ -1,0 +1,14 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-ledger.json",
+    "sha256": "de4a8e952647bcd32b78f042357afc5fdfc45aea802d7a3d5415383bfffbbca8",
+    "status": "passed"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

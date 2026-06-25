@@ -1,0 +1,166 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "add_i32_pair_ptr_arith"
+    ],
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "input_buffers": [
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "lhs",
+          "read_effects": [
+            "*(lhs + i)",
+            "lhs[i]"
+          ],
+          "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+        },
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "rhs",
+          "read_effects": [
+            "*(rhs + i)",
+            "rhs[i]"
+          ],
+          "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+        }
+      ],
+      "noalias_required": [
+        [
+          "lhs",
+          "out"
+        ],
+        [
+          "rhs",
+          "out"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "out",
+          "translation_rule_id": "bounded-pointer-arithmetic-output-write",
+          "write_effects": [
+            "*(out + i)",
+            "out[i]"
+          ]
+        }
+      ],
+      "read_read_alias_allowed": [
+        [
+          "lhs",
+          "rhs"
+        ]
+      ]
+    },
+    "signatures": [
+      {
+        "c_source": "int add_i32_pair_ptr_arith(const int* lhs, const int* rhs, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(lhs + i) + *(rhs + i); } return 0; }",
+        "function": "add_i32_pair_ptr_arith",
+        "parameters": [
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "lhs"
+          },
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "const int*",
+            "direction": "input",
+            "name": "rhs"
+          },
+          {
+            "bounds": {
+              "maximum": "fixture-bound",
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "len"
+          },
+          {
+            "buffer_length_parameter": "len",
+            "c_type": "int*",
+            "direction": "output",
+            "name": "out"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [
+      "Rejected input/output overlap-risk cases are recorded as boundary evidence and are not executed through the safe Rust public API as overlapping references."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "NULL pointer equivalence",
+      "signed overflow equivalence",
+      "complete alias safety"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL lhs, rhs, or out pointers.",
+      "No support for negative len values.",
+      "No signed overflow equivalence claim.",
+      "No claim that input/output overlap can be represented by safe Rust references.",
+      "No whole-program alias safety proof."
+    ]
+  },
+  "fixture": {
+    "hash": "add-i32-pair-ptr-arith-fixture",
+    "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "add_i32_pair_ptr_arith",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
+    "module_path": "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "input": "&[i32], &[i32], AddI32PairAliasCase",
+        "name": "add_i32_pair_ptr_arith",
+        "output": "AddI32PairPtrArithReport",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/add_i32_pair_ptr_arith.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

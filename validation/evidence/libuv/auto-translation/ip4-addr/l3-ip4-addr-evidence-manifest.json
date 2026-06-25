@@ -1,6 +1,14 @@
 {
   "claim_boundary": {
     "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
     "behavior_fields_checked": [
       "return_code",
       "status",
@@ -34,23 +42,23 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-cache-metadata.json",
-      "sha256": "b80e26596c14c2452246d1cfdb45349e4dae6742b6022ac49c444abb4238221a",
+      "sha256": "a1dc47b6b11bd18d83fcd1f5a8785627f4e8317455aa489cc87758884aff5f23",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-config-profile.json",
       "profile_id": "libuv-ip4-addr-linux-gnu",
-      "sha256": "0ca9cb4534dcf4ca2464009220156ca34828cabb34a0ef03c67fee3d68c58f7b",
+      "sha256": "63e2a7bdfdac043a723f12116910c82e7c72894a02deeb3fb9d5010125995f91",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-context-pack.json",
-      "sha256": "576989412c908da0de6cf090b0b739e1bc9f7f56f9f7bab944c0e77d336feb61",
+      "sha256": "f78a074eeb61c09ffe52fb8f8efddba18780480272c6e0b7ff396de98078dfab",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-final-verification.json",
-      "sha256": "63c442ed5028ae295e413ed2f2a9ed8d07d4172dd845ab14bbf8a9897c198478",
+      "sha256": "95b2f3cc28863576449754e27ef623c618919b95275d85c17fd05eacbba309f9",
       "status": "passed"
     },
     "negative_diff": {
@@ -68,17 +76,17 @@
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-pointer-graph.json",
-      "sha256": "3b440cc5b57a36062c5a61d3d736affccbb248c5a8d4c0c6a60850bf99508542",
+      "sha256": "1f7d949a17a3aa2f882361e20f21fe8cd818811b4ddd458209d4c8c6f3411b68",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/rust-check.json",
-      "sha256": "2931496519bbf145a170c25d085ba70b3fa32ce85a00ebc33a4e6bb9b0083bb6",
+      "sha256": "589cddb844e8c1f79af8acfe7c7e9372c7b09413decf5fe7bf2caa3a952d7d6d",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-report.json",
-      "sha256": "8d0a3cfdbc08615358080a1630a9c49549532427c49b134a15bdca5e1e790f4f",
+      "sha256": "b108dccd0850f089d23f23cf9ad8665685afcc7cd2bb632d278a09c170d161c0",
       "status": "passed"
     },
     "schema_diff": {
@@ -98,7 +106,7 @@
     },
     "test_translation": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-test-translation-generated.json",
-      "sha256": "1aa9935f6f91616987457453a71fcc6dbba66660159e031453b4461f7dcb95cb",
+      "sha256": "b0fe708c1ce7a560e735c4f54668e7e0dc1998fa1f18ce0b1adab98495c85a6d",
       "status": "recorded"
     },
     "unsafe_ledger": {
@@ -113,7 +121,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-version-manifest.json",
-      "sha256": "0e0c4f74cdc9681427be928a3ad826dd9bbf81bc98a1c8653050668417b25d0a",
+      "sha256": "dda426dafbd7bc800dfd08c05c95466ce5152df46153ae5a321676fc9fe920bc",
       "status": "recorded"
     }
   },
@@ -123,7 +131,7 @@
     "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json"
   },
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",

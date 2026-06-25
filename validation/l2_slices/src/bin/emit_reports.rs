@@ -5,8 +5,8 @@ use std::{
 };
 
 use c_to_rust_l2_slices::{
-    copy_i32_ptr_arith, libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer,
-    sum_i32_ptr_arith, zlib_adler32, zstd_xxh32,
+    add_i32_pair_ptr_arith, copy_i32_ptr_arith, libuv_ip4_addr, sqlite_varint, store_add_one,
+    sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32, zstd_xxh32,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -121,6 +121,31 @@ struct CopyI32PtrArithOracleCase {
     write_count: usize,
 }
 
+#[derive(Debug, Deserialize)]
+struct AddI32PairPtrArithOracleReport {
+    cases: Vec<AddI32PairPtrArithOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AddI32PairPtrArithOracleCase {
+    id: String,
+    coverage_kind: String,
+    lhs: Vec<i32>,
+    rhs: Vec<i32>,
+    len: i32,
+    return_code: i32,
+    status: String,
+    out_values: Vec<i32>,
+    source_reads: String,
+    canonical_reads: String,
+    source_writes: String,
+    canonical_writes: String,
+    write_count: usize,
+    safe_noalias_precondition: bool,
+    alias_case: String,
+    alias_matrix: Vec<String>,
+}
+
 #[derive(Debug)]
 struct SliceResult {
     slice_id: &'static str,
@@ -188,6 +213,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_sum_i32_buffer(&fixtures_dir, repo_root)?,
         emit_sum_i32_ptr_arith(&fixtures_dir, repo_root)?,
         emit_copy_i32_ptr_arith(&fixtures_dir, repo_root)?,
+        emit_add_i32_pair_ptr_arith(&fixtures_dir, repo_root)?,
     ];
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
     emit_libuv_safety_evidence(repo_root, &safety)?;
@@ -195,6 +221,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     emit_sum_i32_buffer_safety_evidence(repo_root, &safety)?;
     emit_sum_i32_ptr_arith_safety_evidence(repo_root, &safety)?;
     emit_copy_i32_ptr_arith_safety_evidence(repo_root, &safety)?;
+    emit_add_i32_pair_ptr_arith_safety_evidence(repo_root, &safety)?;
     let mut negative_diffs = emit_negative_diffs(&fixtures_dir, &evidence_dir)?;
     negative_diffs.push(emit_libuv_negative_diff(&fixtures_dir, repo_root)?);
     negative_diffs.push(emit_store_add_one_negative_diff(&fixtures_dir, repo_root)?);
@@ -204,6 +231,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         repo_root,
     )?);
     negative_diffs.push(emit_copy_i32_ptr_arith_negative_diff(
+        &fixtures_dir,
+        repo_root,
+    )?);
+    negative_diffs.push(emit_add_i32_pair_ptr_arith_negative_diff(
         &fixtures_dir,
         repo_root,
     )?);
@@ -753,6 +784,218 @@ fn emit_copy_i32_ptr_arith(
 
     Ok(SliceResult {
         slice_id: "demo-copy-i32-ptr-arith",
+        case_count: report.cases.len(),
+        l2_status: status,
+        l3_status: status,
+    })
+}
+
+fn emit_add_i32_pair_ptr_arith(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<SliceResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("add-i32-pair-ptr-arith-c-oracle.json");
+    let oracle_value: Value = read_json(&fixture_path)?;
+    let report: AddI32PairPtrArithOracleReport = serde_json::from_value(oracle_value.clone())?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-c-oracle.json"),
+        &oracle_value,
+    )?;
+
+    let mut rust_cases = Vec::with_capacity(report.cases.len());
+    let mut first_mismatch = None;
+
+    for case in &report.cases {
+        let alias_case =
+            add_i32_pair_ptr_arith::AddI32PairAliasCase::from_fixture(&case.alias_case)
+                .ok_or("add_i32_pair_ptr_arith oracle contains unknown alias_case")?;
+        let rust = add_i32_pair_ptr_arith::add_i32_pair_ptr_arith(&case.lhs, &case.rhs, alias_case);
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "return_code",
+            json!(case.return_code),
+            json!(rust.return_code),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "status",
+            json!(case.status),
+            json!(rust.status),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "len",
+            json!(case.len),
+            json!(rust.len),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "lhs",
+            json!(case.lhs),
+            json!(rust.lhs),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "rhs",
+            json!(case.rhs),
+            json!(rust.rhs),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "out_values",
+            json!(case.out_values),
+            json!(rust.out_values),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "source_reads",
+            json!(case.source_reads),
+            json!(rust.source_reads),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "canonical_reads",
+            json!(case.canonical_reads),
+            json!(rust.canonical_reads),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "source_writes",
+            json!(case.source_writes),
+            json!(rust.source_writes),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "canonical_writes",
+            json!(case.canonical_writes),
+            json!(rust.canonical_writes),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "write_count",
+            json!(case.write_count),
+            json!(rust.write_count),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "safe_noalias_precondition",
+            json!(case.safe_noalias_precondition),
+            json!(rust.safe_noalias_precondition),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "alias_case",
+            json!(case.alias_case),
+            json!(rust.alias_case),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "alias_matrix",
+            json!(case.alias_matrix),
+            json!(rust.alias_matrix),
+        );
+
+        rust_cases.push(json!({
+            "id": case.id,
+            "coverage_kind": case.coverage_kind,
+            "lhs": rust.lhs,
+            "rhs": rust.rhs,
+            "len": rust.len,
+            "return_code": rust.return_code,
+            "status": rust.status,
+            "out_values": rust.out_values,
+            "source_reads": rust.source_reads,
+            "canonical_reads": rust.canonical_reads,
+            "source_writes": rust.source_writes,
+            "canonical_writes": rust.canonical_writes,
+            "write_count": rust.write_count,
+            "safe_noalias_precondition": rust.safe_noalias_precondition,
+            "alias_case": rust.alias_case,
+            "alias_matrix": rust.alias_matrix
+        }));
+    }
+
+    let status = status_from_mismatch(&first_mismatch);
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-rust-report.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "c_source_boundary": "int add_i32_pair_ptr_arith(const int* lhs, const int* rhs, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(lhs + i) + *(rhs + i); } return 0; }",
+            "rust_module_path": "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
+            "fixture": relative_path(&fixture_path),
+            "command": "cargo run --bin emit_reports",
+            "status": status,
+            "case_count": report.cases.len(),
+            "cases": rust_cases
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": status,
+            "case_count": report.cases.len(),
+            "compared_fields": ["return_code", "status", "len", "lhs", "rhs", "out_values", "source_reads", "canonical_reads", "source_writes", "canonical_writes", "write_count", "safe_noalias_precondition", "alias_case", "alias_matrix"],
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+    emit_l3_test_translation(L3TestTranslationSpec {
+        evidence_dir: &evidence_dir,
+        slice_id: "add-i32-pair-ptr-arith",
+        source_commit: "demo-add-i32-pair-ptr-arith-20260625",
+        fixture_path: &fixture_path,
+        rust_test_name: "add_i32_pair_ptr_arith_matches_c_oracle_and_records_alias_boundary",
+        main_paths: &[
+            "disjoint input pair addition",
+            "lhs/rhs read-read alias accepted",
+            "input/output overlap-risk metadata rejected at safe boundary",
+        ],
+        negative_cases: &["negative diff mutates alias_matrix"],
+        behavior_fields: &[
+            "return_code",
+            "status",
+            "len",
+            "lhs",
+            "rhs",
+            "out_values",
+            "source_reads",
+            "canonical_reads",
+            "source_writes",
+            "canonical_writes",
+            "write_count",
+            "safe_noalias_precondition",
+            "alias_case",
+            "alias_matrix",
+        ],
+    })?;
+    emit_add_i32_pair_ptr_arith_performance_smoke(&report, &evidence_dir)?;
+
+    Ok(SliceResult {
+        slice_id: "demo-add-i32-pair-ptr-arith",
         case_count: report.cases.len(),
         l2_status: status,
         l3_status: status,
@@ -1789,6 +2032,67 @@ fn write_copy_i32_ptr_arith_negative_diff(
     Ok(detected)
 }
 
+fn emit_add_i32_pair_ptr_arith_negative_diff(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("add-i32-pair-ptr-arith-c-oracle.json");
+    let report: AddI32PairPtrArithOracleReport = read_json(&fixture_path)?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    let detected = write_add_i32_pair_ptr_arith_negative_diff(&report, &evidence_dir)?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "demo-add-i32-pair-ptr-arith",
+        status: if detected { "passed" } else { "failed" },
+        report_path: "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+    })
+}
+
+fn write_add_i32_pair_ptr_arith_negative_diff(
+    report: &AddI32PairPtrArithOracleReport,
+    evidence_dir: &Path,
+) -> Result<bool, Box<dyn Error>> {
+    let case = report
+        .cases
+        .iter()
+        .find(|case| case.alias_case == "lhs_rhs_read_alias")
+        .ok_or("add_i32_pair_ptr_arith oracle must include lhs/rhs read alias case")?;
+    let alias_case = add_i32_pair_ptr_arith::AddI32PairAliasCase::from_fixture(&case.alias_case)
+        .ok_or("add_i32_pair_ptr_arith oracle contains unknown alias_case")?;
+    let rust = add_i32_pair_ptr_arith::add_i32_pair_ptr_arith(&case.lhs, &case.rhs, alias_case);
+    let mut mutated_alias_matrix = case.alias_matrix.clone();
+    if let Some(first) = mutated_alias_matrix.first_mut() {
+        *first = "lhs-rhs:disjoint".to_owned();
+    }
+    let detected = mutated_alias_matrix != rust.alias_matrix;
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": "expected_failed",
+            "expected_failure": true,
+            "mutation_detected": detected,
+            "mutation": "lhs/rhs read alias case alias_matrix[0] is changed to disjoint",
+            "case_id": case.id,
+            "first_mismatch": if detected {
+                json!({
+                    "case_id": case.id,
+                    "field": "alias_matrix",
+                    "mutated_c_value": mutated_alias_matrix,
+                    "rust_value": rust.alias_matrix
+                })
+            } else {
+                Value::Null
+            }
+        }),
+    )?;
+    Ok(detected)
+}
+
 fn emit_libuv_performance_smoke(
     report: &LibuvIp4OracleReport,
     evidence_dir: &Path,
@@ -1939,6 +2243,42 @@ fn emit_copy_i32_ptr_arith_performance_smoke(
             "status": "recorded",
             "secondary_only": true,
             "operation": "safe Rust copy_i32_ptr_arith replay over fixture corpus",
+            "iterations": iterations,
+            "calls": calls,
+            "elapsed_ms": 0.0,
+            "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+            "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates."
+        }),
+    )
+}
+
+fn emit_add_i32_pair_ptr_arith_performance_smoke(
+    report: &AddI32PairPtrArithOracleReport,
+    evidence_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let iterations = 10_000_u64;
+    let mut calls = 0_u64;
+    for _ in 0..iterations {
+        for case in &report.cases {
+            let alias_case =
+                add_i32_pair_ptr_arith::AddI32PairAliasCase::from_fixture(&case.alias_case)
+                    .ok_or("add_i32_pair_ptr_arith oracle contains unknown alias_case")?;
+            let _ =
+                add_i32_pair_ptr_arith::add_i32_pair_ptr_arith(&case.lhs, &case.rhs, alias_case);
+            calls += 1;
+        }
+    }
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-performance-smoke.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": "recorded",
+            "secondary_only": true,
+            "operation": "safe Rust add_i32_pair_ptr_arith replay over fixture corpus",
             "iterations": iterations,
             "calls": calls,
             "elapsed_ms": 0.0,
@@ -3291,6 +3631,7 @@ fn emit_safety_evidence(
         "audit_status": status,
         "scan_report": "validation/evidence/l2-slices/unsafe-scan.json",
         "audited_modules": [
+            "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
             "validation/l2_slices/src/libuv_ip4_addr.rs",
             "validation/l2_slices/src/sqlite_varint.rs",
             "validation/l2_slices/src/store_add_one.rs",
@@ -3579,6 +3920,62 @@ fn emit_copy_i32_ptr_arith_safety_evidence(
     )
 }
 
+fn emit_add_i32_pair_ptr_arith_safety_evidence(
+    repo_root: &Path,
+    safety: &SafetyEvidence,
+) -> Result<(), Box<dyn Error>> {
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    let unsafe_count = safety.scan["unsafe_count"].as_u64().unwrap_or(0);
+    let status = if unsafe_count == 0 {
+        "passed"
+    } else {
+        "failed"
+    };
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-unsafe-scan.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": status,
+            "crate": "validation/l2_slices",
+            "scope": "first-party Rust source under validation/l2_slices/src",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "public_api_raw_pointer_exposed": false,
+            "public_api_unsafe_fn": false,
+            "hits": safety.scan["hits"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-unsafe-ledger.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": status,
+            "policy": {
+                "first_party_non_test_unsafe_limit": 0,
+                "unsafe_ratio_limit": 0.10,
+                "audit_required_even_when_zero": true
+            },
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "registered_unsafe": [],
+            "introduced_unsafe": [],
+            "audited_modules": [
+                "validation/l2_slices/src/add_i32_pair_ptr_arith.rs"
+            ],
+            "scan_report": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-scan.json"
+        }),
+    )
+}
+
 fn emit_summary(
     evidence_dir: &Path,
     slices: &[SliceResult],
@@ -3602,6 +3999,7 @@ fn emit_summary(
                 "command": "cargo test",
                 "status": if slices.iter().all(|slice| slice.l2_status == "passed") { "passed" } else { "failed" },
                 "tested_modules": [
+                    "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
                     "validation/l2_slices/src/copy_i32_ptr_arith.rs",
                     "validation/l2_slices/src/libuv_ip4_addr.rs",
                     "validation/l2_slices/src/sqlite_varint.rs",

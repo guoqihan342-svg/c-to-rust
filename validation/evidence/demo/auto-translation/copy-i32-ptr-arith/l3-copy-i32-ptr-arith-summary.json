@@ -7,13 +7,13 @@
     "path_sha256": {
       "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
       "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-      "final_verification": "0b9edc891e40a3cc74bdc28b61422d909bf3319cc71c505b85d9bcd2e7d90844",
+      "final_verification": "69e04090ae42a2b0b5159cbe9e98ee5acd90fa5f8a5f45ac21c45e01239b19d6",
       "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
       "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
       "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
       "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
       "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-      "version_manifest": "e987d7742d2fa88d84b5925eb40ae21811b9c8575eaa08acbe89c2156de04e6b"
+      "version_manifest": "04642cf61fb33ed0dd82ac159a3633456df2d2bd02de3b5894ef53fb35daaa05"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",

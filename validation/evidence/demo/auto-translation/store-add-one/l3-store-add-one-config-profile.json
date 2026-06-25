@@ -72,7 +72,7 @@
     "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
   ],
   "profile_id": "demo-store-add-one-wsl-gcc",
-  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

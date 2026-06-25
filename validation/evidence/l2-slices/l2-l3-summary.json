@@ -48,6 +48,12 @@
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "demo-copy-i32-ptr-arith"
+      },
+      {
+        "case_count": 8,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "demo-add-i32-pair-ptr-arith"
       }
     ],
     "status": "passed"
@@ -93,6 +99,11 @@
         "report": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
         "slice_id": "demo-copy-i32-ptr-arith",
         "status": "passed"
+      },
+      {
+        "report": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+        "slice_id": "demo-add-i32-pair-ptr-arith",
+        "status": "passed"
       }
     ],
     "status": "passed"
@@ -102,6 +113,7 @@
     "command": "cargo test",
     "status": "passed",
     "tested_modules": [
+      "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
       "validation/l2_slices/src/copy_i32_ptr_arith.rs",
       "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
@@ -125,6 +137,7 @@
   "unsafe_ledger_check": {
     "audit_status": "passed",
     "audited_modules": [
+      "validation/l2_slices/src/add_i32_pair_ptr_arith.rs",
       "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/store_add_one.rs",

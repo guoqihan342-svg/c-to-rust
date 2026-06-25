@@ -28,6 +28,7 @@ CACHE_INPUT_FIELDS = [
     "translator_version",
     "translator_manifest_sha256",
     "command_arguments",
+    "alias_gate_identity",
 ]
 CACHE_INVALIDATED_ARTIFACTS = [
     "context_pack",
@@ -38,7 +39,11 @@ CACHE_INVALIDATED_ARTIFACTS = [
     "patch_plan",
     "ai_candidate",
     "c_oracle",
+    "rust_replay",
     "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
     "summary",
 ]
 
@@ -300,6 +305,11 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         }
         for edge in raw_pointer.get("pointer_graph", {}).get("edges", [])
     ]
+    alias_gate = alias_gate_evidence(spec, pointer_nodes)
+    pointer_triggers = ["pointer_parameter"] if pointer_nodes else ["none"]
+    if alias_gate["is_alias_sensitive"]:
+        pointer_triggers.append("alias_sensitive_state")
+    pointer_cache_keys = cache_keys(spec, slice_spec_path) + alias_gate["cache_invalidation_keys"]
     pointer_status = "recorded" if pointer_nodes else "not_applicable"
     pointer_payload = {
         "schema_version": 1,
@@ -312,16 +322,20 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         "context_pack_ref": rel(evidence_dir / f"{prefix}-context-pack.json"),
         "applicability": {
             "has_pointer_surface": bool(pointer_nodes),
-            "triggers": ["pointer_parameter"] if pointer_nodes else ["none"],
+            "triggers": pointer_triggers,
         },
         "source_boundary": source_boundary(spec),
-        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        "cache_invalidation_keys": pointer_cache_keys,
     }
     if pointer_nodes:
         pointer_payload.update(
             {
                 "pointer_nodes": pointer_nodes,
                 "dependency_edges": dependency_edges,
+                "alias_sets": alias_gate["alias_sets"],
+                "alias_risks": alias_gate["alias_risks"],
+                "alias_contract": alias_gate["alias_contract"],
+                "safe_boundary_preconditions": alias_gate["safe_boundary_preconditions"],
                 "pointer_decisions": pointer_decisions(pointer_nodes),
                 "rust_mapping": [
                     {
@@ -334,8 +348,9 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 ],
                 "risk_summary": {
                     "unsafe_expected": False,
-                    "blocked_reasons": [],
+                    "blocked_reasons": alias_gate["blocked_reasons"],
                     "known_gaps": spec.get("non_goals", []),
+                    "alias_gate": alias_gate["summary"],
                 },
             }
         )
@@ -388,13 +403,14 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "lvalue_decision_counts": lvalue_decision_counts,
                 "unsupported_lvalue_count": unsupported_lvalue_count,
                 "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
+                "alias_gate": alias_gate["summary"],
             },
             "verification_plan": [
                 {"gate": "rust_check", "command": "rustc --error-format=json <draft>", "required_before_acceptance": True},
                 {"gate": "c_oracle", "command": "generate accepted C oracle", "required_before_acceptance": True},
                 {"gate": "l3_manifest", "command": "emit L3 evidence manifest", "required_before_acceptance": True},
             ],
-            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+            "cache_invalidation_keys": pointer_cache_keys,
         },
     )
 
@@ -454,6 +470,117 @@ def input_buffer_length_companion(spec: dict[str, Any], pointer_id: str) -> str:
             if param.get("name") == pointer_id and param.get("buffer_length_parameter"):
                 return str(param["buffer_length_parameter"])
     return "len"
+
+
+def alias_gate_evidence(spec: dict[str, Any], pointer_nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    read_nodes = [node for node in pointer_nodes if node.get("read_effects")]
+    write_nodes = [node for node in pointer_nodes if node.get("write_effects")]
+    alias_pairs = [
+        (read_node, write_node)
+        for read_node in read_nodes
+        for write_node in write_nodes
+        if read_node.get("id") != write_node.get("id")
+    ]
+    if not alias_pairs:
+        summary = {
+            "decision": "not_applicable",
+            "risk_level": "none",
+            "requires_noalias": False,
+            "complete_alias_safety": False,
+            "reason": "slice has no input/output pointer alias surface",
+        }
+        return {
+            "is_alias_sensitive": False,
+            "alias_sets": [],
+            "alias_risks": [],
+            "alias_contract": {
+                "decision": "not_applicable",
+                "proven": False,
+                "requires_noalias": False,
+                "source": "no read/write pointer pair",
+                "evidence_refs": [],
+                "complete_alias_safety": False,
+            },
+            "safe_boundary_preconditions": [],
+            "blocked_reasons": [],
+            "summary": summary,
+            "cache_invalidation_keys": ["alias_gate=not_applicable"],
+        }
+
+    aliasing_proven = bool(
+        spec.get("c_boundary", {}).get("pointer_contract", {}).get("aliasing_proven", False)
+    )
+    decision = "allow" if aliasing_proven else "requires_noalias_contract"
+    risk_level = "proven_noalias" if aliasing_proven else "unknown_alias"
+    evidence_source = (
+        "c_boundary.pointer_contract.aliasing_proven=true"
+        if aliasing_proven
+        else "c_boundary.pointer_contract.aliasing_proven=false"
+    )
+    alias_sets = []
+    alias_risks = []
+    safe_boundary_preconditions = []
+    for index, (read_node, write_node) in enumerate(alias_pairs, start=1):
+        members = [str(read_node.get("id")), str(write_node.get("id"))]
+        alias_sets.append(
+            {
+                "id": f"alias-set-{index}",
+                "members": members,
+                "relationship": "proven_disjoint" if aliasing_proven else "unknown_overlap",
+                "risk": risk_level,
+                "evidence": evidence_source,
+            }
+        )
+        alias_risks.append(
+            {
+                "id": f"alias-risk-{index}",
+                "pointer_nodes": members,
+                "read_effects": read_node.get("read_effects", []),
+                "write_effects": write_node.get("write_effects", []),
+                "risk_level": risk_level,
+                "evidence_source": evidence_source,
+                "gate_decision": decision,
+                "requires_noalias": not aliasing_proven,
+            }
+        )
+        safe_boundary_preconditions.append(
+            {
+                "id": f"alias-precondition-{index}",
+                "kind": "noalias",
+                "applies_to": members,
+                "required": not aliasing_proven,
+                "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+            }
+        )
+    summary = {
+        "decision": decision,
+        "risk_level": risk_level,
+        "requires_noalias": not aliasing_proven,
+        "complete_alias_safety": False,
+        "risk_count": len(alias_risks),
+        "evidence_source": evidence_source,
+    }
+    return {
+        "is_alias_sensitive": True,
+        "alias_sets": alias_sets,
+        "alias_risks": alias_risks,
+        "alias_contract": {
+            "decision": decision,
+            "proven": aliasing_proven,
+            "requires_noalias": not aliasing_proven,
+            "source": evidence_source,
+            "evidence_refs": [],
+            "complete_alias_safety": False,
+        },
+        "safe_boundary_preconditions": safe_boundary_preconditions,
+        "blocked_reasons": [] if aliasing_proven else ["input/output alias requires explicit noalias contract"],
+        "summary": summary,
+        "cache_invalidation_keys": [
+            f"alias_gate={decision}",
+            f"alias_risk_count={len(alias_risks)}",
+            f"aliasing_proven={str(aliasing_proven).lower()}",
+        ],
+    }
 
 
 def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip: bool) -> dict[str, Any]:
@@ -861,6 +988,7 @@ def emit_manifest(
     slice_id = required_str(spec, "slice_id")
     l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
     semantic_pass = accepted is not None and rust_check.get("status") == "passed"
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     payload = {
         "schema_version": 1,
         "level": "L3",
@@ -902,6 +1030,7 @@ def emit_manifest(
                 "OpenSpec validation",
             ],
             "non_goals": spec.get("non_goals", []),
+            "alias_gate": alias_gate,
         },
     }
     write_json(evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json", payload)
@@ -921,6 +1050,7 @@ def emit_l3_evidence_manifest(
     prefix = f"l3-{slice_id}"
     semantic_pass = accepted is not None and rust_check.get("status") == "passed"
     write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
     if pointer_ref["status"] == "not_applicable":
         pointer_ref["not_applicable_reason"] = "slice has no pointer surface"
@@ -990,6 +1120,7 @@ def emit_l3_evidence_manifest(
                 "semantic equivalence for this auto-generated Rust draft",
                 "full C99/C11 automatic translation",
             ],
+            "alias_gate": alias_gate,
         },
     }
     path = evidence_dir / f"{prefix}-evidence-manifest.json"
@@ -1010,6 +1141,7 @@ def write_l3_candidate_supporting_evidence(
     prefix = f"l3-{slice_id}"
     unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
     semantic_pass = accepted is not None and rust_check.get("status") == "passed"
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     write_json(
         evidence_dir / f"{prefix}-slice-contract.json",
         {
@@ -1109,6 +1241,7 @@ def write_l3_candidate_supporting_evidence(
             "semantic_pass": False,
             "rust_check_status": rust_check.get("status"),
             "c_oracle_status": oracle.get("status"),
+            "alias_gate": alias_gate,
             "required_before_acceptance": [
                 "C_ORACLE_GENERATED",
                 "Rust replay",
@@ -1341,6 +1474,7 @@ def write_accepted_supporting_evidence(
     accepted_paths = accepted["paths"]
     reports = accepted["reports"]
     unsafe_count = unsafe_count_from_report(reports["unsafe_scan"])
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     mark_config_profile_recorded(spec, evidence_dir, accepted)
     write_json(
         evidence_dir / f"{prefix}-rust-report.json",
@@ -1444,6 +1578,7 @@ def write_accepted_supporting_evidence(
             "unsafe_status": reports["unsafe_scan"].get("status"),
             "version_config_status": "recorded",
             "generated_draft_semantic_pass": False,
+            "alias_gate": alias_gate,
             "accepted_evidence_binding": accepted_binding_summary(accepted),
         },
     )
@@ -1728,6 +1863,36 @@ def pointer_status_for_manifest(spec: dict[str, Any], evidence_dir: Path) -> str
         return "incomplete"
 
 
+def alias_gate_from_pointer_graph(evidence_dir: Path, slice_id: str) -> dict[str, Any]:
+    path = evidence_dir / f"l3-{slice_id}-pointer-graph.json"
+    if not path.exists():
+        return {
+            "decision": "missing",
+            "risk_level": "unknown",
+            "requires_noalias": True,
+            "complete_alias_safety": False,
+        }
+    pointer_graph = read_json(path)
+    contract = pointer_graph.get("alias_contract", {})
+    if contract:
+        return {
+            "decision": contract.get("decision", "unknown"),
+            "risk_level": (pointer_graph.get("alias_risks") or [{}])[0].get("risk_level", "none"),
+            "requires_noalias": bool(contract.get("requires_noalias", False)),
+            "complete_alias_safety": bool(contract.get("complete_alias_safety", False)),
+            "risk_count": len(pointer_graph.get("alias_risks", [])),
+            "preconditions": pointer_graph.get("safe_boundary_preconditions", []),
+        }
+    return {
+        "decision": "not_applicable" if pointer_graph.get("status") == "not_applicable" else "missing",
+        "risk_level": "none" if pointer_graph.get("status") == "not_applicable" else "unknown",
+        "requires_noalias": False,
+        "complete_alias_safety": False,
+        "risk_count": 0,
+        "preconditions": [],
+    }
+
+
 def fixture_path(spec: dict[str, Any]) -> str:
     fixture = spec.get("fixture_contract", {})
     return fixture.get("path") or fixture.get("input") or "unknown-fixture"
@@ -1956,6 +2121,47 @@ def cache_identity(
         "translator_version": "0.1.0",
         "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
         "command_arguments": command_arguments,
+        "alias_gate_identity": alias_gate_identity(spec),
+    }
+
+
+def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    pointer_nodes = []
+    for item in pointer_contract.get("input_buffers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+    for item in pointer_contract.get("output_pointers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+    for item in pointer_contract.get("inout_pointers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+
+    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
+    return {
+        "decision": gate["summary"]["decision"],
+        "risk_count": gate["summary"].get("risk_count", 0),
+        "risk_level": gate["summary"]["risk_level"],
+        "aliasing_proven": bool(pointer_contract.get("aliasing_proven", False)),
+        "requires_noalias": bool(gate["summary"]["requires_noalias"]),
+        "precondition_count": len(gate["safe_boundary_preconditions"]),
+        "alias_set_count": len(gate["alias_sets"]),
     }
 
 

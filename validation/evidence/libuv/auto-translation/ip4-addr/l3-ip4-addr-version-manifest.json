@@ -31,6 +31,15 @@
     "toolchain_status": "C_ORACLE_GENERATED"
   },
   "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
     "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "cache_input_fields": [
       "source_commit",
@@ -43,7 +52,8 @@
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
-      "command_arguments"
+      "command_arguments",
+      "alias_gate_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -62,7 +72,11 @@
       "patch_plan",
       "ai_candidate",
       "c_oracle",
+      "rust_replay",
       "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
       "summary"
     ],
     "schema_version": 1,
@@ -93,7 +107,7 @@
     "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
     "translator_version": "0.1.0"
   },
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

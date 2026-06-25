@@ -1,6 +1,25 @@
 {
   "claim_boundary": {
     "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "preconditions": [
+        {
+          "applies_to": [
+            "values",
+            "out"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "behavior_fields_checked": [
       "return_code",
       "status",
@@ -41,23 +60,23 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-auto-cache-metadata.json",
-      "sha256": "867e042ae604d867dcf54f60bd67626ba5dfc39790431a373e08fa1c5de31035",
+      "sha256": "41b119d6a7c4397faa737fc2dbc393903ba0eb44675e1059af459d81c25a6196",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-config-profile.json",
       "profile_id": "demo-copy-i32-ptr-arith-wsl-gcc",
-      "sha256": "2134f51bbd4868a72ce69cdd88197e93559ceb3c1b3d9943ae25e335c67dc517",
+      "sha256": "be3ae673b7a8de787a5aefa328063e021721648cde14de0f0df05b44baf578bc",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-context-pack.json",
-      "sha256": "2a337dbcdc98f0469ce7fd8bdd980bdc89f07fb19b0ad93feaa6a3c4c65609b4",
+      "sha256": "a27c101c04d1743c8799fe0f77ba600872c7b21c3f51deb9ff209f469d06af28",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-final-verification.json",
-      "sha256": "69e04090ae42a2b0b5159cbe9e98ee5acd90fa5f8a5f45ac21c45e01239b19d6",
+      "sha256": "8869ff874d2efcf663ff1e193f0ecdc8aa5062a178859739947d13f4fc99130f",
       "status": "passed"
     },
     "negative_diff": {
@@ -75,17 +94,17 @@
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
-      "sha256": "bfc3d64312b365f3b622b3bfa8df0345de6b8d3154e7a159375a2044bbb96b34",
+      "sha256": "205ae1b77cefbb227ec616a9071838520dabd6891068732a0e0f0469d8ad1c41",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/rust-check.json",
-      "sha256": "d37ca7658b82d08f5e0b89cf970744d6608c9e2a555b90a48cece9e44208b225",
+      "sha256": "08ef7bbe56e8c89ab2a4e6cb8241473f5a992739e331051e3fba03ead520e16e",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-rust-report.json",
-      "sha256": "015ecc71baeaff8b2636c4db7523bea5f4aeff22a447707bcedb0df34e2bdc77",
+      "sha256": "265c80d4152899319bc49e817ae808c037eb62bcba34ab2b42825c39c5517ead",
       "status": "passed"
     },
     "schema_diff": {
@@ -100,12 +119,12 @@
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-summary.json",
-      "sha256": "81eba111b7ae571accbbbbc1885c2af0a031b53460452b0995eaf3afacd6449a",
+      "sha256": "f7cabf5164c05375ab7be15aac1b187b77676d9018ebc03019146488743581f5",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-test-translation-generated.json",
-      "sha256": "1a475d3f2a5b7b6ec6ef344d524844b43a314d8b0fb48850fdc3ea1beec80821",
+      "sha256": "e5d99539554d06021dfdb23a82a7bce6da23693cdc2b8c0c6197d1aa2dc16fb6",
       "status": "recorded"
     },
     "unsafe_ledger": {
@@ -120,7 +139,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-version-manifest.json",
-      "sha256": "04642cf61fb33ed0dd82ac159a3633456df2d2bd02de3b5894ef53fb35daaa05",
+      "sha256": "c8de03fdb9d29269107df667f89127f0bb19e7ace098fa403e6707541292a67c",
       "status": "recorded"
     }
   },
@@ -130,7 +149,7 @@
     "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "2377c217eb71c24dde7e0f14c161a7c7177bd8bd",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "source_commit": "demo-copy-i32-ptr-arith-20260625",

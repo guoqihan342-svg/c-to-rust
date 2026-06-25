@@ -73,7 +73,7 @@
     "No whole-program alias proof."
   ],
   "profile_id": "libuv-ip4-addr-linux-gnu",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

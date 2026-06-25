@@ -1,0 +1,420 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+    "fixture_sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+      "diff": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
+      "negative_diff": "4e4cb35e4c141bd5d42859b8b985e546f698ae038786a90a6b3556516d98d15a",
+      "performance_smoke": "51c5adcf6f335003904d8a6257b914951feb74a34f1643142b01c09ac0b14407",
+      "rust_report": "ab9e940261adfd49b38693d2997e3be5e3addd05a611824889b3dd9c83a0bfdf",
+      "unsafe_ledger": "de4a8e952647bcd32b78f042357afc5fdfc45aea802d7a3d5415383bfffbbca8",
+      "unsafe_scan": "9015145a19e3b5b682df1bfb87edfc8075cda421072ce9d235839c2258dabbf3"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+      "negative_diff": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-scan.json"
+    },
+    "slice_id": "add-i32-pair-ptr-arith",
+    "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 2,
+      "aliasing_proven": false,
+      "decision": "requires_noalias_contract",
+      "precondition_count": 2,
+      "requires_noalias": true,
+      "risk_count": 2,
+      "risk_level": "unknown_alias"
+    },
+    "build_profile_hash": "94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-add-i32-pair-ptr-arith.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "add-i32-pair-ptr-arith-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "add-i32-pair-ptr-arith",
+    "slice_spec_sha256": "340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+      "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py": "210dfcfee80aebb4d70ad732f1bc4eb544d00a978bc3d2bee07fb19b2a2d4dee"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "claim_boundary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "preconditions": [
+        {
+          "applies_to": [
+            "lhs",
+            "out"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        },
+        {
+          "applies_to": [
+            "rhs",
+            "out"
+          ],
+          "id": "alias-precondition-2",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 2,
+      "risk_level": "unknown_alias"
+    },
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL lhs, rhs, or out pointers.",
+      "No support for negative len values.",
+      "No signed overflow equivalence claim.",
+      "No claim that input/output overlap can be represented by safe Rust references.",
+      "No whole-program alias safety proof."
+    ],
+    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "semantic_pass": true
+  },
+  "fixture": {
+    "hash": "add-i32-pair-ptr-arith-fixture",
+    "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json"
+  },
+  "l3_evidence_manifest": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-evidence-manifest.json",
+    "semantic_pass": true,
+    "status": "passed"
+  },
+  "level": "L3",
+  "oracle": {
+    "accepted_oracle": {
+      "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+      "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 8,
+    "fixture": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+    "fixture_sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+    "harness_draft": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c-oracle-harness-draft.c",
+    "schema_version": 1,
+    "semantic_pass": true,
+    "slice_id": "add-i32-pair-ptr-arith",
+    "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+    "source_slice_id": "add-i32-pair-ptr-arith",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "patch": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-self-healing-blocked-repairs.json",
+    "blocked_repairs_items": [],
+    "blocked_repairs_status": "none",
+    "patch_events": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-patch-events.jsonl",
+    "self_heal_applied": false,
+    "status": "none"
+  },
+  "replay": {
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "len",
+      "lhs",
+      "rhs",
+      "out_values",
+      "source_reads",
+      "canonical_reads",
+      "source_writes",
+      "canonical_writes",
+      "write_count",
+      "safe_noalias_precondition",
+      "alias_case",
+      "alias_matrix"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-add-i32-pair-ptr-arith-20260625",
+      "slice_spec_sha256=2f2d79c62a01a0aacb07b8ba823b68f7ee60a3940f147a68f5e7a7a2b0155cc7",
+      "fixture_hash=add-i32-pair-ptr-arith-fixture",
+      "build_profile_hash=94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_code",
+        "status",
+        "len",
+        "lhs",
+        "rhs",
+        "out_values",
+        "source_reads",
+        "canonical_reads",
+        "source_writes",
+        "canonical_writes",
+        "write_count",
+        "safe_noalias_precondition",
+        "alias_case",
+        "alias_matrix"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+        "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+        "sha256": "4e4cb35e4c141bd5d42859b8b985e546f698ae038786a90a6b3556516d98d15a",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+        "sha256": "ab9e940261adfd49b38693d2997e3be5e3addd05a611824889b3dd9c83a0bfdf",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+        "sha256": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml add_i32_pair_ptr_arith",
+        "file": "validation/l2_slices/tests/add_i32_pair_ptr_arith.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_add_i32_pair_ptr_arith_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_add_i32_pair_ptr_arith_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_add_i32_pair_ptr_arith_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "add-i32-pair-ptr-arith",
+    "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+          "operation_count": 4,
+          "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+          "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+          "sha256": "ab9e940261adfd49b38693d2997e3be5e3addd05a611824889b3dd9c83a0bfdf",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "len",
+          "lhs",
+          "rhs",
+          "out_values",
+          "source_reads",
+          "canonical_reads",
+          "source_writes",
+          "canonical_writes",
+          "write_count",
+          "safe_noalias_precondition",
+          "alias_case",
+          "alias_matrix"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+            "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+            "sha256": "ab9e940261adfd49b38693d2997e3be5e3addd05a611824889b3dd9c83a0bfdf",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+            "sha256": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/add_i32_pair_ptr_arith.rs::accepted_add_i32_pair_ptr_arith_replay",
+        "source": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "len",
+          "lhs",
+          "rhs",
+          "out_values",
+          "source_reads",
+          "canonical_reads",
+          "source_writes",
+          "canonical_writes",
+          "write_count",
+          "safe_noalias_precondition",
+          "alias_case",
+          "alias_matrix"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+            "sha256": "4e4cb35e4c141bd5d42859b8b985e546f698ae038786a90a6b3556516d98d15a",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_add_i32_pair_ptr_arith_negative_diff",
+        "source": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "rust_check": {
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-4qmpi1a8 C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\add-i32-pair-ptr-arith\\l3-add-i32-pair-ptr-arith-rust-draft.rs",
+    "error_count": 0,
+    "errors": [],
+    "schema_version": 1,
+    "self_healing": {
+      "blocked_repairs": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-self-healing-blocked-repairs.json",
+      "patch_events": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-patch-events.jsonl",
+      "status": "none"
+    },
+    "status": "passed"
+  },
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "accepted_evidence_bound",
+  "target_id": "demo",
+  "translator": {
+    "artifact_paths": [
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-auto-translation-plan.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-auto-translation-events.jsonl",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-type-map.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-cfg.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-pointer-graph.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-ai-candidate-manifest.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-blocked-repairs.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-draft.rs"
+    ],
+    "slice_id": "add-i32-pair-ptr-arith",
+    "status": "generated",
+    "target_id": "demo"
+  }
+}

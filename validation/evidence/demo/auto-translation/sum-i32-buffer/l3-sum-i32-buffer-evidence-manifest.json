@@ -1,6 +1,25 @@
 {
   "claim_boundary": {
     "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "preconditions": [
+        {
+          "applies_to": [
+            "values",
+            "out"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "behavior_fields_checked": [
       "return_code",
       "status",
@@ -36,23 +55,23 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-cache-metadata.json",
-      "sha256": "0c95ad68de21e885ba6bd9514e5a7e5b120e6b48a9c5e682029f5c9dfbc20414",
+      "sha256": "3c3c00eb0f70d9791b81a1fe7f5913cf48d8ac3e06ef2e4cbb714a8c28cdab5c",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-config-profile.json",
       "profile_id": "demo-sum-i32-buffer-wsl-gcc",
-      "sha256": "286618acfab8f6cd354b666cc91497234020292a53ae0b6f89a110a853f942c7",
+      "sha256": "7ad892e9bd493744f6102345804695f80b3a359e5a41958b63b17b643290c32b",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-context-pack.json",
-      "sha256": "fef389906098bae84067afd46e9a6650cf54d8939bc8d9ce96fc81642ffb1c96",
+      "sha256": "9257ced5c299a1860483c0445da8144e1b8a47c14f97577d19e04eb61c5bd383",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-final-verification.json",
-      "sha256": "dfd84c2d200b058d446af45bf3caaae8146d20f120315c7b6ba9e0f0620b64e4",
+      "sha256": "c4a7873c693ae477f82fe2cf8dbbba91703d6e60ca6ee198071124a5da8ee9c3",
       "status": "passed"
     },
     "negative_diff": {
@@ -70,17 +89,17 @@
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
-      "sha256": "4a0663d8905baeb60586512ebccadbe9f0d856bcb3d60c2bea395b3773e229aa",
+      "sha256": "3e317c8106a5cff9c5a169f39214a2571c61536c49670fcc44154f33cd086541",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/rust-check.json",
-      "sha256": "c8c9030b8b8f20b97b02a762c619a2597aa631a1889a8e66c5fa22eaa75ad6bf",
+      "sha256": "cde34ccdf648938948165fc5690a1a03fecb00350ddfb4e522c49311065f561d",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-rust-report.json",
-      "sha256": "86c68d1aeb50318859b6750fc89648bbe7d4c644dbce448fb0f9d233eeb79ee5",
+      "sha256": "c31bcb07c94dfe845cdc335d9c14950a80d6258a0382d65f0c1ff98a0b91d007",
       "status": "passed"
     },
     "schema_diff": {
@@ -100,7 +119,7 @@
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-test-translation-generated.json",
-      "sha256": "d851b69abda1a4ddb643a4799246af7f948fd3c5a5bcdce1a48604184b751fc7",
+      "sha256": "8c445c1f8389278f1ba63c3b816463fbf4dfa54f7182bf91aecb0ba45273b14a",
       "status": "recorded"
     },
     "unsafe_ledger": {
@@ -115,7 +134,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-version-manifest.json",
-      "sha256": "7733ecdac38cca463891f64fb9db877eb620d6747e5f59380bc667ce187e8715",
+      "sha256": "a5230e7da2f3e7cbd6c6817f4342f10d30e4b057fe46b5440f50a13dcdbf54af",
       "status": "recorded"
     }
   },
@@ -125,7 +144,7 @@
     "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "sum-i32-buffer",
   "source_commit": "demo-sum-i32-buffer-20260625",

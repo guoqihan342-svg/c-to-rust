@@ -61,7 +61,7 @@
     "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml ip4_addr",
@@ -121,7 +121,7 @@
         "port_bytes_hex",
         "addr_bytes_hex"
       ],
-      "coverage_kind": "oracle_replay",
+      "coverage_kind": "main_path",
       "evidence": [
         {
           "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
@@ -141,6 +141,27 @@
       ],
       "rust_test": "validation/l2_slices/tests/libuv_ip4_addr.rs::accepted_ip4_addr_replay",
       "source": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "family",
+        "port_host",
+        "port_bytes_hex",
+        "addr_bytes_hex"
+      ],
+      "coverage_kind": "negative_case",
+      "evidence": [
+        {
+          "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+          "sha256": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+          "status": "passed"
+        }
+      ],
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_ip4_addr_negative_diff",
+      "source": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
       "status": "mapped"
     }
   ]

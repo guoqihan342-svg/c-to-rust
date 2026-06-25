@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int add_i32_pair_ptr_arith(const int* lhs, const int* rhs, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(lhs + i) + *(rhs + i); } return 0; }",
+  "fixture_hash": "add-i32-pair-ptr-arith-fixture",
+  "function_name": "add_i32_pair_ptr_arith",
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "target_id": "demo"
+}

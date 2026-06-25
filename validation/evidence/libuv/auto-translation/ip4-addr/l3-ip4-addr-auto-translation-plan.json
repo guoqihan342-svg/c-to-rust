@@ -5,7 +5,8 @@
     "fixture_hash=libuv-ip4-addr-fixture",
     "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "translator_version=0.1.0",
-    "schema_version=1"
+    "schema_version=1",
+    "alias_gate=not_applicable"
   ],
   "generated_artifacts": [
     {
@@ -98,18 +99,35 @@
     }
   },
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
   "status": "draft_generated",
   "target_id": "libuv",
   "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "lvalue_decision_counts": {
+      "safe_wrapper": 1
+    },
+    "pointer_boundary_decision_counts": {
+      "safe_wrapper_candidate": 1
+    },
     "safe_public_api": true,
     "translation_rule_ids": [
-      "safe-wrapper-for-pointer-out-param"
+      "safe-wrapper-for-pointer-out-param",
+      "pointer-write-recorded",
+      "pointer-field-write",
+      "structured-return-expression"
     ],
     "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
     "unsupported_node_count": 0
   },
   "verification_plan": [

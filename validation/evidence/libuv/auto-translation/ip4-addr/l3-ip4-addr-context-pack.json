@@ -35,7 +35,7 @@
   ],
   "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "slice_spec": {

@@ -31,6 +31,15 @@
     "toolchain_status": "C_ORACLE_GENERATED"
   },
   "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
     "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "cache_input_fields": [
       "source_commit",
@@ -43,7 +52,8 @@
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
-      "command_arguments"
+      "command_arguments",
+      "alias_gate_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -62,7 +72,11 @@
       "patch_plan",
       "ai_candidate",
       "c_oracle",
+      "rust_replay",
       "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
       "summary"
     ],
     "schema_version": 1,
@@ -94,6 +108,14 @@
     "translator_version": "0.1.0"
   },
   "claim_boundary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
     "generated_draft_semantic_pass": false,
     "must_still_pass": [],
     "non_goals": [
@@ -207,7 +229,7 @@
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+    "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml ip4_addr",
@@ -267,7 +289,7 @@
           "port_bytes_hex",
           "addr_bytes_hex"
         ],
-        "coverage_kind": "oracle_replay",
+        "coverage_kind": "main_path",
         "evidence": [
           {
             "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
@@ -288,11 +310,32 @@
         "rust_test": "validation/l2_slices/tests/libuv_ip4_addr.rs::accepted_ip4_addr_replay",
         "source": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
         "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "family",
+          "port_host",
+          "port_bytes_hex",
+          "addr_bytes_hex"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+            "sha256": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_ip4_addr_negative_diff",
+        "source": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+        "status": "mapped"
       }
     ]
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ayx2utu7 C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\libuv\\auto-translation\\ip4-addr\\l3-ip4-addr-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-wng592zl C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\libuv\\auto-translation\\ip4-addr\\l3-ip4-addr-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "schema_version": 1,

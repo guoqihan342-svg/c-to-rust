@@ -1,0 +1,113 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "disjoint input pair addition",
+      "lhs/rhs read-read alias accepted",
+      "input/output overlap-risk metadata rejected at safe boundary"
+    ],
+    "negative_cases": [
+      "negative diff mutates alias_matrix"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L3 demo test translation covers the named function slice and committed oracle fixture only.",
+    "No full-project migration or exhaustive symbolic equivalence is claimed."
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test add_i32_pair_ptr_arith",
+      "file": "validation/l2_slices/tests/add_i32_pair_ptr_arith.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "add_i32_pair_ptr_arith_matches_c_oracle_and_records_alias_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "len",
+        "lhs",
+        "rhs",
+        "out_values",
+        "source_reads",
+        "canonical_reads",
+        "source_writes",
+        "canonical_writes",
+        "write_count",
+        "safe_noalias_precondition",
+        "alias_case",
+        "alias_matrix"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/add_i32_pair_ptr_arith.rs::add_i32_pair_ptr_arith_matches_c_oracle_and_records_alias_boundary",
+      "source": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "len",
+        "lhs",
+        "rhs",
+        "out_values",
+        "source_reads",
+        "canonical_reads",
+        "source_writes",
+        "canonical_writes",
+        "write_count",
+        "safe_noalias_precondition",
+        "alias_case",
+        "alias_matrix"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_add_i32_pair_ptr_arith_negative_diff",
+      "source": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

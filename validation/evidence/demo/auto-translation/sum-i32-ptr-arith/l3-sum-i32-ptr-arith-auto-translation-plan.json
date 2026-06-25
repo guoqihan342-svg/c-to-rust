@@ -5,7 +5,10 @@
     "fixture_hash=sum-i32-ptr-arith-fixture",
     "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
     "translator_version=0.1.0",
-    "schema_version=1"
+    "schema_version=1",
+    "alias_gate=requires_noalias_contract",
+    "alias_risk_count=1",
+    "aliasing_proven=false"
   ],
   "generated_artifacts": [
     {
@@ -98,13 +101,21 @@
     }
   },
   "level": "L3",
-  "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "source_commit": "demo-sum-i32-ptr-arith-20260625",
   "status": "draft_generated",
   "target_id": "demo",
   "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "lvalue_decision_counts": {
       "bounded_input_buffer": 1,
       "bounded_pointer_arithmetic_input_read": 1,

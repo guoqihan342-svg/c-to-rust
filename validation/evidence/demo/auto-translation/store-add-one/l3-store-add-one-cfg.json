@@ -91,7 +91,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "store-add-one",
   "slice_spec_ref": {

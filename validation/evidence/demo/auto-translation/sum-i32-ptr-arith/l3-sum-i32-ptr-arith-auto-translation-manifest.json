@@ -33,6 +33,15 @@
     "toolchain_status": "C_ORACLE_GENERATED"
   },
   "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 1,
+      "aliasing_proven": false,
+      "decision": "requires_noalias_contract",
+      "precondition_count": 1,
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "build_profile_hash": "84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
     "cache_input_fields": [
       "source_commit",
@@ -45,7 +54,8 @@
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
-      "command_arguments"
+      "command_arguments",
+      "alias_gate_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -64,7 +74,11 @@
       "patch_plan",
       "ai_candidate",
       "c_oracle",
+      "rust_replay",
       "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
       "summary"
     ],
     "schema_version": 1,
@@ -94,6 +108,25 @@
     "translator_version": "0.1.0"
   },
   "claim_boundary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "preconditions": [
+        {
+          "applies_to": [
+            "values",
+            "out"
+          ],
+          "id": "alias-precondition-1",
+          "kind": "noalias",
+          "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+          "required": true
+        }
+      ],
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "generated_draft_semantic_pass": false,
     "must_still_pass": [],
     "non_goals": [
@@ -211,7 +244,7 @@
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+    "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml sum_i32_ptr_arith",
@@ -319,7 +352,7 @@
     ]
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-r_4rs39o C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-ptr-arith\\l3-sum-i32-ptr-arith-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-2lnecj8y C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-ptr-arith\\l3-sum-i32-ptr-arith-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "schema_version": 1,

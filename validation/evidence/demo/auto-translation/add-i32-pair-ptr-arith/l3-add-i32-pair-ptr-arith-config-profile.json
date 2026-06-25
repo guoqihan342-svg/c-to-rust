@@ -1,0 +1,91 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+    "fixture_sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+      "diff": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
+      "negative_diff": "4e4cb35e4c141bd5d42859b8b985e546f698ae038786a90a6b3556516d98d15a",
+      "performance_smoke": "51c5adcf6f335003904d8a6257b914951feb74a34f1643142b01c09ac0b14407",
+      "rust_report": "ab9e940261adfd49b38693d2997e3be5e3addd05a611824889b3dd9c83a0bfdf",
+      "unsafe_ledger": "de4a8e952647bcd32b78f042357afc5fdfc45aea802d7a3d5415383bfffbbca8",
+      "unsafe_scan": "9015145a19e3b5b682df1bfb87edfc8075cda421072ce9d235839c2258dabbf3"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+      "negative_diff": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-scan.json"
+    },
+    "slice_id": "add-i32-pair-ptr-arith",
+    "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-i32-pair-ptr-arith-20260625",
+    "slice_spec_sha256=2f2d79c62a01a0aacb07b8ba823b68f7ee60a3940f147a68f5e7a7a2b0155cc7",
+    "fixture_hash=add-i32-pair-ptr-arith-fixture",
+    "build_profile_hash=94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "2f2d79c62a01a0aacb07b8ba823b68f7ee60a3940f147a68f5e7a7a2b0155cc7"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "add-i32-pair-ptr-arith-fixture",
+    "operation_count": 4,
+    "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No support for NULL lhs, rhs, or out pointers.",
+    "No support for negative len values.",
+    "No signed overflow equivalence claim.",
+    "No claim that input/output overlap can be represented by safe Rust references.",
+    "No whole-program alias safety proof."
+  ],
+  "profile_id": "demo-add-i32-pair-ptr-arith-wsl-gcc",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

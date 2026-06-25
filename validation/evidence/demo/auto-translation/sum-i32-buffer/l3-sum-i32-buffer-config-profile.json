@@ -74,7 +74,7 @@
     "No aliasing proof between values and out."
   ],
   "profile_id": "demo-sum-i32-buffer-wsl-gcc",
-  "repo_commit": "73bf1a47f4c62d28bfe9f4ff055b4919f25a3cb8",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

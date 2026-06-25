@@ -1,0 +1,21 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-c-oracle.json",
+    "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 8,
+  "fixture": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
+  "fixture_sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928",
+  "harness_draft": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c-oracle-harness-draft.c",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "source_slice_id": "add-i32-pair-ptr-arith",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

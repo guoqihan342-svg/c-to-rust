@@ -48,6 +48,8 @@ def main() -> int:
         validate_json(REPO_ROOT / schema_path, data_path)
         validated.append(rel(data_path))
 
+    validate_alias_gate(evidence_dir, prefix)
+
     patch_schema = load_json(REPO_ROOT / "validation/auto-translation-template/patch-event.schema.json")
     patch_path = evidence_dir / f"{prefix}-patch-events.jsonl"
     patch_count = 0
@@ -95,6 +97,96 @@ def main() -> int:
 
 def validate_json(schema_path: Path, data_path: Path) -> None:
     jsonschema.validate(load_json(data_path), load_json(schema_path))
+
+
+def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
+    pointer_graph_path = evidence_dir / f"{prefix}-pointer-graph.json"
+    pointer_graph = load_json(pointer_graph_path)
+    if pointer_graph.get("status") == "not_applicable":
+        return
+
+    nodes = pointer_graph.get("pointer_nodes", [])
+    read_nodes = [node for node in nodes if node.get("read_effects")]
+    write_nodes = [node for node in nodes if node.get("write_effects")]
+    alias_pairs = [
+        (str(read_node.get("id")), str(write_node.get("id")))
+        for read_node in read_nodes
+        for write_node in write_nodes
+        if read_node.get("id") != write_node.get("id")
+    ]
+    if not alias_pairs:
+        return
+
+    required = ["alias_sets", "alias_risks", "alias_contract", "safe_boundary_preconditions"]
+    missing = [key for key in required if key not in pointer_graph]
+    triggers = pointer_graph.get("applicability", {}).get("triggers", [])
+    if "alias_sensitive_state" not in triggers:
+        missing.append("applicability.triggers.alias_sensitive_state")
+    if missing:
+        raise SystemExit(f"alias gate evidence missing fields in {pointer_graph_path}: {', '.join(missing)}")
+
+    alias_contract = pointer_graph.get("alias_contract", {})
+    decision = alias_contract.get("decision")
+    if decision not in {"allow", "requires_noalias_contract", "candidate_only", "blocked"}:
+        raise SystemExit(f"alias gate evidence has unsupported decision {decision!r} in {pointer_graph_path}")
+    if decision == "allow" and not alias_contract.get("proven"):
+        raise SystemExit(f"alias gate allow decision requires alias_contract.proven=true in {pointer_graph_path}")
+
+    alias_sets = pointer_graph.get("alias_sets", [])
+    alias_risks = pointer_graph.get("alias_risks", [])
+    preconditions = pointer_graph.get("safe_boundary_preconditions", [])
+    if not alias_sets:
+        raise SystemExit(f"alias gate evidence requires non-empty alias_sets in {pointer_graph_path}")
+    if not alias_risks:
+        raise SystemExit(f"alias gate evidence requires non-empty alias_risks in {pointer_graph_path}")
+    if decision == "requires_noalias_contract" and not preconditions:
+        raise SystemExit(f"alias gate evidence requires noalias preconditions in {pointer_graph_path}")
+
+    required_risk_keys = {"pointer_nodes", "risk_level", "evidence_source", "gate_decision", "requires_noalias"}
+    precondition_sets = {
+        frozenset(item.get("applies_to", []))
+        for item in preconditions
+        if item.get("kind") == "noalias" and item.get("required")
+    }
+    for risk in alias_risks:
+        missing_risk_keys = sorted(required_risk_keys - set(risk))
+        if missing_risk_keys:
+            raise SystemExit(
+                f"alias gate evidence risk missing fields in {pointer_graph_path}: {', '.join(missing_risk_keys)}"
+            )
+        risk_nodes = frozenset(risk.get("pointer_nodes", []))
+        if len(risk_nodes) < 2:
+            raise SystemExit(f"alias gate evidence risk must name at least two pointer nodes in {pointer_graph_path}")
+        if risk.get("gate_decision") != decision:
+            raise SystemExit(f"alias gate evidence risk gate_decision drift in {pointer_graph_path}")
+        if decision == "requires_noalias_contract":
+            if risk.get("risk_level") != "unknown_alias":
+                raise SystemExit(f"alias gate evidence unknown alias risk level required in {pointer_graph_path}")
+            if not risk.get("requires_noalias"):
+                raise SystemExit(f"alias gate evidence risk requires_noalias=true required in {pointer_graph_path}")
+            if risk_nodes not in precondition_sets:
+                raise SystemExit(f"alias gate evidence missing matching noalias precondition in {pointer_graph_path}")
+
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    plan = load_json(plan_path)
+    if "alias_gate" not in plan.get("translation_summary", {}):
+        raise SystemExit(f"alias gate evidence missing translation_summary.alias_gate in {plan_path}")
+
+    manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+        if "alias_gate" not in manifest.get("claim_boundary", {}):
+            raise SystemExit(f"alias gate evidence missing claim_boundary.alias_gate in {manifest_path}")
+
+    l3_manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    l3_manifest = load_json(l3_manifest_path)
+    if "alias_gate" not in l3_manifest.get("claim_boundary", {}):
+        raise SystemExit(f"alias gate evidence missing claim_boundary.alias_gate in {l3_manifest_path}")
+
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    final = load_json(final_path)
+    if "alias_gate" not in final:
+        raise SystemExit(f"alias gate evidence missing final_verification.alias_gate in {final_path}")
 
 
 def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> dict[str, Any]:

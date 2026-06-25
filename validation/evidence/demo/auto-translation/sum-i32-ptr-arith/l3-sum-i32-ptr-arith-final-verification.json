@@ -32,6 +32,25 @@
     "target_id": "demo",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "requires_noalias_contract",
+    "preconditions": [
+      {
+        "applies_to": [
+          "values",
+          "out"
+        ],
+        "id": "alias-precondition-1",
+        "kind": "noalias",
+        "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+        "required": true
+      }
+    ],
+    "requires_noalias": true,
+    "risk_count": 1,
+    "risk_level": "unknown_alias"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",

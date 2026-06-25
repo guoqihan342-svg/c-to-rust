@@ -1,0 +1,296 @@
+{
+  "case_count": 8,
+  "cases": [
+    {
+      "alias_case": "disjoint",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "empty",
+      "id": "empty-disjoint",
+      "len": 0,
+      "lhs": [],
+      "out_values": [],
+      "return_code": 0,
+      "rhs": [],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 0
+    },
+    {
+      "alias_case": "disjoint",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "single",
+      "id": "single-disjoint",
+      "len": 1,
+      "lhs": [
+        7
+      ],
+      "out_values": [
+        12
+      ],
+      "return_code": 0,
+      "rhs": [
+        5
+      ],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 1
+    },
+    {
+      "alias_case": "disjoint",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "multi",
+      "id": "multi-disjoint",
+      "len": 4,
+      "lhs": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "out_values": [
+        11,
+        22,
+        33,
+        44
+      ],
+      "return_code": 0,
+      "rhs": [
+        10,
+        20,
+        30,
+        40
+      ],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 4
+    },
+    {
+      "alias_case": "disjoint",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "negative_values",
+      "id": "mixed-negative",
+      "len": 4,
+      "lhs": [
+        -5,
+        2,
+        -3,
+        6
+      ],
+      "out_values": [
+        -1,
+        -5,
+        0,
+        5
+      ],
+      "return_code": 0,
+      "rhs": [
+        4,
+        -7,
+        3,
+        -1
+      ],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 4
+    },
+    {
+      "alias_case": "lhs_rhs_read_alias",
+      "alias_matrix": [
+        "lhs-rhs:read_read_alias_allowed",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "read_read_alias",
+      "id": "lhs-rhs-read-alias",
+      "len": 3,
+      "lhs": [
+        3,
+        -1,
+        8
+      ],
+      "out_values": [
+        6,
+        -2,
+        16
+      ],
+      "return_code": 0,
+      "rhs": [
+        3,
+        -1,
+        8
+      ],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 3
+    },
+    {
+      "alias_case": "lhs_out_overlap_risk",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:overlap_risk_rejected",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "input_output_overlap_risk",
+      "id": "lhs-out-overlap-risk",
+      "len": 3,
+      "lhs": [
+        1,
+        2,
+        3
+      ],
+      "out_values": [],
+      "return_code": -1,
+      "rhs": [
+        4,
+        5,
+        6
+      ],
+      "safe_noalias_precondition": false,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "rejected_overlap_risk",
+      "write_count": 0
+    },
+    {
+      "alias_case": "rhs_out_overlap_risk",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:overlap_risk_rejected"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "input_output_overlap_risk",
+      "id": "rhs-out-overlap-risk",
+      "len": 3,
+      "lhs": [
+        1,
+        2,
+        3
+      ],
+      "out_values": [],
+      "return_code": -1,
+      "rhs": [
+        4,
+        5,
+        6
+      ],
+      "safe_noalias_precondition": false,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "rejected_overlap_risk",
+      "write_count": 0
+    },
+    {
+      "alias_case": "disjoint",
+      "alias_matrix": [
+        "lhs-rhs:disjoint",
+        "lhs-out:disjoint",
+        "rhs-out:disjoint"
+      ],
+      "canonical_reads": "lhs[i], rhs[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "boundary_safe",
+      "id": "boundary-safe",
+      "len": 3,
+      "lhs": [
+        1073741823,
+        -1073741824,
+        -1
+      ],
+      "out_values": [
+        1073741824,
+        -1073741825,
+        0
+      ],
+      "return_code": 0,
+      "rhs": [
+        1,
+        -1,
+        1
+      ],
+      "safe_noalias_precondition": true,
+      "source_reads": "*(lhs + i), *(rhs + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "write_count": 3
+    }
+  ],
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "lhs",
+    "rhs",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count",
+    "safe_noalias_precondition",
+    "alias_case",
+    "alias_matrix"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No NULL pointer execution.",
+    "No negative len execution.",
+    "No signed overflow cases.",
+    "No claim that input/output overlap can be represented by safe Rust references.",
+    "Rejected overlap-risk cases are boundary metadata, not accepted safe replay executions."
+  ],
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py"
+    ],
+    "functions": [
+      "add_i32_pair_ptr_arith"
+    ],
+    "signature": "int add_i32_pair_ptr_arith(const int* lhs, const int* rhs, int len, int* out)"
+  },
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

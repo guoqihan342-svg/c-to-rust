@@ -1,0 +1,29 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-diff.json",
+    "sha256": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "lhs",
+    "rhs",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count",
+    "safe_noalias_precondition",
+    "alias_case",
+    "alias_matrix"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -7,13 +7,13 @@
     "path_sha256": {
       "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
       "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-      "final_verification": "0b9edc891e40a3cc74bdc28b61422d909bf3319cc71c505b85d9bcd2e7d90844",
+      "final_verification": "69e04090ae42a2b0b5159cbe9e98ee5acd90fa5f8a5f45ac21c45e01239b19d6",
       "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
       "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
       "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
       "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
       "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-      "version_manifest": "e987d7742d2fa88d84b5925eb40ae21811b9c8575eaa08acbe89c2156de04e6b"
+      "version_manifest": "04642cf61fb33ed0dd82ac159a3633456df2d2bd02de3b5894ef53fb35daaa05"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
@@ -33,6 +33,15 @@
     "toolchain_status": "C_ORACLE_GENERATED"
   },
   "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 1,
+      "aliasing_proven": false,
+      "decision": "requires_noalias_contract",
+      "precondition_count": 1,
+      "requires_noalias": true,
+      "risk_count": 1,
+      "risk_level": "unknown_alias"
+    },
     "build_profile_hash": "32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
     "cache_input_fields": [
       "source_commit",
@@ -45,7 +54,8 @@
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
-      "command_arguments"
+      "command_arguments",
+      "alias_gate_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -64,7 +74,11 @@
       "patch_plan",
       "ai_candidate",
       "c_oracle",
+      "rust_replay",
       "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
       "summary"
     ],
     "schema_version": 1,
@@ -93,7 +107,7 @@
     "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
     "translator_version": "0.1.0"
   },
-  "repo_commit": "2377c217eb71c24dde7e0f14c161a7c7177bd8bd",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

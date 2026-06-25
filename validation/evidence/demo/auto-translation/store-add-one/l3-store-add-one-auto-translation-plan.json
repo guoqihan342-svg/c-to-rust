@@ -5,7 +5,8 @@
     "fixture_hash=store-add-one-fixture",
     "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
     "translator_version=0.1.0",
-    "schema_version=1"
+    "schema_version=1",
+    "alias_gate=not_applicable"
   ],
   "generated_artifacts": [
     {
@@ -98,13 +99,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "01edac7314123495fe45b5b97f0d704809620c30",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "store-add-one",
   "source_commit": "demo-store-add-one-20260625",
   "status": "draft_generated",
   "target_id": "demo",
   "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
     "lvalue_decision_counts": {
       "bounded_pointer_index": 1
     },

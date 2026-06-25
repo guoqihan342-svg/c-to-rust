@@ -1,0 +1,21 @@
+{
+  "audited_modules": [
+    "validation/l2_slices/src/add_i32_pair_ptr_arith.rs"
+  ],
+  "first_party_non_test_unsafe_count": 0,
+  "introduced_unsafe": [],
+  "level": "L3",
+  "policy": {
+    "audit_required_even_when_zero": true,
+    "first_party_non_test_unsafe_limit": 0,
+    "unsafe_ratio_limit": 0.1
+  },
+  "registered_unsafe": [],
+  "scan_report": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-unsafe-scan.json",
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "unsafe_ratio": 0.0
+}

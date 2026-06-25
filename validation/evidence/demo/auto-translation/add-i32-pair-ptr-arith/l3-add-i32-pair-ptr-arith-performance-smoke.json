@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-add-i32-pair-ptr-arith-performance-smoke.json",
+    "sha256": "51c5adcf6f335003904d8a6257b914951feb74a34f1643142b01c09ac0b14407",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "status": "recorded",
+  "target_id": "demo"
+}

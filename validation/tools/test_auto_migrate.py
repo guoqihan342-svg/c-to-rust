@@ -479,6 +479,222 @@ class AutoMigrateTests(unittest.TestCase):
                 1,
             )
 
+    def test_alias_sensitive_read_write_pointer_gate_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "copy-i32-alias-gate",
+            "source_commit": "1234567",
+            "function_name": "copy_i32_alias_gate",
+            "c_source": "int copy_i32_alias_gate(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "c_boundary": {
+                "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "values",
+                            "c_type": "const int*",
+                            "length_companion": "len",
+                            "read_effects": ["*(values + i)", "values[i]"],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "out",
+                            "c_type": "int*",
+                            "length_companion": "len",
+                            "write_effects": ["*(out + i)", "out[i]"],
+                        }
+                    ],
+                    "aliasing_proven": False,
+                }
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "copy-i32-alias-gate.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "copy-i32-alias-gate"
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["alias_sets"][0]["id"], "alias-set-1")
+            self.assertEqual(pointer_graph["alias_sets"][0]["members"], ["values", "out"])
+            self.assertEqual(pointer_graph["alias_sets"][0]["relationship"], "unknown_overlap")
+            self.assertEqual(
+                pointer_graph["alias_sets"][0]["evidence"],
+                "c_boundary.pointer_contract.aliasing_proven=false",
+            )
+            self.assertEqual(pointer_graph["alias_contract"]["decision"], "requires_noalias_contract")
+            self.assertFalse(pointer_graph["alias_contract"]["proven"])
+            self.assertTrue(pointer_graph["alias_contract"]["requires_noalias"])
+            self.assertEqual(pointer_graph["alias_risks"][0]["risk_level"], "unknown_alias")
+            self.assertEqual(pointer_graph["alias_risks"][0]["gate_decision"], "requires_noalias_contract")
+            self.assertIn("values", pointer_graph["alias_risks"][0]["pointer_nodes"])
+            self.assertIn("out", pointer_graph["alias_risks"][0]["pointer_nodes"])
+            self.assertTrue(
+                any(
+                    item["kind"] == "noalias"
+                    and item["applies_to"] == ["values", "out"]
+                    and item["required"]
+                    for item in pointer_graph["safe_boundary_preconditions"]
+                )
+            )
+            self.assertEqual(
+                plan["translation_summary"]["alias_gate"]["decision"],
+                "requires_noalias_contract",
+            )
+            self.assertEqual(
+                manifest["claim_boundary"]["alias_gate"]["decision"],
+                "requires_noalias_contract",
+            )
+            self.assertFalse(manifest["claim_boundary"]["alias_gate"]["complete_alias_safety"])
+
+    def test_output_only_pointer_write_does_not_trigger_input_output_alias_risk(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "fill-i32-output-only",
+            "source_commit": "1234567",
+            "function_name": "fill_i32_output_only",
+            "c_source": "int fill_i32_output_only(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "fill-i32-output-only.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "fill-i32-output-only"
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-fill-i32-output-only-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-fill-i32-output-only-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertNotIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["alias_sets"], [])
+            self.assertEqual(pointer_graph["alias_risks"], [])
+            self.assertEqual(pointer_graph["alias_contract"]["decision"], "not_applicable")
+            self.assertFalse(pointer_graph["alias_contract"]["requires_noalias"])
+            self.assertEqual(plan["translation_summary"]["alias_gate"]["decision"], "not_applicable")
+            self.assertEqual(manifest["claim_boundary"]["alias_gate"]["decision"], "not_applicable")
+
+    def test_cache_identity_tracks_alias_gate_inputs(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "copy-i32-alias-cache",
+            "source_commit": "1234567",
+            "function_name": "copy_i32_alias_cache",
+            "c_source": "int copy_i32_alias_cache(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"target_triple": "x86_64-unknown-linux-gnu"},
+            "c_boundary": {
+                "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "values",
+                            "c_type": "const int*",
+                            "length_companion": "len",
+                            "read_effects": ["*(values + i)", "values[i]"],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "out",
+                            "c_type": "int*",
+                            "length_companion": "len",
+                            "write_effects": ["*(out + i)", "out[i]"],
+                        }
+                    ],
+                    "aliasing_proven": False,
+                }
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "copy-i32-alias-cache.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            identity = auto_migrate.cache_identity(spec, spec_path)
+
+            self.assertIn("alias_gate_identity", identity)
+            self.assertEqual(identity["alias_gate_identity"]["decision"], "requires_noalias_contract")
+            self.assertEqual(identity["alias_gate_identity"]["risk_count"], 1)
+            self.assertFalse(identity["alias_gate_identity"]["aliasing_proven"])
+            self.assertTrue(identity["alias_gate_identity"]["requires_noalias"])
+
     def test_unsupported_lvalue_blocks_auto_migrate_candidate_generation(self) -> None:
         spec = {
             "target_id": "demo",
@@ -670,6 +886,12 @@ class AutoMigrateTests(unittest.TestCase):
             "translator_version": "0.1.0",
             "translator_manifest_sha256": "manifest-a",
             "command_arguments": ["auto_migrate.py", "--slice-spec", "slice.json"],
+            "alias_gate_identity": {
+                "decision": "not_applicable",
+                "risk_count": 0,
+                "aliasing_proven": False,
+                "requires_noalias": False,
+            },
         }
 
         reusable = auto_migrate.cache_drift_report(previous, dict(previous))
@@ -683,6 +905,12 @@ class AutoMigrateTests(unittest.TestCase):
         current["build_profile_hash"] = "profile-b"
         current["fixture_hash"] = "fixture-b"
         current["source_file_hashes"] = {"src/file.c": "hash-b"}
+        current["alias_gate_identity"] = {
+            "decision": "requires_noalias_contract",
+            "risk_count": 1,
+            "aliasing_proven": False,
+            "requires_noalias": True,
+        }
 
         drifted = auto_migrate.cache_drift_report(previous, current)
 
@@ -692,6 +920,7 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertIn("source_file_hashes", drifted["drifted_keys"])
         self.assertIn("fixture_hash", drifted["drifted_keys"])
         self.assertIn("build_profile_hash", drifted["drifted_keys"])
+        self.assertIn("alias_gate_identity", drifted["drifted_keys"])
         for artifact in [
             "context_pack",
             "type_map",
@@ -699,8 +928,12 @@ class AutoMigrateTests(unittest.TestCase):
             "pointer_graph",
             "rust_draft",
             "patch_plan",
+            "rust_replay",
             "c_oracle",
             "diff",
+            "negative_diff",
+            "unsafe_ledger",
+            "final_verification",
             "summary",
         ]:
             self.assertIn(artifact, drifted["invalidated_artifacts"])

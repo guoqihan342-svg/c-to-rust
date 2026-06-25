@@ -1,0 +1,322 @@
+{
+  "alias_contract": {
+    "complete_alias_safety": false,
+    "decision": "requires_noalias_contract",
+    "evidence_refs": [],
+    "proven": false,
+    "requires_noalias": true,
+    "source": "c_boundary.pointer_contract.aliasing_proven=false"
+  },
+  "alias_risks": [
+    {
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
+      "gate_decision": "requires_noalias_contract",
+      "id": "alias-risk-1",
+      "pointer_nodes": [
+        "lhs",
+        "out"
+      ],
+      "read_effects": [
+        "lhs[i]",
+        "*(lhs + i)"
+      ],
+      "requires_noalias": true,
+      "risk_level": "unknown_alias",
+      "write_effects": [
+        "out[i]",
+        "*(out + i)"
+      ]
+    },
+    {
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
+      "gate_decision": "requires_noalias_contract",
+      "id": "alias-risk-2",
+      "pointer_nodes": [
+        "rhs",
+        "out"
+      ],
+      "read_effects": [
+        "rhs[i]",
+        "*(rhs + i)"
+      ],
+      "requires_noalias": true,
+      "risk_level": "unknown_alias",
+      "write_effects": [
+        "out[i]",
+        "*(out + i)"
+      ]
+    }
+  ],
+  "alias_sets": [
+    {
+      "evidence": "c_boundary.pointer_contract.aliasing_proven=false",
+      "id": "alias-set-1",
+      "members": [
+        "lhs",
+        "out"
+      ],
+      "relationship": "unknown_overlap",
+      "risk": "unknown_alias"
+    },
+    {
+      "evidence": "c_boundary.pointer_contract.aliasing_proven=false",
+      "id": "alias-set-2",
+      "members": [
+        "rhs",
+        "out"
+      ],
+      "relationship": "unknown_overlap",
+      "risk": "unknown_alias"
+    }
+  ],
+  "applicability": {
+    "has_pointer_surface": true,
+    "triggers": [
+      "pointer_parameter",
+      "alias_sensitive_state"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-i32-pair-ptr-arith-20260625",
+    "slice_spec_sha256=340c227d1c11fb0271dc4e0a3edc30ebc9fd54bc2e0f743974c6562fcaadd375",
+    "fixture_hash=add-i32-pair-ptr-arith-fixture",
+    "build_profile_hash=94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=requires_noalias_contract",
+    "alias_risk_count=2",
+    "aliasing_proven=false"
+  ],
+  "context_pack_ref": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-context-pack.json",
+  "dependency_edges": [
+    {
+      "evidence": "input_influences_output",
+      "from": "lhs",
+      "relationship": "writes_through",
+      "to": "rhs"
+    }
+  ],
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_input_buffer",
+      "id": "pointer-decision-1",
+      "lvalue_kind": "bounded_input_buffer",
+      "pointer_node": "lhs",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "lhs[i]",
+      "translation_rule_id": "bounded-input-buffer-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_arithmetic_input_read",
+      "id": "pointer-decision-2",
+      "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+      "pointer_node": "lhs",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "lhs[i]",
+      "translation_rule_id": "bounded-pointer-arithmetic-input-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_input_buffer",
+      "id": "pointer-decision-3",
+      "lvalue_kind": "bounded_input_buffer",
+      "pointer_node": "rhs",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "rhs[i]",
+      "translation_rule_id": "bounded-input-buffer-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_arithmetic_input_read",
+      "id": "pointer-decision-4",
+      "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+      "pointer_node": "rhs",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "rhs[i]",
+      "translation_rule_id": "bounded-pointer-arithmetic-input-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_arithmetic_output_write",
+      "id": "pointer-decision-5",
+      "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
+      "pointer_node": "out",
+      "reason": "bounded translator pointer/lvalue decision",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "source_statement": "out[i]",
+      "translation_rule_id": "bounded-pointer-arithmetic-output-write",
+      "unsafe_expected": false
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_input_buffer",
+        "bounded_pointer_arithmetic_input_read"
+      ],
+      "buffer_role": "input",
+      "c_type": "const int*",
+      "id": "lhs",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "read_only",
+      "nullability": "unknown",
+      "ownership_role": "borrowed",
+      "read_effects": [
+        "lhs[i]",
+        "*(lhs + i)"
+      ],
+      "symbol": "lhs",
+      "write_effects": []
+    },
+    {
+      "boundary_decisions": [
+        "bounded_input_buffer",
+        "bounded_pointer_arithmetic_input_read"
+      ],
+      "buffer_role": "input",
+      "c_type": "const int*",
+      "id": "rhs",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "read_only",
+      "nullability": "unknown",
+      "ownership_role": "borrowed",
+      "read_effects": [
+        "rhs[i]",
+        "*(rhs + i)"
+      ],
+      "symbol": "rhs",
+      "write_effects": []
+    },
+    {
+      "boundary_decisions": [
+        "bounded_pointer_arithmetic_output_write"
+      ],
+      "buffer_role": "output",
+      "c_type": "int*",
+      "id": "out",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "write_only",
+      "nullability": "unknown",
+      "ownership_role": "out_param",
+      "read_effects": [],
+      "symbol": "out",
+      "write_effects": [
+        "out[i]",
+        "*(out + i)"
+      ]
+    }
+  ],
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "risk_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "requires_noalias_contract",
+      "evidence_source": "c_boundary.pointer_contract.aliasing_proven=false",
+      "requires_noalias": true,
+      "risk_count": 2,
+      "risk_level": "unknown_alias"
+    },
+    "blocked_reasons": [
+      "input/output alias requires explicit noalias contract"
+    ],
+    "known_gaps": [
+      "No full project migration claim.",
+      "No support for NULL lhs, rhs, or out pointers.",
+      "No support for negative len values.",
+      "No signed overflow equivalence claim.",
+      "No claim that input/output overlap can be represented by safe Rust references.",
+      "No whole-program alias safety proof."
+    ],
+    "unsafe_expected": false
+  },
+  "rust_mapping": [
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "lhs",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    },
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "rhs",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    },
+    {
+      "boundary_kind": "safe_wrapper",
+      "pointer_node": "out",
+      "strategy": "safe public API boundary generated by bounded translator",
+      "unsafe_expected": false
+    }
+  ],
+  "safe_boundary_preconditions": [
+    {
+      "applies_to": [
+        "lhs",
+        "out"
+      ],
+      "id": "alias-precondition-1",
+      "kind": "noalias",
+      "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+      "required": true
+    },
+    {
+      "applies_to": [
+        "rhs",
+        "out"
+      ],
+      "id": "alias-precondition-2",
+      "kind": "noalias",
+      "reason": "safe Rust input/output slice boundary cannot express overlapping C input/output buffers",
+      "required": true
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/tools/generate_add_i32_pair_ptr_arith_oracle.py",
+      "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json"
+    ],
+    "functions": [
+      "add_i32_pair_ptr_arith"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -30,6 +30,14 @@
     "target_id": "libuv",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "not_applicable",
+    "preconditions": [],
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",

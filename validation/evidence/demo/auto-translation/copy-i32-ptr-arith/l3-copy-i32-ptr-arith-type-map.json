@@ -55,7 +55,7 @@
       "translation_rule_id": "supported MVP C subset mapping"
     }
   ],
-  "repo_commit": "2377c217eb71c24dde7e0f14c161a7c7177bd8bd",
+  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec_ref": {

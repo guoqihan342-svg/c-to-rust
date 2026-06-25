@@ -1,5 +1,5 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-r_4rs39o C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-ptr-arith\\l3-sum-i32-ptr-arith-rust-draft.rs",
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-2lnecj8y C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-ptr-arith\\l3-sum-i32-ptr-arith-rust-draft.rs",
   "error_count": 0,
   "errors": [],
   "schema_version": 1,
