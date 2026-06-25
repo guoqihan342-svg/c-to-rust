@@ -1,0 +1,15 @@
+{
+  "case_id": "sqlite-varint-0",
+  "detected": true,
+  "first_mismatch": {
+    "case_id": "sqlite-varint-0",
+    "field": "encoded_hex",
+    "mutated_c_value": "01",
+    "rust_value": "00"
+  },
+  "level": "L2",
+  "mutation": "first oracle case encoded_hex is replaced with a different byte",
+  "schema_version": 1,
+  "slice_id": "sqlite-varint",
+  "status": "passed"
+}

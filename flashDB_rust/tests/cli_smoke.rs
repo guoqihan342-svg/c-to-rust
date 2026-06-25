@@ -94,8 +94,36 @@ fn cli_version_manifest_writes_version_governance_report() {
     assert!(text.contains("\"evidence_schema_version\":1"));
     assert!(text.contains("\"cargo_lock_sha256\""));
     assert!(text.contains("\"cache_key_inputs\""));
+    assert!(text.contains("\"command_arguments\":[\"version-manifest\"]"));
+    assert!(text.contains("\"fixture_sha256\":null"));
+    assert!(text.contains("\"ai_metadata\":{\"used\":false,\"provider\":\"not_configured\"}"));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(stdout.trim(), text.trim());
+    let _ = fs::remove_file(report);
+}
+
+#[test]
+fn cli_unsafe_scan_writes_machine_readable_report() {
+    let report = temp_report("unsafe-scan");
+    let output = Command::new(env!("CARGO_BIN_EXE_flashdb-rust"))
+        .args(["unsafe-scan", "--report", report.to_str().unwrap()])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = fs::read_to_string(&report).unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout.trim(), text.trim());
+    assert!(text.contains("\"command\":\"unsafe-scan\""));
+    assert!(text.contains("\"schema_version\":1"));
+    assert!(text.contains("\"first_party_non_test_unsafe_count\":0"));
+    assert!(text.contains("\"unsafe_ratio\":0"));
+    assert!(text.contains("\"categories\":{"));
+    assert!(text.contains("\"findings\":[]"));
     let _ = fs::remove_file(report);
 }
 

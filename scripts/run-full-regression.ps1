@@ -236,9 +236,15 @@ function Get-RoundSteps {
     $flashSmokeReport = Join-Path $RoundDir "flashdb-smoke-memory.json"
     $flashReplayReport = Join-Path $RoundDir "flashdb-rust-fixture-replay.json"
     $flashDiffReport = Join-Path $RoundDir "flashdb-rust-fixture-diff.json"
+    $flashNegativeDiffReport = Join-Path $RoundDir "flashdb-rust-fixture-negative-diff.json"
+    $flashUnsafeReport = Join-Path $RoundDir "flashdb-unsafe-scan.json"
     $flashVersionReport = Join-Path $RoundDir "flashdb-version-manifest.json"
+    $flashVersionBindingReport = Join-Path $RoundDir "flashdb-version-binding.json"
+    $flashL3EvidenceReport = Join-Path $RoundDir "flashdb-l3-evidence.json"
     $flashSearchReport = Join-Path $RoundDir "flashdb-evidence-search.json"
     $catalogReport = Join-Path $RoundDir "catalog-validation.json"
+    $l2EvidenceReport = Join-Path $RoundDir "l2-evidence-summary.json"
+    $testTranslationCoverageReport = Join-Path $RoundDir "test-translation-coverage.json"
 
     $steps = New-Object System.Collections.Generic.List[object]
     $catalogCommand = @(
@@ -263,9 +269,12 @@ function Get-RoundSteps {
     }
     $steps.Add((New-Step "l2-slices-fmt" "l2_slices_build" "." @("cargo", "fmt", "--manifest-path", "validation/l2_slices/Cargo.toml", "--", "--check")))
     $steps.Add((New-Step "l2-slices-test" "l2_slices_tests" "." @("cargo", "test", "--manifest-path", "validation/l2_slices/Cargo.toml")))
+    $steps.Add((New-Step "l2-slices-emit-reports" "l2_slices_evidence" "." @("cargo", "run", "--manifest-path", "validation/l2_slices/Cargo.toml", "--bin", "emit_reports")))
+    $steps.Add((New-Step "l2-evidence-summary" "l2_slices_evidence" "." @("python", "-B", "validation/tools/validate_l2_evidence_summary.py", "--evidence-root", "validation/evidence", "--report", $l2EvidenceReport)))
     $steps.Add((New-Step "auto-migrate-unit-tests" "auto_translation_tests" "." @("python", "-B", "-m", "unittest", "validation.tools.test_auto_migrate", "-v")))
     $steps.Add((New-Step "libuv-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "libuv", "--slice-id", "ip4-addr", "--require-semantic-pass")))
     $steps.Add((New-Step "zlib-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "zlib-ng", "--slice-id", "adler32-step", "--require-semantic-pass")))
+    $steps.Add((New-Step "test-translation-coverage" "test_translation_coverage" "." @("python", "-B", "validation/tools/validate_test_translation_coverage.py", "--evidence-root", "validation/evidence", "--report", $testTranslationCoverageReport)))
     $steps.Add((New-Step "flashdb-fmt" "flashdb_build" "flashDB_rust" @("cargo", "fmt", "--", "--check")))
     $steps.Add((New-Step "flashdb-check" "flashdb_build" "flashDB_rust" @("cargo", "check")))
     $steps.Add((New-Step "flashdb-test" "flashdb_tests" "flashDB_rust" @("cargo", "test")))
@@ -275,8 +284,11 @@ function Get-RoundSteps {
     $steps.Add((New-Step "flashdb-smoke-memory" "flashdb_smoke" "flashDB_rust" @("cargo", "run", "--", "smoke", "--backend", "memory", "--report", $flashSmokeReport)))
     $steps.Add((New-Step "flashdb-fixture-replay" "committed_fixture_replay" "flashDB_rust" @("cargo", "run", "--", "fixture-replay", "--fixture", "fixtures/ci-smoke.json", "--report", $flashReplayReport)))
     $steps.Add((New-Step "flashdb-fixture-diff" "committed_fixture_diff" "flashDB_rust" @("cargo", "run", "--", "diff-report", "--expected", "fixtures/ci-smoke.expected.json", "--actual", $flashReplayReport, "--report", $flashDiffReport)))
-    $steps.Add((New-Step "flashdb-unsafe-scan" "unsafe_budget" "flashDB_rust" @("cargo", "run", "--", "unsafe-scan")))
+    $steps.Add((New-Step "flashdb-fixture-negative-diff" "committed_fixture_negative_diff" "." @("python", "-B", "validation/tools/flashdb_fixture_negative_diff.py", "--expected", "flashDB_rust/fixtures/ci-smoke.expected.json", "--actual", $flashReplayReport, "--report", $flashNegativeDiffReport)))
+    $steps.Add((New-Step "flashdb-unsafe-scan" "unsafe_budget" "flashDB_rust" @("cargo", "run", "--", "unsafe-scan", "--report", $flashUnsafeReport)))
     $steps.Add((New-Step "flashdb-version-manifest" "version_binding" "flashDB_rust" @("cargo", "run", "--", "version-manifest", "--report", $flashVersionReport)))
+    $steps.Add((New-Step "flashdb-version-binding" "version_binding" "." @("python", "-B", "validation/tools/validate_flashdb_version_binding.py", "--manifest", $flashVersionReport, "--cargo-toml", "flashDB_rust/Cargo.toml", "--report", $flashVersionBindingReport)))
+    $steps.Add((New-Step "flashdb-l3-evidence" "l3_evidence_manifest" "." @("python", "-B", "validation/tools/validate_flashdb_l3_evidence.py", "--evidence-root", "validation/evidence", "--report", $flashL3EvidenceReport)))
     if (-not $SkipLongStress) {
         $steps.Add((New-Step "flashdb-release-stress-all" "production_abnormal_reliability_performance" "flashDB_rust" @("cargo", "run", "--release", "--", "stress", "--loops", "$StressLoops", "--seed", "$Round", "--backend", "file", "--scenario", "all", "--report", $flashStressReport)))
     }

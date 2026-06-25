@@ -107,7 +107,7 @@ where
             options.report.as_deref(),
         ),
         "inspect-image" => inspect_image(options),
-        "unsafe-scan" => unsafe_scan(Path::new("src")),
+        "unsafe-scan" => unsafe_scan(Path::new("src"), options.report.as_deref()),
         "version-manifest" => version_manifest(options.report.as_deref()),
         "evidence-search" => evidence_search(options),
         other => Err(Error::Cli(format!("unknown command {other}"))),
@@ -499,6 +499,9 @@ fn version_manifest(report_path: Option<&Path>) -> Result<String> {
             "\"FDB_USING_FILE_POSIX_MODE\":true,",
             "\"FDB_WRITE_GRAN\":1",
             "}},",
+            "\"command_arguments\":[\"version-manifest\"],",
+            "\"fixture_sha256\":null,",
+            "\"ai_metadata\":{{\"used\":false,\"provider\":\"not_configured\"}},",
             "\"cache_key_inputs\":[",
             "\"agent_contract_version\",",
             "\"context_schema_version\",",
@@ -783,20 +786,115 @@ fn is_sha256_hex(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn unsafe_scan(path: &Path) -> Result<String> {
+#[derive(Debug, Clone)]
+struct UnsafeFinding {
+    path: String,
+    line: usize,
+    category: String,
+    text: String,
+}
+
+fn unsafe_scan(path: &Path, report_path: Option<&Path>) -> Result<String> {
     let mut findings = Vec::new();
-    scan_dir_for_unsafe(path, &mut findings)?;
+    let mut scanned_files = 0usize;
+    let mut scanned_lines = 0usize;
+    scan_dir_for_unsafe(path, &mut findings, &mut scanned_files, &mut scanned_lines)?;
+    let categories = unsafe_category_counts(&findings);
+    let unsafe_count = findings.len();
+    let unsafe_ratio = if scanned_lines == 0 {
+        0.0
+    } else {
+        unsafe_count as f64 / scanned_lines as f64
+    };
+    let status = if findings.is_empty() {
+        "passed"
+    } else {
+        "failed"
+    };
+    let findings_json = findings
+        .iter()
+        .map(|finding| {
+            format!(
+                concat!(
+                    "{{",
+                    "\"path\":\"{}\",",
+                    "\"line\":{},",
+                    "\"category\":\"{}\",",
+                    "\"text\":\"{}\"",
+                    "}}"
+                ),
+                escape_json(&finding.path),
+                finding.line,
+                escape_json(&finding.category),
+                escape_json(&finding.text)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let json = format!(
+        concat!(
+            "{{",
+            "\"command\":\"unsafe-scan\",",
+            "\"schema_version\":1,",
+            "\"status\":\"{}\",",
+            "\"scope\":\"first-party non-test Rust source under flashDB_rust/src\",",
+            "\"scanned_files\":{},",
+            "\"scanned_lines\":{},",
+            "\"ignored_paths\":[],",
+            "\"first_party_non_test_unsafe_count\":{},",
+            "\"unsafe_ratio\":{},",
+            "\"categories\":{{",
+            "\"unsafe_function\":{},",
+            "\"unsafe_block\":{},",
+            "\"unsafe_impl\":{},",
+            "\"extern_c\":{},",
+            "\"repr_c\":{},",
+            "\"transmute\":{},",
+            "\"raw_pointer\":{}",
+            "}},",
+            "\"findings\":[{}]",
+            "}}"
+        ),
+        status,
+        scanned_files,
+        scanned_lines,
+        unsafe_count,
+        format_ratio(unsafe_ratio),
+        categories.get("unsafe_function").copied().unwrap_or(0),
+        categories.get("unsafe_block").copied().unwrap_or(0),
+        categories.get("unsafe_impl").copied().unwrap_or(0),
+        categories.get("extern_c").copied().unwrap_or(0),
+        categories.get("repr_c").copied().unwrap_or(0),
+        categories.get("transmute").copied().unwrap_or(0),
+        categories.get("raw_pointer").copied().unwrap_or(0),
+        findings_json
+    );
+    if let Some(path) = report_path {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &json)?;
+    }
     if findings.is_empty() {
-        Ok("{\"unsafe_blocks\":0,\"unsafe_fns\":0,\"findings\":[]}".to_string())
+        Ok(json)
     } else {
         Err(Error::Cli(format!(
             "unsafe usage found: {}",
-            findings.join(", ")
+            findings
+                .iter()
+                .map(|finding| format!("{}:{}:{}", finding.path, finding.line, finding.category))
+                .collect::<Vec<_>>()
+                .join(", ")
         )))
     }
 }
 
-fn scan_dir_for_unsafe(path: &Path, findings: &mut Vec<String>) -> Result<()> {
+fn scan_dir_for_unsafe(
+    path: &Path,
+    findings: &mut Vec<UnsafeFinding>,
+    scanned_files: &mut usize,
+    scanned_lines: &mut usize,
+) -> Result<()> {
     if !path.exists() {
         return Ok(());
     }
@@ -804,18 +902,162 @@ fn scan_dir_for_unsafe(path: &Path, findings: &mut Vec<String>) -> Result<()> {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
-            scan_dir_for_unsafe(&path, findings)?;
+            scan_dir_for_unsafe(&path, findings, scanned_files, scanned_lines)?;
         } else if path.extension().and_then(|v| v.to_str()) == Some("rs") {
+            *scanned_files += 1;
             let text = fs::read_to_string(&path)?;
             for (idx, line) in text.lines().enumerate() {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("unsafe fn ") || trimmed.starts_with("unsafe {") {
-                    findings.push(format!("{}:{}", path.display(), idx + 1));
-                }
+                *scanned_lines += 1;
+                findings.extend(unsafe_findings_in_line(&path, idx + 1, line));
             }
         }
     }
     Ok(())
+}
+
+fn unsafe_findings_in_line(path: &Path, line_no: usize, line: &str) -> Vec<UnsafeFinding> {
+    let code = strip_strings_and_line_comments(line);
+    let raw_without_comment = strip_line_comment(line);
+    let mut findings = Vec::new();
+    let mut add = |category: &str| {
+        findings.push(UnsafeFinding {
+            path: path.display().to_string().replace('\\', "/"),
+            line: line_no,
+            category: category.to_string(),
+            text: line.trim().to_string(),
+        });
+    };
+
+    if has_ordered_tokens(&code, &["unsafe", "fn"]) {
+        add("unsafe_function");
+    }
+    if has_ordered_tokens(&code, &["unsafe", "impl"]) {
+        add("unsafe_impl");
+    }
+    if code.contains("unsafe {") || code.contains("unsafe{") {
+        add("unsafe_block");
+    }
+    if has_token(&code, "extern")
+        && (raw_without_comment.contains("\"C\"") || raw_without_comment.contains("\"cdecl\""))
+    {
+        add("extern_c");
+    }
+    if code.contains("repr(C)") || code.contains("repr( C )") || code.contains("repr(C,") {
+        add("repr_c");
+    }
+    if has_token(&code, "transmute") {
+        add("transmute");
+    }
+    if code.contains("*mut ")
+        || code.contains("*const ")
+        || code.contains("as *mut")
+        || code.contains("as *const")
+    {
+        add("raw_pointer");
+    }
+
+    findings
+}
+
+fn has_ordered_tokens(code: &str, expected: &[&str]) -> bool {
+    let mut index = 0usize;
+    for token in code.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')) {
+        if token == expected[index] {
+            index += 1;
+            if index == expected.len() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn has_token(code: &str, expected: &str) -> bool {
+    code.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+        .any(|token| token == expected)
+}
+
+fn strip_line_comment(line: &str) -> String {
+    line.split_once("//")
+        .map(|(left, _)| left)
+        .unwrap_or(line)
+        .to_string()
+}
+
+fn strip_strings_and_line_comments(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escaped = false;
+
+    while let Some(ch) = chars.next() {
+        if !in_string && !in_char && ch == '/' && chars.peek() == Some(&'/') {
+            break;
+        }
+
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            out.push(' ');
+            continue;
+        }
+
+        if in_char {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_char = false;
+            }
+            out.push(' ');
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = true;
+            out.push(' ');
+        } else if ch == '\'' {
+            in_char = true;
+            out.push(' ');
+        } else {
+            out.push(ch);
+        }
+    }
+
+    out
+}
+
+fn unsafe_category_counts(findings: &[UnsafeFinding]) -> BTreeMap<&'static str, usize> {
+    let mut counts = BTreeMap::from([
+        ("unsafe_function", 0),
+        ("unsafe_block", 0),
+        ("unsafe_impl", 0),
+        ("extern_c", 0),
+        ("repr_c", 0),
+        ("transmute", 0),
+        ("raw_pointer", 0),
+    ]);
+    for finding in findings {
+        if let Some(value) = counts.get_mut(finding.category.as_str()) {
+            *value += 1;
+        }
+    }
+    counts
+}
+
+fn format_ratio(value: f64) -> String {
+    if value == 0.0 {
+        "0".to_string()
+    } else {
+        format!("{value:.6}")
+    }
 }
 
 fn assert_eq_or_error<T>(actual: T, expected: T, context: &str) -> Result<()>
@@ -1229,5 +1471,31 @@ mod tests {
         assert!(!out.contains('\u{1}'));
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn unsafe_scan_classifies_review_relevant_categories() {
+        let path = Path::new("src/demo.rs");
+        let samples = [
+            ("pub unsafe fn call() {}", "unsafe_function"),
+            ("unsafe { do_work(); }", "unsafe_block"),
+            ("unsafe impl Send for Demo {}", "unsafe_impl"),
+            ("extern \"C\" { fn c_call(); }", "extern_c"),
+            ("#[repr(C)] struct Demo { value: u32 }", "repr_c"),
+            ("#[repr(C, packed)] struct Demo { value: u32 }", "repr_c"),
+            (
+                "let value = std::mem::transmute::<u32, i32>(raw);",
+                "transmute",
+            ),
+            ("let ptr: *mut u8 = buffer.as_mut_ptr();", "raw_pointer"),
+        ];
+
+        for (line, category) in samples {
+            let findings = unsafe_findings_in_line(path, 7, line);
+            assert!(
+                findings.iter().any(|finding| finding.category == category),
+                "missing category {category} for line {line}; findings={findings:?}"
+            );
+        }
     }
 }

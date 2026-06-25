@@ -2,7 +2,7 @@
     "schema_version":  1,
     "change":  "run-flashdb-tsdb-over-limit-payload-error-l3-loop",
     "slice_id":  "tsdb-over-limit-payload-error",
-    "status":  "passed",
+    "status":  "legacy_incomplete",
     "fixture":  "flashDB_rust/fixtures/l3-tsdb-over-limit-payload-error.json",
     "fixture_hash":  "34e94566",
     "coverage":  [

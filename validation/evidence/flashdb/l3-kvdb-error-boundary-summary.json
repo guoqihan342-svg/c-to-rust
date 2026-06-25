@@ -3,7 +3,7 @@
     "level":  "L3",
     "target_id":  "flashdb",
     "slice_id":  "kvdb-error-boundary",
-    "status":  "passed",
+    "status":  "legacy_incomplete",
     "repo_commit":  "e7cc5a5e52775d3c0cf68b4f953bf6b9181b437d",
     "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
     "fixture":  "flashDB_rust/fixtures/l3-kvdb-error-boundary.json",

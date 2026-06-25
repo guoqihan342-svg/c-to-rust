@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "level": "L3",
+  "status": "not_applicable",
+  "not_applicable_reason": "This L3 gate validates visible replay behavior through fixture operations and Rust safe APIs; it does not translate a pointer-bearing C function body in this slice.",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "context_pack_ref": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
+  "impact_set_ref": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-impact-set.json",
+  "config_profile_ref": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "source_boundary": {
+    "files": [
+      "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+      "flashDB_rust/src/kvdb.rs",
+      "flashDB_rust/src/replay.rs"
+    ],
+    "functions": [
+      "KvDb::set",
+      "KvDb::get",
+      "KvDb::entries",
+      "KvDb::compact",
+      "KvDb::open",
+      "KvDb::delete"
+    ],
+    "structs": [
+      "KvDb",
+      "KvEntry"
+    ],
+    "globals": []
+  },
+  "pointer_nodes": [],
+  "dependency_edges": [],
+  "alias_sets": [],
+  "external_state": [],
+  "rust_mapping": [
+    {
+      "c_source": "FlashDB KV visible behavior fixture",
+      "rust_target": "safe Rust KvDb API",
+      "strategy": "safe-wrapper-visible-behavior"
+    }
+  ],
+  "validation_coverage": {
+    "fixtures": [
+      "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json"
+    ],
+    "tests": [
+      "flashDB_rust/tests/differential_replay.rs::l3_kvdb_compact_overwrite_fixture_replays_visible_behavior",
+      "flashDB_rust/tests/differential_replay.rs::l3_diff_rejects_kvdb_compact_overwrite_value_regression"
+    ],
+    "oracle_reports": [
+      "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json"
+    ]
+  },
+  "risk_summary": {
+    "unsafe_expected": false,
+    "blocked_reasons": [],
+    "known_gaps": [
+      "No whole-program pointer alias proof is claimed.",
+      "No native FlashDB GC or sector-layout equivalence is claimed."
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "context_pack_ref",
+    "impact_set_ref",
+    "config_profile_ref",
+    "fixture_sha256"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "status": "passed",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "fixture_hash": "78e5ef24",
+  "version_manifest": {
+    "path": "validation/evidence/flashdb/version-governance-manifest.json",
+    "status": "recorded"
+  },
+  "config_profile": {
+    "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
+    "status": "recorded"
+  },
+  "cache_metadata": {
+    "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
+    "status": "recorded"
+  },
+  "cache_key_inputs": [
+    "source_commit",
+    "repo_commit",
+    "fixture_hash",
+    "flashdb_feature_matrix",
+    "cargo_lock_sha256",
+    "rustc_version",
+    "cargo_version",
+    "openspec_version",
+    "command_arguments"
+  ],
+  "binding_boundary": "This binding is slice-local evidence for kvdb-compact-overwrite; it does not upgrade older FlashDB L3 legacy summaries without their own strict binding file."
+}

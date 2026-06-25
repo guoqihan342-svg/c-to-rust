@@ -31,8 +31,23 @@
   "negative_diff_check": {
     "reports": [
       {
+        "report": "validation/evidence/l2-slices/sqlite-varint-negative-diff.json",
+        "slice_id": "sqlite-varint",
+        "status": "passed"
+      },
+      {
         "report": "validation/evidence/l2-slices/zlib-adler32-negative-diff.json",
         "slice_id": "zlib-adler32",
+        "status": "passed"
+      },
+      {
+        "report": "validation/evidence/l2-slices/zstd-xxh32-negative-diff.json",
+        "slice_id": "zstd-xxh32",
+        "status": "passed"
+      },
+      {
+        "report": "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+        "slice_id": "libuv-ip4-addr",
         "status": "passed"
       }
     ],

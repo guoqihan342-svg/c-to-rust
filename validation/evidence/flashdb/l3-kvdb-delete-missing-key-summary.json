@@ -1,7 +1,7 @@
 {
     "schema_version":  1,
     "slice_id":  "kvdb-delete-missing-key",
-    "status":  "passed",
+    "status":  "legacy_incomplete",
     "scope":  "valid but missing KVDB delete returns FDB_KV_NAME_ERR; missing get remains OK/null",
     "fixture":  "flashDB_rust/fixtures/l3-kvdb-delete-missing-key.json",
     "fixture_hash":  "7b2db3e1",

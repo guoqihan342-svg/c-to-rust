@@ -1,0 +1,99 @@
+{
+  "cache_invalidation_keys": [
+    "schema_version",
+    "source_commit=5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+    "fixture=validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+    "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+    "emit_reports.rs"
+  ],
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "short input path",
+      "16-byte block path",
+      "seed variations",
+      "u32 maximum seed"
+    ],
+    "negative_cases": [
+      "checksum value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/l2-slices/zstd-xxh32-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/l2-slices/zstd-xxh32-negative-diff.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/l2-slices/zstd-xxh32-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/l2-slices/zstd-xxh32-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/l2-slices/unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L2 test translation covers the named function slice and committed oracle fixture only.",
+    "No full-project migration or exhaustive symbolic equivalence is claimed."
+  ],
+  "level": "L2",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+      "file": "validation/l2_slices/tests/oracle_fixtures.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "zstd_xxh32_matches_c_oracle"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "zstd-xxh32",
+  "source_commit": "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "path": "validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/l2-slices/zstd-xxh32-oracle.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "zstd",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "value"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/oracle_fixtures.rs::zstd_xxh32_matches_c_oracle",
+      "source": "validation/l2_slices/fixtures/zstd-xxh32-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "value"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_negative_diffs",
+      "source": "validation/evidence/l2-slices/zstd-xxh32-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

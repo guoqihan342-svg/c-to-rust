@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "change": "repair-tsdb-set-status-report-schema",
-  "status": "passed",
+  "status": "legacy_incomplete",
   "slice_id": "tsdb-set-status-report-schema",
   "fixture": "flashDB_rust/fixtures/l3-tsdb-set-status-report-schema.json",
   "fixture_hash": "bd8c4ede",

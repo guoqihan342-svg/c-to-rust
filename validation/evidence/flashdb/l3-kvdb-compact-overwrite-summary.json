@@ -52,6 +52,22 @@
                                             "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
                                             "sha256":  "5524e840e6c4c360924652d358bda057f1cd891f890d639497b3ba3ec4bb1c18"
                                         },
+                     "config_profile":  {
+                                            "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
+                                            "status":  "recorded"
+                                        },
+                     "pointer_dependency_graph":  {
+                                                      "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-pointer-graph.json",
+                                                      "status":  "not_applicable"
+                                                  },
+                     "test_translation":  {
+                                             "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-test-translation.json",
+                                             "status":  "recorded"
+                                         },
+                     "version_or_config_binding":  {
+                                                       "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-version-config-binding.json",
+                                                       "status":  "passed"
+                                                   },
                      "local_toolchain_evidence":  {
                                                       "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-local-toolchain-evidence.json",
                                                       "sha256":  "0027ded4a32be8c7404a695dde702fd050fe5a1ebb9fd0971a3782639dc303dd"

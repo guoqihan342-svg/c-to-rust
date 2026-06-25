@@ -1,0 +1,106 @@
+{
+  "cache_invalidation_keys": [
+    "schema_version",
+    "source_commit=99a92ee66d80d519851015cf27def1c54e7a2037",
+    "fixture=validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
+    "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+    "emit_reports.rs"
+  ],
+  "coverage": {
+    "error_paths": [
+      "truncated varint decode returns None"
+    ],
+    "main_paths": [
+      "single-byte varint",
+      "multi-byte varint width boundaries",
+      "u64 maximum varint"
+    ],
+    "negative_cases": [
+      "encoded_hex mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/l2-slices/sqlite-varint-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/l2-slices/sqlite-varint-negative-diff.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/l2-slices/sqlite-varint-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/l2-slices/sqlite-varint-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/l2-slices/unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L2 test translation covers the named function slice and committed oracle fixture only.",
+    "No full-project migration or exhaustive symbolic equivalence is claimed."
+  ],
+  "level": "L2",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+      "file": "validation/l2_slices/tests/oracle_fixtures.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "sqlite_varint_matches_c_oracle"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sqlite-varint",
+  "source_commit": "99a92ee66d80d519851015cf27def1c54e7a2037",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "path": "validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/l2-slices/sqlite-varint-oracle.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "sqlite",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "encoded_hex",
+        "bytes_used",
+        "decoded_value",
+        "decoded_bytes"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/oracle_fixtures.rs::sqlite_varint_matches_c_oracle",
+      "source": "validation/l2_slices/fixtures/sqlite-varint-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "encoded_hex",
+        "bytes_used",
+        "decoded_value",
+        "decoded_bytes"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_negative_diffs",
+      "source": "validation/evidence/l2-slices/sqlite-varint-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

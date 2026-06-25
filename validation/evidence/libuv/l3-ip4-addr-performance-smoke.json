@@ -1,6 +1,7 @@
 {
   "calls": 70000,
-  "elapsed_ms": 58.1807,
+  "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+  "elapsed_ms": 0.0,
   "iterations": 10000,
   "level": "L3",
   "operation": "safe Rust uv_ip4_addr replay over fixture corpus",

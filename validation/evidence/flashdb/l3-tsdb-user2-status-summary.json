@@ -4,7 +4,7 @@
   "target_id": "flashdb",
   "slice_id": "tsdb-user2-status",
   "change": "run-flashdb-tsdb-user2-status-l3-loop",
-  "status": "passed",
+  "status": "legacy_incomplete",
   "repo_commit_before_slice": "70763f9b103947dc9afecbce5b3a87f34efeb4bc",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "fixture": {

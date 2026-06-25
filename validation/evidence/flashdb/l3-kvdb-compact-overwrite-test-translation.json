@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "level": "L3",
+  "status": "recorded",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "source_test_inputs": {
+    "oracle_strategy": "The same L3 fixture is replayed through Rust and the FlashDB C oracle, then compared by schema-aware diff and negative diff.",
+    "fixtures": [
+      {
+        "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+        "hash": "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
+        "operation_count": 14,
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+        "status": "passed"
+      }
+    ]
+  },
+  "rust_tests": [
+    {
+      "file": "flashDB_rust/tests/differential_replay.rs",
+      "test_names": [
+        "l3_kvdb_compact_overwrite_fixture_replays_visible_behavior",
+        "l3_diff_rejects_kvdb_compact_overwrite_value_regression"
+      ],
+      "cargo_command": "cargo test --test differential_replay l3_kvdb_compact_overwrite -- --nocapture",
+      "framework": "cargo test"
+    }
+  ],
+  "coverage": {
+    "main_paths": [
+      "same-key overwrite",
+      "entries after overwrite",
+      "compact visible behavior",
+      "reopen after compact",
+      "delete and missing get"
+    ],
+    "error_paths": [
+      "missing get after delete"
+    ],
+    "negative_cases": [
+      "post-reopen value mutation is rejected by schema-aware diff"
+    ]
+  },
+  "translation_mappings": [
+    {
+      "source": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+      "rust_test": "flashDB_rust/tests/differential_replay.rs::l3_kvdb_compact_overwrite_fixture_replays_visible_behavior",
+      "behavior_fields": [
+        "value",
+        "entries",
+        "status",
+        "code",
+        "operation success"
+      ],
+      "coverage_kind": "main_path",
+      "status": "mapped"
+    },
+    {
+      "source": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "rust_test": "flashDB_rust/tests/differential_replay.rs::l3_diff_rejects_kvdb_compact_overwrite_value_regression",
+      "behavior_fields": [
+        "value"
+      ],
+      "coverage_kind": "negative_case",
+      "status": "mapped"
+    }
+  ],
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "No full FlashDB project migration is claimed.",
+    "No byte-for-byte flash image or native GC layout equivalence is claimed."
+  ],
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.sha256",
+    "rust_tests",
+    "c_oracle",
+    "schema_diff",
+    "negative_diff"
+  ]
+}

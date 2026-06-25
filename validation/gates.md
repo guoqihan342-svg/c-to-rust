@@ -55,7 +55,7 @@ Pass criteria:
 - Code-test translation evidence maps C tests, fixtures, or oracle expectations to Rust test files, Rust test names, cargo commands, coverage categories, negative cases, evidence links, and known gaps. A generated oracle fixture can serve as the source mapping when no direct upstream C test name exists.
 - Rust translation compiles.
 - First-party unsafe usage is counted and recorded in an unsafe ledger, even when the count is zero.
-- At least one L2 negative diff proves the diff gate catches an intentional mismatch.
+- Every accepted L2 slice has a negative diff proving the diff gate catches an intentional mismatch.
 - Compile self-healing records all rustc errors and patches.
 
 Evidence:
@@ -67,7 +67,7 @@ Evidence:
 - C oracle fixture and Rust replay report for each slice.
 - Schema-aware diff report for each slice.
 - Unsafe scan plus unsafe ledger, even when first-party unsafe count is zero.
-- At least one L2 negative diff report proving the diff gate catches an intentional mismatch.
+- A negative diff report for every accepted L2 slice proving the diff gate catches an intentional mismatch.
 - L2 summary references unsafe ledger and negative diff status.
 - Patch log and reporting boundary for the named slice only.
 
@@ -105,6 +105,38 @@ Pointer dependency graph evidence is a context and risk-boundary gate, not a who
 Code-test translation evidence is a traceability and invalidation gate, not a semantic-equivalence proof. It complements C oracle, Rust replay, schema diff, negative diff, unsafe, pointer, config, and final verification evidence; it never replaces them.
 
 中文：pointer dependency graph 是上下文与风险边界门禁，不是全程序 alias 证明。graph 变化时，受影响的 ContextPack、PatchPlan、C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
+
+## Full Regression Evidence Gates
+
+Purpose: prove a full-regression round consumes the evidence it depends on, not just the compiler and unit-test commands.
+
+Pass criteria:
+
+- L2 reports are regenerated before L2 evidence is validated.
+- `validate_l2_evidence_summary.py` passes and confirms each accepted L2 slice has Rust report, positive diff, negative diff, unsafe scan, unsafe ledger, and test translation evidence.
+- `validate_test_translation_coverage.py` passes and confirms recorded test translation evidence has main-path coverage and negative-case evidence.
+- FlashDB committed fixture replay passes positive diff.
+- `flashdb_fixture_negative_diff.py` mutates committed fixture expected behavior and confirms `diff-report` fails with a mismatch path.
+- `cargo run -- unsafe-scan --report <path>` writes a machine-readable unsafe report with category counts and zero first-party non-test unsafe findings.
+- `validate_flashdb_version_binding.py` consumes `version-manifest` and checks Cargo package/version, schema/tool versions, source commit, feature matrix, and cache-key inputs.
+- `validate_flashdb_l3_evidence.py` validates consumable FlashDB L3 packages with final verification and negative diff evidence; older summaries without those entry points are reported as `legacy_incomplete` and cannot be used as full-regression manifest claims.
+- OpenSpec validation and `git diff --check` still run after the evidence gates.
+
+Evidence:
+
+- Per-round reports under `target/full-regression/<run-id>/round-xxxxx/`.
+- `l2-evidence-summary.json`
+- `test-translation-coverage.json`
+- `flashdb-rust-fixture-negative-diff.json`
+- `flashdb-unsafe-scan.json`
+- `flashdb-version-binding.json`
+- `flashdb-l3-evidence.json`
+
+Boundary:
+
+- Full regression does not prove production-data equivalence unless real or de-identified production fixtures are supplied to replay/diff.
+- Full regression does not claim llvm-cov percentage, symbolic path exhaustiveness, or full FlashDB C project migration.
+- Performance smoke remains secondary evidence and never replaces C/Rust behavior diff or negative controls.
 
 ## Reporting Rules
 

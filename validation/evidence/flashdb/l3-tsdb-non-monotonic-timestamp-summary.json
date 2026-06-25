@@ -2,7 +2,7 @@
   "schema_version": 1,
   "change": "run-flashdb-tsdb-non-monotonic-timestamp-l3-loop",
   "slice_id": "tsdb-non-monotonic-timestamp",
-  "status": "passed",
+  "status": "legacy_incomplete",
   "validated_behavior": [
     "duplicate timestamp append returns FDB_WRITE_ERR",
     "decreasing timestamp append returns FDB_WRITE_ERR",

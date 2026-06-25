@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "kvdb-compact-overwrite",
+  "status": "recorded",
+  "profile_id": "flashdb-kvdb-compact-overwrite-posix-4096-write-gran-1",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "fixture": {
+    "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+    "hash_short": "78e5ef24",
+    "sha256": "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938"
+  },
+  "flashdb_feature_matrix": {
+    "FDB_USING_KVDB": true,
+    "FDB_USING_TSDB": true,
+    "FDB_USING_FILE_POSIX_MODE": true,
+    "FDB_WRITE_GRAN": 1
+  },
+  "c_config": {
+    "header": "flashDB_rust/oracle/fdb_cfg.h",
+    "sha256": "fb3cde1afcc367e01f15529b29d55ac3061d0dd2336aa1c1797678e34a99f4e3"
+  },
+  "rust_profile": {
+    "crate": "flashDB_rust",
+    "backend": "file",
+    "cargo_features": []
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.sha256",
+    "flashdb_feature_matrix",
+    "c_config.sha256",
+    "rust_profile.backend",
+    "Cargo.lock"
+  ]
+}

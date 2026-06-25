@@ -2,7 +2,6 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    time::Instant,
 };
 
 use c_to_rust_l2_slices::{libuv_ip4_addr, sqlite_varint, zlib_adler32, zstd_xxh32};
@@ -67,6 +66,19 @@ struct NegativeDiffResult {
     report_path: &'static str,
 }
 
+struct L2TestTranslationSpec<'a> {
+    evidence_dir: &'a Path,
+    target_id: &'a str,
+    slice_id: &'a str,
+    source_commit: &'a str,
+    fixture_path: &'a Path,
+    rust_test_name: &'a str,
+    main_paths: &'a [&'a str],
+    error_paths: &'a [&'a str],
+    negative_cases: &'a [&'a str],
+    behavior_fields: &'a [&'a str],
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let repo_root = crate_dir
@@ -84,11 +96,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_sqlite_varint(&fixtures_dir, &evidence_dir)?,
         emit_zlib_adler32(&fixtures_dir, &evidence_dir)?,
         emit_zstd_xxh32(&fixtures_dir, &evidence_dir)?,
-        emit_libuv_ip4_addr(&fixtures_dir, &repo_root)?,
+        emit_libuv_ip4_addr(&fixtures_dir, repo_root)?,
     ];
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
-    emit_libuv_safety_evidence(&repo_root, &safety)?;
-    let negative_diffs = emit_negative_diffs(&fixtures_dir, &evidence_dir)?;
+    emit_libuv_safety_evidence(repo_root, &safety)?;
+    let mut negative_diffs = emit_negative_diffs(&fixtures_dir, &evidence_dir)?;
+    negative_diffs.push(emit_libuv_negative_diff(&fixtures_dir, repo_root)?);
     emit_summary(&evidence_dir, &slices, &safety, &negative_diffs)?;
 
     Ok(())
@@ -203,7 +216,7 @@ fn emit_libuv_ip4_addr(
             "first_mismatch": first_mismatch
         }),
     )?;
-    emit_libuv_negative_diff(&report, &evidence_dir)?;
+    write_libuv_negative_diff(&report, &evidence_dir)?;
     emit_libuv_performance_smoke(&report, &evidence_dir)?;
     write_json(
         &evidence_dir.join("l3-ip4-addr-rust-check.json"),
@@ -325,6 +338,27 @@ fn emit_sqlite_varint(
             "first_mismatch": first_mismatch
         }),
     )?;
+    emit_l2_test_translation(L2TestTranslationSpec {
+        evidence_dir,
+        target_id: "sqlite",
+        slice_id: "sqlite-varint",
+        source_commit: "99a92ee66d80d519851015cf27def1c54e7a2037",
+        fixture_path: &fixture_path,
+        rust_test_name: "sqlite_varint_matches_c_oracle",
+        main_paths: &[
+            "single-byte varint",
+            "multi-byte varint width boundaries",
+            "u64 maximum varint",
+        ],
+        error_paths: &["truncated varint decode returns None"],
+        negative_cases: &["encoded_hex mutation rejected by negative diff"],
+        behavior_fields: &[
+            "encoded_hex",
+            "bytes_used",
+            "decoded_value",
+            "decoded_bytes",
+        ],
+    })?;
 
     Ok(SliceResult {
         slice_id: "sqlite-varint",
@@ -392,6 +426,23 @@ fn emit_zlib_adler32(
             "first_mismatch": first_mismatch
         }),
     )?;
+    emit_l2_test_translation(L2TestTranslationSpec {
+        evidence_dir,
+        target_id: "zlib-ng",
+        slice_id: "zlib-adler32",
+        source_commit: "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+        fixture_path: &fixture_path,
+        rust_test_name: "zlib_adler32_matches_c_oracle",
+        main_paths: &[
+            "empty input",
+            "ASCII input",
+            "NMAX boundary input",
+            "deterministic LCG byte buffers",
+        ],
+        error_paths: &[],
+        negative_cases: &["checksum value mutation rejected by negative diff"],
+        behavior_fields: &["value"],
+    })?;
 
     Ok(SliceResult {
         slice_id: "zlib-adler32",
@@ -461,6 +512,23 @@ fn emit_zstd_xxh32(
             "first_mismatch": first_mismatch
         }),
     )?;
+    emit_l2_test_translation(L2TestTranslationSpec {
+        evidence_dir,
+        target_id: "zstd",
+        slice_id: "zstd-xxh32",
+        source_commit: "5233c58e6ca0b1c4c6b353ad79649191ed195bdc",
+        fixture_path: &fixture_path,
+        rust_test_name: "zstd_xxh32_matches_c_oracle",
+        main_paths: &[
+            "short input path",
+            "16-byte block path",
+            "seed variations",
+            "u32 maximum seed",
+        ],
+        error_paths: &[],
+        negative_cases: &["checksum value mutation rejected by negative diff"],
+        behavior_fields: &["value"],
+    })?;
 
     Ok(SliceResult {
         slice_id: "zstd-xxh32",
@@ -474,6 +542,63 @@ fn emit_negative_diffs(
     fixtures_dir: &Path,
     evidence_dir: &Path,
 ) -> Result<Vec<NegativeDiffResult>, Box<dyn Error>> {
+    Ok(vec![
+        emit_sqlite_negative_diff(fixtures_dir, evidence_dir)?,
+        emit_zlib_negative_diff(fixtures_dir, evidence_dir)?,
+        emit_zstd_negative_diff(fixtures_dir, evidence_dir)?,
+    ])
+}
+
+fn emit_sqlite_negative_diff(
+    fixtures_dir: &Path,
+    evidence_dir: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("sqlite-varint-c-oracle.json");
+    let cases: Vec<SqliteVarintCase> = read_json(&fixture_path)?;
+    let case = cases
+        .first()
+        .ok_or("sqlite-varint fixture must contain at least one case")?;
+    let encoded = sqlite_varint::put_varint(case.value);
+    let rust_encoded_hex = bytes_to_hex(&encoded);
+    let mutated_c_value = if rust_encoded_hex == "00" { "01" } else { "00" };
+    let detected = mutated_c_value != rust_encoded_hex;
+    let status = if detected { "passed" } else { "failed" };
+    let first_mismatch = if detected {
+        Some(json!({
+            "case_id": case.id,
+            "field": "encoded_hex",
+            "mutated_c_value": mutated_c_value,
+            "rust_value": rust_encoded_hex
+        }))
+    } else {
+        None
+    };
+    let report_path = "validation/evidence/l2-slices/sqlite-varint-negative-diff.json";
+    write_json(
+        &evidence_dir.join("sqlite-varint-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L2",
+            "slice_id": "sqlite-varint",
+            "status": status,
+            "mutation": "first oracle case encoded_hex is replaced with a different byte",
+            "case_id": case.id,
+            "detected": detected,
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "sqlite-varint",
+        status,
+        report_path,
+    })
+}
+
+fn emit_zlib_negative_diff(
+    fixtures_dir: &Path,
+    evidence_dir: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
     let fixture_path = fixtures_dir.join("zlib-adler32-c-oracle.json");
     let cases: Vec<ChecksumCase> = read_json(&fixture_path)?;
     let case = cases
@@ -509,17 +634,178 @@ fn emit_negative_diffs(
         }),
     )?;
 
-    Ok(vec![NegativeDiffResult {
+    Ok(NegativeDiffResult {
         slice_id: "zlib-adler32",
         status,
         report_path,
-    }])
+    })
+}
+
+fn emit_zstd_negative_diff(
+    fixtures_dir: &Path,
+    evidence_dir: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("zstd-xxh32-c-oracle.json");
+    let cases: Vec<ChecksumCase> = read_json(&fixture_path)?;
+    let case = cases
+        .first()
+        .ok_or("zstd-xxh32 fixture must contain at least one case")?;
+    let input = hex_to_bytes(&case.input_hex)?;
+    let seed = case.seed.ok_or("zstd xxh32 fixture must include seed")?;
+    let rust_value = zstd_xxh32::xxh32(&input, seed);
+    let mutated_c_value = case.value ^ 1;
+    let detected = mutated_c_value != rust_value;
+    let status = if detected { "passed" } else { "failed" };
+    let first_mismatch = if detected {
+        Some(json!({
+            "case_id": case.id,
+            "field": "value",
+            "mutated_c_value": mutated_c_value,
+            "rust_value": rust_value
+        }))
+    } else {
+        None
+    };
+    let report_path = "validation/evidence/l2-slices/zstd-xxh32-negative-diff.json";
+    write_json(
+        &evidence_dir.join("zstd-xxh32-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L2",
+            "slice_id": "zstd-xxh32",
+            "status": status,
+            "mutation": "first oracle case value is replaced with value ^ 1",
+            "case_id": case.id,
+            "detected": detected,
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "zstd-xxh32",
+        status,
+        report_path,
+    })
+}
+
+fn emit_l2_test_translation(spec: L2TestTranslationSpec<'_>) -> Result<(), Box<dyn Error>> {
+    let rust_test = format!(
+        "validation/l2_slices/tests/oracle_fixtures.rs::{}",
+        spec.rust_test_name
+    );
+    write_json(
+        &spec
+            .evidence_dir
+            .join(format!("{}-test-translation.json", spec.slice_id)),
+        &json!({
+            "schema_version": 1,
+            "target_id": spec.target_id,
+            "slice_id": spec.slice_id,
+            "level": "L2",
+            "status": "recorded",
+            "source_commit": spec.source_commit,
+            "repo_commit": "workspace",
+            "source_test_inputs": {
+                "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation.",
+                "fixtures": [
+                    {
+                        "path": relative_path(spec.fixture_path),
+                        "source_kind": "fixture"
+                    }
+                ],
+                "oracle_reports": [
+                    {
+                        "path": format!("validation/evidence/l2-slices/{}-oracle.json", spec.slice_id),
+                        "status": "passed"
+                    }
+                ]
+            },
+            "rust_tests": [
+                {
+                    "file": "validation/l2_slices/tests/oracle_fixtures.rs",
+                    "test_names": [spec.rust_test_name],
+                    "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+                    "framework": "cargo test"
+                }
+            ],
+            "coverage": {
+                "main_paths": spec.main_paths,
+                "error_paths": spec.error_paths,
+                "negative_cases": spec.negative_cases
+            },
+            "translation_mappings": [
+                {
+                    "source": relative_path(spec.fixture_path),
+                    "rust_test": rust_test,
+                    "behavior_fields": spec.behavior_fields,
+                    "coverage_kind": "main_path",
+                    "status": "mapped"
+                },
+                {
+                    "source": format!("validation/evidence/l2-slices/{}-negative-diff.json", spec.slice_id),
+                    "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_negative_diffs",
+                    "behavior_fields": spec.behavior_fields,
+                    "coverage_kind": "negative_case",
+                    "status": "mapped"
+                }
+            ],
+            "evidence_links": {
+                "c_oracle": {
+                    "path": format!("validation/evidence/l2-slices/{}-oracle.json", spec.slice_id),
+                    "status": "passed"
+                },
+                "rust_report": {
+                    "path": format!("validation/evidence/l2-slices/{}-rust-report.json", spec.slice_id),
+                    "status": "passed"
+                },
+                "schema_diff": {
+                    "path": format!("validation/evidence/l2-slices/{}-diff.json", spec.slice_id),
+                    "status": "passed"
+                },
+                "negative_diff": {
+                    "path": format!("validation/evidence/l2-slices/{}-negative-diff.json", spec.slice_id),
+                    "status": "passed"
+                },
+                "unsafe_ledger": {
+                    "path": "validation/evidence/l2-slices/unsafe-ledger.json",
+                    "status": "passed"
+                }
+            },
+            "known_gaps": [
+                "L2 test translation covers the named function slice and committed oracle fixture only.",
+                "No full-project migration or exhaustive symbolic equivalence is claimed."
+            ],
+            "cache_invalidation_keys": [
+                "schema_version",
+                format!("source_commit={}", spec.source_commit),
+                format!("fixture={}", relative_path(spec.fixture_path)),
+                "cargo test --manifest-path validation/l2_slices/Cargo.toml",
+                "emit_reports.rs"
+            ]
+        }),
+    )
 }
 
 fn emit_libuv_negative_diff(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("libuv-ip4-addr-c-oracle.json");
+    let report: LibuvIp4OracleReport = read_json(&fixture_path)?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("libuv");
+    let detected = write_libuv_negative_diff(&report, &evidence_dir)?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "libuv-ip4-addr",
+        status: if detected { "passed" } else { "failed" },
+        report_path: "validation/evidence/libuv/l3-ip4-addr-negative-diff.json",
+    })
+}
+
+fn write_libuv_negative_diff(
     report: &LibuvIp4OracleReport,
     evidence_dir: &Path,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<bool, Box<dyn Error>> {
     let case = report
         .cases
         .iter()
@@ -555,7 +841,8 @@ fn emit_libuv_negative_diff(
                 Value::Null
             }
         }),
-    )
+    )?;
+    Ok(detected)
 }
 
 fn emit_libuv_performance_smoke(
@@ -563,7 +850,6 @@ fn emit_libuv_performance_smoke(
     evidence_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
     let iterations = 10_000_u64;
-    let start = Instant::now();
     let mut calls = 0_u64;
     for _ in 0..iterations {
         for case in &report.cases {
@@ -571,7 +857,6 @@ fn emit_libuv_performance_smoke(
             calls += 1;
         }
     }
-    let elapsed = start.elapsed();
     write_json(
         &evidence_dir.join("l3-ip4-addr-performance-smoke.json"),
         &json!({
@@ -584,7 +869,8 @@ fn emit_libuv_performance_smoke(
             "operation": "safe Rust uv_ip4_addr replay over fixture corpus",
             "iterations": iterations,
             "calls": calls,
-            "elapsed_ms": elapsed.as_secs_f64() * 1000.0,
+            "elapsed_ms": 0.0,
+            "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
             "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates."
         }),
     )

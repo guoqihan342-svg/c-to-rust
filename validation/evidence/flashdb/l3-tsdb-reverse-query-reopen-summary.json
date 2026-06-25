@@ -2,7 +2,7 @@
     "schema_version":  1,
     "change":  "run-flashdb-tsdb-reverse-query-reopen-l3-loop",
     "slice_id":  "tsdb-reverse-query-reopen",
-    "status":  "passed",
+    "status":  "legacy_incomplete",
     "fixture":  "flashDB_rust/fixtures/l3-tsdb-reverse-query-reopen.json",
     "fixture_hash":  "1e0a2914",
     "coverage":  [

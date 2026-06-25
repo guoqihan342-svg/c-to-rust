@@ -1,0 +1,15 @@
+{
+  "case_id": "empty_seed_00000000",
+  "detected": true,
+  "first_mismatch": {
+    "case_id": "empty_seed_00000000",
+    "field": "value",
+    "mutated_c_value": 46947588,
+    "rust_value": 46947589
+  },
+  "level": "L2",
+  "mutation": "first oracle case value is replaced with value ^ 1",
+  "schema_version": 1,
+  "slice_id": "zstd-xxh32",
+  "status": "passed"
+}

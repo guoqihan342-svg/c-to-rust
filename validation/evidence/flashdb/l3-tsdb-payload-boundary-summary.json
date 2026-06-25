@@ -2,7 +2,7 @@
   "schema_version": 1,
   "change": "run-flashdb-tsdb-payload-boundary-l3-loop",
   "slice_id": "tsdb-payload-boundary",
-  "status": "passed",
+  "status": "legacy_incomplete",
   "fixture": "flashDB_rust/fixtures/l3-tsdb-payload-boundary.json",
   "fixture_hash": "441bcb21",
   "coverage": [

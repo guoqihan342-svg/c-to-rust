@@ -4,7 +4,7 @@
     "target_id":  "flashdb",
     "slice_id":  "tsdb-append-query-status",
     "change_id":  "run-flashdb-tsdb-l3-agent-migration-loop",
-    "status":  "passed",
+    "status":  "legacy_incomplete",
     "repo_commit":  "b41e17561b3575c4060c819f560cb1b30734b2b6",
     "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
     "fixture":  {

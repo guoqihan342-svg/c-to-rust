@@ -3,7 +3,7 @@
   "level": "L3",
   "target_id": "flashdb",
   "slice_id": "tsdb-error-boundary",
-  "status": "passed",
+  "status": "legacy_incomplete",
   "repo_commit": "a516e442f4cbdff84a018d5b48268cbc71fe3a5b",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "fixture": {
