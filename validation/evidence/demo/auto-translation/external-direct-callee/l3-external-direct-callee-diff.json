@@ -1,0 +1,21 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+    "sha256": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_value",
+    "status",
+    "external_callee_call_count",
+    "external_callee_contexts",
+    "external_callee_bindings",
+    "source_calls"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror external_direct_callee_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+  "helper_stdout_sha256": "5e426e74e7b3707437ca262a174f5e63ebf8c3d05aa7627e269796db69cec522",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./external_direct_callee_oracle",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_hashes": {
+    "c_helper": "570dfdd0b96601d6249b40677911b5cc2bd863afe0bff9ab2f0708b6da9b7de8",
+    "generator": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

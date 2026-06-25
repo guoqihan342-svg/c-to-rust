@@ -1,0 +1,153 @@
+{
+  "c_source_boundary": "int helper_add_one(int value) { return value + 1; } int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "negative",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "negative-two",
+      "input_value": -2,
+      "return_value": 1,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "negative",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "negative-one",
+      "input_value": -1,
+      "return_value": 2,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "zero",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "zero",
+      "input_value": 0,
+      "return_value": 3,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "positive",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "one",
+      "input_value": 1,
+      "return_value": 4,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "positive",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "seven",
+      "input_value": 7,
+      "return_value": 10,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "safe_range",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "large-safe",
+      "input_value": 2147483000,
+      "return_value": 2147483003,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    }
+  ],
+  "command": "cargo run --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/external_direct_callee.rs",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,136 @@
+{
+  "cache_inputs": [
+    "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "validation/l2_slices/src/external_direct_callee.rs"
+  ],
+  "call_edge_to_callee_binding": [
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "declaration_initializer",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(first)",
+      "statement_context": "assignment",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "return",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "callee_sources": [
+    {
+      "callee": "helper_add_one",
+      "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "sha256": "generated-at-validation"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_external_direct_callee_oracle.py"
+  ],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "value"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "declaration_initializer",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "first"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(first)",
+      "statement_context": "assignment",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "value"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    }
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/external_direct_callee.rs",
+    "validation/l2_slices/tests/external_direct_callee.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "external_direct_callees": [
+    {
+      "definition_status": "real_source_bound",
+      "name": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_files": [
+        {
+          "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+          "sha256": "generated-at-validation"
+        }
+      ],
+      "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/external_direct_callee.rs::external_direct_callee_matches_c_oracle_and_records_helper_context"
+  ],
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "signature_bindings": [
+    {
+      "callee": "helper_add_one",
+      "definition_status": "real_source_bound",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "slice_id": "external-direct-callee",
+  "source_calls": [
+    "int first = helper_add_one(value)",
+    "value = helper_add_one(first)",
+    "return helper_add_one(value)"
+  ],
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "stub_boundaries": [
+    {
+      "allowed_use": "standalone_rust_check_only",
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "stub_kind": "compile_only"
+    }
+  ],
+  "target_id": "demo"
+}

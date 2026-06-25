@@ -1,0 +1,15 @@
+{
+  "target_id": "demo",
+  "slice_id": "external-direct-callee",
+  "status": "generated",
+  "artifact_paths": [
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-plan.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-events.jsonl",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-type-map.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-cfg.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-ai-candidate-manifest.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-blocked-repairs.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs"
+  ]
+}

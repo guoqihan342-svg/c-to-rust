@@ -1,0 +1,97 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "external helper declaration initializer call",
+      "external helper assignment RHS call",
+      "external helper return expression call"
+    ],
+    "negative_cases": [
+      "external callee binding metadata mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L3 demo test translation covers the named function slice and committed oracle fixture only.",
+    "No full-project migration or exhaustive symbolic equivalence is claimed."
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test external_direct_callee",
+      "file": "validation/l2_slices/tests/external_direct_callee.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "external_direct_callee_matches_c_oracle_and_records_helper_context"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status",
+        "external_callee_call_count",
+        "external_callee_contexts",
+        "external_callee_bindings",
+        "source_calls"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/external_direct_callee.rs::external_direct_callee_matches_c_oracle_and_records_helper_context",
+      "source": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_value",
+        "status",
+        "external_callee_call_count",
+        "external_callee_contexts",
+        "external_callee_bindings",
+        "source_calls"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_external_direct_callee_negative_diff",
+      "source": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "case_id": "negative-two",
+  "compared_fields": [
+    "return_value",
+    "status",
+    "external_callee_call_count",
+    "external_callee_contexts",
+    "external_callee_bindings",
+    "source_calls"
+  ],
+  "detected": true,
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "negative-two",
+    "field": "external_callee_call_count",
+    "mutated_c_value": 2,
+    "rust_value": 3
+  },
+  "level": "L3",
+  "mutated_fields": [
+    "external_callee_call_count"
+  ],
+  "mutation": "external direct callee call count is changed by -1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

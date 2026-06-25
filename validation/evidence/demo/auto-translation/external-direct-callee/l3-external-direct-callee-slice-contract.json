@@ -1,0 +1,170 @@
+{
+  "c_boundary": {
+    "call_expression_contract": {
+      "callee_scope": "external_direct_callee",
+      "contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "direct_call_only": true,
+      "unsupported": [
+        "function_pointer_call",
+        "member_call",
+        "macro_call",
+        "nested_call",
+        "variadic_call",
+        "multi_level_call_graph"
+      ]
+    },
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "callee",
+        "name": "helper_add_one",
+        "source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one"
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "call_sites": [
+          "declaration_initializer",
+          "assignment",
+          "return"
+        ],
+        "definition_status": "real_source_bound",
+        "name": "helper_add_one",
+        "observable_effects": [
+          "return_value",
+          "external_callee_call_count",
+          "external_callee_contexts",
+          "external_callee_bindings"
+        ],
+        "signature_ref": "sig-helper-add-one",
+        "source_files": [
+          {
+            "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+            "sha256": "generated-at-validation"
+          }
+        ],
+        "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+        "stub_boundary": "compile_only"
+      }
+    ],
+    "files": [
+      {
+        "entry_role": "slice_entry",
+        "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+        "role": "source",
+        "sha256": "generated-at-validation"
+      },
+      {
+        "callee_role": "external_direct_callee",
+        "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+        "role": "source",
+        "sha256": "generated-at-validation"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "call_helper_chain",
+      "helper_add_one"
+    ],
+    "signatures": [
+      {
+        "c_source": "int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
+        "function": "call_helper_chain",
+        "id": "sig-call-helper-chain",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 2147483000,
+              "minimum": -2
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int"
+      },
+      {
+        "c_source": "int helper_add_one(int value) { return value + 1; }",
+        "definition_status": "real_source_bound",
+        "function": "helper_add_one",
+        "id": "sig-helper-add-one",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "role": "external_direct_callee",
+        "signature_sha256": "helper-add-one-int-int",
+        "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 1,
+      "semantics_verified": false,
+      "status": "compile_context_only",
+      "stub_kind": "compile_only"
+    },
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "helper stub semantic equivalence",
+      "function pointer or nested call expression support",
+      "signed overflow equivalence"
+    ],
+    "non_goals": [
+      "No arbitrary multi-function translation claim.",
+      "No helper stub semantic equivalence claim.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No signed overflow equivalence beyond the committed safe fixture domain."
+    ]
+  },
+  "fixture": {
+    "hash": "external-direct-callee-fixture",
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "call_helper_chain",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/external_direct_callee.rs",
+    "module_path": "validation/l2_slices/src/external_direct_callee.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "input": "i32",
+        "name": "call_helper_chain",
+        "output": "ExternalDirectCalleeReport",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/external_direct_callee.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

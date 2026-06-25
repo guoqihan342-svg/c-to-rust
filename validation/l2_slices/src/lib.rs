@@ -1,6 +1,7 @@
 pub mod add_i32_pair_ptr_arith;
 pub mod call_expression_chain;
 pub mod copy_i32_ptr_arith;
+pub mod external_direct_callee;
 pub mod libuv_ip4_addr;
 pub mod sqlite_varint;
 pub mod store_add_one;

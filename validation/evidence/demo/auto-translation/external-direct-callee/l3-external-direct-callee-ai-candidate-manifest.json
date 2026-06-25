@@ -1,0 +1,17 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "cache_invalidation_keys": [
+    "source_commit=demo-external-direct-callee-20260625",
+    "slice_spec_sha256=d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "fixture_hash=external-direct-callee-fixture",
+    "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "external-direct-callee",
+  "status": "not_used",
+  "target_id": "demo"
+}

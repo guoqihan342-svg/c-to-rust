@@ -1,0 +1,190 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "negative",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "negative-two",
+      "input_value": -2,
+      "return_value": 1,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "negative",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "negative-one",
+      "input_value": -1,
+      "return_value": 2,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "zero",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "zero",
+      "input_value": 0,
+      "return_value": 3,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "positive",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "one",
+      "input_value": 1,
+      "return_value": 4,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "positive",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "seven",
+      "input_value": 7,
+      "return_value": 10,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "safe_range",
+      "external_callee_bindings": [
+        "helper_add_one:int->int",
+        "helper_add_one:int->int",
+        "helper_add_one:int->int"
+      ],
+      "external_callee_call_count": 3,
+      "external_callee_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "id": "large-safe",
+      "input_value": 2147483000,
+      "return_value": 2147483003,
+      "source_calls": [
+        "int first = helper_add_one(value)",
+        "value = helper_add_one(first)",
+        "return helper_add_one(value)"
+      ],
+      "status": "ok"
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status",
+    "external_callee_call_count",
+    "external_callee_contexts",
+    "external_callee_bindings",
+    "source_calls"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No arbitrary multi-function translation claim.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No signed overflow equivalence beyond the committed safe fixture domain."
+  ],
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_boundary": {
+    "direct_call_edges": [
+      {
+        "context": "declaration_initializer",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      },
+      {
+        "context": "assignment",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      },
+      {
+        "context": "return",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      }
+    ],
+    "files": [
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py"
+    ],
+    "functions": [
+      "call_helper_chain",
+      "helper_add_one"
+    ],
+    "signature": "int call_helper_chain(int value); int helper_add_one(int value)"
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

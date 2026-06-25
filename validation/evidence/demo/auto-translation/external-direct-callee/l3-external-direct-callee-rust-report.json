@@ -1,0 +1,193 @@
+{
+  "accepted_rust_report": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+    "sha256": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+    "status": "passed"
+  },
+  "case_count": 6,
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6"
+  },
+  "generated_draft": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
+    "sha256": "37eb1ea9fd1f34823cfef555a6a28330a7aa87fbb66e3ee21962edde60121ebf",
+    "status": "candidate"
+  },
+  "generated_draft_semantic_pass": false,
+  "replay": {
+    "behavior_fields": [
+      "return_value",
+      "status",
+      "external_callee_call_count",
+      "external_callee_contexts",
+      "external_callee_bindings",
+      "source_calls"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-external-direct-callee-20260625",
+      "slice_spec_sha256=f2f9814f76901726de56c6f855ceaeb1357b6946fd8a64384a9415316f2c42b4",
+      "fixture_hash=external-direct-callee-fixture",
+      "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_value",
+        "status",
+        "external_callee_call_count",
+        "external_callee_contexts",
+        "external_callee_bindings",
+        "source_calls"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+        "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+        "sha256": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+        "sha256": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+        "sha256": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml external_direct_callee",
+        "file": "validation/l2_slices/tests/external_direct_callee.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_external_direct_callee_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_external_direct_callee_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_external_direct_callee_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "external-direct-callee",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+          "operation_count": 3,
+          "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+          "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+          "sha256": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "external_callee_call_count",
+          "external_callee_contexts",
+          "external_callee_bindings",
+          "source_calls"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+            "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+            "sha256": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+            "sha256": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/external_direct_callee.rs::accepted_external_direct_callee_replay",
+        "source": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "external_callee_call_count",
+          "external_callee_contexts",
+          "external_callee_bindings",
+          "source_calls"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+            "sha256": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_external_direct_callee_negative_diff",
+        "source": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_slice_id": "external-direct-callee",
+  "status": "passed",
+  "target_id": "demo"
+}

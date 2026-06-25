@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
+    "sha256": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -1,0 +1,19 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+    "sha256": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "negative-two",
+    "field": "external_callee_call_count",
+    "mutated_c_value": 2,
+    "rust_value": 3
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

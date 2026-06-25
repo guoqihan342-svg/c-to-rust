@@ -187,6 +187,212 @@ class AutoMigrateTests(unittest.TestCase):
                 },
             )
 
+    def test_declared_external_callee_context_allows_helper_rust_check(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "external-callee",
+            "source_commit": "1234567",
+            "function_name": "call_helper_chain",
+            "c_source": (
+                "int call_helper_chain(int value) { "
+                "int first = helper_add_one(value); "
+                "value = helper_add_one(first); "
+                "return helper_add_one(value); "
+                "}"
+            ),
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "c_boundary": {
+                "files": [
+                    {"path": "unit/caller.c", "role": "slice_entry", "sha256": "caller-sha"},
+                    {"path": "unit/helper.c", "role": "external_direct_callee", "sha256": "helper-sha"},
+                ],
+                "signatures": [
+                    {
+                        "id": "sig-call-helper-chain",
+                        "function": "call_helper_chain",
+                        "return_type": "int",
+                        "parameters": [{"name": "value", "c_type": "int"}],
+                        "c_source": (
+                            "int call_helper_chain(int value) { "
+                            "int first = helper_add_one(value); "
+                            "value = helper_add_one(first); "
+                            "return helper_add_one(value); "
+                            "}"
+                        ),
+                    },
+                    {
+                        "id": "sig-helper-add-one",
+                        "role": "external_direct_callee",
+                        "function": "helper_add_one",
+                        "return_type": "int",
+                        "parameters": [{"name": "value", "c_type": "int"}],
+                        "source_ref": "unit/helper.c#helper_add_one",
+                        "signature_sha256": "helper-signature-sha",
+                        "definition_status": "real_source_bound",
+                        "c_source": "int helper_add_one(int value) { return value + 1; }",
+                    },
+                ],
+                "direct_dependencies": [
+                    {"kind": "callee", "name": "helper_add_one", "source": "unit/helper.c#helper_add_one"}
+                ],
+                "external_direct_callees": [
+                    {
+                        "name": "helper_add_one",
+                        "signature_ref": "sig-helper-add-one",
+                        "source_files": [{"path": "unit/helper.c", "sha256": "helper-sha"}],
+                        "definition_status": "real_source_bound",
+                        "stub_boundary": "compile_only",
+                    }
+                ],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "external-callee.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "external-callee"
+            draft = (evidence_dir / "l3-external-callee-rust-draft.rs").read_text(encoding="utf-8")
+            plan = json.loads(
+                (evidence_dir / "l3-external-callee-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            context_pack = json.loads(
+                (evidence_dir / "l3-external-callee-context-pack.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("fn helper_add_one(value: i32) -> i32", draft)
+            self.assertIn("external callee context stub: helper_add_one", draft)
+            external_callee = plan["translation_summary"]["external_direct_callees"][0]
+            self.assertEqual(external_callee["name"], "helper_add_one")
+            self.assertEqual(external_callee["signature_ref"], "sig-helper-add-one")
+            self.assertEqual(external_callee["stub_kind"], "compile_only")
+            self.assertFalse(external_callee["semantics_verified"])
+            self.assertEqual(len(plan["translation_summary"]["call_expressions"]), 3)
+            self.assertEqual(
+                plan["translation_summary"]["call_expressions"][0]["callee_signature_id"],
+                "sig-helper-add-one",
+            )
+            self.assertEqual(plan["inputs"]["external_callee_context"]["status"], "recorded")
+            self.assertEqual(plan["inputs"]["external_callee_context"]["declared_count"], 1)
+            self.assertEqual(plan["inputs"]["external_callee_context"]["blocked_count"], 0)
+            self.assertEqual(context_pack["external_direct_callees"][0]["name"], "helper_add_one")
+            self.assertEqual(context_pack["external_direct_callees"][0]["stub_kind"], "compile_only")
+            self.assertFalse(context_pack["external_direct_callees"][0]["semantics_verified"])
+            self.assertEqual(context_pack["call_edge_to_callee_binding"][0]["callee"], "helper_add_one")
+            self.assertEqual(
+                manifest["claim_boundary"]["external_callee_scope"]["status"],
+                "compile_context_only",
+            )
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+
+    def test_undeclared_external_callee_context_blocks_silent_stub_injection(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "missing-external-callee",
+            "source_commit": "1234567",
+            "function_name": "call_missing_helper",
+            "c_source": (
+                "int call_missing_helper(int value) { "
+                "int first = helper_add_one(value); "
+                "return helper_add_one(first); "
+                "}"
+            ),
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "missing-external-callee.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "missing-external-callee"
+            draft = (evidence_dir / "l3-missing-external-callee-rust-draft.rs").read_text(encoding="utf-8")
+            plan = json.loads(
+                (evidence_dir / "l3-missing-external-callee-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertEqual(manifest["rust_check"]["status"], "failed")
+            self.assertNotIn("fn helper_add_one", draft)
+            self.assertEqual(
+                manifest["rust_check"]["external_callee_context"]["status"],
+                "blocked",
+            )
+            self.assertEqual(
+                manifest["rust_check"]["external_callee_context"]["blocked_callees"][0]["name"],
+                "helper_add_one",
+            )
+            self.assertEqual(plan["inputs"]["external_callee_context"]["status"], "blocked")
+            self.assertEqual(plan["inputs"]["external_callee_context"]["declared_count"], 0)
+            self.assertEqual(plan["inputs"]["external_callee_context"]["blocked_count"], 1)
+            self.assertEqual(
+                plan["translation_summary"]["external_direct_callee_blocks"][0]["reason"],
+                "missing_declared_external_direct_callee",
+            )
+
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {
             "target_id": "demo",

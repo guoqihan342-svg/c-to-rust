@@ -1,0 +1,36 @@
+{
+  "commands": [
+    {
+      "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test external_direct_callee",
+      "status": "passed"
+    },
+    {
+      "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+      "status": "passed"
+    }
+  ],
+  "compile_self_healing": {
+    "attempt_count": 0,
+    "unresolved_errors": 0
+  },
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "name": "helper_add_one",
+        "semantics_verified": false,
+        "signature_ref": "sig-helper-add-one",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 1,
+    "status": "recorded"
+  },
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

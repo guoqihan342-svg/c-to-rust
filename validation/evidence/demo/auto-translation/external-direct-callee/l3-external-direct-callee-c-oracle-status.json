@@ -1,0 +1,21 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+    "sha256": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 6,
+  "fixture": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+  "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+  "harness_draft": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-harness-draft.c",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_slice_id": "external-direct-callee",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -1,0 +1,161 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-external-direct-callee-20260625",
+    "slice_spec_sha256=d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "fixture_hash=external-direct-callee-fixture",
+    "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "declaration_initializer",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(first)",
+      "statement_context": "assignment",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "return",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    },
+    {
+      "kind": "callee",
+      "name": "helper_add_one",
+      "source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one"
+    }
+  ],
+  "callee_sources": [
+    {
+      "callee": "helper_add_one",
+      "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "sha256": "generated-at-validation"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  ],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "value"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "declaration_initializer",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "first"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(first)",
+      "statement_context": "assignment",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "value"
+      ],
+      "callee": "helper_add_one",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-helper-add-one",
+      "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "definition_status": "real_source_bound",
+      "source_expression": "helper_add_one(value)",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    }
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/external_direct_callee.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callees": [
+    {
+      "definition_status": "real_source_bound",
+      "header_files": [],
+      "name": "helper_add_one",
+      "parameters": [
+        {
+          "c_type": "int",
+          "name": "value"
+        }
+      ],
+      "return_type": "int",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_files": [
+        {
+          "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+          "sha256": "generated-at-validation"
+        }
+      ],
+      "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "stub_boundary": "compile_only",
+      "stub_kind": "compile_only",
+      "supported": true,
+      "unsupported_reasons": []
+    }
+  ],
+  "fixture": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+  "level": "L3",
+  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "schema_version": 1,
+  "signature_bindings": [
+    {
+      "callee": "helper_add_one",
+      "definition_status": "real_source_bound",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "slice_id": "external-direct-callee",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-external-direct-callee.json",
+    "sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974"
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "stub_boundaries": [
+    {
+      "allowed_use": "standalone_rust_check_only",
+      "callee": "helper_add_one",
+      "semantics_verified": false,
+      "stub_kind": "compile_only"
+    }
+  ],
+  "target_id": "demo"
+}

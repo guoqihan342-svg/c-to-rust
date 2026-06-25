@@ -238,6 +238,8 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         if fixture["sha256"] != actual:
             raise SystemExit(f"semantic pass fixture sha256 mismatch: {fixture['sha256']} != {actual}")
 
+    validate_external_direct_callee_context(slice_spec, evidence_dir, prefix, manifest, reports["final_verification"])
+
     return {
         "status": "passed",
         "semantic_pass": True,
@@ -247,6 +249,90 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "fixture_sha256": fixture.get("sha256"),
         "checked": sorted(reports),
     }
+
+
+def validate_external_direct_callee_context(
+    slice_spec: dict[str, Any],
+    evidence_dir: Path,
+    prefix: str,
+    manifest: dict[str, Any],
+    final_verification: dict[str, Any],
+) -> None:
+    declared = slice_spec.get("c_boundary", {}).get("external_direct_callees", [])
+    if not declared:
+        return
+
+    declared_by_name = {str(item.get("name")): item for item in declared if item.get("name")}
+    signatures = {
+        str(item.get("id") or item.get("function")): item
+        for item in slice_spec.get("c_boundary", {}).get("signatures", [])
+        if item.get("id") or item.get("function")
+    }
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    context_path = evidence_dir / f"{prefix}-context-pack.json"
+    plan = load_json(plan_path)
+    context = load_json(context_path)
+    plan_callees = {
+        str(item.get("name")): item
+        for item in plan.get("translation_summary", {}).get("external_direct_callees", [])
+        if item.get("name")
+    }
+    context_callees = {
+        str(item.get("name")): item
+        for item in context.get("external_direct_callees", [])
+        if item.get("name")
+    }
+    bindings = {
+        str(item.get("callee")): item
+        for item in context.get("signature_bindings", [])
+        if item.get("callee")
+    }
+    source_bindings = {
+        str(item.get("callee")): item
+        for item in context.get("callee_sources", [])
+        if item.get("callee")
+    }
+    call_bindings = [
+        item
+        for item in context.get("call_edge_to_callee_binding", [])
+        if item.get("callee") in declared_by_name
+    ]
+
+    for name, declared_callee in declared_by_name.items():
+        signature_ref = str(declared_callee.get("signature_ref") or "")
+        if signature_ref not in signatures:
+            raise SystemExit(f"external callee {name} signature_ref missing from slice spec signatures")
+        if not declared_callee.get("source_files"):
+            raise SystemExit(f"external callee {name} requires real source_files in slice spec")
+        plan_callee = plan_callees.get(name)
+        if plan_callee is None:
+            raise SystemExit(f"external callee {name} missing from translation plan")
+        context_callee = context_callees.get(name)
+        if context_callee is None:
+            raise SystemExit(f"external callee {name} missing from context pack")
+        if plan_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in translation plan")
+        if context_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in context pack")
+        if plan_callee.get("stub_kind") != "compile_only" or context_callee.get("stub_kind") != "compile_only":
+            raise SystemExit(f"external callee {name} must record compile_only stub boundary")
+        if plan_callee.get("semantics_verified") or context_callee.get("semantics_verified"):
+            raise SystemExit(f"external callee {name} compile-only stub must not claim semantics_verified")
+        if name not in bindings:
+            raise SystemExit(f"external callee {name} missing signature binding in context pack")
+        if name not in source_bindings:
+            raise SystemExit(f"external callee {name} missing callee source binding in context pack")
+
+    if not call_bindings:
+        raise SystemExit("external callee context requires call_edge_to_callee_binding entries")
+
+    claim_scope = manifest.get("claim_boundary", {}).get("external_callee_scope", {})
+    final_scope = final_verification.get("external_callee_scope", claim_scope)
+    for label, scope in [("manifest", claim_scope), ("final_verification", final_scope)]:
+        if scope.get("stub_kind") != "compile_only":
+            raise SystemExit(f"external callee {label} scope must record stub_kind=compile_only")
+        if scope.get("semantics_verified"):
+            raise SystemExit(f"external callee {label} scope must keep semantics_verified=false")
 
 
 def load_ref(evidence: dict[str, Any], key: str) -> dict[str, Any]:

@@ -1,0 +1,14 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+    "sha256": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
+    "status": "passed"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,83 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "external_callee.signature"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [
+            "none"
+          ],
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "call_expression",
+            "assignment",
+            "call_expression",
+            "return",
+            "call_expression"
+          ],
+          "statements": [
+            "int first = helper_add_one(value)",
+            "value = helper_add_one(first)",
+            "return helper_add_one(value)"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "call_helper_chain",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "helper_add_one(value)",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int call_helper_chain(int value)",
+      "source_span": {
+        "file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-external-direct-callee.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

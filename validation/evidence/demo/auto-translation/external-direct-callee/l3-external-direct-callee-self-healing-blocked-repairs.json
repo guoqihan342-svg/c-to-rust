@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-external-direct-callee-20260625",
+    "fixture_hash=external-direct-callee-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "status": "none",
+  "target_id": "demo"
+}

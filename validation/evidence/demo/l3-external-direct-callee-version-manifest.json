@@ -1,0 +1,23 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version",
+    "external_callee.signature"
+  ],
+  "fixture": {
+    "hash": "external-direct-callee-fixture",
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

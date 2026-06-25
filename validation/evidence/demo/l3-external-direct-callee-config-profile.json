@@ -1,0 +1,33 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "external_callee.signature"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "python -B validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "command_args": [
+      "wsl",
+      "gcc",
+      "-std=c99",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "include_paths": []
+  },
+  "level": "L3",
+  "profile_id": "demo-external-direct-callee-wsl-gcc",
+  "repo_commit": "workspace",
+  "rust_profile": {
+    "cargo_features": [],
+    "package": "c-to-rust-l2-slices"
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

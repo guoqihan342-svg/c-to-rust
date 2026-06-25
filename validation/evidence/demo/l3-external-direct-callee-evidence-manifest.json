@@ -1,0 +1,127 @@
+{
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "behavior_fields_checked": [
+      "return_value",
+      "status",
+      "external_callee_call_count",
+      "external_callee_contexts",
+      "external_callee_bindings",
+      "source_calls"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 1,
+      "semantics_verified": false,
+      "status": "compile_context_only",
+      "stub_kind": "compile_only"
+    },
+    "known_gaps": [
+      "No arbitrary multi-function translation claim.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "helper stub semantic equivalence",
+      "function pointer or nested call expression support"
+    ],
+    "scope": "Only the demo call_helper_chain external direct callee slice for the committed fixture corpus."
+  },
+  "evidence": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+      "status": "passed",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-cache-metadata.json",
+      "status": "recorded"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-cfg.json",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-config-profile.json",
+      "profile_id": "demo-external-direct-callee-wsl-gcc",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-context-pack.json",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
+      "secondary_only": true,
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/l3-external-direct-callee-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-rust-check.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-slice-contract.json",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-summary.json",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-test-translation.json",
+      "status": "recorded"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-type-map.json",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/l3-external-direct-callee-version-manifest.json",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "external-direct-callee-fixture",
+    "operation_count": 6,
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

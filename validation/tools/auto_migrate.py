@@ -124,6 +124,346 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
     return path
 
 
+def entry_function_name(spec: dict[str, Any]) -> str:
+    function_name = spec.get("function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    if not function_name and signatures:
+        function_name = signatures[0].get("function")
+    return str(function_name or "")
+
+
+def rust_identifier(name: str) -> str:
+    return f"r#{name}" if name in RUST_KEYWORDS else name
+
+
+def primitive_rust_type(c_type: str) -> str | None:
+    normalized = " ".join(str(c_type).strip().split())
+    return {
+        "int": "i32",
+        "signed int": "i32",
+        "unsigned int": "u32",
+        "short": "i16",
+        "short int": "i16",
+        "unsigned short": "u16",
+        "unsigned short int": "u16",
+        "long": "i64",
+        "long int": "i64",
+        "unsigned long": "u64",
+        "unsigned long int": "u64",
+    }.get(normalized)
+
+
+def declared_external_direct_callee_map(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    c_boundary = spec.get("c_boundary", {})
+    signatures = c_boundary.get("signatures", [])
+    signatures_by_name = {str(item.get("function")): item for item in signatures if item.get("function")}
+    signatures_by_id = {str(item.get("id")): item for item in signatures if item.get("id")}
+    declared: dict[str, dict[str, Any]] = {}
+
+    for item in c_boundary.get("external_direct_callees", []):
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        signature = signatures_by_id.get(str(item.get("signature_ref") or "")) or signatures_by_name.get(name) or {}
+        declared[name] = external_callee_descriptor(spec, item, signature)
+
+    for signature in signatures:
+        if signature.get("role") != "external_direct_callee":
+            continue
+        name = str(signature.get("function") or "")
+        if not name or name in declared:
+            continue
+        declared[name] = external_callee_descriptor(
+            spec,
+            {
+                "name": name,
+                "signature_ref": signature.get("id") or name,
+                "source_files": source_files_for_external_callee(spec, name),
+                "definition_status": signature.get("definition_status", "real_source_bound"),
+                "stub_boundary": "compile_only",
+            },
+            signature,
+        )
+    return declared
+
+
+def external_callee_descriptor(
+    spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
+) -> dict[str, Any]:
+    name = str(item.get("name") or signature.get("function") or "")
+    signature_ref = str(item.get("signature_ref") or signature.get("id") or name)
+    parameters = [
+        {
+            "name": str(param.get("name") or f"arg{index + 1}"),
+            "c_type": str(param.get("c_type") or param.get("type") or ""),
+        }
+        for index, param in enumerate(signature.get("parameters", []))
+    ]
+    return_type = str(signature.get("return_type") or signature.get("returns") or "")
+    unsupported_reasons: list[str] = []
+    if not signature:
+        unsupported_reasons.append("missing_signature")
+    if primitive_rust_type(return_type) is None:
+        unsupported_reasons.append("unsupported_return_type")
+    for param in parameters:
+        if primitive_rust_type(param["c_type"]) is None:
+            unsupported_reasons.append(f"unsupported_parameter_type:{param['name']}")
+    if not parameters:
+        unsupported_reasons.append("missing_parameters")
+    return {
+        "name": name,
+        "signature_ref": signature_ref,
+        "source_ref": item.get("source_ref") or signature.get("source_ref") or "",
+        "source_files": item.get("source_files") or source_files_for_external_callee(spec, name),
+        "header_files": item.get("header_files", []),
+        "definition_status": item.get("definition_status") or signature.get("definition_status") or "real_source_bound",
+        "stub_kind": "compile_only",
+        "stub_boundary": item.get("stub_boundary", "compile_only"),
+        "semantics_verified": False,
+        "parameters": parameters,
+        "return_type": return_type,
+        "supported": not unsupported_reasons,
+        "unsupported_reasons": sorted(set(unsupported_reasons)),
+    }
+
+
+def source_files_for_external_callee(spec: dict[str, Any], name: str) -> list[dict[str, Any]]:
+    files = []
+    for item in spec.get("c_boundary", {}).get("files", []):
+        role = str(item.get("role") or "")
+        path = item.get("path")
+        if path and (role == "external_direct_callee" or name in str(path)):
+            files.append({"path": path, "sha256": item.get("sha256", "")})
+    return files
+
+
+def external_direct_callee_context(
+    spec: dict[str, Any],
+    call_expressions: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    entry_name = entry_function_name(spec)
+    declared_map = declared_external_direct_callee_map(spec)
+    callee_names = sorted(
+        {
+            str(call.get("callee"))
+            for call in (call_expressions or [])
+            if call.get("callee") and str(call.get("callee")) != entry_name
+        }
+    )
+    declared = []
+    blocked = []
+    for name in callee_names:
+        descriptor = declared_map.get(name)
+        if descriptor is None:
+            blocked.append(
+                {
+                    "name": name,
+                    "reason": "missing_declared_external_direct_callee",
+                    "stub_kind": "none",
+                    "semantics_verified": False,
+                }
+            )
+            continue
+        if not descriptor.get("supported"):
+            blocked.append(
+                {
+                    "name": name,
+                    "reason": "unsupported_external_direct_callee_signature",
+                    "unsupported_reasons": descriptor.get("unsupported_reasons", []),
+                    "stub_kind": "none",
+                    "semantics_verified": False,
+                }
+            )
+            continue
+        declared.append(descriptor)
+
+    status = "not_applicable"
+    if blocked:
+        status = "blocked"
+    elif declared:
+        status = "recorded"
+    return {
+        "status": status,
+        "declared": declared,
+        "blocked": blocked,
+        "declared_count": len(declared),
+        "blocked_count": len(blocked),
+    }
+
+
+def external_context_input_ref(evidence_dir: Path, slice_id: str, context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": rel(evidence_dir / f"l3-{slice_id}-context-pack.json"),
+        "status": context["status"],
+        "declared_count": context["declared_count"],
+        "blocked_count": context["blocked_count"],
+    }
+
+
+def bind_external_callee_context(
+    call_expressions: list[dict[str, Any]],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    declared = {item["name"]: item for item in context.get("declared", [])}
+    blocked = {item["name"]: item for item in context.get("blocked", [])}
+    bound = []
+    for call in call_expressions:
+        enriched = dict(call)
+        callee = str(call.get("callee") or "")
+        if callee in declared:
+            descriptor = declared[callee]
+            enriched.update(
+                {
+                    "callee_scope": "external_direct_callee",
+                    "callee_signature_id": descriptor["signature_ref"],
+                    "callee_source_ref": descriptor.get("source_ref", ""),
+                    "definition_status": descriptor.get("definition_status", ""),
+                    "stub_status": "compile_only",
+                }
+            )
+        elif callee in blocked:
+            enriched.update(
+                {
+                    "callee_scope": "external_direct_callee",
+                    "stub_status": "blocked",
+                    "blocked_reason": blocked[callee].get("reason", ""),
+                }
+            )
+        bound.append(enriched)
+    return bound
+
+
+def call_edge_to_callee_binding(
+    call_expressions: list[dict[str, Any]],
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    bindings = []
+    declared = {item["name"]: item for item in context.get("declared", [])}
+    for call in call_expressions:
+        callee = str(call.get("callee") or "")
+        if callee not in declared:
+            continue
+        descriptor = declared[callee]
+        bindings.append(
+            {
+                "callee": callee,
+                "signature_ref": descriptor["signature_ref"],
+                "source_expression": call.get("source_expression", ""),
+                "statement_context": call.get("statement_context", ""),
+                "stub_kind": descriptor["stub_kind"],
+                "semantics_verified": False,
+            }
+        )
+    return bindings
+
+
+def external_callee_sources(context: dict[str, Any]) -> list[dict[str, Any]]:
+    sources = []
+    for callee in context.get("declared", []):
+        for source in callee.get("source_files", []):
+            sources.append(
+                {
+                    "callee": callee["name"],
+                    "path": source.get("path", ""),
+                    "sha256": source.get("sha256", ""),
+                }
+            )
+    return sources
+
+
+def external_signature_bindings(context: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "callee": callee["name"],
+            "signature_ref": callee["signature_ref"],
+            "definition_status": callee.get("definition_status", ""),
+            "stub_kind": callee["stub_kind"],
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+    ]
+
+
+def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "callee": callee["name"],
+            "stub_kind": callee["stub_kind"],
+            "allowed_use": "standalone_rust_check_only",
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+    ]
+
+
+def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
+    if context["status"] == "recorded":
+        status = "compile_context_only"
+    else:
+        status = context["status"]
+    return {
+        "status": status,
+        "declared_count": context["declared_count"],
+        "blocked_count": context["blocked_count"],
+        "stub_kind": "compile_only" if context["declared_count"] else "none",
+        "semantics_verified": False,
+    }
+
+
+def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": context["status"],
+        "declared_count": context["declared_count"],
+        "blocked_count": context["blocked_count"],
+        "declared_callees": [
+            {
+                "name": callee["name"],
+                "signature_ref": callee["signature_ref"],
+                "stub_kind": callee["stub_kind"],
+                "semantics_verified": False,
+            }
+            for callee in context.get("declared", [])
+        ],
+        "blocked_callees": context.get("blocked", []),
+    }
+
+
+def load_plan_call_expressions(evidence_dir: Path, slice_id: str) -> list[dict[str, Any]]:
+    plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
+    if not plan_path.exists():
+        return []
+    plan = read_json(plan_path)
+    return plan.get("translation_summary", {}).get("call_expressions", [])
+
+
+def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> bool:
+    callees = context.get("declared", [])
+    if not callees:
+        return False
+    text = draft_path.read_text(encoding="utf-8")
+    stubs = []
+    for callee in callees:
+        name = rust_identifier(callee["name"])
+        params = []
+        for index, param in enumerate(callee.get("parameters", [])):
+            param_name = rust_identifier(param.get("name") or f"arg{index + 1}")
+            rust_type = primitive_rust_type(param.get("c_type", "")) or "i32"
+            params.append(f"{param_name}: {rust_type}")
+        return_type = primitive_rust_type(callee.get("return_type", "")) or "i32"
+        signature = f"fn {name}({', '.join(params)}) -> {return_type}"
+        if signature in text:
+            continue
+        stubs.append(
+            f'{signature} {{ unimplemented!("external callee context stub: {callee["name"]}") }}'
+        )
+    if not stubs:
+        return False
+    draft_path.write_text("\n".join(stubs) + "\n\n" + text, encoding="utf-8")
+    return True
+
+
 def run_translator(slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
     cmd = [
         "cargo",
@@ -359,7 +699,9 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
 
     raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
-    call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
+    raw_call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
+    external_callee_context = external_direct_callee_context(spec, raw_call_expressions)
+    call_expressions = bind_external_callee_context(raw_call_expressions, external_callee_context)
     lvalue_decision_counts = count_occurrences(
         lvalue_decision_for_kind(kind)
         for function in functions
@@ -390,6 +732,11 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "type_map": {"path": rel(evidence_dir / f"{prefix}-type-map.json"), "status": "recorded"},
                 "cfg": {"path": rel(evidence_dir / f"{prefix}-cfg.json"), "status": "recorded"},
                 "pointer_graph": {"path": rel(evidence_dir / f"{prefix}-pointer-graph.json"), "status": pointer_status},
+                "external_callee_context": external_context_input_ref(
+                    evidence_dir,
+                    slice_id,
+                    external_callee_context,
+                ),
             },
             "generated_artifacts": [
                 generated_artifact(evidence_dir / f"{prefix}-rust-draft.rs", "rust_draft"),
@@ -406,6 +753,8 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
                 "alias_gate": alias_gate["summary"],
                 "call_expressions": call_expressions,
+                "external_direct_callees": external_callee_context["declared"],
+                "external_direct_callee_blocks": external_callee_context["blocked"],
             },
             "verification_plan": [
                 {"gate": "rust_check", "command": "rustc --error-format=json <draft>", "required_before_acceptance": True},
@@ -431,7 +780,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     )
 
     write_auto_translation_events(spec, slice_spec_path, evidence_dir)
-    write_context_pack(spec, slice_spec_path, evidence_dir, call_expressions)
+    write_context_pack(spec, slice_spec_path, evidence_dir, call_expressions, external_callee_context)
 
 
 def pointer_node_kind(node: dict[str, Any]) -> str:
@@ -712,15 +1061,19 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
 def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
     slice_id = required_str(spec, "slice_id")
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     if skip or path is None:
         payload = {
             "schema_version": 1,
             "status": "skipped",
             "errors": [],
             "command": None,
+            "external_callee_context": rust_check_external_context(external_context),
         }
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
+        if external_context["status"] == "recorded":
+            inject_external_callee_stubs(path, external_context)
         first = rust_check_once(path)
         write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
         write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
@@ -738,6 +1091,7 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             "command": final["command"],
             "error_count": len(final["errors"]),
             "errors": final["errors"],
+            "external_callee_context": rust_check_external_context(external_context),
             "self_healing": {
                 "status": patch["status"],
                 "patch_events": patch["patch_events"],
@@ -991,6 +1345,7 @@ def emit_manifest(
     l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
     semantic_pass = accepted is not None and rust_check.get("status") == "passed"
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     payload = {
         "schema_version": 1,
         "level": "L3",
@@ -1033,6 +1388,7 @@ def emit_manifest(
             ],
             "non_goals": spec.get("non_goals", []),
             "alias_gate": alias_gate,
+            "external_callee_scope": external_callee_claim_scope(external_context),
         },
     }
     write_json(evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json", payload)
@@ -1053,6 +1409,7 @@ def emit_l3_evidence_manifest(
     semantic_pass = accepted is not None and rust_check.get("status") == "passed"
     write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
     if pointer_ref["status"] == "not_applicable":
         pointer_ref["not_applicable_reason"] = "slice has no pointer surface"
@@ -1123,6 +1480,7 @@ def emit_l3_evidence_manifest(
                 "full C99/C11 automatic translation",
             ],
             "alias_gate": alias_gate,
+            "external_callee_scope": external_callee_claim_scope(external_context),
         },
     }
     path = evidence_dir / f"{prefix}-evidence-manifest.json"
@@ -1477,6 +1835,7 @@ def write_accepted_supporting_evidence(
     reports = accepted["reports"]
     unsafe_count = unsafe_count_from_report(reports["unsafe_scan"])
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     mark_config_profile_recorded(spec, evidence_dir, accepted)
     write_json(
         evidence_dir / f"{prefix}-rust-report.json",
@@ -1581,6 +1940,7 @@ def write_accepted_supporting_evidence(
             "version_config_status": "recorded",
             "generated_draft_semantic_pass": False,
             "alias_gate": alias_gate,
+            "external_callee_scope": external_callee_claim_scope(external_context),
             "accepted_evidence_binding": accepted_binding_summary(accepted),
         },
     )
@@ -1783,8 +2143,10 @@ def write_context_pack(
     slice_spec_path: Path,
     evidence_dir: Path,
     call_expressions: list[dict[str, Any]] | None = None,
+    external_callee_context: dict[str, Any] | None = None,
 ) -> None:
     slice_id = required_str(spec, "slice_id")
+    context = external_callee_context or external_direct_callee_context(spec, call_expressions)
     payload = {
         "schema_version": 1,
         "level": "L3",
@@ -1799,6 +2161,12 @@ def write_context_pack(
         "direct_rust_files": [spec.get("rust_boundary", {}).get("module") or spec.get("rust_boundary", {}).get("module_path", "")],
         "call_edges": spec.get("c_boundary", {}).get("direct_dependencies", []),
         "direct_call_edges": call_expressions or [],
+        "external_direct_callees": context["declared"],
+        "external_direct_callee_blocks": context["blocked"],
+        "callee_sources": external_callee_sources(context),
+        "signature_bindings": external_signature_bindings(context),
+        "stub_boundaries": external_stub_boundaries(context),
+        "call_edge_to_callee_binding": call_edge_to_callee_binding(call_expressions or [], context),
         "fixture": spec.get("fixture_contract", {}).get("path") or spec.get("fixture_contract", {}).get("input"),
         "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
     }

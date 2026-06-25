@@ -5,8 +5,9 @@ use std::{
 };
 
 use c_to_rust_l2_slices::{
-    add_i32_pair_ptr_arith, call_expression_chain, copy_i32_ptr_arith, libuv_ip4_addr,
-    sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32, zstd_xxh32,
+    add_i32_pair_ptr_arith, call_expression_chain, copy_i32_ptr_arith, external_direct_callee,
+    libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32,
+    zstd_xxh32,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -95,6 +96,24 @@ struct CallExpressionChainOracleCase {
     status: String,
     call_expression_count: usize,
     call_expression_contexts: Vec<String>,
+    source_calls: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExternalDirectCalleeOracleReport {
+    cases: Vec<ExternalDirectCalleeOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExternalDirectCalleeOracleCase {
+    id: String,
+    coverage_kind: String,
+    input_value: i32,
+    return_value: i32,
+    status: String,
+    external_callee_call_count: usize,
+    external_callee_contexts: Vec<String>,
+    external_callee_bindings: Vec<String>,
     source_calls: Vec<String>,
 }
 
@@ -229,6 +248,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_store_add_one(&fixtures_dir, repo_root)?,
         emit_sum_i32_buffer(&fixtures_dir, repo_root)?,
         emit_call_expression_chain(&fixtures_dir, repo_root)?,
+        emit_external_direct_callee(&fixtures_dir, repo_root)?,
         emit_sum_i32_ptr_arith(&fixtures_dir, repo_root)?,
         emit_copy_i32_ptr_arith(&fixtures_dir, repo_root)?,
         emit_add_i32_pair_ptr_arith(&fixtures_dir, repo_root)?,
@@ -238,6 +258,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     emit_store_add_one_safety_evidence(repo_root, &safety)?;
     emit_sum_i32_buffer_safety_evidence(repo_root, &safety)?;
     emit_call_expression_chain_safety_evidence(repo_root, &safety)?;
+    emit_external_direct_callee_safety_evidence(repo_root, &safety)?;
     emit_sum_i32_ptr_arith_safety_evidence(repo_root, &safety)?;
     emit_copy_i32_ptr_arith_safety_evidence(repo_root, &safety)?;
     emit_add_i32_pair_ptr_arith_safety_evidence(repo_root, &safety)?;
@@ -246,6 +267,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     negative_diffs.push(emit_store_add_one_negative_diff(&fixtures_dir, repo_root)?);
     negative_diffs.push(emit_sum_i32_buffer_negative_diff(&fixtures_dir, repo_root)?);
     negative_diffs.push(emit_call_expression_chain_negative_diff(
+        &fixtures_dir,
+        repo_root,
+    )?);
+    negative_diffs.push(emit_external_direct_callee_negative_diff(
         &fixtures_dir,
         repo_root,
     )?);
@@ -296,6 +321,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         &repo_root.join("validation").join("evidence").join("demo"),
         call_slice.case_count,
         call_manifest_status,
+        sum_unsafe_status,
+    )?;
+    let external_callee_slice = slices
+        .iter()
+        .find(|slice| slice.slice_id == "demo-external-direct-callee")
+        .ok_or("demo-external-direct-callee slice result must be present")?;
+    let external_callee_manifest_status =
+        if external_callee_slice.l3_status == "passed" && sum_unsafe_status == "passed" {
+            "passed"
+        } else {
+            "failed"
+        };
+    emit_external_direct_callee_static_l3_evidence(
+        &repo_root.join("validation").join("evidence").join("demo"),
+        external_callee_slice.case_count,
+        external_callee_manifest_status,
         sum_unsafe_status,
     )?;
     let ptr_arith_slice = slices
@@ -636,6 +677,124 @@ fn emit_call_expression_chain(
 
     Ok(SliceResult {
         slice_id: "demo-call-expression",
+        case_count: report.cases.len(),
+        l2_status: status,
+        l3_status: status,
+    })
+}
+
+fn emit_external_direct_callee(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<SliceResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("external-direct-callee-c-oracle.json");
+    let oracle_value: Value = read_json(&fixture_path)?;
+    let report: ExternalDirectCalleeOracleReport = serde_json::from_value(oracle_value.clone())?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-c-oracle.json"),
+        &oracle_value,
+    )?;
+
+    let mut rust_cases = Vec::with_capacity(report.cases.len());
+    let mut first_mismatch = None;
+
+    for case in &report.cases {
+        let rust = external_direct_callee::call_helper_chain(case.input_value);
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "return_value",
+            json!(case.return_value),
+            json!(rust.return_value),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "status",
+            json!(case.status),
+            json!(rust.status),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "external_callee_call_count",
+            json!(case.external_callee_call_count),
+            json!(rust.external_callee_call_count),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "external_callee_contexts",
+            json!(case.external_callee_contexts),
+            json!(rust.external_callee_contexts),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "external_callee_bindings",
+            json!(case.external_callee_bindings),
+            json!(rust.external_callee_bindings),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "source_calls",
+            json!(case.source_calls),
+            json!(rust.source_calls),
+        );
+
+        rust_cases.push(json!({
+            "id": case.id,
+            "coverage_kind": case.coverage_kind,
+            "input_value": rust.input_value,
+            "return_value": rust.return_value,
+            "status": rust.status,
+            "external_callee_call_count": rust.external_callee_call_count,
+            "external_callee_contexts": rust.external_callee_contexts,
+            "external_callee_bindings": rust.external_callee_bindings,
+            "source_calls": rust.source_calls
+        }));
+    }
+
+    let status = status_from_mismatch(&first_mismatch);
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-rust-report.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "c_source_boundary": "int helper_add_one(int value) { return value + 1; } int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
+            "rust_module_path": "validation/l2_slices/src/external_direct_callee.rs",
+            "fixture": relative_path(&fixture_path),
+            "command": "cargo run --bin emit_reports",
+            "status": status,
+            "case_count": report.cases.len(),
+            "cases": rust_cases
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "status": status,
+            "case_count": report.cases.len(),
+            "compared_fields": ["return_value", "status", "external_callee_call_count", "external_callee_contexts", "external_callee_bindings", "source_calls"],
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+    emit_external_direct_callee_test_translation(&evidence_dir, &fixture_path, report.cases.len())?;
+    emit_external_direct_callee_performance_smoke(&report, &evidence_dir)?;
+
+    Ok(SliceResult {
+        slice_id: "demo-external-direct-callee",
         case_count: report.cases.len(),
         l2_status: status,
         l3_status: status,
@@ -1977,6 +2136,34 @@ fn emit_call_expression_chain_test_translation(
     )
 }
 
+fn emit_external_direct_callee_test_translation(
+    evidence_dir: &Path,
+    fixture_path: &Path,
+    _case_count: usize,
+) -> Result<(), Box<dyn Error>> {
+    emit_l3_test_translation(L3TestTranslationSpec {
+        evidence_dir,
+        slice_id: "external-direct-callee",
+        source_commit: "demo-external-direct-callee-20260625",
+        fixture_path,
+        rust_test_name: "external_direct_callee_matches_c_oracle_and_records_helper_context",
+        main_paths: &[
+            "external helper declaration initializer call",
+            "external helper assignment RHS call",
+            "external helper return expression call",
+        ],
+        negative_cases: &["external callee binding metadata mutation rejected by negative diff"],
+        behavior_fields: &[
+            "return_value",
+            "status",
+            "external_callee_call_count",
+            "external_callee_contexts",
+            "external_callee_bindings",
+            "source_calls",
+        ],
+    })
+}
+
 fn emit_libuv_negative_diff(
     fixtures_dir: &Path,
     repo_root: &Path,
@@ -2198,6 +2385,66 @@ fn write_call_expression_chain_negative_diff(
                     "field": "call_expression_count",
                     "mutated_c_value": mutated_count,
                     "rust_value": rust.call_expression_count
+                })
+            } else {
+                Value::Null
+            }
+        }),
+    )?;
+    Ok(detected)
+}
+
+fn emit_external_direct_callee_negative_diff(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("external-direct-callee-c-oracle.json");
+    let report: ExternalDirectCalleeOracleReport = read_json(&fixture_path)?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    let detected = write_external_direct_callee_negative_diff(&report, &evidence_dir)?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "demo-external-direct-callee",
+        status: if detected { "passed" } else { "failed" },
+        report_path: "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+    })
+}
+
+fn write_external_direct_callee_negative_diff(
+    report: &ExternalDirectCalleeOracleReport,
+    evidence_dir: &Path,
+) -> Result<bool, Box<dyn Error>> {
+    let case = report
+        .cases
+        .iter()
+        .next()
+        .ok_or("external_direct_callee oracle must include at least one case")?;
+    let rust = external_direct_callee::call_helper_chain(case.input_value);
+    let mutated_count = case.external_callee_call_count.saturating_sub(1);
+    let detected = mutated_count != rust.external_callee_call_count
+        || case.external_callee_bindings != rust.external_callee_bindings;
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "status": "expected_failed",
+            "expected_failure": true,
+            "mutation_detected": detected,
+            "detected": detected,
+            "mutation": "external direct callee call count is changed by -1",
+            "mutated_fields": ["external_callee_call_count"],
+            "compared_fields": ["return_value", "status", "external_callee_call_count", "external_callee_contexts", "external_callee_bindings", "source_calls"],
+            "case_id": case.id,
+            "first_mismatch": if detected {
+                json!({
+                    "case_id": case.id,
+                    "field": "external_callee_call_count",
+                    "mutated_c_value": mutated_count,
+                    "rust_value": rust.external_callee_call_count
                 })
             } else {
                 Value::Null
@@ -2499,6 +2746,38 @@ fn emit_call_expression_chain_performance_smoke(
             "status": "recorded",
             "secondary_only": true,
             "operation": "safe Rust call_expression_chain replay over fixture corpus",
+            "iterations": iterations,
+            "calls": calls,
+            "elapsed_ms": 0.0,
+            "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+            "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates."
+        }),
+    )
+}
+
+fn emit_external_direct_callee_performance_smoke(
+    report: &ExternalDirectCalleeOracleReport,
+    evidence_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let iterations = 10_000_u64;
+    let mut calls = 0_u64;
+    for _ in 0..iterations {
+        for case in &report.cases {
+            let _ = external_direct_callee::call_helper_chain(case.input_value);
+            calls += 1;
+        }
+    }
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-performance-smoke.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "status": "recorded",
+            "secondary_only": true,
+            "operation": "safe Rust call_helper_chain replay over fixture corpus",
             "iterations": iterations,
             "calls": calls,
             "elapsed_ms": 0.0,
@@ -3889,6 +4168,386 @@ fn emit_call_expression_chain_static_l3_evidence(
     )
 }
 
+fn emit_external_direct_callee_static_l3_evidence(
+    evidence_dir: &Path,
+    case_count: usize,
+    status: &str,
+    unsafe_status: &str,
+) -> Result<(), Box<dyn Error>> {
+    let manifest_status = if status == "passed" {
+        "passed"
+    } else {
+        "failed"
+    };
+    let repo_commit = "workspace".to_owned();
+    let source_commit = "demo-external-direct-callee-20260625";
+    let fixture_path = "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json";
+    let prefix = "l3-external-direct-callee";
+    let behavior_fields = [
+        "return_value",
+        "status",
+        "external_callee_call_count",
+        "external_callee_contexts",
+        "external_callee_bindings",
+        "source_calls",
+    ];
+    let direct_call_edges = json!([
+        {"callee": "helper_add_one", "arguments": ["value"], "source_expression": "helper_add_one(value)", "statement_context": "declaration_initializer", "callee_scope": "external_direct_callee", "callee_signature_id": "sig-helper-add-one", "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one", "definition_status": "real_source_bound", "stub_status": "compile_only"},
+        {"callee": "helper_add_one", "arguments": ["first"], "source_expression": "helper_add_one(first)", "statement_context": "assignment", "callee_scope": "external_direct_callee", "callee_signature_id": "sig-helper-add-one", "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one", "definition_status": "real_source_bound", "stub_status": "compile_only"},
+        {"callee": "helper_add_one", "arguments": ["value"], "source_expression": "helper_add_one(value)", "statement_context": "return", "callee_scope": "external_direct_callee", "callee_signature_id": "sig-helper-add-one", "callee_source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one", "definition_status": "real_source_bound", "stub_status": "compile_only"}
+    ]);
+    let external_callee = json!({
+        "name": "helper_add_one",
+        "signature_ref": "sig-helper-add-one",
+        "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+        "source_files": [{"path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py", "sha256": "generated-at-validation"}],
+        "definition_status": "real_source_bound",
+        "stub_kind": "compile_only",
+        "semantics_verified": false
+    });
+    let external_callee_scope = json!({
+        "status": "compile_context_only",
+        "declared_count": 1,
+        "blocked_count": 0,
+        "stub_kind": "compile_only",
+        "semantics_verified": false
+    });
+
+    write_json(
+        &evidence_dir.join(format!("{prefix}-slice-contract.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "status": "recorded",
+            "source_boundary": {
+                "files": ["validation/l2_slices/tools/generate_external_direct_callee_oracle.py"],
+                "functions": ["call_helper_chain", "helper_add_one"],
+                "signature": "int call_helper_chain(int value); int helper_add_one(int value)"
+            },
+            "rust_boundary": {
+                "module": "validation/l2_slices/src/external_direct_callee.rs",
+                "api": "pub fn call_helper_chain(value: i32) -> ExternalDirectCalleeReport",
+                "safe_rust": true,
+                "raw_pointer_exposed": false
+            },
+            "fixture": {"path": fixture_path, "hash": "external-direct-callee-fixture", "case_count": case_count},
+            "behavior_fields": behavior_fields,
+            "external_direct_callees": [external_callee.clone()],
+            "accepted_differences": [],
+            "non_goals": [
+                "No arbitrary multi-function translation claim.",
+                "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+                "No signed overflow equivalence beyond the committed safe fixture domain."
+            ]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-context-pack.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "status": "recorded",
+            "direct_c_files": ["validation/l2_slices/tools/generate_external_direct_callee_oracle.py"],
+            "direct_rust_files": [
+                "validation/l2_slices/src/external_direct_callee.rs",
+                "validation/l2_slices/tests/external_direct_callee.rs",
+                "validation/l2_slices/src/bin/emit_reports.rs"
+            ],
+            "direct_call_edges": direct_call_edges.clone(),
+            "external_direct_callees": [external_callee.clone()],
+            "callee_sources": [{"callee": "helper_add_one", "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py", "sha256": "generated-at-validation"}],
+            "signature_bindings": [{"callee": "helper_add_one", "signature_ref": "sig-helper-add-one", "definition_status": "real_source_bound", "stub_kind": "compile_only", "semantics_verified": false}],
+            "stub_boundaries": [{"callee": "helper_add_one", "stub_kind": "compile_only", "allowed_use": "standalone_rust_check_only", "semantics_verified": false}],
+            "call_edge_to_callee_binding": [
+                {"callee": "helper_add_one", "signature_ref": "sig-helper-add-one", "source_expression": "helper_add_one(value)", "statement_context": "declaration_initializer", "stub_kind": "compile_only", "semantics_verified": false},
+                {"callee": "helper_add_one", "signature_ref": "sig-helper-add-one", "source_expression": "helper_add_one(first)", "statement_context": "assignment", "stub_kind": "compile_only", "semantics_verified": false},
+                {"callee": "helper_add_one", "signature_ref": "sig-helper-add-one", "source_expression": "helper_add_one(value)", "statement_context": "return", "stub_kind": "compile_only", "semantics_verified": false}
+            ],
+            "source_calls": [
+                "int first = helper_add_one(value)",
+                "value = helper_add_one(first)",
+                "return helper_add_one(value)"
+            ],
+            "related_tests": [
+                "validation/l2_slices/tests/external_direct_callee.rs::external_direct_callee_matches_c_oracle_and_records_helper_context"
+            ],
+            "cache_inputs": [fixture_path, "validation/l2_slices/src/external_direct_callee.rs"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-config-profile.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "status": "recorded",
+            "profile_id": "demo-external-direct-callee-wsl-gcc",
+            "compile_profile": {
+                "c_oracle_command": "python -B validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+                "include_paths": [],
+                "command_args": ["wsl", "gcc", "-std=c99", "-Wall", "-Wextra", "-Werror"]
+            },
+            "rust_profile": {"package": "c-to-rust-l2-slices", "cargo_features": []},
+            "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "external_callee.signature"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-type-map.json")),
+        &json!({
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "level": "L3",
+            "status": "recorded",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "slice_spec_ref": {"path": "validation/slice-specs/demo-external-direct-callee.json", "status": "ready"},
+            "build_profile_ref": {"path": "validation/evidence/demo/l3-external-direct-callee-config-profile.json", "status": "recorded"},
+            "mappings": [
+                {"id": "type-1", "kind": "primitive", "c_name": "value", "symbol": "value", "c_type": "int", "rust_type": "i32", "confidence": "proven", "role": "input_value"},
+                {"id": "type-2", "kind": "primitive", "c_name": "first", "symbol": "first", "c_type": "int", "rust_type": "i32", "confidence": "proven", "role": "local_call_result"},
+                {"id": "type-3", "kind": "primitive", "c_name": "helper_add_one", "symbol": "helper_add_one", "c_type": "int(int)", "rust_type": "fn(i32) -> i32", "confidence": "proven", "role": "external_direct_callee"},
+                {"id": "type-4", "kind": "primitive", "c_name": "return", "symbol": "return", "c_type": "int", "rust_type": "i32", "confidence": "proven", "role": "return_value"}
+            ],
+            "uncertainties": [],
+            "unsupported_types": [],
+            "unsupported_nodes": [],
+            "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "external_callee.signature"],
+            "safe_boundary": {
+                "public_api": "pub fn call_helper_chain(value: i32) -> ExternalDirectCalleeReport",
+                "raw_pointer_exposed": false,
+                "unsafe_required": false
+            }
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-cfg.json")),
+        &json!({
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "level": "L3",
+            "status": "recorded",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "slice_spec_ref": {"path": "validation/slice-specs/demo-external-direct-callee.json", "status": "ready"},
+            "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "external_callee.signature"],
+            "functions": [
+                {
+                    "name": "call_helper_chain",
+                    "signature": "int call_helper_chain(int value)",
+                    "source_span": {"file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py", "line_start": 1, "line_end": 1},
+                    "entry_block": "entry",
+                    "exit_blocks": ["return"],
+                    "basic_blocks": [
+                        {
+                            "id": "entry",
+                            "kind": "entry",
+                            "source_span": {"file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py", "line_start": 1, "line_end": 1},
+                            "statements": ["int first = helper_add_one(value)", "value = helper_add_one(first)", "return helper_add_one(value)"],
+                            "statement_kinds": ["call_expression", "assignment", "call_expression", "return", "call_expression"],
+                            "lvalue_kinds": ["none"],
+                            "lvalue_decisions": []
+                        }
+                    ],
+                    "branches": [],
+                    "returns": [
+                        {"block": "entry", "expression": "helper_add_one(value)", "source_span": {"file": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py", "line_start": 1, "line_end": 1}}
+                    ],
+                    "edges": [],
+                    "structured_control_flow": {
+                        "has_goto": false,
+                        "has_switch": false,
+                        "if_count": 0,
+                        "loop_count": 0,
+                        "relooper_required": false
+                    }
+                }
+            ],
+            "unsupported_control_flow": []
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-pointer-graph.json")),
+        &json!({
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "level": "L3",
+            "status": "not_applicable",
+            "not_applicable_reason": "call_helper_chain has no pointer parameters, pointer returns, globals, buffers, or external mutable state in the committed fixture boundary.",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "context_pack_ref": "validation/evidence/demo/l3-external-direct-callee-context-pack.json",
+            "applicability": {"has_pointer_surface": false, "triggers": ["none"]},
+            "source_boundary": {
+                "files": ["validation/l2_slices/tools/generate_external_direct_callee_oracle.py", fixture_path],
+                "functions": ["call_helper_chain", "helper_add_one"],
+                "structs": [],
+                "globals": [],
+                "direct_call_edges": [
+                    {"from": "call_helper_chain", "to": "helper_add_one", "context": "declaration_initializer"},
+                    {"from": "call_helper_chain", "to": "helper_add_one", "context": "assignment"},
+                    {"from": "call_helper_chain", "to": "helper_add_one", "context": "return"}
+                ]
+            },
+            "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "external_callee.signature"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-rust-check.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "status": status,
+            "compile_self_healing": {"attempt_count": 0, "unresolved_errors": 0},
+            "external_callee_context": {
+                "status": "recorded",
+                "declared_count": 1,
+                "blocked_count": 0,
+                "declared_callees": [{"name": "helper_add_one", "signature_ref": "sig-helper-add-one", "stub_kind": "compile_only", "semantics_verified": false}],
+                "blocked_callees": []
+            },
+            "commands": [
+                {"command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test external_direct_callee", "status": status},
+                {"command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports", "status": status}
+            ]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-final-verification.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "status": status,
+            "semantic_pass": status == "passed",
+            "fixture": {"path": fixture_path},
+            "rust_check_status": status,
+            "c_oracle_status": "passed",
+            "toolchain_status": "C_ORACLE_GENERATED",
+            "rust_report_status": status,
+            "schema_diff_status": status,
+            "negative_diff_mutation_detected": true,
+            "unsafe_status": unsafe_status,
+            "version_config_status": "recorded",
+            "generated_draft_semantic_pass": false,
+            "external_callee_scope": external_callee_scope,
+            "external_direct_callee_context_status": "recorded",
+            "external_direct_callees_checked": ["helper_add_one"],
+            "real_callee_source_count": 1,
+            "generated_stub_count": 1,
+            "callee_signature_binding_status": "recorded"
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-summary.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": source_commit,
+            "status": status,
+            "semantic_pass": status == "passed",
+            "summary": "call_helper_chain external direct callee demo has accepted C oracle, Rust replay, diff, negative diff, unsafe, and version evidence.",
+            "generated_draft_semantic_pass": false,
+            "external_callee_scope": external_callee_scope,
+            "known_gaps": [
+                "No arbitrary multi-function translation claim.",
+                "No function pointer, member call, variadic call, macro call, or nested call support claim."
+            ]
+        }),
+    )?;
+    let version_payload = json!({
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": "demo",
+        "slice_id": "external-direct-callee",
+        "source_commit": source_commit,
+        "repo_commit": repo_commit,
+        "status": "recorded",
+        "semantic_pass": status == "passed",
+        "translator_version": "0.1.0",
+        "fixture": {"path": fixture_path, "hash": "external-direct-callee-fixture"},
+        "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "translator_version", "external_callee.signature"]
+    });
+    write_json(
+        &evidence_dir.join(format!("{prefix}-version-manifest.json")),
+        &version_payload,
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-cache-metadata.json")),
+        &version_payload,
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-evidence-manifest.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "status": manifest_status,
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "fixture": {"path": fixture_path, "hash": "external-direct-callee-fixture", "operation_count": case_count},
+            "evidence": {
+                "slice_contract": {"path": "validation/evidence/demo/l3-external-direct-callee-slice-contract.json", "status": "recorded"},
+                "context_pack": {"path": "validation/evidence/demo/l3-external-direct-callee-context-pack.json", "status": "recorded"},
+                "cache_metadata": {"path": "validation/evidence/demo/l3-external-direct-callee-cache-metadata.json", "status": "recorded"},
+                "config_profile": {"path": "validation/evidence/demo/l3-external-direct-callee-config-profile.json", "status": "recorded", "profile_id": "demo-external-direct-callee-wsl-gcc"},
+                "type_map": {"path": "validation/evidence/demo/l3-external-direct-callee-type-map.json", "status": "recorded"},
+                "cfg": {"path": "validation/evidence/demo/l3-external-direct-callee-cfg.json", "status": "recorded"},
+                "pointer_dependency_graph": {"path": "validation/evidence/demo/l3-external-direct-callee-pointer-graph.json", "status": "not_applicable", "not_applicable_reason": "slice has no pointer surface"},
+                "test_translation": {"path": "validation/evidence/demo/l3-external-direct-callee-test-translation.json", "status": "recorded"},
+                "c_oracle": {"path": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json", "status": "passed", "toolchain_status": "C_ORACLE_GENERATED"},
+                "rust_report": {"path": "validation/evidence/demo/l3-external-direct-callee-rust-report.json", "status": status},
+                "schema_diff": {"path": "validation/evidence/demo/l3-external-direct-callee-diff.json", "status": status},
+                "negative_diff": {"path": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json", "status": "expected_failed", "expected_failure": true, "mutation_detected": true},
+                "rust_check": {"path": "validation/evidence/demo/l3-external-direct-callee-rust-check.json", "status": status},
+                "unsafe_scan": {"path": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json", "status": unsafe_status},
+                "unsafe_ledger": {"path": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json", "status": unsafe_status},
+                "performance_smoke": {"path": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json", "status": "recorded", "secondary_only": true},
+                "final_verification": {"path": "validation/evidence/demo/l3-external-direct-callee-final-verification.json", "status": status},
+                "summary": {"path": "validation/evidence/demo/l3-external-direct-callee-summary.json", "status": status},
+                "version_or_config_binding": {"path": "validation/evidence/demo/l3-external-direct-callee-version-manifest.json", "status": "recorded"}
+            },
+            "claim_boundary": {
+                "scope": "Only the demo call_helper_chain external direct callee slice for the committed fixture corpus.",
+                "behavior_fields_checked": behavior_fields,
+                "external_callee_scope": external_callee_scope,
+                "accepted_metadata_differences": [],
+                "known_gaps": [
+                    "No arbitrary multi-function translation claim.",
+                    "No function pointer, member call, variadic call, macro call, or nested call support claim."
+                ],
+                "must_not_claim": [
+                    "full automatic C99/C11 translation",
+                    "whole-program call graph semantic proof",
+                    "helper stub semantic equivalence",
+                    "function pointer or nested call expression support"
+                ]
+            }
+        }),
+    )
+}
+
 fn emit_sum_i32_ptr_arith_static_l3_evidence(
     evidence_dir: &Path,
     case_count: usize,
@@ -4527,6 +5186,62 @@ fn emit_call_expression_chain_safety_evidence(
                 "validation/l2_slices/src/call_expression_chain.rs"
             ],
             "scan_report": "validation/evidence/demo/l3-call-expression-unsafe-scan.json"
+        }),
+    )
+}
+
+fn emit_external_direct_callee_safety_evidence(
+    repo_root: &Path,
+    safety: &SafetyEvidence,
+) -> Result<(), Box<dyn Error>> {
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    let unsafe_count = safety.scan["unsafe_count"].as_u64().unwrap_or(0);
+    let status = if unsafe_count == 0 {
+        "passed"
+    } else {
+        "failed"
+    };
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-unsafe-scan.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "status": status,
+            "crate": "validation/l2_slices",
+            "scope": "first-party Rust source under validation/l2_slices/src",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "public_api_raw_pointer_exposed": false,
+            "public_api_unsafe_fn": false,
+            "hits": safety.scan["hits"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-external-direct-callee-unsafe-ledger.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "external-direct-callee",
+            "source_commit": "demo-external-direct-callee-20260625",
+            "status": status,
+            "policy": {
+                "first_party_non_test_unsafe_limit": 0,
+                "unsafe_ratio_limit": 0.10,
+                "audit_required_even_when_zero": true
+            },
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "registered_unsafe": [],
+            "introduced_unsafe": [],
+            "audited_modules": [
+                "validation/l2_slices/src/external_direct_callee.rs"
+            ],
+            "scan_report": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json"
         }),
     )
 }

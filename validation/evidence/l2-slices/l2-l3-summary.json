@@ -47,6 +47,12 @@
         "case_count": 6,
         "l2_status": "passed",
         "l3_status": "passed",
+        "slice_id": "demo-external-direct-callee"
+      },
+      {
+        "case_count": 6,
+        "l2_status": "passed",
+        "l3_status": "passed",
         "slice_id": "demo-sum-i32-ptr-arith"
       },
       {
@@ -99,6 +105,11 @@
       {
         "report": "validation/evidence/demo/l3-call-expression-negative-diff.json",
         "slice_id": "demo-call-expression",
+        "status": "passed"
+      },
+      {
+        "report": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+        "slice_id": "demo-external-direct-callee",
         "status": "passed"
       },
       {

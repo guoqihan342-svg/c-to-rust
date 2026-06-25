@@ -1,0 +1,26 @@
+{
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ux2itw__ C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\external-direct-callee\\l3-external-direct-callee-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [
+      {
+        "name": "helper_add_one",
+        "semantics_verified": false,
+        "signature_ref": "sig-helper-add-one",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 1,
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed"
+}

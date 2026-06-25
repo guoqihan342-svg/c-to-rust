@@ -1,0 +1,74 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/l3-external-direct-callee-config-profile.json",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "external_callee.signature"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "role": "input_value",
+      "rust_type": "i32",
+      "symbol": "value"
+    },
+    {
+      "c_name": "first",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "role": "local_call_result",
+      "rust_type": "i32",
+      "symbol": "first"
+    },
+    {
+      "c_name": "helper_add_one",
+      "c_type": "int(int)",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "role": "external_direct_callee",
+      "rust_type": "fn(i32) -> i32",
+      "symbol": "helper_add_one"
+    },
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "primitive",
+      "role": "return_value",
+      "rust_type": "i32",
+      "symbol": "return"
+    }
+  ],
+  "repo_commit": "workspace",
+  "safe_boundary": {
+    "public_api": "pub fn call_helper_chain(value: i32) -> ExternalDirectCalleeReport",
+    "raw_pointer_exposed": false,
+    "unsafe_required": false
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-external-direct-callee.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": [],
+  "unsupported_types": []
+}

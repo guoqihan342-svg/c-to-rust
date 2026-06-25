@@ -1,0 +1,60 @@
+{
+  "accepted_differences": [],
+  "behavior_fields": [
+    "return_value",
+    "status",
+    "external_callee_call_count",
+    "external_callee_contexts",
+    "external_callee_bindings",
+    "source_calls"
+  ],
+  "external_direct_callees": [
+    {
+      "definition_status": "real_source_bound",
+      "name": "helper_add_one",
+      "semantics_verified": false,
+      "signature_ref": "sig-helper-add-one",
+      "source_files": [
+        {
+          "path": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+          "sha256": "generated-at-validation"
+        }
+      ],
+      "source_ref": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py#helper_add_one",
+      "stub_kind": "compile_only"
+    }
+  ],
+  "fixture": {
+    "case_count": 6,
+    "hash": "external-direct-callee-fixture",
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No arbitrary multi-function translation claim.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No signed overflow equivalence beyond the committed safe fixture domain."
+  ],
+  "repo_commit": "workspace",
+  "rust_boundary": {
+    "api": "pub fn call_helper_chain(value: i32) -> ExternalDirectCalleeReport",
+    "module": "validation/l2_slices/src/external_direct_callee.rs",
+    "raw_pointer_exposed": false,
+    "safe_rust": true
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py"
+    ],
+    "functions": [
+      "call_helper_chain",
+      "helper_add_one"
+    ],
+    "signature": "int call_helper_chain(int value); int helper_add_one(int value)"
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

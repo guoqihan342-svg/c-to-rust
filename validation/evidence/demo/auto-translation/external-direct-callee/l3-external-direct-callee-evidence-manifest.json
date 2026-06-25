@@ -1,0 +1,149 @@
+{
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status",
+      "external_callee_call_count",
+      "external_callee_contexts",
+      "external_callee_bindings",
+      "source_calls"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 1,
+      "semantics_verified": false,
+      "status": "compile_context_only",
+      "stub_kind": "compile_only"
+    },
+    "known_gaps": [
+      "No arbitrary multi-function translation claim.",
+      "No helper stub semantic equivalence claim.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No signed overflow equivalence beyond the committed safe fixture domain.",
+      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "helper stub semantic equivalence",
+      "function pointer or nested call expression support",
+      "signed overflow equivalence",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+  },
+  "evidence": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-status.json",
+      "sha256": "6247890501c5281332e8ea44e814edf14038a82d44ba8d9f82408614ebb076ca",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-cache-metadata.json",
+      "sha256": "179f296d6d12fcebe2f4a49d69452267935bd66f89e6a34d1ed1fe757b49192d",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-config-profile.json",
+      "profile_id": "demo-external-direct-callee-wsl-gcc",
+      "sha256": "2af9ac275953edea64e55520e0ab2c3682443f62a918e7d2d4ca4848c604f35d",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-context-pack.json",
+      "sha256": "2c50ca0fedfe6eb8d1c7e5119cee12ae8479d6ab086979a31f60fdd242064842",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-final-verification.json",
+      "sha256": "b64542f604e36d8e6d4b50b25fae63ffffc0e175a296d69bb047125345017bb5",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-negative-diff.json",
+      "sha256": "22ee3c96cfd99a2519eada894e42cd970920ac16673874d356822c8bbda33176",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "4efdb65de0cadb6beaf7a25e6808ef94da964a48e88162ed63da7ec5aa272968",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
+      "sha256": "7f9fd18b0d448eb424e7e28ac2a62970044038dbe3d8285ba9d202a491a96a92",
+      "status": "not_applicable"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/rust-check.json",
+      "sha256": "a4e6aef79613c9825a86dfd1c941a977e9ce2d2a4da5674189cf4857ec45ee72",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-report.json",
+      "sha256": "f7b317d658942c43d36d2ba34f1f744c4b2452fae100d4c5d0d8e1353115f780",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-diff.json",
+      "sha256": "528b4e1bbf8b1bcedd6063105979ba2a60c2f3fbdfbe4adc2c5aa0859db7f72a",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-slice-contract.json",
+      "sha256": "0191f1299e27b3d6b1f013c147cf29b576e411df35786d1516da3143de754f0d",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-summary.json",
+      "sha256": "0ebb3fd06ce219f4ca9da8024d824124a029a9d44c9d5439bc69aefc9bcc738f",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-test-translation-generated.json",
+      "sha256": "632e3ddc09f0d4c6cb395a94b467de716a755cf8935b3238363adb1525719a15",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-ledger.json",
+      "sha256": "7d0b264403e36172be468a2eecf4efebb68807203434ec880d71b3793b46226b",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-scan.json",
+      "sha256": "9472619a97d8c74db527bb0e8feb420b66bd7a7596b1f189e9843f7ab362ce91",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-version-manifest.json",
+      "sha256": "f5adbef58c3710e9115887ad81b2d6dcff515173ad231ba34537fdeb60782df2",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "external-direct-callee-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

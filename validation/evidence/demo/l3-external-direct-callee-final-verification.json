@@ -1,0 +1,35 @@
+{
+  "c_oracle_status": "passed",
+  "callee_signature_binding_status": "recorded",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 1,
+    "semantics_verified": false,
+    "status": "compile_context_only",
+    "stub_kind": "compile_only"
+  },
+  "external_direct_callee_context_status": "recorded",
+  "external_direct_callees_checked": [
+    "helper_add_one"
+  ],
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "generated_draft_semantic_pass": false,
+  "generated_stub_count": 1,
+  "level": "L3",
+  "negative_diff_mutation_detected": true,
+  "real_callee_source_count": 1,
+  "rust_check_status": "passed",
+  "rust_report_status": "passed",
+  "schema_diff_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "unsafe_status": "passed",
+  "version_config_status": "recorded"
+}

@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int call_helper_chain(int value) { int first = helper_add_one(value); value = helper_add_one(first); return helper_add_one(value); }",
+  "fixture_hash": "external-direct-callee-fixture",
+  "function_name": "call_helper_chain",
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "target_id": "demo"
+}

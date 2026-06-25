@@ -1,0 +1,75 @@
+{
+  "alias_gate_identity": {
+    "alias_set_count": 0,
+    "aliasing_proven": false,
+    "decision": "not_applicable",
+    "precondition_count": 0,
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "build_profile_hash": "011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-external-direct-callee.json",
+    "--accept-existing-evidence"
+  ],
+  "fixture_hash": "external-direct-callee-fixture",
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "summary"
+  ],
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 1,
+    "type_map": 1
+  },
+  "slice_id": "external-direct-callee",
+  "slice_spec_sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+    "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_version": "0.1.0"
+}

@@ -1,0 +1,119 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+      "diff": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+      "final_verification": "f6951d5a898457af0ec94ad99100833ef2adf0107ed1d50369f1734cc6d216d9",
+      "negative_diff": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+      "performance_smoke": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+      "rust_report": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+      "unsafe_ledger": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
+      "unsafe_scan": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
+      "version_manifest": "bc208abbae000a08cb7ed3fd7d825b8bc4b9e41f34e118d93718f0edd3f8edfe"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+      "final_verification": "validation/evidence/demo/l3-external-direct-callee-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-external-direct-callee-version-manifest.json"
+    },
+    "slice_id": "external-direct-callee",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "build_profile_hash": "011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-external-direct-callee.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "external-direct-callee-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "external-direct-callee",
+    "slice_spec_sha256": "d1cfb0ab00ec4dc555c59ab9710c587acd005d0e42755bf0d1f9a86846e16974",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py": "e79a6c596f72e8ffd312f323f3bc65564b5cf0c608c92ac3ce8ce388f8816a69"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

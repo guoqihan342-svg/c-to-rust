@@ -1,0 +1,93 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "fixture_sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "bd927e6af469ce16d37c8119db3421c3d609b6bf9b1f76e4bd081b061e04a22b",
+      "diff": "25b25cd3c8c06c52aff6257b4d0fdc39ee6a62dce282ed714a36f062cd7855fd",
+      "final_verification": "f6951d5a898457af0ec94ad99100833ef2adf0107ed1d50369f1734cc6d216d9",
+      "negative_diff": "666613c9f2a097a36d636b55dba3eb292b7307d8c739c7e77e37dfd006623288",
+      "performance_smoke": "86e73951ca1d24c63bf426c2abbfa49ec85209b464fd3ff172a21a42215596ef",
+      "rust_report": "9b2e743b35e7e9bc3a38c74abcd4c191d147e48fda0d55e16202f494f870cfed",
+      "unsafe_ledger": "2fe75734941305cbc1a7ad536d868127a0872280bb2a5f9854791bdfdaaf35d5",
+      "unsafe_scan": "587e4cf9d97b84ded264c3314b8c02525882c66e694b1cb7dbe6893f9c07f73e",
+      "version_manifest": "bc208abbae000a08cb7ed3fd7d825b8bc4b9e41f34e118d93718f0edd3f8edfe"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-external-direct-callee-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-external-direct-callee-diff.json",
+      "final_verification": "validation/evidence/demo/l3-external-direct-callee-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-external-direct-callee-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-external-direct-callee-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-external-direct-callee-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-external-direct-callee-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-external-direct-callee-version-manifest.json"
+    },
+    "slice_id": "external-direct-callee",
+    "source_commit": "demo-external-direct-callee-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-external-direct-callee-20260625",
+    "slice_spec_sha256=f2f9814f76901726de56c6f855ceaeb1357b6946fd8a64384a9415316f2c42b4",
+    "fixture_hash=external-direct-callee-fixture",
+    "build_profile_hash=011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "f2f9814f76901726de56c6f855ceaeb1357b6946fd8a64384a9415316f2c42b4"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "external-direct-callee-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No arbitrary multi-function translation claim.",
+    "No helper stub semantic equivalence claim.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No signed overflow equivalence beyond the committed safe fixture domain."
+  ],
+  "profile_id": "demo-external-direct-callee-wsl-gcc",
+  "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "external_callee.signature"
+  ],
+  "context_pack_ref": "validation/evidence/demo/l3-external-direct-callee-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "call_helper_chain has no pointer parameters, pointer returns, globals, buffers, or external mutable state in the committed fixture boundary.",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_boundary": {
+    "direct_call_edges": [
+      {
+        "context": "declaration_initializer",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      },
+      {
+        "context": "assignment",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      },
+      {
+        "context": "return",
+        "from": "call_helper_chain",
+        "to": "helper_add_one"
+      }
+    ],
+    "files": [
+      "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+    ],
+    "functions": [
+      "call_helper_chain",
+      "helper_add_one"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "demo-external-direct-callee-20260625",
+  "status": "not_applicable",
+  "target_id": "demo"
+}
