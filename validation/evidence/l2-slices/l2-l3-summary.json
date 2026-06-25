@@ -42,6 +42,12 @@
         "l2_status": "passed",
         "l3_status": "passed",
         "slice_id": "demo-sum-i32-ptr-arith"
+      },
+      {
+        "case_count": 6,
+        "l2_status": "passed",
+        "l3_status": "passed",
+        "slice_id": "demo-copy-i32-ptr-arith"
       }
     ],
     "status": "passed"
@@ -82,6 +88,11 @@
         "report": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
         "slice_id": "demo-sum-i32-ptr-arith",
         "status": "passed"
+      },
+      {
+        "report": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+        "slice_id": "demo-copy-i32-ptr-arith",
+        "status": "passed"
       }
     ],
     "status": "passed"
@@ -91,6 +102,7 @@
     "command": "cargo test",
     "status": "passed",
     "tested_modules": [
+      "validation/l2_slices/src/copy_i32_ptr_arith.rs",
       "validation/l2_slices/src/libuv_ip4_addr.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/store_add_one.rs",

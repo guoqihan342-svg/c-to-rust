@@ -278,6 +278,7 @@ function Get-RoundSteps {
     $steps.Add((New-Step "demo-store-add-one-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "demo", "--slice-id", "store-add-one", "--require-semantic-pass")))
     $steps.Add((New-Step "demo-sum-i32-buffer-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "demo", "--slice-id", "sum-i32-buffer", "--require-semantic-pass")))
     $steps.Add((New-Step "demo-sum-i32-ptr-arith-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "demo", "--slice-id", "sum-i32-ptr-arith", "--require-semantic-pass")))
+    $steps.Add((New-Step "demo-copy-i32-ptr-arith-auto-evidence-semantic" "auto_translation_evidence" "." @("python", "-B", "validation/tools/validate_auto_translation_evidence.py", "--target-id", "demo", "--slice-id", "copy-i32-ptr-arith", "--require-semantic-pass")))
     $steps.Add((New-Step "test-translation-coverage" "test_translation_coverage" "." @("python", "-B", "validation/tools/validate_test_translation_coverage.py", "--evidence-root", "validation/evidence", "--report", $testTranslationCoverageReport)))
     $steps.Add((New-Step "flashdb-fmt" "flashdb_build" "flashDB_rust" @("cargo", "fmt", "--", "--check")))
     $steps.Add((New-Step "flashdb-check" "flashdb_build" "flashDB_rust" @("cargo", "check")))

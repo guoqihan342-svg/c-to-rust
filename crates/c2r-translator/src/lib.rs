@@ -197,11 +197,28 @@ struct IncDecStatement {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum LValue {
-    SimpleIdentifier { name: String },
-    PointerField { base: String, field: String },
-    DerefIdentifier { base: String },
-    BoundedPointerIndex { base: String, index: String },
-    Unsupported { reason: String },
+    SimpleIdentifier {
+        name: String,
+    },
+    PointerField {
+        base: String,
+        field: String,
+    },
+    DerefIdentifier {
+        base: String,
+    },
+    BoundedPointerIndex {
+        base: String,
+        index: String,
+    },
+    BoundedPointerArithmeticIndex {
+        base: String,
+        index: String,
+        source: String,
+    },
+    Unsupported {
+        reason: String,
+    },
 }
 
 pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
@@ -263,6 +280,7 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
 
     record_unsupported_statements(&statements, &mut result);
     record_unbounded_buffer_reads(&statements, &mut result);
+    record_unbounded_pointer_arithmetic_output_writes(&function, &statements, &mut result);
     if result
         .errors
         .iter()
@@ -634,6 +652,13 @@ fn classify_statement(text: &str) -> StatementKind {
 fn classify_lvalue_statement(target: &str, simple_kind: StatementKind) -> StatementKind {
     match parse_lvalue(target) {
         LValue::SimpleIdentifier { .. } => simple_kind,
+        LValue::BoundedPointerArithmeticIndex { .. } => {
+            if simple_kind == StatementKind::Assignment {
+                StatementKind::PointerWrite
+            } else {
+                StatementKind::UnsupportedLValue
+            }
+        }
         LValue::PointerField { .. }
         | LValue::DerefIdentifier { .. }
         | LValue::BoundedPointerIndex { .. } => StatementKind::PointerWrite,
@@ -651,6 +676,9 @@ fn statement_kind_labels(statements: &[ParsedStatement]) -> Vec<String> {
         if statement_has_bounded_pointer_arithmetic_input_read(statement) {
             push_unique(&mut labels, "bounded_pointer_arithmetic_input_read");
         }
+        if statement_has_bounded_pointer_arithmetic_output_write(statement) {
+            push_unique(&mut labels, "bounded_pointer_arithmetic_output_write");
+        }
     }
     labels
 }
@@ -664,6 +692,9 @@ fn statement_lvalue_kinds(statements: &[ParsedStatement]) -> Vec<String> {
         }
         if statement_has_bounded_pointer_arithmetic_input_read(statement) {
             push_unique(&mut kinds, "bounded_pointer_arithmetic_input_buffer");
+        }
+        if statement_has_bounded_pointer_arithmetic_output_write(statement) {
+            push_unique(&mut kinds, "bounded_pointer_arithmetic_output_buffer");
         }
     }
     kinds
@@ -829,6 +860,13 @@ fn parse_lvalue(target: &str) -> LValue {
         };
     }
     if let Some(rest) = trimmed.strip_prefix('*') {
+        if let Some((base, index, source)) = parse_pointer_arithmetic_deref_lvalue(trimmed) {
+            return LValue::BoundedPointerArithmeticIndex {
+                base,
+                index,
+                source,
+            };
+        }
         let base = rest.trim();
         if is_simple_identifier(base) {
             return LValue::DerefIdentifier {
@@ -860,22 +898,51 @@ fn parse_lvalue(target: &str) -> LValue {
     }
 }
 
+fn parse_pointer_arithmetic_deref_lvalue(target: &str) -> Option<(String, String, String)> {
+    let trimmed = target.trim();
+    let rest = trimmed.strip_prefix('*')?.trim();
+    if !rest.starts_with('(') {
+        return None;
+    }
+    let close = find_matching_byte(rest, 0, b'(', b')')?;
+    if !rest[close + 1..].trim().is_empty() {
+        return None;
+    }
+    let inner = rest[1..close].trim();
+    let parts = split_top_level(inner, b'+');
+    if parts.len() != 2 {
+        return None;
+    }
+    let base = parts[0].trim();
+    let index = parts[1].trim();
+    if !is_simple_identifier(base) || !is_simple_identifier(index) {
+        return None;
+    }
+    Some((base.to_string(), index.to_string(), trimmed.to_string()))
+}
+
 fn lvalue_kind(lvalue: &LValue) -> &'static str {
     match lvalue {
         LValue::SimpleIdentifier { .. } => "simple_identifier",
         LValue::PointerField { .. } => "pointer_field",
         LValue::DerefIdentifier { .. } => "deref_identifier",
         LValue::BoundedPointerIndex { .. } => "bounded_pointer_index",
+        LValue::BoundedPointerArithmeticIndex { .. } => "bounded_pointer_arithmetic_output_buffer",
         LValue::Unsupported { .. } => "unsupported_lvalue",
     }
 }
 
-fn lvalue_write_effect(lvalue: &LValue) -> Option<String> {
+fn lvalue_write_effects(lvalue: &LValue) -> Vec<String> {
     match lvalue {
-        LValue::PointerField { base, field } => Some(format!("{base}->{field}")),
-        LValue::DerefIdentifier { base } => Some(format!("*{base}")),
-        LValue::BoundedPointerIndex { base, index } => Some(format!("{base}[{index}]")),
-        _ => None,
+        LValue::PointerField { base, field } => vec![format!("{base}->{field}")],
+        LValue::DerefIdentifier { base } => vec![format!("*{base}")],
+        LValue::BoundedPointerIndex { base, index } => vec![format!("{base}[{index}]")],
+        LValue::BoundedPointerArithmeticIndex {
+            base,
+            index,
+            source,
+        } => vec![format!("{base}[{index}]"), source.clone()],
+        _ => Vec::new(),
     }
 }
 
@@ -883,7 +950,8 @@ fn lvalue_base(lvalue: &LValue) -> Option<&str> {
     match lvalue {
         LValue::PointerField { base, .. }
         | LValue::DerefIdentifier { base }
-        | LValue::BoundedPointerIndex { base, .. } => Some(base),
+        | LValue::BoundedPointerIndex { base, .. }
+        | LValue::BoundedPointerArithmeticIndex { base, .. } => Some(base),
         _ => None,
     }
 }
@@ -935,6 +1003,20 @@ fn statement_has_bounded_pointer_arithmetic_input_read(statement: &ParsedStateme
         .any(|read| {
             read.pointer_arithmetic && loop_condition_bounds_index(&condition, &read.index, "len")
         })
+}
+
+fn statement_has_bounded_pointer_arithmetic_output_write(statement: &ParsedStatement) -> bool {
+    if statement.kind != StatementKind::For {
+        return false;
+    }
+    let Some((_, condition, _, body)) = parse_for_parts(&statement.text) else {
+        return false;
+    };
+    let nested = parse_statements(&body);
+    nested
+        .iter()
+        .flat_map(pointer_arithmetic_output_writes_for_statement)
+        .any(|write| loop_condition_bounds_index(&condition, &write.index, "len"))
 }
 
 fn parse_declaration(text: &str) -> Option<Declaration> {
@@ -1248,6 +1330,75 @@ fn record_unbounded_buffer_reads_with_bounds(
     }
 }
 
+fn record_unbounded_pointer_arithmetic_output_writes(
+    function: &ParsedFunction,
+    statements: &[ParsedStatement],
+    result: &mut TranslationResult,
+) {
+    record_unbounded_pointer_arithmetic_output_writes_with_bounds(
+        function,
+        statements,
+        &[],
+        result,
+    );
+}
+
+fn record_unbounded_pointer_arithmetic_output_writes_with_bounds(
+    function: &ParsedFunction,
+    statements: &[ParsedStatement],
+    bounds: &[(&str, &str)],
+    result: &mut TranslationResult,
+) {
+    for statement in statements {
+        if statement.kind == StatementKind::For {
+            if let Some((_, condition, _, body)) = parse_for_parts(&statement.text) {
+                let nested = parse_statements(&body);
+                let nested_writes = nested
+                    .iter()
+                    .flat_map(pointer_arithmetic_output_writes_for_statement)
+                    .collect::<Vec<_>>();
+                let mut nested_bounds = bounds.to_vec();
+                for write in &nested_writes {
+                    if loop_condition_bounds_index(&condition, &write.index, "len")
+                        && mutable_i32_pointer_param(function, &write.base)
+                    {
+                        nested_bounds.push((write.base.as_str(), write.index.as_str()));
+                    }
+                }
+                record_unbounded_pointer_arithmetic_output_writes_with_bounds(
+                    function,
+                    &nested,
+                    &nested_bounds,
+                    result,
+                );
+            }
+            continue;
+        }
+        for write in pointer_arithmetic_output_writes_for_statement(statement) {
+            let allowed = bounds
+                .iter()
+                .any(|(base, index)| *base == write.base && *index == write.index);
+            if !allowed {
+                result.errors.push(TranslationError {
+                    kind: "unsupported_syntax".to_string(),
+                    message: format!(
+                        "output buffer write `{}` is not proven by a bounded length companion",
+                        write.source
+                    ),
+                    source_span: Some(statement.text.clone()),
+                });
+            }
+        }
+    }
+}
+
+fn mutable_i32_pointer_param(function: &ParsedFunction, name: &str) -> bool {
+    function
+        .params
+        .iter()
+        .any(|param| param.name == name && normalize_type(&param.c_type) == "int*")
+}
+
 fn parse_simple_call(text: &str) -> Option<(&str, &str)> {
     let trimmed = text.trim().trim_end_matches(';').trim();
     let open = trimmed.find('(')?;
@@ -1350,7 +1501,13 @@ fn emit_pointer_graph(
         } else {
             "out_param"
         };
-        let rust_boundary = if normalize_type(&param.c_type) == "const int*" {
+        let boundary_decisions = pointer_boundary_decisions(&param.name, statements);
+        let rust_boundary = if boundary_decisions
+            .iter()
+            .any(|item| item == "bounded_pointer_arithmetic_output_write")
+        {
+            "&mut [i32]"
+        } else if normalize_type(&param.c_type) == "const int*" {
             "&[i32]"
         } else if role == "borrowed_input" {
             "&str"
@@ -1358,7 +1515,6 @@ fn emit_pointer_graph(
             "owned safe report"
         };
         let write_effects = pointer_write_effects(&param.name, statements);
-        let boundary_decisions = pointer_boundary_decisions(&param.name, statements);
         if role == "out_param" && write_effects.is_empty() {
             result.errors.push(TranslationError {
                 kind: "unsupported_pointer_pattern".to_string(),
@@ -1419,6 +1575,15 @@ fn collect_pointer_read_effects(
                 let recorded_buffer_read =
                     push_buffer_read_effects_from_statement(name, statement, effects);
                 if !recorded_buffer_read {
+                    if statement.kind == StatementKind::PointerWrite {
+                        if let Some(lvalue) = statement_lvalue(statement) {
+                            if matches!(lvalue, LValue::BoundedPointerArithmeticIndex { .. })
+                                && lvalue_base(&lvalue) == Some(name)
+                            {
+                                continue;
+                            }
+                        }
+                    }
                     let effect = if statement.text.contains(&format!("{name}[i]")) {
                         format!("{name}[i]")
                     } else {
@@ -1482,6 +1647,19 @@ fn bounded_pointer_arithmetic_read_in_loop(
         })
 }
 
+fn bounded_pointer_arithmetic_output_write_in_loop(
+    name: &str,
+    condition: &str,
+    statements: &[ParsedStatement],
+) -> bool {
+    statements
+        .iter()
+        .flat_map(pointer_arithmetic_output_writes_for_statement)
+        .any(|write| {
+            write.base == name && loop_condition_bounds_index(condition, &write.index, "len")
+        })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BufferRead {
     base: String,
@@ -1493,6 +1671,36 @@ struct BufferRead {
 impl BufferRead {
     fn canonical_source(&self) -> String {
         format!("{}[{}]", self.base, self.index)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct OutputBufferWrite {
+    base: String,
+    index: String,
+    source: String,
+}
+
+fn pointer_arithmetic_output_writes_for_statement(
+    statement: &ParsedStatement,
+) -> Vec<OutputBufferWrite> {
+    if statement.kind != StatementKind::PointerWrite {
+        return Vec::new();
+    }
+    let Some(assignment) = parse_assignment(&statement.text) else {
+        return Vec::new();
+    };
+    match parse_lvalue(&assignment.target) {
+        LValue::BoundedPointerArithmeticIndex {
+            base,
+            index,
+            source,
+        } => vec![OutputBufferWrite {
+            base,
+            index,
+            source,
+        }],
+        _ => Vec::new(),
     }
 }
 
@@ -1673,18 +1881,38 @@ fn loop_condition_bounds_index(condition: &str, index_name: &str, len_name: &str
 }
 
 fn pointer_write_effects(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
-    statements
-        .iter()
-        .filter_map(|statement| {
-            if statement.kind != StatementKind::PointerWrite {
-                return None;
+    let mut effects = Vec::new();
+    collect_pointer_write_effects(name, statements, &mut effects);
+    effects
+}
+
+fn collect_pointer_write_effects(
+    name: &str,
+    statements: &[ParsedStatement],
+    effects: &mut Vec<String>,
+) {
+    for statement in statements {
+        if statement.kind == StatementKind::For {
+            if let Some((_, _, _, body)) = parse_for_parts(&statement.text) {
+                collect_pointer_write_effects(name, &parse_statements(&body), effects);
             }
-            let lvalue = statement_lvalue(statement)?;
-            (lvalue_base(&lvalue) == Some(name))
-                .then(|| lvalue_write_effect(&lvalue))
-                .flatten()
-        })
-        .collect()
+            continue;
+        }
+        if statement.kind != StatementKind::PointerWrite {
+            continue;
+        }
+        let Some(lvalue) = statement_lvalue(statement) else {
+            continue;
+        };
+        if lvalue_base(&lvalue) != Some(name) {
+            continue;
+        }
+        for effect in lvalue_write_effects(&lvalue) {
+            if !effects.iter().any(|item| item == &effect) {
+                effects.push(effect);
+            }
+        }
+    }
 }
 
 fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
@@ -1705,6 +1933,13 @@ fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec
                 {
                     decisions.push("bounded_pointer_arithmetic_input_read".to_string());
                 }
+                if bounded_pointer_arithmetic_output_write_in_loop(name, &condition, &nested)
+                    && !decisions
+                        .iter()
+                        .any(|item| item == "bounded_pointer_arithmetic_output_write")
+                {
+                    decisions.push("bounded_pointer_arithmetic_output_write".to_string());
+                }
             }
         }
         if statement.kind != StatementKind::PointerWrite {
@@ -1718,6 +1953,9 @@ fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec
         };
         let decision = match lvalue {
             LValue::BoundedPointerIndex { .. } => "bounded_pointer_index",
+            LValue::BoundedPointerArithmeticIndex { .. } => {
+                "bounded_pointer_arithmetic_output_write"
+            }
             LValue::PointerField { .. } | LValue::DerefIdentifier { .. } => {
                 "safe_wrapper_candidate"
             }
@@ -1822,6 +2060,19 @@ fn supports_pointer_body_translation(
         })
 }
 
+fn supports_pointer_output_buffer_translation(
+    function: &ParsedFunction,
+    statements: &[ParsedStatement],
+) -> bool {
+    function
+        .params
+        .iter()
+        .any(|param| normalize_type(&param.c_type) == "int*")
+        && statements
+            .iter()
+            .any(statement_has_bounded_pointer_arithmetic_output_write)
+}
+
 fn emit_rust(
     function: &ParsedFunction,
     statements: &[ParsedStatement],
@@ -1837,6 +2088,34 @@ fn emit_rust(
             .translation_rule_ids
             .push("safe-wrapper-for-pointer-out-param".to_string());
         record_statement_rules(statements, result);
+        if supports_pointer_output_buffer_translation(function, statements) {
+            let rust_params = function
+                .params
+                .iter()
+                .map(|param| {
+                    format!(
+                        "{}: {}",
+                        param.name,
+                        public_pointer_buffer_param_type(&param.c_type)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let body_lines = emit_safe_pointer_body(statements, 1);
+            return format!(
+                "pub fn {}({rust_params}) -> i32 {{\n{}\n}}\n",
+                function.name,
+                body_lines
+                    .into_iter()
+                    .map(|line| if line.is_empty() {
+                        "    0".to_string()
+                    } else {
+                        line
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+        }
         if supports_pointer_body_translation(function, statements) {
             let rust_params = function
                 .params
@@ -1980,6 +2259,12 @@ fn record_statement_rules(statements: &[ParsedStatement], result: &mut Translati
                         "bounded-pointer-arithmetic-input-read",
                     );
                 }
+                if statement_has_bounded_pointer_arithmetic_output_write(statement) {
+                    push_rule_once(
+                        &mut result.plan.translation_rule_ids,
+                        "bounded-pointer-arithmetic-output-write",
+                    );
+                }
                 Some("structured-for")
             }
             StatementKind::BoundedInputBufferRead => Some("bounded-input-buffer-read"),
@@ -2009,6 +2294,9 @@ fn pointer_lvalue_rule(text: &str) -> Option<&'static str> {
         LValue::PointerField { .. } => Some("pointer-field-write"),
         LValue::DerefIdentifier { .. } => Some("pointer-deref-write"),
         LValue::BoundedPointerIndex { .. } => Some("bounded-pointer-index-write"),
+        LValue::BoundedPointerArithmeticIndex { .. } => {
+            Some("bounded-pointer-arithmetic-output-write")
+        }
         _ => None,
     }
 }
@@ -2300,6 +2588,13 @@ fn indent(level: usize) -> String {
 
 fn public_param_type(c_type: &str) -> &'static str {
     map_c_type(c_type).unwrap_or("/* unsupported */ ()")
+}
+
+fn public_pointer_buffer_param_type(c_type: &str) -> &'static str {
+    match normalize_type(c_type).as_str() {
+        "int*" => "&mut [i32]",
+        _ => public_param_type(c_type),
+    }
 }
 
 fn report_type_name(function_name: &str) -> String {

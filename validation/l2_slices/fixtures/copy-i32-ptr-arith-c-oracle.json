@@ -1,0 +1,165 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "empty",
+      "id": "empty",
+      "len": 0,
+      "out_values": [],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [],
+      "write_count": 0
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "single",
+      "id": "single-positive",
+      "len": 1,
+      "out_values": [
+        7
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        7
+      ],
+      "write_count": 1
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "multi",
+      "id": "multi-positive",
+      "len": 4,
+      "out_values": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "write_count": 4
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "negative_values",
+      "id": "mixed-negative",
+      "len": 4,
+      "out_values": [
+        -5,
+        2,
+        -3,
+        6
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        -5,
+        2,
+        -3,
+        6
+      ],
+      "write_count": 4
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "zero_values",
+      "id": "zero-values",
+      "len": 3,
+      "out_values": [
+        0,
+        0,
+        0
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        0,
+        0,
+        0
+      ],
+      "write_count": 3
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "boundary_safe",
+      "id": "boundary-safe",
+      "len": 3,
+      "out_values": [
+        1073741823,
+        -1073741824,
+        -1
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        1073741823,
+        -1073741824,
+        -1
+      ],
+      "write_count": 3
+    }
+  ],
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "values",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No NULL pointer execution.",
+    "No negative len execution.",
+    "No aliasing proof between values and out.",
+    "No input/output overlap execution.",
+    "No signed overflow cases.",
+    "No arbitrary pointer arithmetic beyond *(values + i) reads and *(out + i) writes."
+  ],
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py"
+    ],
+    "functions": [
+      "copy_i32_ptr_arith"
+    ],
+    "signature": "int copy_i32_ptr_arith(const int* values, int len, int* out)"
+  },
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

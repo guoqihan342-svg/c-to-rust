@@ -1,0 +1,23 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+    "sha256": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "single-positive",
+    "field": "out_values",
+    "mutated_c_value": [
+      8
+    ],
+    "rust_value": [
+      7
+    ]
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

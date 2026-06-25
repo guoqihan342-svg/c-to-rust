@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+  "fixture_hash": "copy-i32-ptr-arith-fixture",
+  "function_name": "copy_i32_ptr_arith",
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "target_id": "demo"
+}

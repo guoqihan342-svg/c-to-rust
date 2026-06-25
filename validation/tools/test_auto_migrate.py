@@ -371,6 +371,114 @@ class AutoMigrateTests(unittest.TestCase):
                 1,
             )
 
+    def test_pointer_arithmetic_output_write_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "fill-i32-ptr-arith-out",
+            "source_commit": "1234567",
+            "function_name": "fill_i32_ptr_arith_out",
+            "c_source": "int fill_i32_ptr_arith_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "fill-i32-ptr-arith-out.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "fill-i32-ptr-arith-out"
+            cfg = json.loads((evidence_dir / "l3-fill-i32-ptr-arith-out-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-fill-i32-ptr-arith-out-pointer-graph.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            plan = json.loads(
+                (
+                    evidence_dir / "l3-fill-i32-ptr-arith-out-auto-translation-plan.json"
+                ).read_text(encoding="utf-8")
+            )
+            rust_draft = (evidence_dir / "l3-fill-i32-ptr-arith-out-rust-draft.rs").read_text(
+                encoding="utf-8"
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("out: &mut [i32]", rust_draft)
+            self.assertIn("out[i as usize] = value;", rust_draft)
+            self.assertIn("bounded_pointer_arithmetic_output_write", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_output_buffer", block["lvalue_kinds"])
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_output_write"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-output-write"
+                    for decision in block["lvalue_decisions"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_output_write"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-output-write"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            out_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "out")
+            self.assertEqual(out_node["kind"], "buffer")
+            self.assertEqual(out_node["buffer_role"], "output")
+            self.assertEqual(out_node["length_companion"], "len")
+            self.assertEqual(out_node["ownership_role"], "out_param")
+            self.assertEqual(out_node["mutability"], "write_only")
+            self.assertIn("out[i]", out_node["write_effects"])
+            self.assertIn("*(out + i)", out_node["write_effects"])
+            self.assertIn("bounded_pointer_arithmetic_output_write", out_node["boundary_decisions"])
+            self.assertIn(
+                "bounded-pointer-arithmetic-output-write",
+                plan["translation_summary"]["translation_rule_ids"],
+            )
+            self.assertEqual(
+                plan["translation_summary"]["lvalue_decision_counts"][
+                    "bounded_pointer_arithmetic_output_write"
+                ],
+                1,
+            )
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"][
+                    "bounded_pointer_arithmetic_output_write"
+                ],
+                1,
+            )
+
     def test_unsupported_lvalue_blocks_auto_migrate_candidate_generation(self) -> None:
         spec = {
             "target_id": "demo",

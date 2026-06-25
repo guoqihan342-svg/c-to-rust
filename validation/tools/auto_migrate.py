@@ -288,7 +288,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
             "boundary_decisions": node.get("boundary_decisions", []),
         }
         if kind == "buffer":
-            pointer_node["buffer_role"] = "input"
+            pointer_node["buffer_role"] = pointer_buffer_role(node)
             pointer_node["length_companion"] = input_buffer_length_companion(spec, str(pointer_node["id"]))
         pointer_nodes.append(pointer_node)
     dependency_edges = [
@@ -417,11 +417,19 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
 
 
 def pointer_node_kind(node: dict[str, Any]) -> str:
+    if "bounded_pointer_arithmetic_output_write" in node.get("boundary_decisions", []):
+        return "buffer"
     if node.get("role") == "out_param":
         return "struct_pointer"
     if str(node.get("c_type", "")).strip() == "const int*":
         return "buffer"
     return "raw_pointer"
+
+
+def pointer_buffer_role(node: dict[str, Any]) -> str:
+    if node.get("role") == "out_param":
+        return "output"
+    return "input"
 
 
 def pointer_ownership_role(node: dict[str, Any]) -> str:
@@ -1795,6 +1803,7 @@ def lvalue_decision_for_kind(kind: str) -> str:
         "bounded_pointer_index": "bounded_pointer_index",
         "bounded_input_buffer": "bounded_input_buffer",
         "bounded_pointer_arithmetic_input_buffer": "bounded_pointer_arithmetic_input_read",
+        "bounded_pointer_arithmetic_output_buffer": "bounded_pointer_arithmetic_output_write",
         "unsupported_lvalue": "unsupported_lvalue",
     }.get(kind, "unknown")
 
@@ -1807,6 +1816,7 @@ def lvalue_translation_rule(kind: str) -> str:
         "bounded_pointer_index": "bounded-pointer-index-write",
         "bounded_input_buffer": "bounded-input-buffer-read",
         "bounded_pointer_arithmetic_input_buffer": "bounded-pointer-arithmetic-input-read",
+        "bounded_pointer_arithmetic_output_buffer": "bounded-pointer-arithmetic-output-write",
         "unsupported_lvalue": "unsupported-lvalue-block",
     }.get(kind, "unknown-lvalue")
 
@@ -1846,6 +1856,8 @@ def pointer_decision_lvalue_kind(decision: str) -> str:
         return "bounded_input_buffer"
     if decision == "bounded_pointer_arithmetic_input_read":
         return "bounded_pointer_arithmetic_input_buffer"
+    if decision == "bounded_pointer_arithmetic_output_write":
+        return "bounded_pointer_arithmetic_output_buffer"
     return "pointer_write"
 
 
@@ -1856,6 +1868,8 @@ def pointer_decision_translation_rule(decision: str) -> str:
         return "bounded-input-buffer-read"
     if decision == "bounded_pointer_arithmetic_input_read":
         return "bounded-pointer-arithmetic-input-read"
+    if decision == "bounded_pointer_arithmetic_output_write":
+        return "bounded-pointer-arithmetic-output-write"
     return "pointer-field-write"
 
 

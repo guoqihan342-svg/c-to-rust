@@ -1,0 +1,135 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-copy-i32-ptr-arith-20260625",
+    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "fixture_hash=copy-i32-ptr-arith-fixture",
+    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "return 0",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_input_read",
+              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 2,
+              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_output_write",
+              "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "",
+              "statement_index": 3,
+              "translation_rule_id": "bounded-pointer-arithmetic-output-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "none",
+            "bounded_input_buffer",
+            "bounded_pointer_arithmetic_input_buffer",
+            "bounded_pointer_arithmetic_output_buffer"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "for",
+            "bounded_input_buffer_read",
+            "bounded_pointer_arithmetic_input_read",
+            "bounded_pointer_arithmetic_output_write",
+            "return"
+          ],
+          "statements": [
+            "for (int i = 0; i < len; i++) { *(out + i) = *(values + i); }",
+            "return 0"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "copy_i32_ptr_arith",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "0",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int copy_i32_ptr_arith(const int* values, int len, int* out)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 1,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "2377c217eb71c24dde7e0f14c161a7c7177bd8bd",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
+    "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "status": "ready"
+  },
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

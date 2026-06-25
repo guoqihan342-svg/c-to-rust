@@ -315,6 +315,56 @@ fn bounded_pointer_arithmetic_read_generates_safe_slice_boundary_and_decisions()
 }
 
 #[test]
+fn bounded_pointer_arithmetic_output_write_generates_safe_mut_slice_boundary_and_decisions() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "fill-i32-ptr-arith-out".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "fill_i32_ptr_arith_out".to_string(),
+        c_source: "int fill_i32_ptr_arith_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn fill_i32_ptr_arith_out(out: &mut [i32], len: i32, value: i32)"));
+    assert!(result.rust_code.contains("out[i as usize] = value;"));
+    assert!(!result.rust_code.contains("*(out + i)"));
+    assert!(!result.rust_code.contains("*mut"));
+    let out = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "out")
+        .expect("out pointer node");
+    assert_eq!(out.role, "out_param");
+    assert_eq!(out.rust_boundary, "&mut [i32]");
+    assert!(out.write_effects.contains(&"out[i]".to_string()));
+    assert!(out.write_effects.contains(&"*(out + i)".to_string()));
+    assert!(out
+        .boundary_decisions
+        .contains(&"bounded_pointer_arithmetic_output_write".to_string()));
+    assert!(result.cfg.functions[0].blocks[0]
+        .statement_kinds
+        .contains(&"bounded_pointer_arithmetic_output_write".to_string()));
+    assert!(result.cfg.functions[0].blocks[0]
+        .lvalue_kinds
+        .contains(&"bounded_pointer_arithmetic_output_buffer".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-pointer-arithmetic-output-write".to_string()));
+    assert!(!result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-pointer-arithmetic-input-read".to_string()));
+}
+
+#[test]
 fn unproven_input_buffer_read_blocks_without_false_success() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
@@ -365,13 +415,40 @@ fn unproven_pointer_arithmetic_read_blocks_without_false_success() {
 }
 
 #[test]
-fn pointer_arithmetic_writes_do_not_count_as_input_buffer_reads() {
+fn unproven_pointer_arithmetic_output_write_blocks_without_false_success() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
-        slice_id: "ptr-arith-write".to_string(),
+        slice_id: "bad-ptr-arith-out".to_string(),
         source_commit: "1234567".to_string(),
-        function_name: "ptr_arith_write".to_string(),
-        c_source: "int ptr_arith_write(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }".to_string(),
+        function_name: "bad_ptr_arith_out".to_string(),
+        c_source:
+            "int bad_ptr_arith_out(int* out, int i, int value) { *(out + i) = value; return 0; }"
+                .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.rust_code.is_empty());
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "unsupported_syntax"),
+        "{:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn complex_pointer_arithmetic_output_write_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-ptr-arith-complex-out".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_ptr_arith_complex_out".to_string(),
+        c_source: "int bad_ptr_arith_complex_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i + 1) = value; } return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
     };
@@ -387,6 +464,23 @@ fn pointer_arithmetic_writes_do_not_count_as_input_buffer_reads() {
         "{:?}",
         result.errors
     );
+}
+
+#[test]
+fn bounded_pointer_arithmetic_writes_do_not_count_as_input_buffer_reads() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "ptr-arith-write".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "ptr_arith_write".to_string(),
+        c_source: "int ptr_arith_write(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert!(!result
         .cfg
         .functions
@@ -394,6 +488,9 @@ fn pointer_arithmetic_writes_do_not_count_as_input_buffer_reads() {
         .flat_map(|function| function.blocks.iter())
         .flat_map(|block| block.statement_kinds.iter())
         .any(|kind| kind == "bounded_input_buffer_read"));
+    assert!(result.cfg.functions[0].blocks[0]
+        .statement_kinds
+        .contains(&"bounded_pointer_arithmetic_output_write".to_string()));
     assert!(!result
         .plan
         .translation_rule_ids
@@ -414,9 +511,9 @@ fn unsupported_complex_lvalues_block_without_false_success() {
             "int field_assignment(int value) { state.field = value; return value; }",
         ),
         (
-            "pointer-arithmetic",
-            "pointer_arithmetic",
-            "int pointer_arithmetic(int* out, int i, int value) { *(out + i) = value; return 0; }",
+            "pointer-arithmetic-complex",
+            "pointer_arithmetic_complex",
+            "int pointer_arithmetic_complex(int* out, int i, int value) { *(out + i + 1) = value; return 0; }",
         ),
     ] {
         let spec = SliceSpec {

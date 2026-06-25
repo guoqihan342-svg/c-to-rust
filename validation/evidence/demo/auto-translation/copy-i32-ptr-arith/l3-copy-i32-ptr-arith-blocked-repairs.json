@@ -1,0 +1,7 @@
+{
+  "blocked": [],
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "status": "none",
+  "target_id": "demo"
+}

@@ -1,0 +1,22 @@
+{
+  "case_count": 6,
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "values",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

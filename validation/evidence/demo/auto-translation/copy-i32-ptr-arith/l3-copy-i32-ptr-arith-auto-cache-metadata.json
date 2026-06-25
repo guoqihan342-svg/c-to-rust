@@ -1,0 +1,61 @@
+{
+  "build_profile_hash": "32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-copy-i32-ptr-arith.json",
+    "--accept-existing-evidence"
+  ],
+  "fixture_hash": "copy-i32-ptr-arith-fixture",
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "diff",
+    "summary"
+  ],
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 1,
+    "type_map": 1
+  },
+  "slice_id": "copy-i32-ptr-arith",
+  "slice_spec_sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json": "31fb2903c83e4056cb843f8b604ba74b22c1ec4adb4490c43cafffb40a9cd83f",
+    "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py": "301321a8d3963b739f2e399eec6358737a18cc240a3f769d9e4ce91d4b240847"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_version": "0.1.0"
+}

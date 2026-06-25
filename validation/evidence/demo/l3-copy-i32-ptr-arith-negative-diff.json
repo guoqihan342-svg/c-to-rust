@@ -1,0 +1,22 @@
+{
+  "case_id": "single-positive",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "single-positive",
+    "field": "out_values",
+    "mutated_c_value": [
+      8
+    ],
+    "rust_value": [
+      7
+    ]
+  },
+  "level": "L3",
+  "mutation": "first non-empty oracle case out_values[0] is changed by +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

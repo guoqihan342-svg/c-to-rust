@@ -1,0 +1,25 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-diff.json",
+    "sha256": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "values",
+    "out_values",
+    "source_reads",
+    "canonical_reads",
+    "source_writes",
+    "canonical_writes",
+    "write_count"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "copy-i32-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

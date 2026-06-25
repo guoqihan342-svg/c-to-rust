@@ -1,0 +1,14 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-ledger.json",
+    "sha256": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
+    "status": "passed"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

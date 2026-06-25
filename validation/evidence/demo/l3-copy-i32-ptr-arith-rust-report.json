@@ -1,0 +1,139 @@
+{
+  "c_source_boundary": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+  "case_count": 6,
+  "cases": [
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "empty",
+      "id": "empty",
+      "len": 0,
+      "out_values": [],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [],
+      "write_count": 0
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "single",
+      "id": "single-positive",
+      "len": 1,
+      "out_values": [
+        7
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        7
+      ],
+      "write_count": 1
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "multi",
+      "id": "multi-positive",
+      "len": 4,
+      "out_values": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "write_count": 4
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "negative_values",
+      "id": "mixed-negative",
+      "len": 4,
+      "out_values": [
+        -5,
+        2,
+        -3,
+        6
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        -5,
+        2,
+        -3,
+        6
+      ],
+      "write_count": 4
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "zero_values",
+      "id": "zero-values",
+      "len": 3,
+      "out_values": [
+        0,
+        0,
+        0
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        0,
+        0,
+        0
+      ],
+      "write_count": 3
+    },
+    {
+      "canonical_reads": "values[i]",
+      "canonical_writes": "out[i]",
+      "coverage_kind": "boundary_safe",
+      "id": "boundary-safe",
+      "len": 3,
+      "out_values": [
+        1073741823,
+        -1073741824,
+        -1
+      ],
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_writes": "*(out + i) under i < len",
+      "status": "ok",
+      "values": [
+        1073741823,
+        -1073741824,
+        -1
+      ],
+      "write_count": 3
+    }
+  ],
+  "command": "cargo run --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/copy_i32_ptr_arith.rs",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

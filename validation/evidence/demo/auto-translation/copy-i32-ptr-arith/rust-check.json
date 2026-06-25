@@ -1,0 +1,12 @@
+{
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-j1h_pr6m validation\\evidence\\demo\\auto-translation\\copy-i32-ptr-arith\\l3-copy-i32-ptr-arith-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed"
+}

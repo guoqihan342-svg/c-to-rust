@@ -1,0 +1,71 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-translator-input.json",
+    "sha256": "3f970916833b589d9a83af5caa43d77b18ac6882d93d9b989748cbeaa06c9250",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-copy-i32-ptr-arith-20260625",
+    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "fixture_hash=copy-i32-ptr-arith-fixture",
+    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "values",
+      "c_type": "const int*",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&[i32]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "len",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "IntOutReport",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "2377c217eb71c24dde7e0f14c161a7c7177bd8bd",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
+    "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "status": "ready"
+  },
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

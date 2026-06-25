@@ -1,3 +1,4 @@
+pub mod copy_i32_ptr_arith;
 pub mod libuv_ip4_addr;
 pub mod sqlite_varint;
 pub mod store_add_one;

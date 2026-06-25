@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror copy_i32_ptr_arith_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+  "helper_stdout_sha256": "70c5444bdf58b60f7e49cf304868069afb2f5a88d9ae4ddee2f5d2dd6a8b566f",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./copy_i32_ptr_arith_oracle",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "source_hashes": {
+    "c_helper": "00c31f75d1c714a24318f2f88b824bd24eb60dabc3af70721deeb1b1e9a425f9",
+    "generator": "301321a8d3963b739f2e399eec6358737a18cc240a3f769d9e4ce91d4b240847"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}
