@@ -1,9 +1,11 @@
 use std::{
     fs,
+    path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
+use serde_json::Value;
 
 fn profile(clang_available: bool) -> BuildProfile {
     BuildProfile {
@@ -14,6 +16,20 @@ fn profile(clang_available: bool) -> BuildProfile {
         compiler_command_source: "compile_commands.json".to_string(),
         clang_available,
     }
+}
+
+fn unique_out_dir(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "c2r-translator-test-{name}-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ))
+}
+
+fn json_file(path: PathBuf) -> Value {
+    serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
 #[test]
@@ -84,6 +100,160 @@ fn pointer_out_param_generates_safe_public_boundary_and_pointer_graph() {
         .read_effects
         .contains(&"addr->sin_family = AF_INET".to_string()));
     assert_eq!(result.plan.unsafe_candidate_count, 0);
+}
+
+#[test]
+fn pointer_field_writes_record_lvalue_and_boundary_decisions() {
+    let spec = SliceSpec {
+        target_id: "libuv".to_string(),
+        slice_id: "ip4-addr-fields".to_string(),
+        source_commit: "5e7d51a".to_string(),
+        function_name: "uv_ip4_addr".to_string(),
+        c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; addr->sin_port = port; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+    let out_dir = unique_out_dir("ip4-addr-fields");
+
+    let result = translate_slice(&spec);
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(manifest.slice_id, "ip4-addr-fields");
+    let addr = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "addr")
+        .expect("addr pointer node");
+    assert!(addr.write_effects.contains(&"addr->sin_family".to_string()));
+    assert!(addr.write_effects.contains(&"addr->sin_port".to_string()));
+
+    let cfg = json_file(out_dir.join("l3-ip4-addr-fields-cfg.json"));
+    let pointer_graph = json_file(out_dir.join("l3-ip4-addr-fields-pointer-graph.json"));
+    let plan = json_file(out_dir.join("l3-ip4-addr-fields-auto-translation-plan.json"));
+    let lvalue_kinds = cfg["cfg"]["functions"][0]["blocks"][0]["lvalue_kinds"]
+        .as_array()
+        .expect("lvalue kinds");
+    let addr_decisions = pointer_graph["pointer_graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == "addr")
+        .and_then(|node| node["boundary_decisions"].as_array())
+        .expect("addr boundary decisions");
+
+    assert!(lvalue_kinds.iter().any(|kind| kind == "pointer_field"));
+    assert!(addr_decisions
+        .iter()
+        .any(|decision| decision == "safe_wrapper_candidate"));
+    assert!(plan["plan"]["translation_rule_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|rule| rule == "pointer-field-write"));
+}
+
+#[test]
+fn bounded_pointer_index_write_generates_safe_boundary_and_decision() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "fill-first".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "fill_first".to_string(),
+        c_source: "int fill_first(int* out, int value) { out[0] = value; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result.rust_code.contains("pub fn fill_first(value: i32)"));
+    assert!(!result.rust_code.contains("*mut"));
+    let out = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "out")
+        .expect("out pointer node");
+    assert_eq!(out.role, "out_param");
+    assert!(out.write_effects.contains(&"out[0]".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-pointer-index-write".to_string()));
+}
+
+#[test]
+fn bounded_pointer_index_compound_assignment_records_decision() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "add-first".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "add_first".to_string(),
+        c_source: "int add_first(int* out, int value) { out[0] += value; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let out = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "out")
+        .expect("out pointer node");
+    assert!(out.write_effects.contains(&"out[0]".to_string()));
+    assert!(result
+        .plan
+        .translation_rule_ids
+        .contains(&"bounded-pointer-index-write".to_string()));
+}
+
+#[test]
+fn unsupported_complex_lvalues_block_without_false_success() {
+    for (slice_id, function_name, c_source) in [
+        (
+            "unbounded-index",
+            "unbounded_index",
+            "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+        ),
+        (
+            "field-assignment",
+            "field_assignment",
+            "int field_assignment(int value) { state.field = value; return value; }",
+        ),
+        (
+            "pointer-arithmetic",
+            "pointer_arithmetic",
+            "int pointer_arithmetic(int* out, int i, int value) { *(out + i) = value; return 0; }",
+        ),
+    ] {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: slice_id.to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: function_name.to_string(),
+            c_source: c_source.to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            build_profile: profile(true),
+        };
+
+        let result = translate_slice(&spec);
+
+        assert!(result.rust_code.is_empty(), "{slice_id}");
+        assert!(
+            result
+                .errors
+                .iter()
+                .any(|error| error.kind == "unsupported_lvalue"),
+            "{slice_id}: {:?}",
+            result.errors
+        );
+    }
 }
 
 #[test]
@@ -489,13 +659,7 @@ fn writes_translation_artifacts_for_l3_manifest_binding() {
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
     };
-    let out_dir = std::env::temp_dir().join(format!(
-        "c2r-translator-test-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let out_dir = unique_out_dir("add-one");
 
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 

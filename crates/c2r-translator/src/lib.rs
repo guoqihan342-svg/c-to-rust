@@ -83,6 +83,8 @@ pub struct CfgBlock {
     pub id: String,
     pub statements: Vec<String>,
     pub statement_kinds: Vec<String>,
+    #[serde(default)]
+    pub lvalue_kinds: Vec<String>,
     pub terminator: String,
     pub edges: Vec<String>,
 }
@@ -101,6 +103,8 @@ pub struct PointerNode {
     pub rust_boundary: String,
     pub read_effects: Vec<String>,
     pub write_effects: Vec<String>,
+    #[serde(default)]
+    pub boundary_decisions: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -160,6 +164,7 @@ enum StatementKind {
     While,
     For,
     PointerWrite,
+    UnsupportedLValue,
     Expression,
 }
 
@@ -187,6 +192,15 @@ struct CompoundAssignment {
 struct IncDecStatement {
     target: String,
     delta_operator: &'static str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LValue {
+    SimpleIdentifier { name: String },
+    PointerField { base: String, field: String },
+    DerefIdentifier { base: String },
+    BoundedPointerIndex { base: String, index: String },
+    Unsupported { reason: String },
 }
 
 pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
@@ -222,6 +236,10 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
             statement_kinds: statements
                 .iter()
                 .map(|statement| statement.kind.label().to_string())
+                .collect(),
+            lvalue_kinds: statements
+                .iter()
+                .map(|statement| statement_lvalue_kind(statement).to_string())
                 .collect(),
             terminator: if statements
                 .iter()
@@ -603,13 +621,10 @@ fn classify_statement(text: &str) -> StatementKind {
         return StatementKind::PrimitiveDeclaration;
     }
     if let Some(assignment) = parse_assignment(trimmed) {
-        if assignment.target.contains("->") || assignment.target.starts_with('*') {
-            return StatementKind::PointerWrite;
-        }
-        return StatementKind::Assignment;
+        return classify_lvalue_statement(&assignment.target, StatementKind::Assignment);
     }
-    if parse_compound_assignment(trimmed).is_some() {
-        return StatementKind::CompoundAssignment;
+    if let Some(assignment) = parse_compound_assignment(trimmed) {
+        return classify_lvalue_statement(&assignment.target, StatementKind::CompoundAssignment);
     }
     if parse_inc_dec_statement(trimmed).is_some() {
         return StatementKind::IncDec;
@@ -618,6 +633,16 @@ fn classify_statement(text: &str) -> StatementKind {
         return StatementKind::SimpleCall;
     }
     StatementKind::Expression
+}
+
+fn classify_lvalue_statement(target: &str, simple_kind: StatementKind) -> StatementKind {
+    match parse_lvalue(target) {
+        LValue::SimpleIdentifier { .. } => simple_kind,
+        LValue::PointerField { .. }
+        | LValue::DerefIdentifier { .. }
+        | LValue::BoundedPointerIndex { .. } => StatementKind::PointerWrite,
+        LValue::Unsupported { .. } => StatementKind::UnsupportedLValue,
+    }
 }
 
 impl StatementKind {
@@ -633,6 +658,7 @@ impl StatementKind {
             Self::While => "while",
             Self::For => "for",
             Self::PointerWrite => "pointer_write",
+            Self::UnsupportedLValue => "unsupported_lvalue",
             Self::Expression => "expression",
         }
     }
@@ -751,6 +777,105 @@ fn is_simple_identifier(text: &str) -> bool {
     (first.is_ascii_alphabetic() || first == b'_') && bytes.all(is_ident_byte)
 }
 
+fn parse_lvalue(target: &str) -> LValue {
+    let trimmed = target.trim();
+    if is_simple_identifier(trimmed) {
+        return LValue::SimpleIdentifier {
+            name: trimmed.to_string(),
+        };
+    }
+    if let Some((base, field)) = trimmed.split_once("->") {
+        let base = base.trim();
+        let field = field.trim();
+        if is_simple_identifier(base) && is_simple_identifier(field) {
+            return LValue::PointerField {
+                base: base.to_string(),
+                field: field.to_string(),
+            };
+        }
+        return LValue::Unsupported {
+            reason: "unsupported pointer field lvalue".to_string(),
+        };
+    }
+    if let Some(rest) = trimmed.strip_prefix('*') {
+        let base = rest.trim();
+        if is_simple_identifier(base) {
+            return LValue::DerefIdentifier {
+                base: base.to_string(),
+            };
+        }
+        return LValue::Unsupported {
+            reason: "pointer arithmetic or complex dereference is outside the bounded subset"
+                .to_string(),
+        };
+    }
+    if let Some(open) = trimmed.find('[') {
+        if trimmed.ends_with(']') {
+            let base = trimmed[..open].trim();
+            let index = trimmed[open + 1..trimmed.len() - 1].trim();
+            if is_simple_identifier(base) && index == "0" {
+                return LValue::BoundedPointerIndex {
+                    base: base.to_string(),
+                    index: index.to_string(),
+                };
+            }
+            return LValue::Unsupported {
+                reason: "pointer index boundary is unproven".to_string(),
+            };
+        }
+    }
+    LValue::Unsupported {
+        reason: "complex lvalue is outside the bounded subset".to_string(),
+    }
+}
+
+fn lvalue_kind(lvalue: &LValue) -> &'static str {
+    match lvalue {
+        LValue::SimpleIdentifier { .. } => "simple_identifier",
+        LValue::PointerField { .. } => "pointer_field",
+        LValue::DerefIdentifier { .. } => "deref_identifier",
+        LValue::BoundedPointerIndex { .. } => "bounded_pointer_index",
+        LValue::Unsupported { .. } => "unsupported_lvalue",
+    }
+}
+
+fn lvalue_write_effect(lvalue: &LValue) -> Option<String> {
+    match lvalue {
+        LValue::PointerField { base, field } => Some(format!("{base}->{field}")),
+        LValue::DerefIdentifier { base } => Some(format!("*{base}")),
+        LValue::BoundedPointerIndex { base, index } => Some(format!("{base}[{index}]")),
+        _ => None,
+    }
+}
+
+fn lvalue_base(lvalue: &LValue) -> Option<&str> {
+    match lvalue {
+        LValue::PointerField { base, .. }
+        | LValue::DerefIdentifier { base }
+        | LValue::BoundedPointerIndex { base, .. } => Some(base),
+        _ => None,
+    }
+}
+
+fn statement_lvalue(statement: &ParsedStatement) -> Option<LValue> {
+    parse_assignment(&statement.text)
+        .map(|assignment| parse_lvalue(&assignment.target))
+        .or_else(|| {
+            parse_compound_assignment(&statement.text)
+                .map(|assignment| parse_lvalue(&assignment.target))
+        })
+        .or_else(|| {
+            parse_inc_dec_statement(&statement.text).map(|inc_dec| parse_lvalue(&inc_dec.target))
+        })
+}
+
+fn statement_lvalue_kind(statement: &ParsedStatement) -> &'static str {
+    statement_lvalue(statement)
+        .as_ref()
+        .map(lvalue_kind)
+        .unwrap_or("none")
+}
+
 fn parse_declaration(text: &str) -> Option<Declaration> {
     let trimmed = text.trim().trim_end_matches(';').trim();
     let (declaration, initializer) = match trimmed.split_once('=') {
@@ -787,7 +912,10 @@ fn parse_assignment(text: &str) -> Option<Assignment> {
         }
         let target = trimmed[..index].trim();
         let value = trimmed[index + 1..].trim();
-        if target.is_empty() || target.contains(char::is_whitespace) || value.is_empty() {
+        if target.is_empty()
+            || value.is_empty()
+            || (target.contains(char::is_whitespace) && !target.trim().starts_with('*'))
+        {
             return None;
         }
         return Some(Assignment {
@@ -806,7 +934,7 @@ fn parse_compound_assignment(text: &str) -> Option<CompoundAssignment> {
         };
         let target = trimmed[..index].trim();
         let value = trimmed[index + operator.len()..].trim();
-        if !is_simple_assignment_target(target) || value.is_empty() {
+        if target.is_empty() || value.is_empty() {
             return None;
         }
         return Some(CompoundAssignment {
@@ -914,6 +1042,22 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                     strip_keyword(&statement.text, "return"),
                     result,
                 );
+            }
+            StatementKind::UnsupportedLValue => {
+                let reason = statement_lvalue(statement)
+                    .and_then(|lvalue| match lvalue {
+                        LValue::Unsupported { reason } => Some(reason),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| "complex lvalue is outside the bounded subset".to_string());
+                result.errors.push(TranslationError {
+                    kind: "unsupported_lvalue".to_string(),
+                    message: format!(
+                        "statement `{}` uses unsupported lvalue: {reason}",
+                        statement.text
+                    ),
+                    source_span: Some(statement.text.clone()),
+                });
             }
             StatementKind::Expression => result.errors.push(TranslationError {
                 kind: "unsupported_syntax".to_string(),
@@ -1078,6 +1222,7 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
         "unsigned char" => Some("u8"),
         "char" => Some("u8"),
         "const char*" => Some("&str"),
+        "int*" => Some("IntOutReport"),
         "struct sockaddr_in*" => Some("Ip4AddrReport"),
         "void" => Some("()"),
         _ => None,
@@ -1104,6 +1249,7 @@ fn emit_pointer_graph(
             "owned safe report"
         };
         let write_effects = pointer_write_effects(&param.name, statements);
+        let boundary_decisions = pointer_boundary_decisions(&param.name, statements);
         if role == "out_param" && write_effects.is_empty() {
             result.errors.push(TranslationError {
                 kind: "unsupported_pointer_pattern".to_string(),
@@ -1121,6 +1267,7 @@ fn emit_pointer_graph(
             rust_boundary: rust_boundary.to_string(),
             read_effects: pointer_read_effects(&param.name, statements),
             write_effects,
+            boundary_decisions,
         });
     }
 
@@ -1144,22 +1291,44 @@ fn pointer_read_effects(name: &str, statements: &[ParsedStatement]) -> Vec<Strin
 }
 
 fn pointer_write_effects(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
-    let arrow_prefix = format!("{name}->");
-    let deref_target = format!("*{name}");
     statements
         .iter()
         .filter_map(|statement| {
             if statement.kind != StatementKind::PointerWrite {
                 return None;
             }
-            let assignment = parse_assignment(&statement.text)?;
-            if assignment.target.starts_with(&arrow_prefix) || assignment.target == deref_target {
-                Some(assignment.target)
-            } else {
-                None
-            }
+            let lvalue = statement_lvalue(statement)?;
+            (lvalue_base(&lvalue) == Some(name))
+                .then(|| lvalue_write_effect(&lvalue))
+                .flatten()
         })
         .collect()
+}
+
+fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
+    let mut decisions = Vec::new();
+    for statement in statements {
+        if statement.kind != StatementKind::PointerWrite {
+            continue;
+        }
+        let Some(lvalue) = statement_lvalue(statement) else {
+            continue;
+        };
+        if lvalue_base(&lvalue) != Some(name) {
+            continue;
+        }
+        let decision = match lvalue {
+            LValue::BoundedPointerIndex { .. } => "bounded_pointer_index",
+            LValue::PointerField { .. } | LValue::DerefIdentifier { .. } => {
+                "safe_wrapper_candidate"
+            }
+            _ => continue,
+        };
+        if !decisions.iter().any(|item| item == decision) {
+            decisions.push(decision.to_string());
+        }
+    }
+    decisions
 }
 
 fn statement_mutates_target(statement: &ParsedStatement, target: &str) -> bool {
@@ -1246,6 +1415,7 @@ fn emit_rust(
             .plan
             .translation_rule_ids
             .push("safe-wrapper-for-pointer-out-param".to_string());
+        record_statement_rules(statements, result);
         let rust_params = function
             .params
             .iter()
@@ -1326,12 +1496,33 @@ fn record_statement_rules(statements: &[ParsedStatement], result: &mut Translati
             StatementKind::If => Some("structured-if"),
             StatementKind::While => Some("structured-while"),
             StatementKind::For => Some("structured-for"),
-            StatementKind::PointerWrite => Some("pointer-write-recorded"),
-            StatementKind::Expression => None,
+            StatementKind::PointerWrite => {
+                push_rule_once(
+                    &mut result.plan.translation_rule_ids,
+                    "pointer-write-recorded",
+                );
+                if let Some(rule) = pointer_lvalue_rule(&statement.text) {
+                    push_rule_once(&mut result.plan.translation_rule_ids, rule);
+                }
+                continue;
+            }
+            StatementKind::UnsupportedLValue | StatementKind::Expression => None,
         };
         if let Some(rule) = rule {
             push_rule_once(&mut result.plan.translation_rule_ids, rule);
         }
+    }
+}
+
+fn pointer_lvalue_rule(text: &str) -> Option<&'static str> {
+    match statement_lvalue(&ParsedStatement {
+        text: text.to_string(),
+        kind: StatementKind::PointerWrite,
+    })? {
+        LValue::PointerField { .. } => Some("pointer-field-write"),
+        LValue::DerefIdentifier { .. } => Some("pointer-deref-write"),
+        LValue::BoundedPointerIndex { .. } => Some("bounded-pointer-index-write"),
+        _ => None,
     }
 }
 
@@ -1402,7 +1593,9 @@ fn emit_rust_statement(statement: &ParsedStatement, indent_level: usize) -> Vec<
             "{prefix}return {};",
             translate_expr(strip_keyword(&statement.text, "return"))
         )],
-        StatementKind::SimpleCall | StatementKind::Expression => {
+        StatementKind::SimpleCall
+        | StatementKind::UnsupportedLValue
+        | StatementKind::Expression => {
             vec![format!("{prefix}{};", translate_expr(&statement.text))]
         }
         StatementKind::If => {
