@@ -301,7 +301,7 @@ function Get-RoundSteps {
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            '$changed = git diff --name-only -- validation/evidence; if ($changed) { $changed; git diff --exit-code -- validation/evidence }'
+            '$changed = @(git diff --name-only HEAD -- validation/evidence); $untracked = @(git ls-files --others --exclude-standard -- validation/evidence); if ($changed) { $changed; git diff --exit-code HEAD -- validation/evidence }; if ($untracked) { $untracked }; if ($changed -or $untracked) { exit 1 }'
         )))
     }
     $steps.Add((New-Step "openspec-validate-all" "openspec_gates" "." @("openspec", "validate", "--all")))
