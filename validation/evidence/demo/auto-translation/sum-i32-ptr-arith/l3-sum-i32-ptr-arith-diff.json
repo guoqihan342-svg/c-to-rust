@@ -1,0 +1,22 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+    "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_code",
+    "status",
+    "len",
+    "sum",
+    "source_reads",
+    "canonical_reads",
+    "source_write"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

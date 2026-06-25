@@ -1,0 +1,19 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+    "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "single-positive",
+    "field": "sum",
+    "mutated_c_value": 8,
+    "rust_value": 7
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

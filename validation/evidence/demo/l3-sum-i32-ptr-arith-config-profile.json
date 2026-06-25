@@ -1,0 +1,20 @@
+{
+  "c_oracle_command": "python -B validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+  "compiler": {
+    "mode": "wsl",
+    "name": "gcc",
+    "standard": "c99"
+  },
+  "level": "L3",
+  "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
+  "rust": {
+    "crate": "validation/l2_slices",
+    "framework": "cargo test"
+  },
+  "rust_replay_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sum_i32_ptr_arith",
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

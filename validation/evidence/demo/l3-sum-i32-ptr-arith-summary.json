@@ -1,0 +1,17 @@
+{
+  "generated_draft_semantic_pass": false,
+  "known_gaps": [
+    "No NULL pointer execution.",
+    "No negative len execution.",
+    "No pointer arithmetic writes.",
+    "No aliasing or signed overflow claim."
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "passed",
+  "summary": "sum_i32_ptr_arith pointer-arithmetic input read demo has accepted C oracle, Rust replay, diff, negative diff, unsafe, and version evidence.",
+  "target_id": "demo"
+}

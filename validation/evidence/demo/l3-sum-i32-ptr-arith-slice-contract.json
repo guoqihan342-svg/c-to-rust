@@ -1,0 +1,40 @@
+{
+  "claim_boundary": {
+    "non_goals": [
+      "No NULL pointer execution.",
+      "No negative len execution.",
+      "No pointer arithmetic writes.",
+      "No aliasing or signed overflow claim."
+    ],
+    "scope": "Only the demo sum_i32_ptr_arith slice for the committed fixture corpus."
+  },
+  "fixture": {
+    "case_count": 6,
+    "hash": "sum-i32-ptr-arith-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_boundary": {
+    "api": "pub fn sum_i32_ptr_arith(values: &[i32]) -> SumI32PtrArithReport",
+    "module": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py"
+    ],
+    "functions": [
+      "sum_i32_ptr_arith"
+    ],
+    "signature": "int sum_i32_ptr_arith(const int* values, int len, int* out)"
+  },
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

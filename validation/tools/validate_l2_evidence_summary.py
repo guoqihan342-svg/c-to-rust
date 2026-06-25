@@ -162,6 +162,8 @@ def evidence_location(evidence_root: Path, l2_root: Path, slice_id: str) -> tupl
         return evidence_root / "demo", "l3-store-add-one", "L3"
     if slice_id == "demo-sum-i32-buffer":
         return evidence_root / "demo", "l3-sum-i32-buffer", "L3"
+    if slice_id == "demo-sum-i32-ptr-arith":
+        return evidence_root / "demo", "l3-sum-i32-ptr-arith", "L3"
     return l2_root, slice_id, "L2"
 
 
@@ -172,6 +174,8 @@ def expected_negative_report_path(slice_id: str) -> str:
         return "validation/evidence/demo/l3-store-add-one-negative-diff.json"
     if slice_id == "demo-sum-i32-buffer":
         return "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json"
+    if slice_id == "demo-sum-i32-ptr-arith":
+        return "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json"
     return f"validation/evidence/l2-slices/{slice_id}-negative-diff.json"
 
 

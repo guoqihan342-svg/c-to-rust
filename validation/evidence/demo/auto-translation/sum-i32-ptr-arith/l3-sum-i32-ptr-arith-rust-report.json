@@ -1,0 +1,197 @@
+{
+  "accepted_rust_report": {
+    "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+    "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+    "status": "passed"
+  },
+  "case_count": 6,
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b"
+  },
+  "generated_draft": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-draft.rs",
+    "sha256": "3139acaff1f7aadf9a283431fb86f34f984833d0528956e29af150e5f0f37858",
+    "status": "candidate"
+  },
+  "generated_draft_semantic_pass": false,
+  "replay": {
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "len",
+      "sum",
+      "source_reads",
+      "canonical_reads",
+      "source_write"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-sum-i32-ptr-arith-20260625",
+      "slice_spec_sha256=29a694f53403d050cf3ee7d96e7c7c27a89273a10fafbd9180376e8983844e52",
+      "fixture_hash=sum-i32-ptr-arith-fixture",
+      "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_code",
+        "status",
+        "len",
+        "sum",
+        "source_reads",
+        "canonical_reads",
+        "source_write"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+        "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+        "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+        "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+        "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml sum_i32_ptr_arith",
+        "file": "validation/l2_slices/tests/sum_i32_ptr_arith.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_sum_i32_ptr_arith_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_sum_i32_ptr_arith_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_sum_i32_ptr_arith_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "sum-i32-ptr-arith",
+    "source_commit": "demo-sum-i32-ptr-arith-20260625",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+          "operation_count": 4,
+          "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+          "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+          "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "len",
+          "sum",
+          "source_reads",
+          "canonical_reads",
+          "source_write"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+            "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+            "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+            "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/sum_i32_ptr_arith.rs::accepted_sum_i32_ptr_arith_replay",
+        "source": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_code",
+          "status",
+          "len",
+          "sum",
+          "source_reads",
+          "canonical_reads",
+          "source_write"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+            "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_sum_i32_ptr_arith_negative_diff",
+        "source": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "source_slice_id": "sum-i32-ptr-arith",
+  "status": "passed",
+  "target_id": "demo"
+}

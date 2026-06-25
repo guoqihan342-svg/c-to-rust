@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror sum_i32_ptr_arith_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+  "helper_stdout_sha256": "d631d8b22d12f9cbe65d64ddf2d680f175c176f3653a879e8d0c074e3f37486c",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./sum_i32_ptr_arith_oracle",
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "source_hashes": {
+    "c_helper": "03d5acf118e039d6be4b25f5c1cd591cd0006165bba5e6d03d3d26bf837710e8",
+    "generator": "aaff85da70aba9bcf801edd3c3c8780bb9db72c2a00b323f879e791b2a25cd6c"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

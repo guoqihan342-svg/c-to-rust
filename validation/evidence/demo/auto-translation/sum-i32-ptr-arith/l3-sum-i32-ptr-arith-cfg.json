@@ -1,0 +1,138 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-sum-i32-ptr-arith-20260625",
+    "slice_spec_sha256=29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "fixture_hash=sum-i32-ptr-arith-fixture",
+    "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_input_buffer",
+              "lvalue_kind": "bounded_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "for (int i = 0; i < len; i++) { total = total + *(values + i); }",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-input-buffer-read"
+            },
+            {
+              "decision": "bounded_pointer_arithmetic_input_read",
+              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "out[0] = total",
+              "statement_index": 2,
+              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+            },
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "return 0",
+              "statement_index": 3,
+              "translation_rule_id": "bounded-pointer-index-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "none",
+            "bounded_input_buffer",
+            "bounded_pointer_arithmetic_input_buffer",
+            "bounded_pointer_index"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "primitive_declaration",
+            "for",
+            "bounded_input_buffer_read",
+            "bounded_pointer_arithmetic_input_read",
+            "pointer_write",
+            "return"
+          ],
+          "statements": [
+            "int total = 0",
+            "for (int i = 0; i < len; i++) { total = total + *(values + i); }",
+            "out[0] = total",
+            "return 0"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "sum_i32_ptr_arith",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "0",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int sum_i32_ptr_arith(const int* values, int len, int* out)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 1,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sum-i32-ptr-arith.json",
+    "sha256": "29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "status": "ready"
+  },
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

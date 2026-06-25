@@ -1,0 +1,34 @@
+{
+  "cache_inputs": [
+    "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "validation/l2_slices/src/sum_i32_ptr_arith.rs"
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py"
+  ],
+  "direct_call_edges": [
+    {
+      "from": "C oracle helper",
+      "to": "sum_i32_ptr_arith"
+    },
+    {
+      "from": "Rust emit_reports",
+      "to": "sum_i32_ptr_arith::sum_i32_ptr_arith"
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_files": [
+    "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+    "validation/l2_slices/tests/sum_i32_ptr_arith.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "test_entrypoints": [
+    "validation/l2_slices/tests/sum_i32_ptr_arith.rs::sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "values",
+      "c_type": "const int*",
+      "decision": "safe_slice_input",
+      "kind": "pointer",
+      "length_companion": "len",
+      "rust_type": "&[i32]"
+    },
+    {
+      "c_name": "len",
+      "c_type": "int",
+      "kind": "primitive",
+      "rust_type": "i32"
+    },
+    {
+      "c_name": "out",
+      "c_type": "int*",
+      "decision": "owned_report_output",
+      "kind": "pointer",
+      "rust_type": "SumI32PtrArithReport"
+    },
+    {
+      "c_name": "total",
+      "c_type": "int",
+      "kind": "primitive",
+      "rust_type": "i32"
+    },
+    {
+      "c_name": "i",
+      "c_type": "int",
+      "kind": "primitive",
+      "rust_type": "i32"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sum-i32-ptr-arith.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": []
+}

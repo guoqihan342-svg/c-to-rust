@@ -648,6 +648,9 @@ fn statement_kind_labels(statements: &[ParsedStatement]) -> Vec<String> {
         if statement_has_bounded_input_buffer_read(statement) {
             push_unique(&mut labels, StatementKind::BoundedInputBufferRead.label());
         }
+        if statement_has_bounded_pointer_arithmetic_input_read(statement) {
+            push_unique(&mut labels, "bounded_pointer_arithmetic_input_read");
+        }
     }
     labels
 }
@@ -658,6 +661,9 @@ fn statement_lvalue_kinds(statements: &[ParsedStatement]) -> Vec<String> {
         push_unique(&mut kinds, statement_lvalue_kind(statement));
         if statement_has_bounded_input_buffer_read(statement) {
             push_unique(&mut kinds, "bounded_input_buffer");
+        }
+        if statement_has_bounded_pointer_arithmetic_input_read(statement) {
+            push_unique(&mut kinds, "bounded_pointer_arithmetic_input_buffer");
         }
     }
     kinds
@@ -911,8 +917,24 @@ fn statement_has_bounded_input_buffer_read(statement: &ParsedStatement) -> bool 
     let nested = parse_statements(&body);
     nested
         .iter()
-        .flat_map(|nested| bounded_input_buffer_reads(&nested.text))
+        .flat_map(bounded_input_buffer_reads_for_statement)
         .any(|read| loop_condition_bounds_index(&condition, &read.index, "len"))
+}
+
+fn statement_has_bounded_pointer_arithmetic_input_read(statement: &ParsedStatement) -> bool {
+    if statement.kind != StatementKind::For {
+        return false;
+    }
+    let Some((_, condition, _, body)) = parse_for_parts(&statement.text) else {
+        return false;
+    };
+    let nested = parse_statements(&body);
+    nested
+        .iter()
+        .flat_map(bounded_input_buffer_reads_for_statement)
+        .any(|read| {
+            read.pointer_arithmetic && loop_condition_bounds_index(&condition, &read.index, "len")
+        })
 }
 
 fn parse_declaration(text: &str) -> Option<Declaration> {
@@ -1196,7 +1218,7 @@ fn record_unbounded_buffer_reads_with_bounds(
                 let nested = parse_statements(&body);
                 let nested_reads = nested
                     .iter()
-                    .flat_map(|nested| bounded_input_buffer_reads(&nested.text))
+                    .flat_map(bounded_input_buffer_reads_for_statement)
                     .collect::<Vec<_>>();
                 let mut nested_bounds = bounds.to_vec();
                 for read in &nested_reads {
@@ -1208,7 +1230,7 @@ fn record_unbounded_buffer_reads_with_bounds(
             }
             continue;
         }
-        for read in bounded_input_buffer_reads(&statement.text) {
+        for read in bounded_input_buffer_reads_for_statement(statement) {
             let allowed = bounds
                 .iter()
                 .any(|(base, index)| *base == read.base && *index == read.index);
@@ -1216,8 +1238,8 @@ fn record_unbounded_buffer_reads_with_bounds(
                 result.errors.push(TranslationError {
                     kind: "unsupported_syntax".to_string(),
                     message: format!(
-                        "input buffer read `{}[{}]` is not proven by a bounded length companion",
-                        read.base, read.index
+                        "input buffer read `{}` is not proven by a bounded length companion",
+                        read.source
                     ),
                     source_span: Some(statement.text.clone()),
                 });
@@ -1394,18 +1416,44 @@ fn collect_pointer_read_effects(
                 }
             }
             _ if contains_token(&statement.text, name) => {
-                let effect = if statement.text.contains(&format!("{name}[i]")) {
-                    format!("{name}[i]")
-                } else {
-                    statement.text.clone()
-                };
-                if !effects.iter().any(|item| item == &effect) {
-                    effects.push(effect);
+                let recorded_buffer_read =
+                    push_buffer_read_effects_from_statement(name, statement, effects);
+                if !recorded_buffer_read {
+                    let effect = if statement.text.contains(&format!("{name}[i]")) {
+                        format!("{name}[i]")
+                    } else {
+                        statement.text.clone()
+                    };
+                    if !effects.iter().any(|item| item == &effect) {
+                        effects.push(effect);
+                    }
                 }
             }
             _ => {}
         }
     }
+}
+
+fn push_buffer_read_effects_from_statement(
+    name: &str,
+    statement: &ParsedStatement,
+    effects: &mut Vec<String>,
+) -> bool {
+    let mut recorded = false;
+    for read in bounded_input_buffer_reads_for_statement(statement) {
+        if read.base != name {
+            continue;
+        }
+        let canonical = read.canonical_source();
+        if !effects.iter().any(|item| item == &canonical) {
+            effects.push(canonical);
+        }
+        if read.pointer_arithmetic && !effects.iter().any(|item| item == &read.source) {
+            effects.push(read.source);
+        }
+        recorded = true;
+    }
+    recorded
 }
 
 fn bounded_buffer_read_in_loop(
@@ -1415,18 +1463,112 @@ fn bounded_buffer_read_in_loop(
 ) -> bool {
     statements
         .iter()
-        .flat_map(|statement| bounded_input_buffer_reads(&statement.text))
+        .flat_map(bounded_input_buffer_reads_for_statement)
         .any(|read| read.base == name && loop_condition_bounds_index(condition, &read.index, "len"))
+}
+
+fn bounded_pointer_arithmetic_read_in_loop(
+    name: &str,
+    condition: &str,
+    statements: &[ParsedStatement],
+) -> bool {
+    statements
+        .iter()
+        .flat_map(bounded_input_buffer_reads_for_statement)
+        .any(|read| {
+            read.base == name
+                && read.pointer_arithmetic
+                && loop_condition_bounds_index(condition, &read.index, "len")
+        })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BufferRead {
     base: String,
     index: String,
+    source: String,
+    pointer_arithmetic: bool,
+}
+
+impl BufferRead {
+    fn canonical_source(&self) -> String {
+        format!("{}[{}]", self.base, self.index)
+    }
 }
 
 fn bounded_input_buffer_reads(text: &str) -> Vec<BufferRead> {
     let mut reads = Vec::new();
+    collect_array_index_buffer_reads(text, &mut reads);
+    collect_pointer_arithmetic_buffer_reads(text, &mut reads);
+    reads
+}
+
+fn bounded_input_buffer_reads_for_statement(statement: &ParsedStatement) -> Vec<BufferRead> {
+    match statement.kind {
+        StatementKind::PrimitiveDeclaration => parse_declaration(&statement.text)
+            .and_then(|declaration| declaration.initializer)
+            .map(|initializer| bounded_input_buffer_reads(&initializer))
+            .unwrap_or_default(),
+        StatementKind::Assignment | StatementKind::PointerWrite => {
+            parse_assignment(&statement.text)
+                .map(|assignment| bounded_input_buffer_reads(&assignment.value))
+                .unwrap_or_default()
+        }
+        StatementKind::CompoundAssignment => parse_compound_assignment(&statement.text)
+            .map(|assignment| bounded_input_buffer_reads(&assignment.value))
+            .unwrap_or_default(),
+        StatementKind::Return => {
+            bounded_input_buffer_reads(strip_keyword(&statement.text, "return"))
+        }
+        StatementKind::If => parse_if_parts(&statement.text)
+            .map(|(condition, then_body, else_body)| {
+                let mut reads = bounded_input_buffer_reads(&condition);
+                reads.extend(
+                    parse_statements(&then_body)
+                        .iter()
+                        .flat_map(bounded_input_buffer_reads_for_statement),
+                );
+                if let Some(else_body) = else_body {
+                    reads.extend(
+                        parse_statements(&else_body)
+                            .iter()
+                            .flat_map(bounded_input_buffer_reads_for_statement),
+                    );
+                }
+                reads
+            })
+            .unwrap_or_default(),
+        StatementKind::While => parse_loop_parts(&statement.text, "while")
+            .map(|(condition, body)| {
+                let mut reads = bounded_input_buffer_reads(&condition);
+                reads.extend(
+                    parse_statements(&body)
+                        .iter()
+                        .flat_map(bounded_input_buffer_reads_for_statement),
+                );
+                reads
+            })
+            .unwrap_or_default(),
+        StatementKind::For => parse_for_parts(&statement.text)
+            .map(|(_, condition, _, body)| {
+                let mut reads = bounded_input_buffer_reads(&condition);
+                reads.extend(
+                    parse_statements(&body)
+                        .iter()
+                        .flat_map(bounded_input_buffer_reads_for_statement),
+                );
+                reads
+            })
+            .unwrap_or_default(),
+        StatementKind::Expression
+        | StatementKind::SimpleCall
+        | StatementKind::BoundedInputBufferRead
+        | StatementKind::IncDec
+        | StatementKind::UnsupportedLValue => Vec::new(),
+    }
+}
+
+fn collect_array_index_buffer_reads(text: &str, reads: &mut Vec<BufferRead>) {
     let bytes = text.as_bytes();
     let mut index = 0usize;
     while index < bytes.len() {
@@ -1448,11 +1590,80 @@ fn bounded_input_buffer_reads(text: &str) -> Vec<BufferRead> {
             reads.push(BufferRead {
                 base: base.to_string(),
                 index: subscript.to_string(),
+                source: text[base_start..=close].trim().to_string(),
+                pointer_arithmetic: false,
             });
         }
         index = close + 1;
     }
-    reads
+}
+
+fn collect_pointer_arithmetic_buffer_reads(text: &str, reads: &mut Vec<BufferRead>) {
+    let bytes = text.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] != b'*' || !is_unary_deref_context(text, index) {
+            index += 1;
+            continue;
+        }
+        let open = skip_whitespace(text, index + 1);
+        if bytes.get(open) != Some(&b'(') {
+            index += 1;
+            continue;
+        }
+        let Some(close) = find_matching_byte(text, open, b'(', b')') else {
+            break;
+        };
+        let inner = text[open + 1..close].trim();
+        let parts = split_top_level(inner, b'+');
+        if parts.len() == 2 {
+            let base = parts[0].trim();
+            let read_index = parts[1].trim();
+            if is_simple_identifier(base) && is_simple_identifier(read_index) {
+                reads.push(BufferRead {
+                    base: base.to_string(),
+                    index: read_index.to_string(),
+                    source: text[index..=close].trim().to_string(),
+                    pointer_arithmetic: true,
+                });
+            }
+        }
+        index = close + 1;
+    }
+}
+
+fn is_unary_deref_context(text: &str, star_index: usize) -> bool {
+    let prefix = text[..star_index].trim_end();
+    if prefix.is_empty() || prefix.ends_with("return") {
+        return true;
+    }
+    prefix
+        .as_bytes()
+        .last()
+        .map(|byte| {
+            matches!(
+                *byte,
+                b'=' | b'('
+                    | b'{'
+                    | b'['
+                    | b','
+                    | b';'
+                    | b':'
+                    | b'?'
+                    | b'+'
+                    | b'-'
+                    | b'*'
+                    | b'/'
+                    | b'%'
+                    | b'&'
+                    | b'|'
+                    | b'^'
+                    | b'!'
+                    | b'<'
+                    | b'>'
+            )
+        })
+        .unwrap_or(true)
 }
 
 fn loop_condition_bounds_index(condition: &str, index_name: &str, len_name: &str) -> bool {
@@ -1481,10 +1692,18 @@ fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec
     for statement in statements {
         if statement.kind == StatementKind::For {
             if let Some((_, condition, _, body)) = parse_for_parts(&statement.text) {
-                if bounded_buffer_read_in_loop(name, &condition, &parse_statements(&body))
+                let nested = parse_statements(&body);
+                if bounded_buffer_read_in_loop(name, &condition, &nested)
                     && !decisions.iter().any(|item| item == "bounded_input_buffer")
                 {
                     decisions.push("bounded_input_buffer".to_string());
+                }
+                if bounded_pointer_arithmetic_read_in_loop(name, &condition, &nested)
+                    && !decisions
+                        .iter()
+                        .any(|item| item == "bounded_pointer_arithmetic_input_read")
+                {
+                    decisions.push("bounded_pointer_arithmetic_input_read".to_string());
                 }
             }
         }
@@ -1496,7 +1715,7 @@ fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec
         };
         if lvalue_base(&lvalue) != Some(name) {
             continue;
-        }
+        };
         let decision = match lvalue {
             LValue::BoundedPointerIndex { .. } => "bounded_pointer_index",
             LValue::PointerField { .. } | LValue::DerefIdentifier { .. } => {
@@ -1560,7 +1779,7 @@ fn statement_mutates_target(statement: &ParsedStatement, target: &str) -> bool {
                     && statement_mutates_target(
                         &ParsedStatement {
                             kind: classify_statement(&step),
-                            text: step,
+                            text: step.clone(),
                         },
                         target,
                     );
@@ -1753,6 +1972,12 @@ fn record_statement_rules(statements: &[ParsedStatement], result: &mut Translati
                     push_rule_once(
                         &mut result.plan.translation_rule_ids,
                         "bounded-input-buffer-read",
+                    );
+                }
+                if statement_has_bounded_pointer_arithmetic_input_read(statement) {
+                    push_rule_once(
+                        &mut result.plan.translation_rule_ids,
+                        "bounded-pointer-arithmetic-input-read",
                     );
                 }
                 Some("structured-for")
@@ -2098,7 +2323,7 @@ fn translate_expr(expr: &str) -> String {
     let mut out = expr.trim().to_string();
     for read in bounded_input_buffer_reads(expr) {
         out = out.replace(
-            &format!("{}[{}]", read.base, read.index),
+            &read.source,
             &format!("{}[{} as usize]", read.base, read.index),
         );
     }

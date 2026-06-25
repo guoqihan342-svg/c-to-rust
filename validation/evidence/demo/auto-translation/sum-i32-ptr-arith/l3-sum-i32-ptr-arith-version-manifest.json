@@ -1,0 +1,105 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "fixture_sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+      "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+      "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
+      "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+      "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
+      "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+      "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
+      "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
+      "version_manifest": "a957a9d4f3f39f57f27386932d147e6a2aaa16207d7295b5b21177df1820206e"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+      "final_verification": "validation/evidence/demo/l3-sum-i32-ptr-arith-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-sum-i32-ptr-arith-version-manifest.json"
+    },
+    "slice_id": "sum-i32-ptr-arith",
+    "source_commit": "demo-sum-i32-ptr-arith-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "build_profile_hash": "84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-sum-i32-ptr-arith.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "sum-i32-ptr-arith-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "diff",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "sum-i32-ptr-arith",
+    "slice_spec_sha256": "29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "source_commit": "demo-sum-i32-ptr-arith-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+      "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py": "aaff85da70aba9bcf801edd3c3c8780bb9db72c2a00b323f879e791b2a25cd6c"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "repo_commit": "9f82c3192e6fef1fa1fe23925c13572aaa629a35",
+  "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

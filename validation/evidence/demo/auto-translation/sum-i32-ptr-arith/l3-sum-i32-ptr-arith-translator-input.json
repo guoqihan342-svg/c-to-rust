@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+  "fixture_hash": "sum-i32-ptr-arith-fixture",
+  "function_name": "sum_i32_ptr_arith",
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "target_id": "demo"
+}

@@ -1,0 +1,17 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "cache_invalidation_keys": [
+    "source_commit=demo-sum-i32-ptr-arith-20260625",
+    "slice_spec_sha256=29d438e3cd09353016b95ba580eceb05b8a1f0ed9c9a0c354152f5755e0b7139",
+    "fixture_hash=sum-i32-ptr-arith-fixture",
+    "build_profile_hash=84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "sum-i32-ptr-arith",
+  "status": "not_used",
+  "target_id": "demo"
+}

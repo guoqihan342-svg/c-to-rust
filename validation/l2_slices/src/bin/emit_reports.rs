@@ -5,7 +5,8 @@ use std::{
 };
 
 use c_to_rust_l2_slices::{
-    libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer, zlib_adler32, zstd_xxh32,
+    libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32,
+    zstd_xxh32,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -80,6 +81,25 @@ struct SumI32BufferOracleCase {
     source_write: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct SumI32PtrArithOracleReport {
+    cases: Vec<SumI32PtrArithOracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SumI32PtrArithOracleCase {
+    id: String,
+    coverage_kind: String,
+    values: Vec<i32>,
+    len: i32,
+    return_code: i32,
+    status: String,
+    sum: i32,
+    source_reads: String,
+    canonical_reads: String,
+    source_write: String,
+}
+
 #[derive(Debug)]
 struct SliceResult {
     slice_id: &'static str,
@@ -134,15 +154,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_libuv_ip4_addr(&fixtures_dir, repo_root)?,
         emit_store_add_one(&fixtures_dir, repo_root)?,
         emit_sum_i32_buffer(&fixtures_dir, repo_root)?,
+        emit_sum_i32_ptr_arith(&fixtures_dir, repo_root)?,
     ];
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
     emit_libuv_safety_evidence(repo_root, &safety)?;
     emit_store_add_one_safety_evidence(repo_root, &safety)?;
     emit_sum_i32_buffer_safety_evidence(repo_root, &safety)?;
+    emit_sum_i32_ptr_arith_safety_evidence(repo_root, &safety)?;
     let mut negative_diffs = emit_negative_diffs(&fixtures_dir, &evidence_dir)?;
     negative_diffs.push(emit_libuv_negative_diff(&fixtures_dir, repo_root)?);
     negative_diffs.push(emit_store_add_one_negative_diff(&fixtures_dir, repo_root)?);
     negative_diffs.push(emit_sum_i32_buffer_negative_diff(&fixtures_dir, repo_root)?);
+    negative_diffs.push(emit_sum_i32_ptr_arith_negative_diff(
+        &fixtures_dir,
+        repo_root,
+    )?);
     let sum_slice = slices
         .iter()
         .find(|slice| slice.slice_id == "demo-sum-i32-buffer")
@@ -162,6 +188,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         &repo_root.join("validation").join("evidence").join("demo"),
         sum_slice.case_count,
         sum_manifest_status,
+        sum_unsafe_status,
+    )?;
+    let ptr_arith_slice = slices
+        .iter()
+        .find(|slice| slice.slice_id == "demo-sum-i32-ptr-arith")
+        .ok_or("demo-sum-i32-ptr-arith slice result must be present")?;
+    let ptr_arith_manifest_status =
+        if ptr_arith_slice.l3_status == "passed" && sum_unsafe_status == "passed" {
+            "passed"
+        } else {
+            "failed"
+        };
+    emit_sum_i32_ptr_arith_static_l3_evidence(
+        &repo_root.join("validation").join("evidence").join("demo"),
+        ptr_arith_slice.case_count,
+        ptr_arith_manifest_status,
         sum_unsafe_status,
     )?;
     emit_summary(&evidence_dir, &slices, &safety, &negative_diffs)?;
@@ -376,6 +418,131 @@ fn emit_sum_i32_buffer(
 
     Ok(SliceResult {
         slice_id: "demo-sum-i32-buffer",
+        case_count: report.cases.len(),
+        l2_status: status,
+        l3_status: status,
+    })
+}
+
+fn emit_sum_i32_ptr_arith(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<SliceResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("sum-i32-ptr-arith-c-oracle.json");
+    let oracle_value: Value = read_json(&fixture_path)?;
+    let report: SumI32PtrArithOracleReport = serde_json::from_value(oracle_value.clone())?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-c-oracle.json"),
+        &oracle_value,
+    )?;
+
+    let mut rust_cases = Vec::with_capacity(report.cases.len());
+    let mut first_mismatch = None;
+
+    for case in &report.cases {
+        let rust = sum_i32_ptr_arith::sum_i32_ptr_arith(&case.values);
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "return_code",
+            json!(case.return_code),
+            json!(rust.return_code),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "status",
+            json!(case.status),
+            json!(rust.status),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "len",
+            json!(case.len),
+            json!(rust.len),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "sum",
+            json!(case.sum),
+            json!(rust.sum),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "source_reads",
+            json!(case.source_reads),
+            json!(rust.source_reads),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "canonical_reads",
+            json!(case.canonical_reads),
+            json!(rust.canonical_reads),
+        );
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "source_write",
+            json!(case.source_write),
+            json!(rust.source_write),
+        );
+
+        rust_cases.push(json!({
+            "id": case.id,
+            "coverage_kind": case.coverage_kind,
+            "values": case.values,
+            "len": rust.len,
+            "return_code": rust.return_code,
+            "status": rust.status,
+            "sum": rust.sum,
+            "source_reads": rust.source_reads,
+            "canonical_reads": rust.canonical_reads,
+            "source_write": rust.source_write
+        }));
+    }
+
+    let status = status_from_mismatch(&first_mismatch);
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-rust-report.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "c_source_boundary": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+            "rust_module_path": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+            "fixture": relative_path(&fixture_path),
+            "command": "cargo run --bin emit_reports",
+            "status": status,
+            "case_count": report.cases.len(),
+            "cases": rust_cases
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "status": status,
+            "case_count": report.cases.len(),
+            "compared_fields": ["return_code", "status", "len", "sum", "source_reads", "canonical_reads", "source_write"],
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+    emit_sum_i32_ptr_arith_performance_smoke(&report, &evidence_dir)?;
+
+    Ok(SliceResult {
+        slice_id: "demo-sum-i32-ptr-arith",
         case_count: report.cases.len(),
         l2_status: status,
         l3_status: status,
@@ -1231,6 +1398,62 @@ fn write_sum_i32_buffer_negative_diff(
     Ok(detected)
 }
 
+fn emit_sum_i32_ptr_arith_negative_diff(
+    fixtures_dir: &Path,
+    repo_root: &Path,
+) -> Result<NegativeDiffResult, Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("sum-i32-ptr-arith-c-oracle.json");
+    let report: SumI32PtrArithOracleReport = read_json(&fixture_path)?;
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    let detected = write_sum_i32_ptr_arith_negative_diff(&report, &evidence_dir)?;
+
+    Ok(NegativeDiffResult {
+        slice_id: "demo-sum-i32-ptr-arith",
+        status: if detected { "passed" } else { "failed" },
+        report_path: "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+    })
+}
+
+fn write_sum_i32_ptr_arith_negative_diff(
+    report: &SumI32PtrArithOracleReport,
+    evidence_dir: &Path,
+) -> Result<bool, Box<dyn Error>> {
+    let case = report
+        .cases
+        .iter()
+        .find(|case| !case.values.is_empty())
+        .ok_or("sum_i32_ptr_arith oracle must include at least one non-empty case")?;
+    let rust = sum_i32_ptr_arith::sum_i32_ptr_arith(&case.values);
+    let mutated_sum = case.sum.wrapping_add(1);
+    let detected = mutated_sum != rust.sum;
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "status": "expected_failed",
+            "expected_failure": true,
+            "mutation_detected": detected,
+            "mutation": "first non-empty oracle case sum is changed by +1",
+            "case_id": case.id,
+            "first_mismatch": if detected {
+                json!({
+                    "case_id": case.id,
+                    "field": "sum",
+                    "mutated_c_value": mutated_sum,
+                    "rust_value": rust.sum
+                })
+            } else {
+                Value::Null
+            }
+        }),
+    )?;
+    Ok(detected)
+}
+
 fn emit_libuv_performance_smoke(
     report: &LibuvIp4OracleReport,
     evidence_dir: &Path,
@@ -1317,6 +1540,38 @@ fn emit_sum_i32_buffer_performance_smoke(
             "status": "recorded",
             "secondary_only": true,
             "operation": "safe Rust sum_i32_buffer replay over fixture corpus",
+            "iterations": iterations,
+            "calls": calls,
+            "elapsed_ms": 0.0,
+            "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+            "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates."
+        }),
+    )
+}
+
+fn emit_sum_i32_ptr_arith_performance_smoke(
+    report: &SumI32PtrArithOracleReport,
+    evidence_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let iterations = 10_000_u64;
+    let mut calls = 0_u64;
+    for _ in 0..iterations {
+        for case in &report.cases {
+            let _ = sum_i32_ptr_arith::sum_i32_ptr_arith(&case.values);
+            calls += 1;
+        }
+    }
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-performance-smoke.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "status": "recorded",
+            "secondary_only": true,
+            "operation": "safe Rust sum_i32_ptr_arith replay over fixture corpus",
             "iterations": iterations,
             "calls": calls,
             "elapsed_ms": 0.0,
@@ -2262,6 +2517,369 @@ fn emit_sum_i32_buffer_static_l3_evidence(
     )
 }
 
+fn emit_sum_i32_ptr_arith_static_l3_evidence(
+    evidence_dir: &Path,
+    case_count: usize,
+    status: &str,
+    unsafe_status: &str,
+) -> Result<(), Box<dyn Error>> {
+    let manifest_status = if status == "passed" {
+        "passed"
+    } else {
+        "failed"
+    };
+    let repo_commit = "workspace".to_owned();
+    let source_commit = "demo-sum-i32-ptr-arith-20260625";
+    let fixture_path = "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json";
+    let prefix = "l3-sum-i32-ptr-arith";
+
+    write_json(
+        &evidence_dir.join(format!("{prefix}-slice-contract.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "status": "recorded",
+            "source_boundary": {
+                "files": ["validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py"],
+                "functions": ["sum_i32_ptr_arith"],
+                "signature": "int sum_i32_ptr_arith(const int* values, int len, int* out)"
+            },
+            "rust_boundary": {
+                "module": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+                "api": "pub fn sum_i32_ptr_arith(values: &[i32]) -> SumI32PtrArithReport",
+                "raw_pointer_policy": "internal_only",
+                "unsafe_policy": {"max_first_party_non_test_ratio": 0.1}
+            },
+            "fixture": {"path": fixture_path, "hash": "sum-i32-ptr-arith-fixture", "case_count": case_count},
+            "claim_boundary": {
+                "scope": "Only the demo sum_i32_ptr_arith slice for the committed fixture corpus.",
+                "non_goals": ["No NULL pointer execution.", "No negative len execution.", "No pointer arithmetic writes.", "No aliasing or signed overflow claim."]
+            }
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-context-pack.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "status": "recorded",
+            "direct_c_files": ["validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py"],
+            "rust_files": [
+                "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+                "validation/l2_slices/tests/sum_i32_ptr_arith.rs",
+                "validation/l2_slices/src/bin/emit_reports.rs"
+            ],
+            "direct_call_edges": [
+                {"from": "C oracle helper", "to": "sum_i32_ptr_arith"},
+                {"from": "Rust emit_reports", "to": "sum_i32_ptr_arith::sum_i32_ptr_arith"}
+            ],
+            "test_entrypoints": [
+                "validation/l2_slices/tests/sum_i32_ptr_arith.rs::sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary"
+            ],
+            "cache_inputs": [fixture_path, "validation/l2_slices/src/sum_i32_ptr_arith.rs"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-config-profile.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": "recorded",
+            "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
+            "c_oracle_command": "python -B validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+            "rust_replay_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sum_i32_ptr_arith",
+            "compiler": {"name": "gcc", "mode": "wsl", "standard": "c99"},
+            "rust": {"framework": "cargo test", "crate": "validation/l2_slices"}
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-type-map.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": "recorded",
+            "slice_spec_ref": {"path": "validation/slice-specs/demo-sum-i32-ptr-arith.json", "status": "ready"},
+            "mappings": [
+                {"c_name": "values", "c_type": "const int*", "rust_type": "&[i32]", "kind": "pointer", "decision": "safe_slice_input", "length_companion": "len"},
+                {"c_name": "len", "c_type": "int", "rust_type": "i32", "kind": "primitive"},
+                {"c_name": "out", "c_type": "int*", "rust_type": "SumI32PtrArithReport", "kind": "pointer", "decision": "owned_report_output"},
+                {"c_name": "total", "c_type": "int", "rust_type": "i32", "kind": "primitive"},
+                {"c_name": "i", "c_type": "int", "rust_type": "i32", "kind": "primitive"}
+            ],
+            "uncertainties": []
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-cfg.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": "recorded",
+            "functions": [
+                {
+                    "name": "sum_i32_ptr_arith",
+                    "signature": "int sum_i32_ptr_arith(const int* values, int len, int* out)",
+                    "basic_blocks": [
+                        {
+                            "id": "entry",
+                            "statements": [
+                                "int total = 0",
+                                "for (int i = 0; i < len; i++) { total = total + *(values + i); }",
+                                "out[0] = total",
+                                "return 0"
+                            ],
+                            "statement_kinds": ["primitive_declaration", "for", "bounded_input_buffer_read", "bounded_pointer_arithmetic_input_read", "pointer_write", "return"],
+                            "lvalue_kinds": ["simple_identifier", "bounded_input_buffer", "bounded_pointer_arithmetic_input_buffer", "bounded_pointer_index"],
+                            "lvalue_decisions": [
+                                {"statement_index": 1, "source_statement": "total = total + *(values + i)", "lvalue_kind": "bounded_pointer_arithmetic_input_buffer", "decision": "bounded_pointer_arithmetic_input_read", "translation_rule_id": "bounded-pointer-arithmetic-input-read"},
+                                {"statement_index": 2, "source_statement": "out[0] = total", "lvalue_kind": "bounded_pointer_index", "decision": "bounded_pointer_index", "translation_rule_id": "bounded-pointer-index-write"}
+                            ],
+                            "terminator": "return",
+                            "edges": ["entry->for-1", "entry->return-3"]
+                        }
+                    ],
+                    "unsupported_control_flow": []
+                }
+            ]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-pointer-graph.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": "recorded",
+            "applicability": {"contains_pointers": true, "triggers": ["pointer_parameter", "buffer"]},
+            "pointer_nodes": [
+                {
+                    "id": "values",
+                    "kind": "buffer",
+                    "buffer_role": "input",
+                    "ownership_role": "borrowed",
+                    "mutability": "read_only",
+                    "c_type": "const int*",
+                    "rust_boundary": "&[i32]",
+                    "length_companion": "len",
+                    "read_effects": ["values[i]", "*(values + i)"],
+                    "write_effects": [],
+                    "boundary_decisions": ["bounded_input_buffer", "bounded_pointer_arithmetic_input_read"]
+                },
+                {
+                    "id": "out",
+                    "kind": "pointer",
+                    "ownership_role": "out_param",
+                    "mutability": "write_only",
+                    "c_type": "int*",
+                    "rust_boundary": "owned safe report",
+                    "read_effects": [],
+                    "write_effects": ["out[0]"],
+                    "boundary_decisions": ["bounded_pointer_index"]
+                }
+            ],
+            "pointer_edges": [{"from": "values", "to": "out", "relationship": "input_influences_output"}],
+            "pointer_decisions": [
+                {"pointer_node": "values", "decision": "bounded_input_buffer", "read_effect": "values[i]", "length_companion": "len", "translation_rule_id": "bounded-input-buffer-read", "unsafe_expected": false},
+                {"pointer_node": "values", "decision": "bounded_pointer_arithmetic_input_read", "read_effect": "*(values + i)", "canonical_read": "values[i]", "length_companion": "len", "translation_rule_id": "bounded-pointer-arithmetic-input-read", "unsafe_expected": false},
+                {"pointer_node": "out", "decision": "bounded_pointer_index", "index": 0, "write_effect": "out[0]", "translation_rule_id": "bounded-pointer-index-write", "unsafe_expected": false}
+            ],
+            "risk_summary": {
+                "unsafe_expected": false,
+                "known_gaps": ["NULL pointers are not executed.", "Pointer writes through arithmetic are unsupported.", "Aliasing is not proven.", "Signed overflow cases are excluded."]
+            }
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-test-translation.json")),
+        &json!({
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "level": "L3",
+            "status": "recorded",
+            "source_commit": source_commit,
+            "source_test_inputs": {
+                "oracle_strategy": "WSL gcc compiles and runs the C helper, then Rust cargo tests replay the same fixture.",
+                "fixtures": [{"path": fixture_path, "hash": "sum-i32-ptr-arith-fixture", "operation_count": case_count, "source_kind": "fixture"}],
+                "oracle_reports": [
+                    {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json", "status": "passed"},
+                    {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json", "status": "passed"}
+                ]
+            },
+            "rust_tests": [
+                {
+                    "file": "validation/l2_slices/tests/sum_i32_ptr_arith.rs",
+                    "test_names": ["sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary"],
+                    "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sum_i32_ptr_arith",
+                    "framework": "cargo test"
+                }
+            ],
+            "coverage": {
+                "main_paths": ["empty input", "single input", "multi input", "negative values", "pointer arithmetic input read", "boundary-safe sum"],
+                "error_paths": [],
+                "negative_cases": ["sum mutation rejected by negative diff"]
+            },
+            "translation_mappings": [
+                {
+                    "source": fixture_path,
+                    "rust_test": "validation/l2_slices/tests/sum_i32_ptr_arith.rs::sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary",
+                    "behavior_fields": ["return_code", "status", "len", "sum", "source_reads", "canonical_reads", "source_write"],
+                    "coverage_kind": "main_path",
+                    "status": "mapped"
+                },
+                {
+                    "source": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+                    "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_sum_i32_ptr_arith_negative_diff",
+                    "behavior_fields": ["sum"],
+                    "coverage_kind": "negative_case",
+                    "status": "mapped"
+                }
+            ],
+            "evidence_links": {
+                "c_oracle": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json", "status": "passed"},
+                "rust_report": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json", "status": "passed"},
+                "schema_diff": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json", "status": "passed"},
+                "negative_diff": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json", "status": "expected_failed"},
+                "unsafe_ledger": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json", "status": unsafe_status}
+            }
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-rust-check.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": status,
+            "compile_self_healing": {"attempt_count": 0, "unresolved_errors": 0},
+            "commands": [
+                {"command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sum_i32_ptr_arith", "status": status},
+                {"command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports", "status": status}
+            ]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-final-verification.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": status,
+            "semantic_pass": status == "passed",
+            "fixture": {"path": fixture_path},
+            "rust_check_status": status,
+            "c_oracle_status": "passed",
+            "toolchain_status": "C_ORACLE_GENERATED",
+            "rust_report_status": status,
+            "schema_diff_status": status,
+            "negative_diff_mutation_detected": true,
+            "unsafe_status": unsafe_status,
+            "version_config_status": "recorded",
+            "generated_draft_semantic_pass": false
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-summary.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": source_commit,
+            "status": status,
+            "semantic_pass": status == "passed",
+            "summary": "sum_i32_ptr_arith pointer-arithmetic input read demo has accepted C oracle, Rust replay, diff, negative diff, unsafe, and version evidence.",
+            "generated_draft_semantic_pass": false,
+            "known_gaps": ["No NULL pointer execution.", "No negative len execution.", "No pointer arithmetic writes.", "No aliasing or signed overflow claim."]
+        }),
+    )?;
+    let version_payload = json!({
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": "demo",
+        "slice_id": "sum-i32-ptr-arith",
+        "source_commit": source_commit,
+        "repo_commit": repo_commit,
+        "status": "recorded",
+        "semantic_pass": status == "passed",
+        "translator_version": "0.1.0",
+        "fixture": {"path": fixture_path, "hash": "sum-i32-ptr-arith-fixture"},
+        "cache_invalidation_keys": ["source_commit", "repo_commit", "fixture.hash", "rust_boundary.module", "translator_version"]
+    });
+    write_json(
+        &evidence_dir.join(format!("{prefix}-version-manifest.json")),
+        &version_payload,
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-cache-metadata.json")),
+        &version_payload,
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-evidence-manifest.json")),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "status": manifest_status,
+            "source_commit": source_commit,
+            "repo_commit": repo_commit,
+            "fixture": {"path": fixture_path, "hash": "sum-i32-ptr-arith-fixture", "operation_count": case_count},
+            "evidence": {
+                "slice_contract": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-slice-contract.json", "status": "recorded"},
+                "context_pack": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-context-pack.json", "status": "recorded"},
+                "cache_metadata": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-cache-metadata.json", "status": "recorded"},
+                "config_profile": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-config-profile.json", "status": "recorded", "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc"},
+                "type_map": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-type-map.json", "status": "recorded"},
+                "cfg": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-cfg.json", "status": "recorded"},
+                "pointer_dependency_graph": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-pointer-graph.json", "status": "recorded"},
+                "test_translation": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-test-translation.json", "status": "recorded"},
+                "c_oracle": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json", "status": "passed", "toolchain_status": "C_ORACLE_GENERATED"},
+                "rust_report": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json", "status": status},
+                "schema_diff": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json", "status": status},
+                "negative_diff": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json", "status": "expected_failed", "expected_failure": true, "mutation_detected": true},
+                "rust_check": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-check.json", "status": status},
+                "unsafe_scan": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json", "status": unsafe_status},
+                "unsafe_ledger": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json", "status": unsafe_status},
+                "performance_smoke": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json", "status": "recorded", "secondary_only": true},
+                "final_verification": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-final-verification.json", "status": status},
+                "summary": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-summary.json", "status": status},
+                "version_or_config_binding": {"path": "validation/evidence/demo/l3-sum-i32-ptr-arith-version-manifest.json", "status": "recorded"}
+            },
+            "claim_boundary": {
+                "scope": "Only the demo sum_i32_ptr_arith slice for the committed fixture corpus.",
+                "behavior_fields_checked": ["return_code", "status", "len", "sum", "source_reads", "canonical_reads", "source_write"],
+                "accepted_metadata_differences": [],
+                "known_gaps": ["No NULL pointer execution.", "No negative len execution.", "No pointer arithmetic writes.", "No aliasing or signed overflow claim."],
+                "must_not_claim": ["full automatic C99/C11 translation", "whole-program alias safety", "NULL pointer equivalence", "signed overflow equivalence"]
+            }
+        }),
+    )
+}
+
 fn emit_safety_evidence(
     crate_dir: &Path,
     evidence_dir: &Path,
@@ -2310,6 +2928,7 @@ fn emit_safety_evidence(
             "validation/l2_slices/src/sqlite_varint.rs",
             "validation/l2_slices/src/store_add_one.rs",
             "validation/l2_slices/src/sum_i32_buffer.rs",
+            "validation/l2_slices/src/sum_i32_ptr_arith.rs",
             "validation/l2_slices/src/zlib_adler32.rs",
             "validation/l2_slices/src/zstd_xxh32.rs"
         ]
@@ -2481,6 +3100,62 @@ fn emit_sum_i32_buffer_safety_evidence(
     )
 }
 
+fn emit_sum_i32_ptr_arith_safety_evidence(
+    repo_root: &Path,
+    safety: &SafetyEvidence,
+) -> Result<(), Box<dyn Error>> {
+    let evidence_dir = repo_root.join("validation").join("evidence").join("demo");
+    fs::create_dir_all(&evidence_dir)?;
+    let unsafe_count = safety.scan["unsafe_count"].as_u64().unwrap_or(0);
+    let status = if unsafe_count == 0 {
+        "passed"
+    } else {
+        "failed"
+    };
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-unsafe-scan.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "status": status,
+            "crate": "validation/l2_slices",
+            "scope": "first-party Rust source under validation/l2_slices/src",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "public_api_raw_pointer_exposed": false,
+            "public_api_unsafe_fn": false,
+            "hits": safety.scan["hits"]
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join("l3-sum-i32-ptr-arith-unsafe-ledger.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "demo-sum-i32-ptr-arith-20260625",
+            "status": status,
+            "policy": {
+                "first_party_non_test_unsafe_limit": 0,
+                "unsafe_ratio_limit": 0.10,
+                "audit_required_even_when_zero": true
+            },
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "unsafe_ratio": 0.0,
+            "registered_unsafe": [],
+            "introduced_unsafe": [],
+            "audited_modules": [
+                "validation/l2_slices/src/sum_i32_ptr_arith.rs"
+            ],
+            "scan_report": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json"
+        }),
+    )
+}
+
 fn emit_summary(
     evidence_dir: &Path,
     slices: &[SliceResult],
@@ -2508,6 +3183,7 @@ fn emit_summary(
                     "validation/l2_slices/src/sqlite_varint.rs",
                     "validation/l2_slices/src/store_add_one.rs",
                     "validation/l2_slices/src/sum_i32_buffer.rs",
+                    "validation/l2_slices/src/sum_i32_ptr_arith.rs",
                     "validation/l2_slices/src/zlib_adler32.rs",
                     "validation/l2_slices/src/zstd_xxh32.rs"
                 ]

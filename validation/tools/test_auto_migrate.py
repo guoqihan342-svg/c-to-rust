@@ -272,6 +272,105 @@ class AutoMigrateTests(unittest.TestCase):
                 plan["translation_summary"]["pointer_boundary_decision_counts"]["bounded_input_buffer"], 1
             )
 
+    def test_pointer_arithmetic_input_read_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "1234567",
+            "function_name": "sum_i32_ptr_arith",
+            "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "sum"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "sum-i32-ptr-arith.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "sum-i32-ptr-arith"
+            cfg = json.loads((evidence_dir / "l3-sum-i32-ptr-arith-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-sum-i32-ptr-arith-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-sum-i32-ptr-arith-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("bounded_input_buffer_read", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_input_read", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_input_buffer", block["lvalue_kinds"])
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_input_read"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-input-read"
+                    for decision in block["lvalue_decisions"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_input_read"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-input-read"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            values_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "values")
+            self.assertIn("values[i]", values_node["read_effects"])
+            self.assertIn("*(values + i)", values_node["read_effects"])
+            self.assertIn("bounded_input_buffer", values_node["boundary_decisions"])
+            self.assertIn("bounded_pointer_arithmetic_input_read", values_node["boundary_decisions"])
+            self.assertIn("bounded-input-buffer-read", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn(
+                "bounded-pointer-arithmetic-input-read",
+                plan["translation_summary"]["translation_rule_ids"],
+            )
+            self.assertEqual(
+                plan["translation_summary"]["lvalue_decision_counts"][
+                    "bounded_pointer_arithmetic_input_read"
+                ],
+                1,
+            )
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"][
+                    "bounded_pointer_arithmetic_input_read"
+                ],
+                1,
+            )
+
     def test_unsupported_lvalue_blocks_auto_migrate_candidate_generation(self) -> None:
         spec = {
             "target_id": "demo",

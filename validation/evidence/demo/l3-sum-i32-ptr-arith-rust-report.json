@@ -1,0 +1,107 @@
+{
+  "c_source_boundary": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+  "case_count": 6,
+  "cases": [
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "empty",
+      "id": "empty",
+      "len": 0,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": []
+    },
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "single",
+      "id": "single-positive",
+      "len": 1,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 7,
+      "values": [
+        7
+      ]
+    },
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "multi",
+      "id": "multi-positive",
+      "len": 4,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 10,
+      "values": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "negative_values",
+      "id": "mixed-negative",
+      "len": 4,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": [
+        -5,
+        2,
+        -3,
+        6
+      ]
+    },
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "zero_crossing",
+      "id": "zero-sum",
+      "len": 3,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 0,
+      "values": [
+        -10,
+        10,
+        0
+      ]
+    },
+    {
+      "canonical_reads": "values[i]",
+      "coverage_kind": "boundary_safe",
+      "id": "boundary-safe",
+      "len": 3,
+      "return_code": 0,
+      "source_reads": "*(values + i) under i < len",
+      "source_write": "out[0]",
+      "status": "ok",
+      "sum": 2147483645,
+      "values": [
+        1073741823,
+        1073741823,
+        -1
+      ]
+    }
+  ],
+  "command": "cargo run --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

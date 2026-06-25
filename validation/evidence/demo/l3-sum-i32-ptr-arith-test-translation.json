@@ -1,0 +1,101 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "empty input",
+      "single input",
+      "multi input",
+      "negative values",
+      "pointer arithmetic input read",
+      "boundary-safe sum"
+    ],
+    "negative_cases": [
+      "sum mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sum_i32_ptr_arith",
+      "file": "validation/l2_slices/tests/sum_i32_ptr_arith.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "sum-i32-ptr-arith-fixture",
+        "operation_count": 6,
+        "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_code",
+        "status",
+        "len",
+        "sum",
+        "source_reads",
+        "canonical_reads",
+        "source_write"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/sum_i32_ptr_arith.rs::sum_i32_ptr_arith_matches_c_oracle_with_safe_boundary",
+      "source": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "sum"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_sum_i32_ptr_arith_negative_diff",
+      "source": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

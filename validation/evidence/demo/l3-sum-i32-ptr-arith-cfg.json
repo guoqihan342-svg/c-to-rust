@@ -1,0 +1,61 @@
+{
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "edges": [
+            "entry->for-1",
+            "entry->return-3"
+          ],
+          "id": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "bounded_pointer_arithmetic_input_read",
+              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
+              "source_statement": "total = total + *(values + i)",
+              "statement_index": 1,
+              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+            },
+            {
+              "decision": "bounded_pointer_index",
+              "lvalue_kind": "bounded_pointer_index",
+              "source_statement": "out[0] = total",
+              "statement_index": 2,
+              "translation_rule_id": "bounded-pointer-index-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "simple_identifier",
+            "bounded_input_buffer",
+            "bounded_pointer_arithmetic_input_buffer",
+            "bounded_pointer_index"
+          ],
+          "statement_kinds": [
+            "primitive_declaration",
+            "for",
+            "bounded_input_buffer_read",
+            "bounded_pointer_arithmetic_input_read",
+            "pointer_write",
+            "return"
+          ],
+          "statements": [
+            "int total = 0",
+            "for (int i = 0; i < len; i++) { total = total + *(values + i); }",
+            "out[0] = total",
+            "return 0"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "name": "sum_i32_ptr_arith",
+      "signature": "int sum_i32_ptr_arith(const int* values, int len, int* out)",
+      "unsupported_control_flow": []
+    }
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

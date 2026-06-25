@@ -345,7 +345,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
 
     raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
     lvalue_decision_counts = count_occurrences(
-        kind
+        lvalue_decision_for_kind(kind)
         for function in functions
         for block in function.get("basic_blocks", [])
         for kind in block.get("lvalue_kinds", [])
@@ -1794,6 +1794,7 @@ def lvalue_decision_for_kind(kind: str) -> str:
         "deref_identifier": "safe_wrapper",
         "bounded_pointer_index": "bounded_pointer_index",
         "bounded_input_buffer": "bounded_input_buffer",
+        "bounded_pointer_arithmetic_input_buffer": "bounded_pointer_arithmetic_input_read",
         "unsupported_lvalue": "unsupported_lvalue",
     }.get(kind, "unknown")
 
@@ -1805,6 +1806,7 @@ def lvalue_translation_rule(kind: str) -> str:
         "deref_identifier": "pointer-deref-write",
         "bounded_pointer_index": "bounded-pointer-index-write",
         "bounded_input_buffer": "bounded-input-buffer-read",
+        "bounded_pointer_arithmetic_input_buffer": "bounded-pointer-arithmetic-input-read",
         "unsupported_lvalue": "unsupported-lvalue-block",
     }.get(kind, "unknown-lvalue")
 
@@ -1842,6 +1844,8 @@ def pointer_decision_lvalue_kind(decision: str) -> str:
         return "bounded_pointer_index"
     if decision == "bounded_input_buffer":
         return "bounded_input_buffer"
+    if decision == "bounded_pointer_arithmetic_input_read":
+        return "bounded_pointer_arithmetic_input_buffer"
     return "pointer_write"
 
 
@@ -1850,6 +1854,8 @@ def pointer_decision_translation_rule(decision: str) -> str:
         return "bounded-pointer-index-write"
     if decision == "bounded_input_buffer":
         return "bounded-input-buffer-read"
+    if decision == "bounded_pointer_arithmetic_input_read":
+        return "bounded-pointer-arithmetic-input-read"
     return "pointer-field-write"
 
 

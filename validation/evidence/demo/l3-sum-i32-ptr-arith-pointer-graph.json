@@ -1,0 +1,94 @@
+{
+  "applicability": {
+    "contains_pointers": true,
+    "triggers": [
+      "pointer_parameter",
+      "buffer"
+    ]
+  },
+  "level": "L3",
+  "pointer_decisions": [
+    {
+      "decision": "bounded_input_buffer",
+      "length_companion": "len",
+      "pointer_node": "values",
+      "read_effect": "values[i]",
+      "translation_rule_id": "bounded-input-buffer-read",
+      "unsafe_expected": false
+    },
+    {
+      "canonical_read": "values[i]",
+      "decision": "bounded_pointer_arithmetic_input_read",
+      "length_companion": "len",
+      "pointer_node": "values",
+      "read_effect": "*(values + i)",
+      "translation_rule_id": "bounded-pointer-arithmetic-input-read",
+      "unsafe_expected": false
+    },
+    {
+      "decision": "bounded_pointer_index",
+      "index": 0,
+      "pointer_node": "out",
+      "translation_rule_id": "bounded-pointer-index-write",
+      "unsafe_expected": false,
+      "write_effect": "out[0]"
+    }
+  ],
+  "pointer_edges": [
+    {
+      "from": "values",
+      "relationship": "input_influences_output",
+      "to": "out"
+    }
+  ],
+  "pointer_nodes": [
+    {
+      "boundary_decisions": [
+        "bounded_input_buffer",
+        "bounded_pointer_arithmetic_input_read"
+      ],
+      "buffer_role": "input",
+      "c_type": "const int*",
+      "id": "values",
+      "kind": "buffer",
+      "length_companion": "len",
+      "mutability": "read_only",
+      "ownership_role": "borrowed",
+      "read_effects": [
+        "values[i]",
+        "*(values + i)"
+      ],
+      "rust_boundary": "&[i32]",
+      "write_effects": []
+    },
+    {
+      "boundary_decisions": [
+        "bounded_pointer_index"
+      ],
+      "c_type": "int*",
+      "id": "out",
+      "kind": "pointer",
+      "mutability": "write_only",
+      "ownership_role": "out_param",
+      "read_effects": [],
+      "rust_boundary": "owned safe report",
+      "write_effects": [
+        "out[0]"
+      ]
+    }
+  ],
+  "risk_summary": {
+    "known_gaps": [
+      "NULL pointers are not executed.",
+      "Pointer writes through arithmetic are unsupported.",
+      "Aliasing is not proven.",
+      "Signed overflow cases are excluded."
+    ],
+    "unsafe_expected": false
+  },
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

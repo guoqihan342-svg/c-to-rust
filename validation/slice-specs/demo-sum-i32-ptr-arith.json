@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "sum-i32-ptr-arith",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "sum_i32_ptr_arith",
+  "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "fixture_hash": "sum-i32-ptr-arith-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": "<demo-slice>",
+    "source_commit": "demo-sum-i32-ptr-arith-20260625",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py": "generated-at-validation"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "sum_i32_ptr_arith"
+    ],
+    "signatures": [
+      {
+        "function": "sum_i32_ptr_arith",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "values",
+            "c_type": "const int*",
+            "direction": "input",
+            "buffer_length_parameter": "len"
+          },
+          {
+            "name": "len",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": 0,
+              "maximum": "fixture-bound"
+            }
+          },
+          {
+            "name": "out",
+            "c_type": "int*",
+            "direction": "output"
+          }
+        ],
+        "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "values",
+          "c_type": "const int*",
+          "length_companion": "len",
+          "read_effects": [
+            "*(values + i)",
+            "values[i]"
+          ],
+          "loop_bound": "0 <= i < len",
+          "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+        }
+      ],
+      "output_pointers": [
+        {
+          "name": "out",
+          "c_type": "int*",
+          "write_effects": [
+            "out[0]"
+          ]
+        }
+      ],
+      "aliasing_proven": false
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/tools/generate_sum_i32_ptr_arith_oracle.py",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "sum-i32-ptr-arith-fixture",
+    "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
+    "hash": "sum-i32-ptr-arith-fixture",
+    "cases": [
+      {
+        "id": "empty",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json"
+      },
+      {
+        "id": "single-positive",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json"
+      },
+      {
+        "id": "mixed-negative",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json"
+      },
+      {
+        "id": "boundary-safe",
+        "input_ref": "cases[5]",
+        "expected_ref": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "len",
+      "sum",
+      "source_reads",
+      "canonical_reads",
+      "source_write"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
+    "diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-sum-i32-ptr-arith-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-sum-i32-ptr-arith-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-sum-i32-ptr-arith-version-manifest.json",
+    "behavior_fields": [
+      "return_code",
+      "status",
+      "len",
+      "sum",
+      "source_reads",
+      "canonical_reads",
+      "source_write"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+    "public_api": [
+      {
+        "name": "sum_i32_ptr_arith",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper",
+        "input": "&[i32]",
+        "output": "SumI32PtrArithReport"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/sum_i32_ptr_arith.rs",
+    "api_name": "sum_i32_ptr_arith",
+    "test_file": "validation/l2_slices/tests/sum_i32_ptr_arith.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for NULL values or out pointers.",
+      "No support for negative len values.",
+      "No support for signed overflow; fixture sums remain inside C int defined range.",
+      "No support for pointer arithmetic writes such as *(out + i) = value.",
+      "No aliasing proof between values and out."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "NULL pointer equivalence",
+      "signed overflow equivalence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No support for NULL values or out pointers.",
+    "No support for negative len values.",
+    "No support for signed overflow; fixture sums remain inside C int defined range.",
+    "No support for pointer arithmetic writes such as *(out + i) = value.",
+    "No aliasing proof between values and out."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}
