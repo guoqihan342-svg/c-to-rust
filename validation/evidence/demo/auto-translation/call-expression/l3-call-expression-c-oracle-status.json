@@ -1,0 +1,21 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+    "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 7,
+  "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+  "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+  "harness_draft": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "source_slice_id": "call-expression",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

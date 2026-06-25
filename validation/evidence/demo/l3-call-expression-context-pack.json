@@ -1,0 +1,55 @@
+{
+  "cache_inputs": [
+    "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "validation/l2_slices/src/call_expression_chain.rs"
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_call_expression_oracle.py"
+  ],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "value - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(value - 1)",
+      "statement_context": "declaration_initializer"
+    },
+    {
+      "arguments": [
+        "first - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(first - 1)",
+      "statement_context": "assignment"
+    },
+    {
+      "arguments": [
+        "value - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(value - 1)",
+      "statement_context": "return"
+    }
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/call_expression_chain.rs",
+    "validation/l2_slices/tests/call_expression_chain.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/call_expression_chain.rs::call_expression_chain_matches_c_oracle_and_records_call_contexts"
+  ],
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_calls": [
+    "int first = call_expression_chain(value - 1)",
+    "value = call_expression_chain(first - 1)",
+    "return call_expression_chain(value - 1)"
+  ],
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

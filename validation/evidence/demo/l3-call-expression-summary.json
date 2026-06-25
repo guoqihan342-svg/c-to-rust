@@ -1,0 +1,16 @@
+{
+  "generated_draft_semantic_pass": false,
+  "known_gaps": [
+    "No external callee semantic proof.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No large recursion depth or performance claim."
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "passed",
+  "summary": "call_expression_chain recursive direct-call demo has accepted C oracle, Rust replay, diff, negative diff, unsafe, and version evidence.",
+  "target_id": "demo"
+}

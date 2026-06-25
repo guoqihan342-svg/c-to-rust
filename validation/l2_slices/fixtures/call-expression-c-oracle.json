@@ -1,0 +1,160 @@
+{
+  "case_count": 7,
+  "cases": [
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "base_negative",
+      "id": "negative-two",
+      "input_value": -2,
+      "return_value": 2,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "base_negative",
+      "id": "negative-one",
+      "input_value": -1,
+      "return_value": 1,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "base_zero",
+      "id": "zero",
+      "input_value": 0,
+      "return_value": 0,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "recursive_single",
+      "id": "one",
+      "input_value": 1,
+      "return_value": 0,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "recursive_multi",
+      "id": "two",
+      "input_value": 2,
+      "return_value": 0,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "recursive_multi",
+      "id": "three",
+      "input_value": 3,
+      "return_value": 0,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    },
+    {
+      "call_expression_contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "call_expression_count": 3,
+      "coverage_kind": "recursive_multi",
+      "id": "four",
+      "input_value": 4,
+      "return_value": 0,
+      "source_calls": [
+        "int first = call_expression_chain(value - 1)",
+        "value = call_expression_chain(first - 1)",
+        "return call_expression_chain(value - 1)"
+      ],
+      "status": "ok"
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status",
+    "call_expression_count",
+    "call_expression_contexts",
+    "source_calls"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No external callee semantic proof.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No large recursion depth or performance claim.",
+    "No signed overflow domain; fixture values stay inside the safe recursion input domain."
+  ],
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_call_expression_oracle.py"
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "signature": "int call_expression_chain(int value)"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

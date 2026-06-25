@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror call_expression_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+  "helper_stdout_sha256": "9afc10771d1b939f5a1ce1269b46249da6738420314044c193460b99fbf6f9b7",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./call_expression_oracle",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "source_hashes": {
+    "c_helper": "7256f75a6315dc258264e354c39974224290016276b2ffbc6f45d43481d0f09e",
+    "generator": "34cce4a9f955180b729fea7b5ac1fe06a8bab71761f895cd0bdc2307da08d15e"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

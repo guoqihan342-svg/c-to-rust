@@ -1,0 +1,111 @@
+{
+  "c_boundary": {
+    "call_expression_contract": {
+      "callee_scope": "self_recursive",
+      "contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "direct_call_only": true,
+      "unsupported": [
+        "function_pointer_call",
+        "member_call",
+        "macro_call",
+        "nested_call",
+        "variadic_call",
+        "external_callee_semantics"
+      ]
+    },
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "callee",
+        "name": "call_expression_chain",
+        "source": "self-recursive direct call"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "signatures": [
+      {
+        "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
+        "function": "call_expression_chain",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 4,
+              "minimum": -2
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "external callee semantic equivalence",
+      "function pointer or nested call expression support",
+      "signed overflow equivalence"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No external callee semantic proof.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No large recursion depth or performance claim.",
+      "No signed overflow equivalence beyond the committed safe fixture domain."
+    ]
+  },
+  "fixture": {
+    "hash": "call-expression-fixture",
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "call_expression_chain",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/call_expression_chain.rs",
+    "module_path": "validation/l2_slices/src/call_expression_chain.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "input": "i32",
+        "name": "call_expression_chain",
+        "output": "CallExpressionChainReport",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/call_expression_chain.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

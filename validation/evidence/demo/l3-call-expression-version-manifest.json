@@ -1,0 +1,22 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "fixture": {
+    "hash": "call-expression-fixture",
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

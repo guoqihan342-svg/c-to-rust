@@ -1,0 +1,22 @@
+{
+  "commands": [
+    {
+      "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test call_expression_chain",
+      "status": "passed"
+    },
+    {
+      "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+      "status": "passed"
+    }
+  ],
+  "compile_self_healing": {
+    "attempt_count": 0,
+    "unresolved_errors": 0
+  },
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

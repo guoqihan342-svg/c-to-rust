@@ -1,0 +1,43 @@
+{
+  "accepted_differences": [],
+  "behavior_fields": [
+    "return_value",
+    "status",
+    "call_expression_count",
+    "call_expression_contexts",
+    "source_calls"
+  ],
+  "fixture": {
+    "case_count": 7,
+    "hash": "call-expression-fixture",
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No external callee semantic proof.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No large recursion depth or performance claim.",
+    "No full project migration claim."
+  ],
+  "repo_commit": "workspace",
+  "rust_boundary": {
+    "api": "pub fn call_expression_chain(value: i32) -> CallExpressionChainReport",
+    "module": "validation/l2_slices/src/call_expression_chain.rs",
+    "raw_pointer_exposed": false,
+    "safe_rust": true
+  },
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_call_expression_oracle.py"
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "signature": "int call_expression_chain(int value)"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

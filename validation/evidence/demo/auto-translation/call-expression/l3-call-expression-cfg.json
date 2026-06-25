@@ -1,0 +1,111 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-call-expression-20260625",
+    "slice_spec_sha256=0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "fixture_hash=call-expression-fixture",
+    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "value_assignment",
+              "lvalue_kind": "simple_identifier",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "int first = call_expression_chain(value - 1)",
+              "statement_index": 1,
+              "translation_rule_id": "assignment"
+            }
+          ],
+          "lvalue_kinds": [
+            "none",
+            "simple_identifier"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "if",
+            "primitive_declaration",
+            "call_expression",
+            "assignment",
+            "return"
+          ],
+          "statements": [
+            "if (value <= 0) { return -value; }",
+            "int first = call_expression_chain(value - 1)",
+            "value = call_expression_chain(first - 1)",
+            "return call_expression_chain(value - 1)"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "call_expression_chain",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "call_expression_chain(value - 1)",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int call_expression_chain(int value)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 1,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "status": "ready"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

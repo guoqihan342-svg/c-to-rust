@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+    "sha256": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "status": "recorded",
+  "target_id": "demo"
+}

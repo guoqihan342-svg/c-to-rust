@@ -1,0 +1,61 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-translator-input.json",
+    "sha256": "18557258ebd7796cd96798814bed5b0adcaa6347abaeff699a34d0528850ac99",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-call-expression-20260625",
+    "slice_spec_sha256=0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "fixture_hash=call-expression-fixture",
+    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "first",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "status": "ready"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

@@ -1,0 +1,20 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-call-expression-diff.json",
+    "sha256": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+    "status": "passed"
+  },
+  "compared_fields": [
+    "return_value",
+    "status",
+    "call_expression_count",
+    "call_expression_contexts",
+    "source_calls"
+  ],
+  "first_mismatch": null,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "status": "passed",
+  "target_id": "demo"
+}

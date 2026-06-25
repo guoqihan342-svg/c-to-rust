@@ -1,0 +1,41 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "context_pack_ref": "validation/evidence/demo/l3-call-expression-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "call_expression_chain has no pointer parameters, pointer returns, globals, buffers, or external mutable state in the committed fixture boundary.",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_boundary": {
+    "direct_call_edges": [
+      {
+        "condition": "value > 0",
+        "from": "call_expression_chain",
+        "to": "call_expression_chain"
+      }
+    ],
+    "files": [
+      "validation/l2_slices/tools/generate_call_expression_oracle.py",
+      "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

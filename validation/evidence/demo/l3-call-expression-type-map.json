@@ -1,0 +1,63 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/l3-call-expression-config-profile.json",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "role": "input_value",
+      "rust_type": "i32",
+      "symbol": "value"
+    },
+    {
+      "c_name": "first",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "role": "local_call_result",
+      "rust_type": "i32",
+      "symbol": "first"
+    },
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "role": "return_value",
+      "rust_type": "i32",
+      "symbol": "return"
+    }
+  ],
+  "repo_commit": "workspace",
+  "safe_boundary": {
+    "public_api": "pub fn call_expression_chain(value: i32) -> CallExpressionChainReport",
+    "raw_pointer_exposed": false,
+    "unsafe_required": false
+  },
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": [],
+  "unsupported_types": []
+}

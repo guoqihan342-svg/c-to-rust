@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-call-expression-20260625",
+    "fixture_hash=call-expression-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "status": "none",
+  "target_id": "demo"
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "one",
+  "compared_fields": [
+    "return_value",
+    "status",
+    "call_expression_count",
+    "call_expression_contexts",
+    "source_calls"
+  ],
+  "detected": true,
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "one",
+    "field": "call_expression_count",
+    "mutated_c_value": 2,
+    "rust_value": 3
+  },
+  "level": "L3",
+  "mutated_fields": [
+    "call_expression_count"
+  ],
+  "mutation": "recursive oracle case call_expression_count is changed by -1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

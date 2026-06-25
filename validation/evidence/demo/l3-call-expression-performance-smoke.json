@@ -1,0 +1,15 @@
+{
+  "calls": 70000,
+  "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+  "elapsed_ms": 0.0,
+  "iterations": 10000,
+  "level": "L3",
+  "operation": "safe Rust call_expression_chain replay over fixture corpus",
+  "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates.",
+  "schema_version": 1,
+  "secondary_only": true,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

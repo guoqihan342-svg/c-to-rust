@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "call-expression",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "call_expression_chain",
+  "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
+  "source_commit": "demo-call-expression-20260625",
+  "fixture_hash": "call-expression-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": "<demo-slice>",
+    "source_commit": "demo-call-expression-20260625",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/tools/generate_call_expression_oracle.py": "generated-at-validation"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+        "role": "source"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "signatures": [
+      {
+        "function": "call_expression_chain",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": -2,
+              "maximum": 4
+            }
+          }
+        ],
+        "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "callee",
+        "name": "call_expression_chain",
+        "source": "self-recursive direct call"
+      }
+    ],
+    "call_expression_contract": {
+      "direct_call_only": true,
+      "callee_scope": "self_recursive",
+      "contexts": [
+        "declaration_initializer",
+        "assignment",
+        "return"
+      ],
+      "unsupported": [
+        "function_pointer_call",
+        "member_call",
+        "macro_call",
+        "nested_call",
+        "variadic_call",
+        "external_callee_semantics"
+      ]
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-call-expression-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "call-expression-fixture",
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "hash": "call-expression-fixture",
+    "cases": [
+      {
+        "id": "negative-two",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-call-expression-c-oracle.json"
+      },
+      {
+        "id": "zero",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-call-expression-c-oracle.json"
+      },
+      {
+        "id": "one",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-call-expression-c-oracle.json"
+      },
+      {
+        "id": "three",
+        "input_ref": "cases[5]",
+        "expected_ref": "validation/evidence/demo/l3-call-expression-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status",
+      "call_expression_count",
+      "call_expression_contexts",
+      "source_calls"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-call-expression-rust-report.json",
+    "diff": "validation/evidence/demo/l3-call-expression-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-call-expression-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-call-expression-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status",
+      "call_expression_count",
+      "call_expression_contexts",
+      "source_calls"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/call_expression_chain.rs",
+    "public_api": [
+      {
+        "name": "call_expression_chain",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper",
+        "input": "i32",
+        "output": "CallExpressionChainReport"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/call_expression_chain.rs",
+    "api_name": "call_expression_chain",
+    "test_file": "validation/l2_slices/tests/call_expression_chain.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No external callee semantic proof.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No large recursion depth or performance claim.",
+      "No signed overflow equivalence beyond the committed safe fixture domain."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "external callee semantic equivalence",
+      "function pointer or nested call expression support",
+      "signed overflow equivalence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No external callee semantic proof.",
+    "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+    "No large recursion depth or performance claim.",
+    "No signed overflow equivalence beyond the committed safe fixture domain."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

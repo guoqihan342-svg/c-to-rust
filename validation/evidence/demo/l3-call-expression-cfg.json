@@ -1,0 +1,128 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [
+            "none"
+          ],
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "if",
+            "call_expression",
+            "assignment",
+            "call_expression",
+            "return",
+            "call_expression"
+          ],
+          "statements": [
+            "if (value <= 0)",
+            "int first = call_expression_chain(value - 1)",
+            "value = call_expression_chain(first - 1)",
+            "return call_expression_chain(value - 1)"
+          ]
+        }
+      ],
+      "branches": [
+        {
+          "condition": "value <= 0",
+          "id": "branch-1",
+          "kind": "if",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "edges": [
+        {
+          "condition": "value <= 0",
+          "from": "entry",
+          "kind": "true_branch",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "base_return"
+        },
+        {
+          "condition": "value > 0",
+          "from": "entry",
+          "kind": "false_branch",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "recursive_return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "base_return",
+        "recursive_return"
+      ],
+      "name": "call_expression_chain",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "-value",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          }
+        },
+        {
+          "block": "entry",
+          "expression": "call_expression_chain(value - 1)",
+          "source_span": {
+            "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int call_expression_chain(int value)",
+      "source_span": {
+        "file": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 1,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

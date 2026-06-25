@@ -1,0 +1,19 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+    "sha256": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+    "status": "passed"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "one",
+    "field": "call_expression_count",
+    "mutated_c_value": 2,
+    "rust_value": 3
+  },
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

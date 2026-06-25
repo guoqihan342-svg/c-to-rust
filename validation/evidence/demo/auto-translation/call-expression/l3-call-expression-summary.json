@@ -1,0 +1,42 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+      "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+      "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
+      "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+      "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+      "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+      "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+      "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+      "version_manifest": "8ad11660cf15d396a47c8819823eb3433aebf28946db54d465e9ebf5906adcc7"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-call-expression-diff.json",
+      "final_verification": "validation/evidence/demo/l3-call-expression-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-call-expression-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-call-expression-version-manifest.json"
+    },
+    "slice_id": "call-expression",
+    "source_commit": "demo-call-expression-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "generated_draft_semantic_pass": false,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "status": "passed",
+  "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
+  "target_id": "demo"
+}

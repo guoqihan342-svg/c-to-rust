@@ -1,0 +1,16 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
+  "fixture_hash": "call-expression-fixture",
+  "function_name": "call_expression_chain",
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "target_id": "demo"
+}

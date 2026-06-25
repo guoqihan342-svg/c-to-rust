@@ -1,0 +1,175 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-call-expression-20260625",
+    "slice_spec_sha256=0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "fixture_hash=call-expression-fixture",
+    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/demo-call-expression.json",
+      "sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "draft_generated",
+  "target_id": "demo",
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [
+      {
+        "arguments": [
+          "value - 1"
+        ],
+        "callee": "call_expression_chain",
+        "source_expression": "call_expression_chain(value - 1)",
+        "statement_context": "declaration_initializer"
+      },
+      {
+        "arguments": [
+          "first - 1"
+        ],
+        "callee": "call_expression_chain",
+        "source_expression": "call_expression_chain(first - 1)",
+        "statement_context": "assignment"
+      },
+      {
+        "arguments": [
+          "value - 1"
+        ],
+        "callee": "call_expression_chain",
+        "source_expression": "call_expression_chain(value - 1)",
+        "statement_context": "return"
+      }
+    ],
+    "lvalue_decision_counts": {
+      "value_assignment": 1
+    },
+    "pointer_boundary_decision_counts": {},
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "structured-return-expression",
+      "structured-if",
+      "bounded-call-expression",
+      "primitive-declaration",
+      "assignment"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

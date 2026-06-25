@@ -1,0 +1,14 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+    "sha256": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+    "status": "passed"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "status": "passed",
+  "target_id": "demo"
+}

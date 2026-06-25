@@ -1,0 +1,110 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "base negative/zero return path",
+      "recursive declaration initializer call",
+      "recursive assignment RHS call",
+      "recursive return expression call"
+    ],
+    "negative_cases": [
+      "call expression metadata mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-call-expression-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L3 demo test translation covers the named function slice and committed oracle fixture only.",
+    "No external callee semantic proof, function pointer call support, nested call support, or full-project migration is claimed."
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test call_expression_chain",
+      "file": "validation/l2_slices/tests/call_expression_chain.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "call_expression_chain_matches_c_oracle_and_records_call_contexts"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "call-expression-fixture",
+        "operation_count": 7,
+        "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status",
+        "call_expression_count",
+        "call_expression_contexts",
+        "source_calls"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/call_expression_chain.rs::call_expression_chain_matches_c_oracle_and_records_call_contexts",
+      "source": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "call_expression_count",
+        "call_expression_contexts"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_call_expression_chain_negative_diff",
+      "source": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

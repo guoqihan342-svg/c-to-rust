@@ -1,0 +1,17 @@
+{
+  "case_count": 7,
+  "compared_fields": [
+    "return_value",
+    "status",
+    "call_expression_count",
+    "call_expression_contexts",
+    "source_calls"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

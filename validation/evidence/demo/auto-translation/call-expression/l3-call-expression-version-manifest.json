@@ -1,0 +1,119 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+      "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+      "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
+      "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+      "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+      "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+      "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+      "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+      "version_manifest": "8ad11660cf15d396a47c8819823eb3433aebf28946db54d465e9ebf5906adcc7"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-call-expression-diff.json",
+      "final_verification": "validation/evidence/demo/l3-call-expression-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-call-expression-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-call-expression-version-manifest.json"
+    },
+    "slice_id": "call-expression",
+    "source_commit": "demo-call-expression-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "build_profile_hash": "7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-call-expression.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "call-expression-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "call-expression",
+    "slice_spec_sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "source_commit": "demo-call-expression-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/call-expression-c-oracle.json": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+      "validation/l2_slices/tools/generate_call_expression_oracle.py": "34cce4a9f955180b729fea7b5ac1fe06a8bab71761f895cd0bdc2307da08d15e"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

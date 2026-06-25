@@ -1,0 +1,120 @@
+{
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "behavior_fields_checked": [
+      "return_value",
+      "status",
+      "call_expression_count",
+      "call_expression_contexts",
+      "source_calls"
+    ],
+    "known_gaps": [
+      "No external callee semantic proof.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No large recursion depth or performance claim."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program call graph semantic proof",
+      "external callee semantic equivalence",
+      "function pointer or nested call expression support"
+    ],
+    "scope": "Only the demo call_expression_chain slice for the committed fixture corpus."
+  },
+  "evidence": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "status": "passed",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/l3-call-expression-cache-metadata.json",
+      "status": "recorded"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/l3-call-expression-cfg.json",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/l3-call-expression-config-profile.json",
+      "profile_id": "demo-call-expression-wsl-gcc",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/l3-call-expression-context-pack.json",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/l3-call-expression-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+      "secondary_only": true,
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/l3-call-expression-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/l3-call-expression-rust-check.json",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-call-expression-diff.json",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/l3-call-expression-slice-contract.json",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/l3-call-expression-summary.json",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/l3-call-expression-test-translation.json",
+      "status": "recorded"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/l3-call-expression-type-map.json",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/l3-call-expression-version-manifest.json",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "call-expression-fixture",
+    "operation_count": 7,
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "passed",
+  "target_id": "demo"
+}

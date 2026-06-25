@@ -1,0 +1,67 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-call-expression-20260625",
+    "slice_spec_sha256=0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "fixture_hash=call-expression-fixture",
+    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    },
+    {
+      "kind": "callee",
+      "name": "call_expression_chain",
+      "source": "self-recursive direct call"
+    }
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/tools/generate_call_expression_oracle.py",
+    "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  ],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "value - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(value - 1)",
+      "statement_context": "declaration_initializer"
+    },
+    {
+      "arguments": [
+        "first - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(first - 1)",
+      "statement_context": "assignment"
+    },
+    {
+      "arguments": [
+        "value - 1"
+      ],
+      "callee": "call_expression_chain",
+      "source_expression": "call_expression_chain(value - 1)",
+      "statement_context": "return"
+    }
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/call_expression_chain.rs"
+  ],
+  "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+  "level": "L3",
+  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb"
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "status": "recorded",
+  "target_id": "demo"
+}

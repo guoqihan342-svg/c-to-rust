@@ -1,0 +1,366 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+      "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+      "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
+      "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+      "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+      "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+      "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+      "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+      "version_manifest": "8ad11660cf15d396a47c8819823eb3433aebf28946db54d465e9ebf5906adcc7"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-call-expression-diff.json",
+      "final_verification": "validation/evidence/demo/l3-call-expression-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-call-expression-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-call-expression-version-manifest.json"
+    },
+    "slice_id": "call-expression",
+    "source_commit": "demo-call-expression-20260625",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "build_profile_hash": "7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity"
+    ],
+    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-call-expression.json",
+      "--accept-existing-evidence"
+    ],
+    "fixture_hash": "call-expression-fixture",
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "summary"
+    ],
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 1,
+      "type_map": 1
+    },
+    "slice_id": "call-expression",
+    "slice_spec_sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "source_commit": "demo-call-expression-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/call-expression-c-oracle.json": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+      "validation/l2_slices/tools/generate_call_expression_oracle.py": "34cce4a9f955180b729fea7b5ac1fe06a8bab71761f895cd0bdc2307da08d15e"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_version": "0.1.0"
+  },
+  "claim_boundary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No external callee semantic proof.",
+      "No function pointer, member call, variadic call, macro call, or nested call support claim.",
+      "No large recursion depth or performance claim.",
+      "No signed overflow equivalence beyond the committed safe fixture domain."
+    ],
+    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "semantic_pass": true
+  },
+  "fixture": {
+    "hash": "call-expression-fixture",
+    "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+  },
+  "l3_evidence_manifest": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-evidence-manifest.json",
+    "semantic_pass": true,
+    "status": "passed"
+  },
+  "level": "L3",
+  "oracle": {
+    "accepted_oracle": {
+      "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+      "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 7,
+    "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+    "harness_draft": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+    "schema_version": 1,
+    "semantic_pass": true,
+    "slice_id": "call-expression",
+    "source_commit": "demo-call-expression-20260625",
+    "source_slice_id": "call-expression",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "patch": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-self-healing-blocked-repairs.json",
+    "blocked_repairs_items": [],
+    "blocked_repairs_status": "none",
+    "patch_events": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-patch-events.jsonl",
+    "self_heal_applied": false,
+    "status": "none"
+  },
+  "replay": {
+    "behavior_fields": [
+      "return_value",
+      "status",
+      "call_expression_count",
+      "call_expression_contexts",
+      "source_calls"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-call-expression-20260625",
+      "slice_spec_sha256=18557258ebd7796cd96798814bed5b0adcaa6347abaeff699a34d0528850ac99",
+      "fixture_hash=call-expression-fixture",
+      "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_value",
+        "status",
+        "call_expression_count",
+        "call_expression_contexts",
+        "source_calls"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+        "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+        "sha256": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+        "sha256": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-call-expression-diff.json",
+        "sha256": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml call_expression",
+        "file": "validation/l2_slices/tests/call_expression_chain.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_call_expression_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_call_expression_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_call_expression_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "call-expression",
+    "source_commit": "demo-call-expression-20260625",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+          "operation_count": 4,
+          "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+          "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+          "sha256": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "call_expression_count",
+          "call_expression_contexts",
+          "source_calls"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+            "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+            "sha256": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-call-expression-diff.json",
+            "sha256": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/call_expression_chain.rs::accepted_call_expression_replay",
+        "source": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "call_expression_count",
+          "call_expression_contexts",
+          "source_calls"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+            "sha256": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_call_expression_negative_diff",
+        "source": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "rust_check": {
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-vn_agmdb C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\call-expression\\l3-call-expression-rust-draft.rs",
+    "error_count": 0,
+    "errors": [],
+    "schema_version": 1,
+    "self_healing": {
+      "blocked_repairs": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-self-healing-blocked-repairs.json",
+      "patch_events": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-patch-events.jsonl",
+      "status": "none"
+    },
+    "status": "passed"
+  },
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "accepted_evidence_bound",
+  "target_id": "demo",
+  "translator": {
+    "artifact_paths": [
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-plan.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-events.jsonl",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-blocked-repairs.json",
+      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs"
+    ],
+    "slice_id": "call-expression",
+    "status": "generated",
+    "target_id": "demo"
+  }
+}
