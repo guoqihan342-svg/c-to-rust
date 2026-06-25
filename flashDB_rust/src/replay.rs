@@ -7,9 +7,11 @@ use crate::types::{Error, Result, TsStatus};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const FLASHDB_SOURCE_COMMIT: &str = "93d175549da579b8abac07bd175ce4c3f9dde829";
+static NEXT_REPLAY_RUN_ID: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone)]
 struct Fixture {
@@ -128,6 +130,7 @@ fn write_optional_report(path: Option<&Path>, json: &str) -> Result<()> {
 struct ReplayState {
     kv: KvReplayDb,
     ts: TsReplayDb,
+    temp_dir: Option<PathBuf>,
 }
 
 impl ReplayState {
@@ -135,6 +138,7 @@ impl ReplayState {
         let size = if size == 0 { DEFAULT_FLASH_SIZE } else { size };
         let unique = unique_run_id();
         let base = std::env::temp_dir().join(format!("flashdb_rust_replay_{unique}"));
+        let temp_dir = (backend == "file").then(|| base.clone());
         let kv = if backend == "file" {
             fs::create_dir_all(&base)?;
             KvReplayDb::File {
@@ -154,7 +158,21 @@ impl ReplayState {
         } else {
             TsReplayDb::Memory(TsDb::create(MemoryFlash::new(size))?)
         };
-        Ok(Self { kv, ts })
+        Ok(Self { kv, ts, temp_dir })
+    }
+}
+
+impl Drop for ReplayState {
+    fn drop(&mut self) {
+        if let KvReplayDb::File { db, .. } = &mut self.kv {
+            drop(db.take());
+        }
+        if let TsReplayDb::File { db, .. } = &mut self.ts {
+            drop(db.take());
+        }
+        if let Some(temp_dir) = &self.temp_dir {
+            let _ = fs::remove_dir_all(temp_dir);
+        }
     }
 }
 
@@ -1125,11 +1143,12 @@ fn command_exists(command: &str) -> bool {
 }
 
 fn unique_run_id() -> String {
+    let sequence = NEXT_REPLAY_RUN_ID.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_nanos())
         .unwrap_or(0);
-    format!("{}_{}", std::process::id(), nanos)
+    format!("{}_{}_{}", std::process::id(), sequence, nanos)
 }
 
 #[cfg(test)]

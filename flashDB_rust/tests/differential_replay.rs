@@ -1,10 +1,12 @@
 use flashdb_rust::cli;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TSDB_128_BYTE_PAYLOAD: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const TSDB_129_BYTE_PAYLOAD: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefx";
+static NEXT_TEMP_PATH_ID: AtomicU64 = AtomicU64::new(0);
 
 fn step_json_for<'a>(report: &'a str, step_id: &str) -> &'a str {
     let marker = format!("{{\"id\":\"{step_id}\"");
@@ -1506,9 +1508,16 @@ fn diff_does_not_allow_accepted_differences_to_hide_behavior_fields() {
 }
 
 fn temp_path(name: &str) -> PathBuf {
+    let sequence = NEXT_TEMP_PATH_ID.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!("flashdb_rust_{nanos}_{name}"))
+    std::env::temp_dir().join(format!(
+        "flashdb_rust_{}_{}_{}_{}",
+        std::process::id(),
+        sequence,
+        nanos,
+        name
+    ))
 }
