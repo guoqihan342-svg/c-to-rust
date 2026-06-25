@@ -1,0 +1,9 @@
+{
+  "reason": "Performance is not evaluated for draft-only auto-translation candidates.",
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

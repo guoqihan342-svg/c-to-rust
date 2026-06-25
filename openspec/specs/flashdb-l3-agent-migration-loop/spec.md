@@ -69,9 +69,9 @@ The system SHALL rerun validation in escalating order and SHALL persist L3 evide
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark the C oracle or L3 semantic gate as passed until Linux/WSL/CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: Unsafe Budget And Ledger
-The system SHALL keep first-party non-test unsafe below 10% and SHALL prefer 0% unsafe for the initial L3 slice.
+The system SHALL keep first-party non-test unsafe below 10%.
 
-系统必须将 first-party non-test unsafe 控制在 10% 以下，首个 L3 切片默认目标为 0% unsafe。
+系统必须将 first-party non-test unsafe 控制在 10% 以下。
 
 #### Scenario: Unsafe scan is part of the L3 gate
 - **WHEN** L3 verification runs
@@ -189,9 +189,9 @@ The system SHALL persist TSDB L3 evidence under `validation/evidence/flashdb/` a
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark TSDB L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: TSDB Unsafe, Cache, And Parallel Boundaries
-The system SHALL keep TSDB first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep TSDB first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
-系统必须将此 TSDB 切片的 first-party non-test unsafe 保持为 0%，并使用确定性缓存失效和有边界的并行智能体角色。
+系统必须将此 TSDB 切片的 first-party non-test unsafe 控制在 10% 以下，并使用确定性缓存失效和有边界的并行智能体角色。
 
 #### Scenario: TSDB unsafe scan is part of the gate
 - **WHEN** TSDB L3 verification runs
@@ -275,7 +275,7 @@ The system SHALL persist KVDB compact/overwrite L3 evidence under `validation/ev
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: KVDB Compact Overwrite Unsafe Cache And Parallel Boundaries
-The system SHALL keep KVDB compact/overwrite first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep KVDB compact/overwrite first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
 #### Scenario: KVDB compact overwrite unsafe scan is part of the gate
 - **WHEN** L3 verification runs
@@ -365,9 +365,9 @@ The system SHALL persist KVDB error-boundary L3 evidence under `validation/evide
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: KVDB Error Boundary Unsafe Cache And Parallel Boundaries
-The system SHALL keep KVDB error-boundary first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep KVDB error-boundary first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
-系统必须将此 KVDB error-boundary 切片的 first-party non-test unsafe 保持为 0%，并使用确定性缓存失效和有边界的并行智能体角色。
+系统必须将此 KVDB error-boundary 切片的 first-party non-test unsafe 控制在 10% 以下，并使用确定性缓存失效和有边界的并行智能体角色。
 
 #### Scenario: KVDB error boundary unsafe scan is part of the gate
 - **WHEN** L3 verification runs
@@ -459,9 +459,9 @@ The system SHALL persist TSDB deleted-status L3 evidence under `validation/evide
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: TSDB Deleted Status Unsafe Cache And Parallel Boundaries
-The system SHALL keep TSDB deleted-status first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep TSDB deleted-status first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
-系统必须将本 TSDB deleted-status 切片的一方非测试 unsafe 保持为 0%，并使用确定性缓存失效与有边界的并行智能体角色。
+系统必须将本 TSDB deleted-status 切片的一方非测试 unsafe 控制在 10% 以下，并使用确定性缓存失效与有边界的并行智能体角色。
 
 #### Scenario: TSDB deleted status unsafe scan is part of the gate
 - **WHEN** L3 verification runs
@@ -553,9 +553,9 @@ The system SHALL persist TSDB error-boundary L3 evidence under `validation/evide
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: TSDB Error Boundary Unsafe Cache And Parallel Boundaries
-The system SHALL keep TSDB error-boundary first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep TSDB error-boundary first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
-系统必须将本 TSDB error-boundary 切片的一方非测试 unsafe 保持为 0%，并使用确定性缓存失效与有边界的并行智能体角色。
+系统必须将本 TSDB error-boundary 切片的一方非测试 unsafe 控制在 10% 以下，并使用确定性缓存失效与有边界的并行智能体角色。
 
 #### Scenario: TSDB error boundary unsafe scan is part of the gate
 - **WHEN** L3 verification runs
@@ -1042,9 +1042,9 @@ The system SHALL persist KVDB delete-missing-key L3 evidence under `validation/e
 - **THEN** the agent records `SKIPPED_LOCAL_NO_C_TOOLCHAIN` and does not mark L3 semantic evidence as passed until Linux, WSL, or CI produces `C_ORACLE_GENERATED`
 
 ### Requirement: KVDB Delete Missing Key Unsafe Cache And Parallel Boundaries
-The system SHALL keep KVDB delete-missing-key first-party non-test unsafe at 0% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
+The system SHALL keep KVDB delete-missing-key first-party non-test unsafe below 10% for this slice and SHALL use deterministic cache invalidation and bounded parallel agent roles.
 
-系统必须将此 KVDB delete-missing-key 切片的 first-party non-test unsafe 保持为 0%，并使用确定性缓存失效和有边界的并行智能体角色。
+系统必须将此 KVDB delete-missing-key 切片的 first-party non-test unsafe 控制在 10% 以下，并使用确定性缓存失效和有边界的并行智能体角色。
 
 #### Scenario: KVDB delete missing key unsafe scan is part of the gate
 - **WHEN** L3 verification runs

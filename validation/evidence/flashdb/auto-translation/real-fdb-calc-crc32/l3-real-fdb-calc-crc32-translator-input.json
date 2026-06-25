@@ -1,0 +1,18 @@
+{
+  "build_profile": {
+    "abi": "unknown",
+    "clang_available": false,
+    "compiler_command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+    "defines": [],
+    "include_paths": [
+      "inc"
+    ],
+    "target_triple": "unknown"
+  },
+  "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)\n{\n    const uint8_t *p;\n\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n\n    return crc ^ ~0U;\n}",
+  "fixture_hash": "real-fdb-calc-crc32-fixture",
+  "function_name": "fdb_calc_crc32",
+  "slice_id": "real-fdb-calc-crc32",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "target_id": "flashdb"
+}

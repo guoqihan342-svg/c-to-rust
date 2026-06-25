@@ -1,0 +1,159 @@
+{
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_code"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "known_gaps": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics.",
+      "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
+      "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+      "sha256": "4047a1fab627022a213baedd70ba9e2863543468364b7651522ffa5a98042e28",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
+      "sha256": "51578e56f3b64b6c9629b363a9f9ad7d93aef40573a3a43d7bb3a79e5b38204b",
+      "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-cache-metadata.json",
+      "sha256": "7ee9b70c3d491bd317f501205d2423db55d3ff7f137f9cd2cf80cc44be84207c",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-config-profile.json",
+      "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
+      "sha256": "06f4e26c3133ac4badab096776306175ed8260c63be620ac62d7e152e3be3efb",
+      "status": "incomplete"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-context-pack.json",
+      "sha256": "53b78e983db6e905a177c5e25c82e9194f90ca460b9c3fbae5a5291207598176",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
+      "sha256": "d3fe75a200b7a732ed432c36c63690d7e007b10948f0b1071297b44cf31d630e",
+      "status": "incomplete"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": false,
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json",
+      "sha256": "42cb99b5ce723facd9419c5a5c3dad72f2ed6fcb915b1552f95e485f1eab26a3",
+      "status": "incomplete"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "36873c83773c1715d0aaa0e4dbdc1f62a837493e4e1885f2729bacaf333d0d2d",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
+      "sha256": "2b1add4e58281d8e4027ac9289e3aa5f82affbab82970ebf797315c15fd51548",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L4",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
+      "sha256": "2c3c81d2008faa7ffb4ab0e273bc5721a2c36fbc0549046220be1c127c94b7b2",
+      "status": "refused"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
+      "sha256": "0eafcf3a34f6038536622d61a34970817b46f140c9345e8664ed42cacdd68b3e",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-report.json",
+      "sha256": "2160dc4655c907e49ad342d6d49ea89eb334ce07d77687e01bbea0305c4c55ed",
+      "status": "incomplete"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
+      "sha256": "339d0b7159916b46b90437eb016346e6e8ac325529567c2d3b7ac62e652ea918",
+      "status": "incomplete"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-slice-contract.json",
+      "sha256": "7835d03d7f3ded5f3a8048fc9a5190d3a056ea10feaf8c57311442fd8e976ecc",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-summary.json",
+      "sha256": "0d84989e7b39265b25e874fa78a287c9871f1d91144ff160769e8e1871e60242",
+      "status": "incomplete"
+    },
+    "test_translation": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-test-translation-generated.json",
+      "sha256": "1feb8a579bc772cb08d1d2d82696d27a6a25517d950df9deb7444ee0a5497395",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+      "sha256": "7986ed7a1fdf87691610e905cece68535a8f4a6cf37d1f1ecc5abdf11f95d8fb",
+      "status": "incomplete"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+      "sha256": "ca9312fced77929ec4a76849c8ddfc3bfb8ea1b24fa69b54f10dc196d85ec7e8",
+      "status": "incomplete"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
+      "profile": "L4-dev",
+      "sha256": "76dd956588a6c358b5fe6db1a4cf09b85c5b770a54510431d7861a16f4e70f32",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json",
+      "sha256": "6e893181cbc585fcb10b76a08deda40d78dd2b7be3c146af3028e26b1c7f61ff",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "real-fdb-calc-crc32-fixture",
+    "operation_count": 0,
+    "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
+  },
+  "level": "L3",
+  "repo_commit": "075611719613bb0c54b0082de791f42c5a94b77f",
+  "schema_version": 1,
+  "slice_id": "real-fdb-calc-crc32",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "incomplete",
+  "target_id": "flashdb"
+}

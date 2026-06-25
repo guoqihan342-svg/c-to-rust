@@ -1,0 +1,46 @@
+{
+  "build_profile_hash": "2bd8a664a416f008a66d8206a1075ff3cafea4d6b7502ced86d977d55f7e5d5b",
+  "commands": [
+    {
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
+      "name": "c2rust",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    }
+  ],
+  "correctness_role": "candidate_context_only",
+  "diagnostics": [
+    "no executable c2rust-transpile or c2rust command found on PATH"
+  ],
+  "fallback_oracle": "original_c_oracle_required",
+  "must_not_claim": [
+    "C2Rust output proves semantic equivalence",
+    "C2Rust baseline was generated"
+  ],
+  "output": null,
+  "reason": "blocked_by_missing_tools",
+  "reference_tree": {
+    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
+    "path": "F:\\agent\\c2rust-master",
+    "status": "present"
+  },
+  "schema_version": 1,
+  "selected_command": null,
+  "slice_id": "real-fdb-calc-crc32",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+    "sha256": "3fbbfb1a1831ecf5c21c13558ed0213ff11a2bea96a4cc0fb80e048130a01182"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "skipped",
+  "target_id": "flashdb",
+  "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
+}

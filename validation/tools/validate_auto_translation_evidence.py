@@ -41,6 +41,9 @@ def main() -> int:
         ("validation/auto-translation-template/auto-translation-plan.schema.json", evidence_dir / f"{prefix}-auto-translation-plan.json"),
         ("validation/auto-translation-template/ai-candidate-manifest.schema.json", evidence_dir / f"{prefix}-ai-candidate-manifest.json"),
         ("validation/auto-translation-template/blocked-repairs.schema.json", evidence_dir / f"{prefix}-self-healing-blocked-repairs.json"),
+        ("validation/auto-translation-template/c2rust-baseline-manifest.schema.json", evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"),
+        ("validation/auto-translation-template/route-decision.schema.json", evidence_dir / f"{prefix}-route-decision.json"),
+        ("validation/auto-translation-template/validation-profile.schema.json", evidence_dir / f"{prefix}-validation-profile.json"),
     ]
 
     validated = []
@@ -49,6 +52,7 @@ def main() -> int:
         validated.append(rel(data_path))
 
     validate_alias_gate(evidence_dir, prefix)
+    validate_route_baseline_profile_refs(evidence_dir, prefix)
 
     patch_schema = load_json(REPO_ROOT / "validation/auto-translation-template/patch-event.schema.json")
     patch_path = evidence_dir / f"{prefix}-patch-events.jsonl"
@@ -189,6 +193,87 @@ def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
         raise SystemExit(f"alias gate evidence missing final_verification.alias_gate in {final_path}")
 
 
+def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str) -> None:
+    baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+    route_path = evidence_dir / f"{prefix}-route-decision.json"
+    profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+    baseline = load_json(baseline_path)
+    route = load_json(route_path)
+    profile = load_json(profile_path)
+
+    if baseline.get("correctness_role") != "candidate_context_only":
+        raise SystemExit(f"C2Rust baseline must be candidate context only in {baseline_path}")
+    if route.get("verification_profile") != profile.get("profile"):
+        raise SystemExit(f"route/profile mismatch: {route.get('verification_profile')} != {profile.get('profile')}")
+    if route.get("level") != profile.get("route_level"):
+        raise SystemExit(f"route/profile level mismatch: {route.get('level')} != {profile.get('route_level')}")
+    if route.get("level") == "L4":
+        if route.get("status") != "refused":
+            raise SystemExit(f"L4 route requires refused status in {route_path}")
+        if route.get("translator", {}).get("candidate_generation_allowed"):
+            raise SystemExit(f"L4 route must not allow candidate generation in {route_path}")
+    if profile.get("status") == "passed" and profile.get("skipped_gates"):
+        raise SystemExit(f"passed validation profile cannot contain skipped required gates in {profile_path}")
+
+    auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    auto_manifest = load_json(auto_manifest_path)
+    require_ref(auto_manifest.get("c2rust_baseline"), baseline_path, "auto_manifest.c2rust_baseline")
+    require_ref(auto_manifest.get("route_decision"), route_path, "auto_manifest.route_decision")
+    require_ref(auto_manifest.get("validation_profile"), profile_path, "auto_manifest.validation_profile")
+
+    l3_manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    l3_manifest = load_json(l3_manifest_path)
+    evidence = l3_manifest.get("evidence", {})
+    require_ref(evidence.get("c2rust_baseline"), baseline_path, "l3_manifest.evidence.c2rust_baseline")
+    require_ref(evidence.get("route_decision"), route_path, "l3_manifest.evidence.route_decision")
+    require_ref(evidence.get("validation_profile"), profile_path, "l3_manifest.evidence.validation_profile")
+
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    final = load_json(final_path)
+    require_ref(final.get("c2rust_baseline"), baseline_path, "final_verification.c2rust_baseline")
+    require_ref(final.get("route_decision"), route_path, "final_verification.route_decision")
+    require_ref(final.get("validation_profile"), profile_path, "final_verification.validation_profile")
+    if "skipped_gates" not in final:
+        raise SystemExit(f"validation profile skipped gates missing from {final_path}")
+
+    cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+    cache = load_json(cache_path)
+    required_identity_keys = [
+        "c2rust_baseline_identity",
+        "route_decision_identity",
+        "validation_profile_identity",
+    ]
+    for key in required_identity_keys:
+        if key not in cache:
+            raise SystemExit(f"cache metadata missing {key} in {cache_path}")
+        if key not in cache.get("cache_input_fields", []):
+            raise SystemExit(f"cache metadata cache_input_fields missing {key} in {cache_path}")
+    dependent = cache.get("dependent_artifacts", {})
+    require_ref(dependent.get("c2rust_baseline"), baseline_path, "cache.dependent_artifacts.c2rust_baseline")
+    require_ref(dependent.get("route_decision"), route_path, "cache.dependent_artifacts.route_decision")
+    require_ref(dependent.get("validation_profile"), profile_path, "cache.dependent_artifacts.validation_profile")
+
+
+def require_ref(ref: Any, expected_path: Path, label: str) -> None:
+    if not isinstance(ref, dict) or not ref.get("path"):
+        raise SystemExit(f"{label} missing path reference")
+    resolved = resolve_ref_path(str(ref["path"]))
+    if not resolved.exists():
+        raise SystemExit(f"{label} points to missing evidence: {resolved}")
+    if resolved.resolve() != expected_path.resolve():
+        raise SystemExit(f"{label} path mismatch: {resolved} != {expected_path}")
+    if ref.get("sha256") and ref["sha256"] != sha256(expected_path):
+        raise SystemExit(f"{label} sha256 mismatch: {ref['sha256']} != {sha256(expected_path)}")
+    payload = load_json(expected_path)
+    if ref.get("status") and payload.get("status") and ref["status"] != payload["status"]:
+        raise SystemExit(f"{label} status mismatch: {ref['status']} != {payload['status']}")
+
+
+def resolve_ref_path(path: str) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else REPO_ROOT / candidate
+
+
 def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> dict[str, Any]:
     slice_spec = load_json(slice_spec_path)
     manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
@@ -198,6 +283,9 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
 
     evidence = manifest.get("evidence", {})
     reports = {
+        "c2rust_baseline": load_ref(evidence, "c2rust_baseline"),
+        "route_decision": load_ref(evidence, "route_decision"),
+        "validation_profile": load_ref(evidence, "validation_profile"),
         "c_oracle": load_ref(evidence, "c_oracle"),
         "rust_report": load_ref(evidence, "rust_report"),
         "schema_diff": load_ref(evidence, "schema_diff"),
@@ -208,6 +296,13 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "version_or_config_binding": load_ref(evidence, "version_or_config_binding"),
     }
 
+    if reports["c2rust_baseline"].get("correctness_role") != "candidate_context_only":
+        raise SystemExit("semantic pass requires C2Rust baseline to remain candidate_context_only")
+    if reports["route_decision"].get("level") == "L4":
+        raise SystemExit("semantic pass cannot accept L4 refused route")
+    require_status(reports["validation_profile"], "validation_profile", {"passed"})
+    if reports["validation_profile"].get("skipped_gates"):
+        raise SystemExit("semantic pass requires validation_profile.skipped_gates=[]")
     require_status(reports["c_oracle"], "c_oracle", {"C_ORACLE_GENERATED", "passed"})
     if reports["c_oracle"].get("toolchain_status") != "C_ORACLE_GENERATED":
         raise SystemExit("semantic pass requires c_oracle.toolchain_status=C_ORACLE_GENERATED")

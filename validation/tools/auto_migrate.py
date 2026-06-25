@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -29,12 +30,18 @@ CACHE_INPUT_FIELDS = [
     "translator_manifest_sha256",
     "command_arguments",
     "alias_gate_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
 ]
 CACHE_INVALIDATED_ARTIFACTS = [
     "context_pack",
     "type_map",
     "cfg",
     "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
     "rust_draft",
     "patch_plan",
     "ai_candidate",
@@ -44,6 +51,7 @@ CACHE_INVALIDATED_ARTIFACTS = [
     "negative_diff",
     "unsafe_ledger",
     "final_verification",
+    "auto_translation_manifest",
     "summary",
 ]
 
@@ -70,20 +78,41 @@ def main() -> int:
     translator_spec = write_translator_spec(spec, args.slice_spec, evidence_dir)
     translator_summary = run_translator(translator_spec, evidence_dir)
     normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
+    c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
+    route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
     oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
     replay = generate_rust_replay_test_draft(spec, evidence_dir)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
-    cache = emit_cache_metadata(
-        spec,
-        args.slice_spec,
-        evidence_dir,
-        accept_existing_evidence=args.accept_existing_evidence,
-    )
     accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
     if accepted is not None:
         oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
         replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted)
-    manifest = emit_manifest(spec, evidence_dir, translator_summary, oracle, replay, rust_check, patch, cache, accepted)
+    validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
+    if route_decision.get("level") == "L4":
+        patch = write_route_refused_patch(spec, evidence_dir, route_decision)
+    cache = emit_cache_metadata(
+        spec,
+        args.slice_spec,
+        evidence_dir,
+        c2rust_baseline=c2rust_baseline,
+        route_decision=route_decision,
+        validation_profile=validation_profile,
+        accept_existing_evidence=args.accept_existing_evidence,
+    )
+    manifest = emit_manifest(
+        spec,
+        evidence_dir,
+        translator_summary,
+        oracle,
+        replay,
+        rust_check,
+        patch,
+        cache,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+    )
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 
@@ -1252,6 +1281,64 @@ def write_no_patch_required(spec: dict[str, Any], evidence_dir: Path, draft_path
     }
 
 
+def write_route_refused_patch(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    draft_path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
+    reason = "Route decision refused candidate generation for unsupported C semantics."
+    event = {
+        "schema_version": 1,
+        "patch_id": "patch-route-refused-1",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "round": 1,
+        "status": "blocked",
+        "files": [{"path": rel(draft_path) if draft_path else "", "spans": [{"line_start": 1, "line_end": 1}]}],
+        "reason": reason,
+        "expected_error_delta": {"before": [], "after_expected": []},
+        "forbidden_changes": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+        ],
+        "rollback_id": f"rollback-{slice_id}-route-refused-1",
+        "ai_usage": {"used": False},
+        "verification_commands": ["route-decision validation"],
+    }
+    write_text(events_path, json.dumps(event, sort_keys=True) + "\n")
+    blocked = blocked_repairs_payload(
+        spec,
+        [
+            {
+                "repair_id": "repair-route-refused-1",
+                "blocked_reason": reason,
+                "forbidden_change": "unsupported_control_flow",
+                "candidate_patch_id": event["patch_id"],
+                "source_span": {"file": rel(draft_path) if draft_path else "", "line_start": 1, "line_end": 1},
+                "human_action_required": True,
+                "route_decision": route_decision.get("level"),
+            }
+        ],
+    )
+    write_json(blocked_path, blocked)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(blocked_path),
+        "blocked_repairs_status": blocked["status"],
+        "blocked_repairs_items": blocked["blocked_repairs"],
+        "status": "blocked",
+        "self_heal_applied": False,
+    }
+
+
 def write_blocked_patch(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -1315,19 +1402,353 @@ def emit_cache_metadata(
     spec: dict[str, Any],
     slice_spec: Path,
     evidence_dir: Path,
+    c2rust_baseline: dict[str, Any] | None = None,
+    route_decision: dict[str, Any] | None = None,
+    validation_profile: dict[str, Any] | None = None,
     accept_existing_evidence: bool = False,
 ) -> dict[str, Any]:
-    identity = cache_identity(spec, slice_spec, accept_existing_evidence)
+    identity = cache_identity(
+        spec,
+        slice_spec,
+        accept_existing_evidence,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+    )
+    dependent_artifacts = {
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+    }
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": spec.get("slice_id"),
         **identity,
+        "dependent_artifacts": dependent_artifacts,
         "cache_input_fields": CACHE_INPUT_FIELDS,
         "invalidates": CACHE_INVALIDATED_ARTIFACTS,
     }
     write_json(evidence_dir / f"l3-{spec.get('slice_id')}-auto-cache-metadata.json", payload)
     return payload
+
+
+def artifact_cache_identity(artifact: dict[str, Any] | None) -> dict[str, Any]:
+    if artifact is None:
+        return {"status": "missing", "sha256": "missing"}
+    return {
+        "status": artifact.get("status", "unknown"),
+        "sha256": sha256_json(artifact),
+    }
+
+
+def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    commands = c2rust_command_candidates()
+    selected = next((item for item in commands if item.get("path")), None)
+    reference_tree = Path("F:/agent/c2rust-master")
+    reference_status = "present" if reference_tree.exists() else "missing"
+    status = "skipped"
+    diagnostics: list[str] = []
+    reason = "blocked_by_missing_tools"
+    if selected is None:
+        diagnostics.append("no executable c2rust-transpile or c2rust command found on PATH")
+    else:
+        status = "blocked"
+        reason = "baseline_generation_not_enabled"
+        diagnostics.append("executable C2Rust was detected but baseline generation is not enabled in this bounded MVP")
+    manifest = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "reason": reason,
+        "correctness_role": "candidate_context_only",
+        "fallback_oracle": "original_c_oracle_required",
+        "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance",
+        "source_commit": source_commit(spec),
+        "slice_spec": {"path": rel(slice_spec), "sha256": sha256(slice_spec)},
+        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "commands": commands,
+        "selected_command": selected,
+        "reference_tree": {
+            "path": str(reference_tree),
+            "status": reference_status,
+            "cargo_toml": str(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
+        },
+        "output": None,
+        "diagnostics": diagnostics,
+        "must_not_claim": [
+            "C2Rust output proves semantic equivalence",
+            "C2Rust baseline was generated" if status != "generated" else "",
+        ],
+    }
+    manifest["must_not_claim"] = [item for item in manifest["must_not_claim"] if item]
+    write_json(evidence_dir / f"{prefix}-c2rust-baseline-manifest.json", manifest)
+    return manifest
+
+
+def c2rust_command_candidates() -> list[dict[str, Any]]:
+    names = ["c2rust-transpile", "c2rust"]
+    candidates = []
+    for name in names:
+        path = shutil.which(name)
+        version = c2rust_command_version(path) if path else {"version_status": "NOT_FOUND", "version": ""}
+        candidates.append({"name": name, "path": path or "", "available": bool(path), **version})
+    return candidates
+
+
+def c2rust_command_version(path: str | None) -> dict[str, str]:
+    if not path:
+        return {"version_status": "NOT_FOUND", "version": ""}
+    try:
+        result = subprocess.run(
+            [path, "--version"],
+            text=True,
+            capture_output=True,
+            timeout=5,
+        )
+    except Exception as exc:
+        return {"version_status": "ERROR", "version": "", "version_error": str(exc)}
+    version = (result.stdout or result.stderr).strip()
+    return {
+        "version_status": "OK" if result.returncode == 0 and version else "UNKNOWN",
+        "version": version,
+    }
+
+
+def emit_route_decision(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    translator_summary: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    type_map = read_json(evidence_dir / f"{prefix}-type-map.json")
+    cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
+    pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
+    plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan)
+    translator = route_translator(level)
+    profile = validation_profile_name(level, "dev")
+    decision = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "refused" if level == "L4" else "recorded",
+        "level": level,
+        "translator": translator,
+        "rationale": rationale,
+        "verification_profile": profile,
+        "source_artifacts": {
+            "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
+            "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
+            "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
+            "translation_plan": evidence_ref(
+                evidence_dir / f"{prefix}-auto-translation-plan.json",
+                plan.get("status", "recorded"),
+            ),
+            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        },
+        "policy": {
+            "goal": "dev",
+            "fixed_loop_count_required": False,
+            "repair_budget_source": "run_policy",
+        },
+        "misroute": None,
+    }
+    write_json(evidence_dir / f"{prefix}-route-decision.json", decision)
+    return decision
+
+
+def route_level(
+    spec: dict[str, Any],
+    translator_summary: dict[str, Any],
+    type_map: dict[str, Any],
+    cfg: dict[str, Any],
+    pointer: dict[str, Any],
+    plan: dict[str, Any],
+) -> tuple[str, list[dict[str, Any]]]:
+    rationale: list[dict[str, Any]] = []
+    blocked_statuses = {
+        "translator": translator_summary.get("status"),
+        "type_map": type_map.get("status"),
+        "cfg": cfg.get("status"),
+        "plan": plan.get("status"),
+    }
+    if any(value == "blocked" for value in blocked_statuses.values()):
+        rationale.append({"feature": "blocked_artifact", "values": blocked_statuses, "weight": "hard_refuse"})
+        return "L4", rationale
+    if cfg.get("unsupported_control_flow"):
+        rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
+        return "L4", rationale
+    pointer_nodes = pointer.get("pointer_nodes", [])
+    if not pointer_nodes:
+        rationale.append({"feature": "scalar_only", "weight": "low"})
+        return "L0", rationale
+    alias_contract = pointer.get("alias_contract", {})
+    if alias_contract.get("decision") == "blocked":
+        rationale.append({"feature": "alias_blocked", "weight": "high"})
+        return "L3", rationale
+    if any(node.get("ownership_role") == "unknown" for node in pointer_nodes):
+        rationale.append({"feature": "unknown_pointer_role", "weight": "medium"})
+        return "L2", rationale
+    rationale.append({"feature": "bounded_pointer_surface", "weight": "low"})
+    return "L1", rationale
+
+
+def route_translator(level: str) -> dict[str, Any]:
+    if level == "L4":
+        return {"kind": "refuse", "candidate_generation_allowed": False}
+    if level in {"L0", "L1", "L2"}:
+        return {"kind": "tier1", "candidate_generation_allowed": True}
+    return {"kind": "agent", "candidate_generation_allowed": True}
+
+
+def emit_validation_profile(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    oracle: dict[str, Any],
+    rust_check: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    goal = route_decision.get("policy", {}).get("goal", "dev")
+    level = str(route_decision.get("level", "L4"))
+    profile = validation_profile_name(level, goal)
+    required = required_gates_for_profile(level, goal)
+    skipped = []
+    if route_decision.get("translator", {}).get("kind") == "refuse":
+        skipped.append({"gate": "candidate_generation", "reason": "route_refused"})
+    if "compile" in required and rust_check.get("status") not in {"passed", "failed"}:
+        skipped.append({"gate": "compile", "reason": rust_check.get("status", "unknown")})
+    if "c_oracle_diff" in required and oracle.get("status") != "C_ORACLE_GENERATED":
+        skipped.append({"gate": "c_oracle_diff", "reason": oracle.get("status", "missing")})
+    for gate in required:
+        if gate in {"compile", "c_oracle_diff"}:
+            continue
+        if gate == "rust_tests":
+            test_translation = read_json(evidence_dir / f"{prefix}-test-translation-generated.json")
+            if test_translation.get("status") not in {"recorded", "passed"}:
+                skipped.append({"gate": gate, "reason": test_translation.get("status", "missing")})
+            continue
+        if gate == "unsafe_ledger":
+            accepted_ledger = accepted is not None and accepted.get("reports", {}).get("unsafe_ledger", {}).get("status") == "passed"
+            unsafe_ledger = evidence_dir / f"{prefix}-unsafe-ledger.json"
+            generated_ledger = unsafe_ledger.exists() and read_json(unsafe_ledger).get("status") == "passed"
+            if not accepted_ledger and not generated_ledger:
+                skipped.append({"gate": gate, "reason": "unsafe_ledger_not_passed"})
+            continue
+        skipped.append({"gate": gate, "reason": "required_gate_not_available_in_dev_evidence"})
+    compile_passed = rust_check.get("status") == "passed"
+    oracle_passed = oracle.get("status") == "C_ORACLE_GENERATED"
+    result = "passed" if not skipped and compile_passed and oracle_passed else "blocked" if level == "L4" else "incomplete"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": result,
+        "profile": profile,
+        "route_level": level,
+        "goal": goal,
+        "required_gates": required,
+        "optional_gates": optional_gates_for_profile(level, goal),
+        "skipped_gates": skipped,
+        "required_gate_status": {
+            "compile": rust_check.get("status"),
+            "c_oracle_diff": oracle.get("status"),
+        },
+        "loop_policy": {
+            "source": "run_policy",
+            "fixed_project_loop_count_required": False,
+            "stress_loops": spec.get("verification_profile", {}).get("stress_loops"),
+        },
+        "tool_boundaries": {
+            "c_ub": ["clang_diagnostics", "sanitizer_oracle", "unsupported_evidence"],
+            "rust_ub": ["miri", "unsafe_ledger", "rust_verification_tools"],
+        },
+    }
+    write_json(evidence_dir / f"{prefix}-validation-profile.json", payload)
+    return payload
+
+
+def validation_profile_name(level: str, goal: str) -> str:
+    return f"{level}-{goal}"
+
+
+def required_gates_for_profile(level: str, goal: str) -> list[str]:
+    gates = ["compile", "c_oracle_diff"]
+    if level in {"L1", "L2", "L3"}:
+        gates.extend(["unsafe_ledger", "rust_tests"])
+    if level in {"L2", "L3"}:
+        gates.extend(["fuzz_property", "miri"])
+    if level == "L3" and goal in {"ci-merge", "release"}:
+        gates.append("kani")
+    if goal == "release":
+        gates.extend(["negative_diff", "evidence_cleanliness"])
+    return gates
+
+
+def optional_gates_for_profile(level: str, goal: str) -> list[str]:
+    optional = ["negative_diff", "evidence_cleanliness"]
+    if level in {"L0", "L1"}:
+        optional.extend(["fuzz_property", "miri"])
+    if goal != "release":
+        optional.append("kani")
+    return optional
+
+
+def c2rust_baseline_ref(
+    spec: dict[str, Any], evidence_dir: Path, c2rust_baseline: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-c2rust-baseline-manifest.json"
+    status = c2rust_baseline.get("status", "missing") if c2rust_baseline else "missing"
+    return evidence_ref(path, status)
+
+
+def route_decision_ref(
+    spec: dict[str, Any], evidence_dir: Path, route_decision: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-route-decision.json"
+    status = route_decision.get("status", "missing") if route_decision else "missing"
+    ref = evidence_ref(path, status)
+    if route_decision:
+        ref["level"] = route_decision.get("level")
+    return ref
+
+
+def validation_profile_ref(
+    spec: dict[str, Any], evidence_dir: Path, validation_profile: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-validation-profile.json"
+    status = validation_profile.get("status", "missing") if validation_profile else "missing"
+    ref = evidence_ref(path, status)
+    if validation_profile:
+        ref["profile"] = validation_profile.get("profile")
+    return ref
+
+
+def semantic_pass_for_run(
+    accepted: dict[str, Any] | None,
+    rust_check: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> bool:
+    if accepted is None:
+        return False
+    if rust_check.get("status") != "passed":
+        return False
+    if validation_profile.get("status") != "passed":
+        return False
+    if validation_profile.get("route_level") == "L4":
+        return False
+    return not validation_profile.get("skipped_gates")
 
 
 def emit_manifest(
@@ -1339,11 +1760,25 @@ def emit_manifest(
     rust_check: dict[str, Any],
     patch: dict[str, Any],
     cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
     accepted: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
-    l3_manifest = emit_l3_evidence_manifest(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
-    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
+    l3_manifest = emit_l3_evidence_manifest(
+        spec,
+        evidence_dir,
+        oracle,
+        replay,
+        rust_check,
+        cache,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+    )
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     payload = {
@@ -1363,6 +1798,9 @@ def emit_manifest(
         "rust_check": rust_check,
         "patch": patch,
         "cache": cache,
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
         "l3_evidence_manifest": {
             "path": rel(l3_manifest),
             "status": "passed" if semantic_pass else "incomplete",
@@ -1402,12 +1840,27 @@ def emit_l3_evidence_manifest(
     replay: dict[str, Any],
     rust_check: dict[str, Any],
     cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
     accepted: dict[str, Any] | None = None,
 ) -> Path:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
-    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
-    write_l3_candidate_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
+    write_l3_candidate_supporting_evidence(
+        spec,
+        evidence_dir,
+        oracle,
+        replay,
+        rust_check,
+        cache,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+    )
+    bind_route_decision_to_generated_artifacts(spec, evidence_dir, c2rust_baseline, route_decision, validation_profile)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
@@ -1431,6 +1884,9 @@ def emit_l3_evidence_manifest(
         "evidence": {
             "slice_contract": evidence_ref(evidence_dir / f"{prefix}-slice-contract.json", "recorded"),
             "context_pack": evidence_ref(evidence_dir / f"{prefix}-context-pack.json", "recorded"),
+            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+            "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
             "cache_metadata": evidence_ref(evidence_dir / f"{prefix}-auto-cache-metadata.json", "recorded"),
             "config_profile": {
                 **evidence_ref(evidence_dir / f"{prefix}-config-profile.json", "recorded" if semantic_pass else "incomplete"),
@@ -1488,6 +1944,37 @@ def emit_l3_evidence_manifest(
     return path
 
 
+def bind_route_decision_to_generated_artifacts(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    refs = {
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+    }
+    for file_name in [
+        f"{prefix}-auto-translation-plan.json",
+        f"{prefix}-ai-candidate-manifest.json",
+        "rust-check.json",
+        f"{prefix}-diff.json",
+        f"{prefix}-negative-diff.json",
+        f"{prefix}-unsafe-scan.json",
+        f"{prefix}-unsafe-ledger.json",
+    ]:
+        path = evidence_dir / file_name
+        if not path.exists():
+            continue
+        payload = read_json(path)
+        payload.update(refs)
+        write_json(path, payload)
+
+
 def write_l3_candidate_supporting_evidence(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -1495,12 +1982,15 @@ def write_l3_candidate_supporting_evidence(
     replay: dict[str, Any],
     rust_check: dict[str, Any],
     cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
     accepted: dict[str, Any] | None = None,
 ) -> None:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
-    semantic_pass = accepted is not None and rust_check.get("status") == "passed"
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     write_json(
         evidence_dir / f"{prefix}-slice-contract.json",
@@ -1518,7 +2008,18 @@ def write_l3_candidate_supporting_evidence(
     )
     write_l3_config_profile(spec, evidence_dir)
     if accepted is not None:
-        write_accepted_supporting_evidence(spec, evidence_dir, oracle, replay, rust_check, cache, accepted)
+        write_accepted_supporting_evidence(
+            spec,
+            evidence_dir,
+            oracle,
+            replay,
+            rust_check,
+            cache,
+            c2rust_baseline,
+            route_decision,
+            validation_profile,
+            accepted,
+        )
         return
     write_json(
         evidence_dir / f"{prefix}-rust-report.json",
@@ -1601,6 +2102,11 @@ def write_l3_candidate_supporting_evidence(
             "semantic_pass": False,
             "rust_check_status": rust_check.get("status"),
             "c_oracle_status": oracle.get("status"),
+            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+            "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+            "skipped_gates": validation_profile.get("skipped_gates", []),
+            "validation_profile_status": validation_profile.get("status"),
             "alias_gate": alias_gate,
             "required_before_acceptance": [
                 "C_ORACLE_GENERATED",
@@ -1827,6 +2333,9 @@ def write_accepted_supporting_evidence(
     replay: dict[str, Any],
     rust_check: dict[str, Any],
     cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
     accepted: dict[str, Any],
 ) -> None:
     slice_id = required_str(spec, "slice_id")
@@ -1834,6 +2343,7 @@ def write_accepted_supporting_evidence(
     accepted_paths = accepted["paths"]
     reports = accepted["reports"]
     unsafe_count = unsafe_count_from_report(reports["unsafe_scan"])
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     mark_config_profile_recorded(spec, evidence_dir, accepted)
@@ -1843,8 +2353,8 @@ def write_accepted_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
-            "status": "passed",
-            "semantic_pass": True,
+            "status": "passed" if semantic_pass else "blocked",
+            "semantic_pass": semantic_pass,
             "source_commit": source_commit(spec),
             "fixture": {"path": fixture_path(spec), "sha256": accepted["fixture_sha256"]},
             "source_slice_id": reports["rust_report"].get("slice_id"),
@@ -1932,6 +2442,11 @@ def write_accepted_supporting_evidence(
             "fixture": {"path": fixture_path(spec), "sha256": accepted["fixture_sha256"]},
             "rust_check_status": rust_check.get("status"),
             "c_oracle_status": oracle.get("status"),
+            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+            "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+            "skipped_gates": validation_profile.get("skipped_gates", []),
+            "validation_profile_status": validation_profile.get("status"),
             "toolchain_status": "C_ORACLE_GENERATED",
             "rust_report_status": reports["rust_report"].get("status"),
             "schema_diff_status": reports["diff"].get("status"),
@@ -1950,8 +2465,8 @@ def write_accepted_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
-            "status": "passed",
-            "semantic_pass": True,
+            "status": "passed" if semantic_pass else "blocked",
+            "semantic_pass": semantic_pass,
             "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
             "generated_draft_semantic_pass": False,
             "accepted_evidence_binding": accepted_binding_summary(accepted),
@@ -1964,7 +2479,7 @@ def write_accepted_supporting_evidence(
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
             "status": "recorded",
-            "semantic_pass": True,
+            "semantic_pass": semantic_pass,
             "source_commit": source_commit(spec),
             "repo_commit": repo_commit(),
             "cache": cache,
@@ -2474,6 +2989,9 @@ def cache_identity(
     spec: dict[str, Any],
     slice_spec_path: Path,
     accept_existing_evidence: bool = False,
+    c2rust_baseline: dict[str, Any] | None = None,
+    route_decision: dict[str, Any] | None = None,
+    validation_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:
@@ -2498,6 +3016,9 @@ def cache_identity(
         "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
         "command_arguments": command_arguments,
         "alias_gate_identity": alias_gate_identity(spec),
+        "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
+        "route_decision_identity": artifact_cache_identity(route_decision),
+        "validation_profile_identity": artifact_cache_identity(validation_profile),
     }
 
 
@@ -2564,12 +3085,29 @@ def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dic
 
 
 def source_file_hashes(spec: dict[str, Any]) -> dict[str, str]:
-    files = [item["path"] for item in spec.get("c_boundary", {}).get("files", []) if item.get("path")]
+    declared_hashes = {
+        str(path): str(value)
+        for path, value in spec.get("source", {}).get("source_file_hashes", {}).items()
+        if value
+    }
+    file_entries = [item for item in spec.get("c_boundary", {}).get("files", []) if item.get("path")]
+    files = [item["path"] for item in file_entries]
     files.extend(str(item) for item in spec.get("source_files", []))
     result: dict[str, str] = {}
+    source_root = spec.get("source", {}).get("source_root")
     for file_name in sorted(set(files)):
+        matching_entry = next((item for item in file_entries if item.get("path") == file_name), {})
+        explicit_hash = declared_hashes.get(file_name) or matching_entry.get("sha256")
         path = REPO_ROOT / file_name
-        result[file_name] = sha256(path) if path.exists() and path.is_file() else "missing"
+        if path.exists() and path.is_file():
+            result[file_name] = sha256(path)
+            continue
+        if source_root:
+            source_path = Path(str(source_root)) / file_name
+            if source_path.exists() and source_path.is_file():
+                result[file_name] = sha256(source_path)
+                continue
+        result[file_name] = str(explicit_hash) if explicit_hash else "missing"
     return result
 
 

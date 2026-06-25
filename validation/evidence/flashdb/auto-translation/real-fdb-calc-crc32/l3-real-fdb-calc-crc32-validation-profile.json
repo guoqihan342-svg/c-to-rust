@@ -1,0 +1,49 @@
+{
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "kani"
+  ],
+  "profile": "L4-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "compile": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff"
+  ],
+  "route_level": "L4",
+  "schema_version": 1,
+  "skipped_gates": [
+    {
+      "gate": "candidate_generation",
+      "reason": "route_refused"
+    },
+    {
+      "gate": "c_oracle_diff",
+      "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+    }
+  ],
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "blocked",
+  "target_id": "flashdb",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

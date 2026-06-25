@@ -1,0 +1,57 @@
+{
+  "level": "L4",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "recorded"
+      },
+      "weight": "hard_refuse"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "real-fdb-calc-crc32",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+      "sha256": "4047a1fab627022a213baedd70ba9e2863543468364b7651522ffa5a98042e28",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
+      "sha256": "154e3a2be796bb21dd2ee165f7f353b18830047b67e4ad8300af29130c7c966e",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
+      "sha256": "2b1add4e58281d8e4027ac9289e3aa5f82affbab82970ebf797315c15fd51548",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
+      "sha256": "5c84e6a31bb5a8a92485eadda3eda889a99ba24556e092c8ac89ae8bee5a3064",
+      "status": "blocked"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
+      "sha256": "467f5f745f7eeed4b14db693852984604c120a263393f4cb3013ed319947dbd4",
+      "status": "recorded"
+    }
+  },
+  "status": "refused",
+  "target_id": "flashdb",
+  "translator": {
+    "candidate_generation_allowed": false,
+    "kind": "refuse"
+  },
+  "verification_profile": "L4-dev"
+}

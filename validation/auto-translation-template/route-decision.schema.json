@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Route Decision Evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "status",
+    "level",
+    "translator",
+    "rationale",
+    "verification_profile",
+    "source_artifacts",
+    "policy",
+    "misroute"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "slice_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["recorded", "refused"]},
+    "level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
+    "translator": {
+      "type": "object",
+      "required": ["kind", "candidate_generation_allowed"],
+      "properties": {
+        "kind": {"enum": ["tier1", "agent", "refuse"]},
+        "candidate_generation_allowed": {"type": "boolean"}
+      }
+    },
+    "rationale": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["feature", "weight"],
+        "properties": {
+          "feature": {"type": "string", "minLength": 1},
+          "weight": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "verification_profile": {"type": "string", "minLength": 1},
+    "source_artifacts": {
+      "type": "object",
+      "required": ["type_map", "cfg", "pointer_graph", "translation_plan", "c2rust_baseline"],
+      "additionalProperties": true
+    },
+    "policy": {
+      "type": "object",
+      "required": ["goal", "fixed_loop_count_required", "repair_budget_source"],
+      "properties": {
+        "goal": {"type": "string", "minLength": 1},
+        "fixed_loop_count_required": {"const": false},
+        "repair_budget_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "misroute": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"level": {"const": "L4"}}},
+      "then": {
+        "properties": {
+          "status": {"const": "refused"},
+          "translator": {
+            "properties": {
+              "kind": {"const": "refuse"},
+              "candidate_generation_allowed": {"const": false}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

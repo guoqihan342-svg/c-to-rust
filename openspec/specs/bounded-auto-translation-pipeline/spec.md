@@ -3,14 +3,29 @@
 ## Purpose
 TBD - created by archiving change add-bounded-auto-translation-pipeline. Update Purpose after archive.
 ## Requirements
-### Requirement: Slice Spec And Build Profile Input
-The system SHALL start every automatic translation run from a machine-readable slice spec whose C target has passed L1 native validation and whose build profile is sufficient to reproduce preprocessing, type, ABI, and fixture boundaries.
+### Requirement: Machine-Generated Slice Spec And Build Profile Input
+The system SHALL start every automatic translation run from a machine-generated slice spec whose C target has passed L1 native validation and whose build profile is sufficient to reproduce preprocessing, type, ABI, and fixture boundaries.
 
-系统必须从可机器读取的 slice spec 开始自动翻译；该 slice 对应的 C target 必须已经通过 L1 native validation，并且 build profile 必须足以复现预处理、类型、ABI 与 fixture 边界。
+The slice spec SHALL be an intermediate contract and evidence anchor generated from real C source, not the primary human-authored translation input.
+
+系统必须从机器生成的 slice spec 开始自动翻译；该 slice 对应的 C target 必须已经通过 L1 native validation，并且 build profile 必须足以复现预处理、类型、ABI 与 fixture 边界。
+
+slice spec 必须是从真实 C 源码生成的中间契约和证据锚点，而不是主要由人工填写的翻译输入。
 
 #### Scenario: L1-passed slice is accepted
 - **WHEN** `auto_migrate` receives a slice spec for a target with accepted L1 native evidence
 - **THEN** it records `target_id`, `slice_id`, source root, source commit, C files, function names, signatures, compile profile, fixture contract, Rust output boundary, and evidence output root before translation starts
+
+#### Scenario: Real source extraction precedes translation
+- **WHEN** a user or agent requests automatic translation for a C repository, build profile, and function selector
+- **THEN** the system opens the referenced C source files, uses a real C-aware frontend or parser plus compile-profile evidence to locate the function boundary, and generates the slice spec from the extracted source span
+- **AND** the generated slice spec records source file path, line or byte span, source hash, source commit, compile command source, include paths, defines, macro or preprocessing mode, function signature, direct callees, and unsupported extraction facts before translation starts
+- **AND** a hand-authored `c_source` string without real source file, span, hash, and compile-profile provenance MUST NOT satisfy this requirement
+
+#### Scenario: Slice spec remains the downstream contract
+- **WHEN** the source extractor emits a slice spec
+- **THEN** context pack, type map, CFG, pointer graph, Rust draft, C oracle harness, Rust replay test, cache metadata, and final L3 evidence all consume the same slice spec hash
+- **AND** any manual override to the generated slice spec records the edited fields, reason, reviewer, previous hash, new hash, and verification rerun requirements before the run can be accepted
 
 #### Scenario: Missing L1 evidence blocks translation
 - **WHEN** the slice spec references a target without accepted L1 native evidence
@@ -24,6 +39,22 @@ The system SHALL start every automatic translation run from a machine-readable s
 - **WHEN** `tree-sitter-c` or another syntax-only parser locates a function, call, type spelling, or source span
 - **THEN** the run may use that parser only for indexing, slicing, or tolerant scanning
 - **AND** typedef, macro expansion, ABI, struct layout, integer width, implicit cast, and declaration disambiguation facts MUST come from build profile, compile commands, clang/libclang, WSL/Linux/CI evidence, or explicit unsupported/type-ambiguity records before a Rust draft can be accepted
+
+### Requirement: Real C Frontend Before Scale Claims
+The system SHALL not claim scalable C-to-Rust translation capability until at least one real source function is automatically discovered, extracted, translated, and validated through the existing evidence gates.
+
+系统在至少一个真实源码函数完成自动发现、抽取、翻译并通过现有证据门禁之前，不得声明具备可规模化的 C-to-Rust 翻译能力。
+#### Scenario: Corrode-style frontend lesson is adopted
+- **WHEN** the project compares its pipeline with Corrode-style C-to-Rust translation
+- **THEN** the project treats Corrode's useful lesson as the need for a real C source frontend that can consume compiler-like inputs, preprocessing context, and parsed C structure before emitting Rust candidates
+- **AND** the project does not copy Corrode's broad unsafe-first output strategy as sufficient for acceptance
+- **AND** low unsafe ratio, oracle/replay equivalence, negative controls, compile self-healing evidence, cache/version binding, and OpenSpec validation remain mandatory
+
+#### Scenario: L1 target count is not translation evidence
+- **WHEN** reporting automatic translation progress
+- **THEN** L1 native build/test success for a target is reported only as C baseline reproducibility
+- **AND** it MUST NOT be used as evidence that the translator can automatically translate that target's real functions
+- **AND** translation capability is reported only for named real-source functions or slices with generated slice spec provenance and completed L3 evidence
 
 ### Requirement: Context Type CFG And Pointer Evidence
 The system SHALL extract and persist context pack, type map, CFG, and pointer graph evidence before generating a Rust draft.

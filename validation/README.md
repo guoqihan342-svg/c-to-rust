@@ -34,6 +34,38 @@ powershell -ExecutionPolicy Bypass -File .\scripts\validate-c-project-catalog.ps
 
 The verifier is intentionally lightweight. It does not clone large repositories. Future per-project changes must pin commits, clone outside this repository, run the native C build/test smoke, define a bounded migration slice, and add C/Rust differential evidence before claiming deeper success.
 
+## Real Source Slice Extraction
+
+中文：真实源码函数必须先由 `validation/tools/extract_source_slice.py` 生成 slice spec，再交给 `validation/tools/auto_migrate.py`。手写 `c_source` 只能作为 demo 或临时 fixture，不能作为真实自动翻译能力证据。
+
+English: real-source functions must first be converted into a generated slice spec by `validation/tools/extract_source_slice.py`, then passed to `validation/tools/auto_migrate.py`. A hand-written `c_source` string is only acceptable for demos or temporary fixtures; it is not evidence of real automatic translation capability.
+
+```powershell
+python validation/tools/extract_source_slice.py `
+  --repo-root F:\path\to\CProject `
+  --source-file src/example.c `
+  --function add_one `
+  --target-id example `
+  --slice-id real-add-one `
+  --source-commit <pinned-commit> `
+  --compiler-command-source compile_commands.json `
+  --out validation/slice-specs/example-real-add-one.json
+
+python validation/tools/auto_migrate.py `
+  --slice-spec validation/slice-specs/example-real-add-one.json `
+  --skip-c-oracle
+```
+
+## C2Rust Baseline, Route, And Validation Profile
+
+中文：`auto_migrate.py` 现在会为每个自动迁移 slice 生成三类一等证据：`l3-<slice>-c2rust-baseline-manifest.json`、`l3-<slice>-route-decision.json` 和 `l3-<slice>-validation-profile.json`。C2Rust baseline 只是候选上下文或交叉检查，不能替代原始 C oracle、Rust replay、schema-aware diff、negative diff、unsafe ledger 或 final verification。缺少 C2Rust 可执行文件时必须记录 `skipped` 或 `blocked`，不能伪造生成成功。
+
+English: `auto_migrate.py` now emits three first-class evidence files for each automatic migration slice: `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The C2Rust baseline is candidate context or cross-check evidence only; it never replaces the original C oracle, Rust replay, schema-aware diff, negative diff, unsafe ledger, or final verification. Missing executable C2Rust tooling must be recorded as `skipped` or `blocked`, never as a generated success.
+
+中文：route decision 只决定候选生成路径和上下文预算；validation profile 决定本次运行必须通过的 gates。任何 Agent、C2Rust、手写规则或 Rust 编译通过的输出，只有在 selected validation profile 通过且没有 skipped required gate 时，才可以被绑定为 semantic pass。
+
+English: the route decision controls candidate generation path and context budget only; the validation profile controls the required gates for the run. Output from an Agent, C2Rust, deterministic rules, or Rust compilation can be bound as a semantic pass only when the selected validation profile passes with no skipped required gate.
+
 ## Current Candidate Count
 
 The catalog currently contains 40 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, terminal/system, kernel/virtualization, document processing, scientific data, VPN, packet analysis, and embedded domains.

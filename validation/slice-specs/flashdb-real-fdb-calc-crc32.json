@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "level": "L3",
+  "status": "draft",
+  "function_name": "fdb_calc_crc32",
+  "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)\n{\n    const uint8_t *p;\n\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n\n    return crc ^ ~0U;\n}",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture_hash": "real-fdb-calc-crc32-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "source": {
+    "source_root": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_file_hashes": {
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "src/fdb_utils.c",
+        "role": "source",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      }
+    ],
+    "functions": [
+      "fdb_calc_crc32"
+    ],
+    "signatures": [
+      {
+        "function": "fdb_calc_crc32",
+        "return_type": "uint32_t",
+        "parameters": [
+          {
+            "name": "crc",
+            "c_type": "uint32_t",
+            "direction": "input"
+          },
+          {
+            "name": "buf",
+            "c_type": "const void*",
+            "direction": "input"
+          },
+          {
+            "name": "size",
+            "c_type": "size_t",
+            "direction": "input"
+          }
+        ],
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)\n{\n    const uint8_t *p;\n\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n\n    return crc ^ ~0U;\n}",
+        "source_span": {
+          "file": "src/fdb_utils.c",
+          "line_start": 77,
+          "line_end": 89,
+          "byte_start": 3818,
+          "byte_end": 4075,
+          "sha256": "523e88f41d20405f6aed4fbd62e1ddc2c7127473864d9ca80d2aca4874549007"
+        },
+        "definition_status": "real_source_bound"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "uint32_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "void",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "size_t",
+        "source": "extracted_signature"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
+    "compiler_command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+    "include_paths": [
+      "inc"
+    ],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "unknown",
+      "endianness": "unknown",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "syntax-indexed real source slice; clang/libclang or compile_commands semantic evidence required for accepted translation"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-calc-crc32-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+    "hash": "real-fdb-calc-crc32-fixture",
+    "cases": [],
+    "observable_outputs": [
+      "return_code"
+    ],
+    "behavior_fields": [
+      "return_code"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_calc_crc32.rs",
+    "public_api": [
+      {
+        "name": "fdb_calc_crc32",
+        "visibility": "public",
+        "boundary_kind": "internal_ffi"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "c_boundary.signatures[0].source_span.sha256",
+    "build_profile.profile_id",
+    "translator_version"
+  ]
+}

@@ -81,6 +81,7 @@ Pass criteria:
 - Pointer dependency graph evidence is recorded for pointer-bearing slices or explicitly marked `not_applicable` for pure value slices.
 - Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
 - Code-test translation evidence maps the source fixtures, C tests, or oracle expectations to Rust tests, main/error path coverage, negative cases, evidence links, and cache invalidation keys.
+- Automatic migration evidence records C2Rust baseline availability, route decision, and validation profile as first-class evidence. C2Rust output is candidate context only and cannot replace the original C oracle, Rust replay, diff, unsafe, or final-verification gates.
 - Rust output is compared against C/golden output by schema-aware diff.
 - Negative regression counterexample fails as expected.
 - Performance smoke records timing or operation counters without replacing correctness gates.
@@ -103,6 +104,8 @@ Config profile is a traceability and invalidation gate, not a full macro solver.
 Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
 
 Code-test translation evidence is a traceability and invalidation gate, not a semantic-equivalence proof. It complements C oracle, Rust replay, schema diff, negative diff, unsafe, pointer, config, and final verification evidence; it never replaces them.
+
+C2Rust baseline evidence is a traceability, cross-check, and candidate-context gate, not correctness evidence. Generated, skipped, or blocked baseline status must be recorded, and semantic acceptance still requires the selected validation profile to pass without skipped required gates.
 
 中文：pointer dependency graph 是上下文与风险边界门禁，不是全程序 alias 证明。graph 变化时，受影响的 ContextPack、PatchPlan、C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
@@ -149,3 +152,5 @@ Boundary:
 - L3 passed: the bounded slice has behavior evidence plus synchronized code-test translation evidence.
 
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.
+
+Automatic translation capability claims require more than L1 target success or a hand-authored `c_source` string. A slice only counts as real-source automatic translation evidence when the slice spec is generated from real C source files with source span, source hash, build profile provenance, and completed L3 evidence for the named function.

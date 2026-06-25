@@ -1,0 +1,26 @@
+{
+  "blocked_repairs": [
+    {
+      "blocked_reason": "Route decision refused candidate generation for unsupported C semantics.",
+      "candidate_patch_id": "patch-route-refused-1",
+      "forbidden_change": "unsupported_control_flow",
+      "human_action_required": true,
+      "repair_id": "repair-route-refused-1",
+      "route_decision": "L4",
+      "source_span": {
+        "file": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "cache_invalidation_keys": [
+    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
+    "fixture_hash=real-fdb-calc-crc32-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

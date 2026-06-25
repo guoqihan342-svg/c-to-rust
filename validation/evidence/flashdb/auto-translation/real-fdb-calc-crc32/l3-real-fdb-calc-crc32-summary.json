@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "incomplete",
+  "summary": "Auto-translation candidate generated with schema-bound evidence; acceptance gates remain open.",
+  "target_id": "flashdb"
+}

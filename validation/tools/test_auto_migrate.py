@@ -20,6 +20,104 @@ def load_auto_migrate_module():
 
 
 class AutoMigrateTests(unittest.TestCase):
+    def test_route_baseline_and_validation_profile_evidence_are_emitted(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "route-profile",
+            "source_commit": "1234567",
+            "function_name": "route_profile",
+            "c_source": "int route_profile(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "route-profile.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "route-profile"
+            baseline = json.loads(
+                (evidence_dir / "l3-route-profile-c2rust-baseline-manifest.json").read_text(encoding="utf-8")
+            )
+            route = json.loads((evidence_dir / "l3-route-profile-route-decision.json").read_text(encoding="utf-8"))
+            profile = json.loads(
+                (evidence_dir / "l3-route-profile-validation-profile.json").read_text(encoding="utf-8")
+            )
+            l3 = json.loads((evidence_dir / "l3-route-profile-evidence-manifest.json").read_text(encoding="utf-8"))
+            final = json.loads((evidence_dir / "l3-route-profile-final-verification.json").read_text(encoding="utf-8"))
+            plan = json.loads((evidence_dir / "l3-route-profile-auto-translation-plan.json").read_text(encoding="utf-8"))
+            cache = json.loads((evidence_dir / "l3-route-profile-auto-cache-metadata.json").read_text(encoding="utf-8"))
+
+            self.assertIn(baseline["status"], {"generated", "skipped", "blocked"})
+            self.assertEqual(baseline["correctness_role"], "candidate_context_only")
+            self.assertEqual(route["level"], "L0")
+            self.assertEqual(route["translator"]["kind"], "tier1")
+            self.assertIn("compile", profile["required_gates"])
+            self.assertIn("c_oracle_diff", profile["required_gates"])
+            self.assertEqual(profile["loop_policy"]["source"], "run_policy")
+            self.assertEqual(
+                Path(manifest["c2rust_baseline"]["path"]).name,
+                "l3-route-profile-c2rust-baseline-manifest.json",
+            )
+            self.assertTrue((evidence_dir / "l3-route-profile-c2rust-baseline-manifest.json").exists())
+            self.assertEqual(manifest["route_decision"]["level"], "L0")
+            self.assertEqual(manifest["validation_profile"]["profile"], "L0-dev")
+            self.assertIn("c2rust_baseline", l3["evidence"])
+            self.assertIn("route_decision", l3["evidence"])
+            self.assertIn("validation_profile", l3["evidence"])
+            self.assertEqual(
+                Path(final["c2rust_baseline"]["path"]).name,
+                "l3-route-profile-c2rust-baseline-manifest.json",
+            )
+            self.assertEqual(final["validation_profile_status"], profile["status"])
+            self.assertEqual(Path(plan["route_decision"]["path"]).name, "l3-route-profile-route-decision.json")
+            self.assertEqual(
+                Path(cache["dependent_artifacts"]["c2rust_baseline"]["path"]).name,
+                "l3-route-profile-c2rust-baseline-manifest.json",
+            )
+            self.assertIn("route_decision_identity", cache["cache_input_fields"])
+
+    def test_semantic_pass_requires_validation_profile_passed(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+
+        accepted = {"status": "accepted"}
+        rust_check = {"status": "passed"}
+        profile = {"status": "incomplete", "skipped_gates": [{"gate": "c_oracle_diff", "reason": "SKIPPED"}]}
+
+        self.assertFalse(auto_migrate.semantic_pass_for_run(accepted, rust_check, profile))
+        self.assertFalse(auto_migrate.semantic_pass_for_run(None, rust_check, {"status": "passed"}))
+        self.assertTrue(auto_migrate.semantic_pass_for_run(accepted, rust_check, {"status": "passed", "skipped_gates": []}))
+
     def test_generates_candidate_without_claiming_semantic_pass(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
@@ -972,6 +1070,9 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(identity["alias_gate_identity"]["risk_count"], 1)
             self.assertFalse(identity["alias_gate_identity"]["aliasing_proven"])
             self.assertTrue(identity["alias_gate_identity"]["requires_noalias"])
+            self.assertEqual(identity["c2rust_baseline_identity"]["status"], "missing")
+            self.assertEqual(identity["route_decision_identity"]["status"], "missing")
+            self.assertEqual(identity["validation_profile_identity"]["status"], "missing")
 
     def test_unsupported_lvalue_blocks_auto_migrate_candidate_generation(self) -> None:
         spec = {
@@ -1023,10 +1124,28 @@ class AutoMigrateTests(unittest.TestCase):
             plan = json.loads(
                 (evidence_dir / "l3-unbounded-index-auto-translation-plan.json").read_text(encoding="utf-8")
             )
+            route = json.loads((evidence_dir / "l3-unbounded-index-route-decision.json").read_text(encoding="utf-8"))
+            profile = json.loads(
+                (evidence_dir / "l3-unbounded-index-validation-profile.json").read_text(encoding="utf-8")
+            )
+            blocked = json.loads(
+                (evidence_dir / "l3-unbounded-index-self-healing-blocked-repairs.json").read_text(encoding="utf-8")
+            )
             block = cfg["functions"][0]["basic_blocks"][0]
 
             self.assertEqual(manifest["translator"]["status"], "blocked")
             self.assertEqual(plan["status"], "blocked")
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertEqual(route["translator"]["kind"], "refuse")
+            self.assertFalse(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(profile["route_level"], "L4")
+            self.assertEqual(profile["status"], "blocked")
+            self.assertIn({"gate": "candidate_generation", "reason": "route_refused"}, profile["skipped_gates"])
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertIsNone(manifest["accepted_evidence_binding"])
+            self.assertEqual(blocked["status"], "recorded")
             self.assertEqual(plan["translation_summary"]["unsupported_lvalue_count"], 1)
             self.assertIn("unsupported_lvalue", block["lvalue_kinds"])
             self.assertTrue(
@@ -1170,6 +1289,9 @@ class AutoMigrateTests(unittest.TestCase):
                 "aliasing_proven": False,
                 "requires_noalias": False,
             },
+            "c2rust_baseline_identity": {"status": "skipped", "sha256": "baseline-a"},
+            "route_decision_identity": {"status": "recorded", "sha256": "route-a"},
+            "validation_profile_identity": {"status": "incomplete", "sha256": "profile-a"},
         }
 
         reusable = auto_migrate.cache_drift_report(previous, dict(previous))
@@ -1189,6 +1311,9 @@ class AutoMigrateTests(unittest.TestCase):
             "aliasing_proven": False,
             "requires_noalias": True,
         }
+        current["c2rust_baseline_identity"] = {"status": "generated", "sha256": "baseline-b"}
+        current["route_decision_identity"] = {"status": "recorded", "sha256": "route-b"}
+        current["validation_profile_identity"] = {"status": "passed", "sha256": "profile-b"}
 
         drifted = auto_migrate.cache_drift_report(previous, current)
 
@@ -1199,11 +1324,17 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertIn("fixture_hash", drifted["drifted_keys"])
         self.assertIn("build_profile_hash", drifted["drifted_keys"])
         self.assertIn("alias_gate_identity", drifted["drifted_keys"])
+        self.assertIn("c2rust_baseline_identity", drifted["drifted_keys"])
+        self.assertIn("route_decision_identity", drifted["drifted_keys"])
+        self.assertIn("validation_profile_identity", drifted["drifted_keys"])
         for artifact in [
             "context_pack",
             "type_map",
             "cfg",
             "pointer_graph",
+            "c2rust_baseline",
+            "route_decision",
+            "validation_profile",
             "rust_draft",
             "patch_plan",
             "rust_replay",
@@ -1212,6 +1343,7 @@ class AutoMigrateTests(unittest.TestCase):
             "negative_diff",
             "unsafe_ledger",
             "final_verification",
+            "auto_translation_manifest",
             "summary",
         ]:
             self.assertIn(artifact, drifted["invalidated_artifacts"])
@@ -1239,6 +1371,30 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(accepted["generated_draft_semantic_pass"])
             self.assertFalse(summary["generated_draft_semantic_pass"])
             self.assertEqual(summary["paths"]["c_oracle"], accepted["paths"]["c_oracle"])
+
+    def test_source_file_hashes_preserve_generated_real_source_hashes(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "source": {
+                "source_root": "C:/external/FlashDB",
+                "source_file_hashes": {
+                    "src/fdb_utils.c": "real-source-sha",
+                },
+            },
+            "c_boundary": {
+                "files": [
+                    {
+                        "path": "src/fdb_utils.c",
+                        "role": "source",
+                        "sha256": "real-source-sha",
+                    }
+                ]
+            },
+        }
+
+        hashes = auto_migrate.source_file_hashes(spec)
+
+        self.assertEqual(hashes["src/fdb_utils.c"], "real-source-sha")
 
     def _accepted_evidence_spec(self, root: Path, include_toolchain_marker: bool) -> dict:
         fixture = root / "fixture.json"

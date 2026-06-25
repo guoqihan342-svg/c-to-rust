@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "C2Rust Baseline Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "status",
+    "reason",
+    "correctness_role",
+    "fallback_oracle",
+    "validation_impact",
+    "source_commit",
+    "slice_spec",
+    "build_profile_hash",
+    "commands",
+    "selected_command",
+    "reference_tree",
+    "output",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "slice_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["generated", "skipped", "blocked", "stale", "incomplete"]},
+    "reason": {"type": "string", "minLength": 1},
+    "correctness_role": {"const": "candidate_context_only"},
+    "fallback_oracle": {"const": "original_c_oracle_required"},
+    "validation_impact": {"type": "string", "minLength": 1},
+    "source_commit": {"type": "string", "minLength": 7},
+    "slice_spec": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "build_profile_hash": {"type": "string", "minLength": 1},
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "available", "version_status", "version"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "path": {"type": "string"},
+          "available": {"type": "boolean"},
+          "version_status": {"type": "string", "minLength": 1},
+          "version": {"type": "string"}
+        }
+      }
+    },
+    "selected_command": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ]
+    },
+    "reference_tree": {
+      "type": "object",
+      "required": ["path", "status", "cargo_toml"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"enum": ["present", "missing"]},
+        "cargo_toml": {"type": "string"}
+      }
+    },
+    "output": {
+      "anyOf": [
+        {"type": "null"},
+        {"type": "object"}
+      ]
+    },
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "generated"}}},
+      "then": {
+        "properties": {
+          "selected_command": {"type": "object"},
+          "output": {
+            "type": "object",
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["skipped", "blocked"]}}},
+      "then": {"properties": {"output": {"type": "null"}}}
+    }
+  ]
+}

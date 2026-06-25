@@ -1,0 +1,15 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "blocked",
+  "artifact_paths": [
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-events.jsonl",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-blocked-repairs.json",
+    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs"
+  ]
+}

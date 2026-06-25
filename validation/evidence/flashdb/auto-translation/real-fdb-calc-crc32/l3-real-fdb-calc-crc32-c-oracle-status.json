@@ -1,0 +1,11 @@
+{
+  "boundary": "Draft generation is not oracle success.",
+  "fixture": null,
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+  "required_final_status": "C_ORACLE_GENERATED",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "target_id": "flashdb"
+}
