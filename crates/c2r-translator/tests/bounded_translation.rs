@@ -990,6 +990,68 @@ fn clang_lowering_skeleton_maps_bitand_array_index_expr() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_shift_right_expr() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_shift".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "crc".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Shr,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 8,
+                    spelling: "8".to_string(),
+                    ty: int_ty,
+                }),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower shift right expression");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Shr,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected shift right return, got {:?}", ir.body);
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
+    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 8, .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_simple_while_statement() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -2364,6 +2426,111 @@ fn clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when
         panic!("expected postfix increment ptr, got {ptr:?}");
     };
     assert!(matches!(target.as_ref(), IrExpr::Var { name, .. } if name == "p"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_shift_right_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-shift-right");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_shift.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_shift(uint32_t crc) { return crc >> 8; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_shift");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Shr,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected shift right return, got {:?}", function.body);
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
+    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 8, .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-crc-update-postinc-shift");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_update_expr.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nstatic const uint32_t table[256];\nuint32_t crc_update_expr(uint32_t crc, const uint8_t *p) { return table[(crc ^ *p++) & 0xff] ^ (crc >> 8); }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_update_expr");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::BitXor,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected crc update return, got {:?}", function.body);
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Index { .. }));
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Shr,
+            ..
+        }
+    ));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

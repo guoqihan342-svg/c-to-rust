@@ -4481,3 +4481,81 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
 - 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动；下一轮应只为
   `BinaryOperator(">>")` 写最小 skeleton/lowering，映射到现有 `IrBinOp::Shr`，
   再用 real-fdb report 验证是否进入 emitter gate 对齐阶段。
+
+## 62. 2026-06-26 clang shift-right lowering
+
+本轮承接第 61 节的真实 blocker：只为 clang AST lowering report 增加最小
+`BinaryOperator(">>")` 支持，映射到现有 `IrBinOp::Shr`；不扩展其它二元运算，
+不调整 typed IR emitter / CRC32 matcher，也不触碰 validation evidence。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Shr`。
+  - `expr_skeleton_from_ast()` 的 `BinaryOperator` opcode match 新增
+    `Some(">>") => ClangBinaryOperator::Shr`。
+  - `lower_binary_operator()` 新增 `Shr -> IrBinOp::Shr`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_shift_right_expr`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_shift_right_expr_when_enabled`。
+  - 新增真实 clang 组合 smoke：
+    `clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled`，
+    覆盖 `table[(crc ^ *p++) & 0xff] ^ (crc >> 8)`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_shift_right_expr` 先失败在
+  `ClangBinaryOperator::Shr` 不存在。
+- 绿灯：补 clang `Shr` enum、opcode `">>"` parser 和 `IrBinOp::Shr`
+  映射后，skeleton、真实 `crc >> 8` smoke 和真实 CRC update RHS smoke 均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 61 节末尾：
+  `unsupported_clang_expr: BinaryOperator: opcode >> is outside the current skeleton`。
+- 本轮后：
+  `status=lowered`，`errors=[]`。
+- 当前 report artifact 仍是 diagnostic/report 路径；临时 report 里
+  `function_ir` 字段为 `null`，所以这只能说明 clang AST lowering front-end
+  已跨过当前真实语法 blocker，不能声明真实 clang-lowered IR 已驱动 Rust 生成。
+
+本轮并行只读审查结论：
+- Laplace：`>>` 的最小改动面就是 `ClangBinaryOperator::Shr`、opcode `">>"`
+  mapping 和 `lower_binary_operator()` 三处；不要顺手实现 `<<`、`|`、`-` 等其它运算，
+  也不要碰 signed shift 语义建模或 evidence。
+- Volta：只补 `>>` 很可能让 real-fdb report 从 unsupported 变为 lowered，但这不等于
+  `emit_rust_from_ir` 已接受真实 clang-lowered IR；当前主翻译路径的 CRC32 成功仍来自
+  C 源字符串识别后构造的硬编码 typed IR，emitter gate 仍是刻意严格的
+  `is_crc32_byte_cursor_ir()`。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_shift_right_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_shift_right_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled -- --nocapture
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused shift-right skeleton test：`1 passed`。
+- 真实 clang shift-right smoke：`1 passed`。
+- 真实 clang CRC update RHS smoke：`1 passed`。
+- real-fdb 临时 out-root clang lowering report：`status=lowered`，`errors=[]`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `85 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+
+当前核心翻译功能状态：
+- clang AST lowering report 已能跨过 real-fdb `fdb_calc_crc32` 目前已知的前端语法
+  blocker：局部声明、指针 cast assignment、`crc = crc ^ ~0U;`、`WhileStmt`、
+  `while(size--)`、`crc32_tab[...]`、全局 `uint32_t[256]` table、`& 0xff`、
+  `*p++`、postfix `p++` 和 `crc >> 8`。
+- 这还不是完整“真实 clang AST lowering -> typed IR -> 可编译 Rust”的闭环。
+- 下一步建议：新增一个整函数测试，直接把真实 clang-lowered `fdb_calc_crc32`
+  的 `IrFunction` 传给 `emit_rust_from_ir`，先观察 fail-closed 的真实形状差异；
+  然后只按实际 diff 调整 `is_crc32_byte_cursor_ir()` 或接线 report/translation 路径。

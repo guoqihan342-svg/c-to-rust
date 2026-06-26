@@ -216,6 +216,7 @@ pub enum ClangBinaryOperator {
     Add,
     BitAnd,
     BitXor,
+    Shr,
 }
 
 #[cfg(feature = "typed-ir")]
@@ -829,6 +830,7 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 Some("+") => ClangBinaryOperator::Add,
                 Some("&") => ClangBinaryOperator::BitAnd,
                 Some("^") => ClangBinaryOperator::BitXor,
+                Some(">>") => ClangBinaryOperator::Shr,
                 Some(opcode) => {
                     return Ok(ClangExprSkeleton::Unsupported {
                         node: "BinaryOperator".to_string(),
@@ -1260,6 +1262,7 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
         ClangBinaryOperator::Add => IrBinOp::Add,
         ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
+        ClangBinaryOperator::Shr => IrBinOp::Shr,
     }
 }
 
