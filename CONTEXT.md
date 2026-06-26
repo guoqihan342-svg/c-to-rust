@@ -5184,3 +5184,20 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U)` 已能在 table 作为 readonly pointer parameter 时走 generic typed IR emitter。
 - `while(size--)` 已有窄 generic lowering，保留 postfix decrement 语义；`while(--size)`、`if(value++)`、signed int decrement condition 仍 fail-closed。
 - real FlashDB crc32 仍没有完全泛化：`crc32_table` global const array 还只是表达式里的 array-typed Var，没有全局常量数据模型或 Rust table emitter。下一刀应设计 typed IR global readonly array/context，再替换并删除 legacy crc32 matcher。
+
+## 74. 2026-06-26 bilingual docs convention for architecture docs
+
+用户明确要求文档都要中英文版本。本轮先把刚新增和同步触及的 c2rust migration docs 按目录既有约定落成中文主文档 `.md` + 英文镜像 `.en.md`：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - 改为中文主版本，保留架构图、核心代码地图、当前 generic emitter 能力和 crc32 blocker。
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 新增英文镜像版本。
+- `docs/c2rust-migration-agent/README.md`
+  - 改为中文主版本。
+  - 新增“双语文档约定”：新增用户/Agent 文档默认中文 `.md` + 英文 `.en.md`，OpenSpec parser anchors 保持英文。
+  - Document Map 同步列出 `README.md` / `README.en.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`。
+- `docs/c2rust-migration-agent/README.en.md`
+  - 新增英文镜像版本。
+
+注意：目录内部分早期文档仍是“中文说明 + English summary”的混合格式，还不是完整双文件版本。后续触及时应按本轮约定拆成完整双语版本；若用户要求一次性补齐历史文档，应批量处理这些文件的 `.en.md` 镜像和中文主文档。

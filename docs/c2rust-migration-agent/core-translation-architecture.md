@@ -1,80 +1,80 @@
-# Core Translation Architecture
+# 核心翻译架构
 
-本页记录当前 `c-to-rust` 核心翻译链路、关键代码位置和 FlashDB crc32 泛化进度。
+本页是中文版本，记录当前 `c-to-rust` 核心翻译链路、关键代码位置和 FlashDB crc32 泛化进度。英文版本见 `core-translation-architecture.en.md`。
 
-## Architecture
+## 架构图
 
 ```mermaid
 flowchart TD
-    C["C source / compile_commands.json"] --> Clang["clang AST dump frontend"]
-    Clang --> Skeleton["Clang skeleton AST subset"]
+    C["C 源码 / compile_commands.json"] --> Clang["clang AST dump 前端"]
+    Clang --> Skeleton["clang skeleton AST 子集"]
     Skeleton --> IR["typed IR: IrFunction / IrStmt / IrExpr / IrType"]
-    IR --> Emitter{"Rust emitter route"}
+    IR --> Emitter{"Rust emitter 路由"}
     Emitter --> Generic["generic typed IR emitter"]
     Emitter --> Canned["legacy crc32 typed-IR matcher + canned emitter"]
-    Generic --> Rust["safe Rust draft"]
+    Generic --> Rust["safe Rust 草稿"]
     Canned --> Rust
     Rust --> Rustc["rustc smoke / cargo tests"]
-    Rustc --> Evidence["validation evidence and reports"]
+    Rustc --> Evidence["validation evidence 与报告"]
 
-    Generic --> Supported["current generic coverage:
+    Generic --> Supported["当前 generic 覆盖:
     scalar decl/assign/if/while,
     comparison conditions,
     const pointer slices,
     table index via slice param,
     nested byte *p++ prelude,
     size_t while(size--)"]
-    Generic --> Blocked["known blockers:
+    Generic --> Blocked["已知 blocker:
     no global const table IR,
     no generic crc32 table data emission,
     no broad C side-effect ordering"]
 ```
 
-## Core Code Map
+## 核心代码位置
 
 - `crates/c2r-translator/src/clang_frontend.rs`
-  - Reads real clang AST dump JSON.
-  - Lowers supported C AST nodes into a compact clang skeleton.
-  - Converts skeleton nodes into typed IR.
-  - Important functions: `expr_skeleton_from_ast_with_options`, `stmt_skeleton_from_ast`, `lower_function_from_clang_ast_dump_report`, `lower_stmt`, `lower_expr`.
+  - 读取真实 clang AST dump JSON。
+  - 把支持的 C AST 节点 lowering 成紧凑的 clang skeleton。
+  - 把 skeleton 节点转换成 typed IR。
+  - 关键函数：`expr_skeleton_from_ast_with_options`、`stmt_skeleton_from_ast`、`lower_function_from_clang_ast_dump_report`、`lower_stmt`、`lower_expr`。
 - `crates/c2r-translator/src/typed_ir.rs`
-  - Defines `IrFunction`, `IrStmt`, `IrExpr`, `IrType`.
-  - Emits Rust from typed IR.
-  - Important functions: `emit_rust_from_ir`, `emit_scalar_rust_from_ir`, `emit_stmt`, `emit_expr_with_prelude`, `emit_post_increment_byte_read_expr`, `emit_postfix_decrement_while_loop`.
-  - Legacy crc32 route still lives here: `is_crc32_byte_cursor_ir`, `emit_crc32_byte_cursor_rust`.
+  - 定义 `IrFunction`、`IrStmt`、`IrExpr`、`IrType`。
+  - 从 typed IR 生成 Rust。
+  - 关键函数：`emit_rust_from_ir`、`emit_scalar_rust_from_ir`、`emit_stmt`、`emit_expr_with_prelude`、`emit_post_increment_byte_read_expr`、`emit_postfix_decrement_while_loop`。
+  - 旧 crc32 路由仍在这里：`is_crc32_byte_cursor_ir`、`emit_crc32_byte_cursor_rust`。
 - `crates/c2r-translator/tests/bounded_translation.rs`
-  - Main behavior contract for the bounded translator.
-  - Covers direct typed IR tests, real clang AST smoke tests, fail-closed boundaries, and rustc smoke compilation.
+  - bounded translator 的主要行为契约。
+  - 覆盖直接 typed IR 测试、真实 clang AST smoke 测试、fail-closed 边界和 rustc smoke 编译。
 - `CONTEXT.md`
-  - Chronological handoff log for this branch.
-  - Use the latest numbered section first when resuming work.
+  - 当前分支的时间顺序交接日志。
+  - 恢复开发时先看最新编号章节。
 
-## Current Core Translation Status
+## 当前核心翻译状态
 
-Generic typed IR emission now covers:
+generic typed IR emission 现在覆盖：
 
-- scalar declarations, assignment, return, `if`, `while`;
-- comparison expressions only in conditions;
-- initialized scalar locals from clang AST;
-- no-brace `if` / `while` bodies from clang AST;
-- readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
-- `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
-- nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
-- assignment RHS prelude, enough for `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U);` when `table` is a pointer parameter;
-- narrow `size_t` postfix-decrement while conditions, lowering `while (size--)` into a Rust `loop` that preserves postfix side effects.
+- scalar declaration、assignment、return、`if`、`while`；
+- 只允许出现在条件中的 comparison expression；
+- 来自 clang AST 的 initialized scalar local；
+- 来自 clang AST 的无大括号 `if` / `while` body；
+- readonly integer pointer parameter 到 Rust slice，例如 `const uint32_t *table -> table: &[u32]`；
+- 当已经证明存在 `const uint8_t *p` byte cursor 和 byte read 时，把 `const void *buf` 翻译成 `&[u8]`；
+- 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
+- assignment RHS prelude，足够覆盖 table 是 pointer parameter 时的 `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U);`；
+- 窄化的 `size_t` postfix-decrement while condition，把 `while (size--)` lowering 成保留 postfix side effect 的 Rust `loop`。
 
-Still not generic:
+仍未泛化：
 
-- `static const uint32_t crc32_table[256]` has no explicit typed IR global-data model yet.
-- Real FlashDB crc32 still passes through the legacy typed-IR shape matcher and canned Rust route.
-- The project should not claim "zero crc32-specific code" until `is_crc32_byte_cursor_ir` and `emit_crc32_byte_cursor_rust` are removed after a generic path passes.
+- `static const uint32_t crc32_table[256]` 还没有显式 typed IR global-data model。
+- 真实 FlashDB crc32 仍通过 legacy typed-IR shape matcher 和 canned Rust 路由。
+- 在 `is_crc32_byte_cursor_ir` 和 `emit_crc32_byte_cursor_rust` 被删除、generic 路径通过前，项目不能声称“全程零 crc32 专用代码”。
 
-## Next Implementation Cut
+## 下一步实现切口
 
-The next useful cut is explicit global readonly table support:
+下一刀应优先做显式 readonly global table 支持：
 
-1. Add typed IR representation for readonly global arrays, or a translation context that carries them.
-2. Make `crc32_table[...]` resolve through that context instead of being an undeclared local.
-3. Emit Rust for the table data or for a validated external table binding.
-4. Run real FlashDB crc32 through `generic typed IR emitter -> rustc smoke`.
-5. Only then remove the legacy crc32 matcher and canned emitter.
+1. 增加 readonly global array 的 typed IR 表示，或增加携带 global table 的 translation context。
+2. 让 `crc32_table[...]` 通过该 context 解析，而不是作为未声明 local。
+3. 为 table data 或已验证的 external table binding 生成 Rust。
+4. 让真实 FlashDB crc32 跑通 `generic typed IR emitter -> rustc smoke`。
+5. 通过后再删除 legacy crc32 matcher 和 canned emitter。

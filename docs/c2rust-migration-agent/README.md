@@ -1,56 +1,63 @@
 # C2Rust Migration Agent
 
-中文：这里是 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。
+这里是 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文版本见 `README.en.md`。
 
-English: this folder contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent.
+## 当前状态
 
-## Current Status
+- OpenSpec change：`design-c2rust-migration-agent`
+- 第一目标：FlashDB
+- 源码克隆：`sources/FlashDB`
+- 源码 commit：`93d175549da579b8abac07bd175ce4c3f9dde829`
+- Rust 输出项目名：`flashDB_rust`
+- C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
+- 安全目标：first-party non-test unsafe 低于 10%
 
-- OpenSpec change: `design-c2rust-migration-agent`
-- First target: FlashDB
-- Source clone: `sources/FlashDB`
-- Source commit: `93d175549da579b8abac07bd175ce4c3f9dde829`
-- Rust output project name: `flashDB_rust`
-- C2Rust role: baseline/oracle only, not final deliverable
-- Safety target: first-party non-test unsafe below 10%
+## 双语文档约定
 
-## Document Map
+- 面向用户或 Agent 的新增文档，默认使用中文主文档 `.md` 和英文镜像 `.en.md`。
+- 修改已有文档时，如果改动超过小修小补，应同步维护对应英文镜像。
+- OpenSpec parser anchors 必须保留英文，例如 `## ADDED Requirements`、`### Requirement:`、`#### Scenario:`、`WHEN`、`THEN`。
+- 本目录仍有早期文档采用“中文说明 + English summary”混合格式；后续触及时按上述约定拆成完整双语版本。
 
-- `baseline-record.json`: machine-readable version, hash, source, and tool availability record.
-- `baseline-and-versioning.md`: version policy for Agent, schema, PatchPlan, and `flashDB_rust`.
-- `build-and-c2rust-baseline.md`: FlashDB build capture, C2Rust baseline, and C oracle fallback.
-- `agent-contract.md`: OpenCode/Codex runtime contract, phases, IO, subagents, AI policy, async/thread policy.
-- `context-store-and-self-healing.md`: SQLite/JSONL schema, ContextPack, impact sets, rustc repair loop, PatchPlan.
-- `core-translation-architecture.md`: current clang AST -> typed IR -> Rust emitter architecture, core code map, and crc32 generic-emitter progress.
-- `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
-- `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
+## 文档地图
 
-## Quick Use
+- `README.md` / `README.en.md`：本目录索引、状态和双语文档约定。
+- `baseline-record.json`：机器可读的版本、hash、源码和工具可用性记录。
+- `baseline-and-versioning.md`：Agent、schema、PatchPlan 和 `flashDB_rust` 的版本策略。
+- `build-and-c2rust-baseline.md`：FlashDB build capture、C2Rust baseline 和 C oracle fallback。
+- `agent-contract.md`：OpenCode/Codex runtime contract、phase、IO、subagent、AI policy、async/thread policy。
+- `context-store-and-self-healing.md`：SQLite/JSONL schema、ContextPack、impact set、rustc repair loop、PatchPlan。
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 clang AST -> typed IR -> Rust emitter 架构、核心代码地图和 crc32 generic-emitter 进度。
+- `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
+- `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
+- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档。
+
+## 快速使用
 
 ```bash
 openspec status --change "design-c2rust-migration-agent" --json
 openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
 
-Then run the Agent phase, for example:
+然后运行 Agent phase，例如：
 
 ```bash
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
 
-## Operating Principles
+## 运行原则
 
-- Use OpenSpec before implementation.
-- Keep context local-first and token-bounded.
-- Spawn multiple subagents for read-only or disjoint work.
-- Use deterministic rules before AI.
-- Treat AI output as a candidate, never as evidence.
-- Keep C2Rust output as baseline/oracle only.
-- Prefer small, compile-passing slices.
-- Prove behavior with Rust tests and C/Rust differential evidence.
-- Track unsafe and keep it below 10%.
-- Add caching only with explicit invalidation and equivalence gates.
+- 实现前先走 OpenSpec。
+- context local-first，并限制 token。
+- 只在只读任务或不相交写入任务上并行多个 subagent。
+- 先用确定性规则，再使用 AI。
+- AI 输出只能作为候选，不能作为证据。
+- C2Rust 输出只作为 baseline/oracle。
+- 优先迁移小的、可编译通过的 slice。
+- 用 Rust 测试和 C/Rust differential evidence 证明行为。
+- 跟踪 unsafe，并把比例控制在 10% 以下。
+- 只有显式 invalidation 和 equivalence gates 时才加 cache。
 
-## Native Windows Tool Note
+## Native Windows 工具说明
 
-This host currently lacks native `c2rust`, `clang`, `cmake`, `bear`, `intercept-build`, `cargo-nextest`, `cargo-llvm-cov`, `cargo-fuzz`, and `cargo-geiger` on PATH. The design remains valid, but those gates need WSL/Linux or later tool installation before real migration verification can claim completion.
+当前主机 PATH 缺少 native `c2rust`、`clang`、`cmake`、`bear`、`intercept-build`、`cargo-nextest`、`cargo-llvm-cov`、`cargo-fuzz` 和 `cargo-geiger`。设计仍然有效，但在真实迁移验证能声称完成前，这些 gate 需要 WSL/Linux 或后续工具安装。
