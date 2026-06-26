@@ -940,13 +940,13 @@ fn emit_expr(
                     .map_err(|detail| format!("unary minus operand {detail}"))?;
                 Ok(format!("(-{operand})"))
             }
+            IrUnOp::Not => emit_logical_not_value_expr(operand, ty, symbols, context),
             IrUnOp::BitNot => {
                 validate_expr_matches_type(operand, ty, "bitnot operand")?;
                 let operand = emit_expr(operand, symbols, context)
                     .map_err(|detail| format!("bitnot operand {detail}"))?;
                 Ok(format!("!{operand}"))
             }
-            _ => Err(format!("unary op {op:?} is unsupported")),
         },
         IrExpr::Cast { target, expr, .. } => {
             if !is_integer_type(target) {
@@ -1678,6 +1678,11 @@ fn emit_logical_not_condition_expr(
             type_label(result_ty)
         ));
     }
+    if let Some(callee) = find_call_callee(operand) {
+        return Err(format!(
+            "logical not operand call expression {callee} is unsupported"
+        ));
+    }
     if let Some(condition) = emit_negated_comparison_condition_expr(operand, symbols, context)? {
         return Ok(condition);
     }
@@ -1688,6 +1693,20 @@ fn emit_logical_not_condition_expr(
     let operand = emit_expr(operand, symbols, context)
         .map_err(|detail| format!("logical not operand {detail}"))?;
     Ok(format!("{operand} == {zero}"))
+}
+
+fn emit_logical_not_value_expr(
+    operand: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let condition = emit_logical_not_condition_expr(operand, result_ty, symbols, context)?;
+    let one = emit_integer_literal(1, result_ty)
+        .map_err(|detail| format!("logical not true literal {detail}"))?;
+    let zero = emit_integer_literal(0, result_ty)
+        .map_err(|detail| format!("logical not false literal {detail}"))?;
+    Ok(format!("(if {condition} {{ {one} }} else {{ {zero} }})"))
 }
 
 fn emit_negated_comparison_condition_expr(

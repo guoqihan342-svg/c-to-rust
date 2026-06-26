@@ -6345,3 +6345,78 @@ English mirror summary:
 - Value-position `IrUnOp::Not` remains fail-closed, so C `int` result semantics such as `return !value`, assignment RHS, and declaration initializer are not supported yet.
 - This is candidate generation only. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, or semantic acceptance.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 92. 2026-06-27 value-position logical not through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR value-position 发射点、clang AST `UnaryOperator("!")` 已有 lowering、边界测试缺口、文档同步点和最终 diff；主线程按 TDD 把 C logical not `!expr` 的窄 value-position C `int` 0/1 结果语义接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_expr()` 现在支持 `IrUnOp::Not` 的 value-position。
+  - 新增 value materialization helper：先复用 logical-not condition lowering，再生成 `(if condition { 1i32 } else { 0i32 })`；它不是 Rust `!value`。
+  - logical-not result type 继续要求 C `int`，也就是 signed 32-bit integer；operand 的零值按 operand type 生成，例如 `unsigned char value` 发 `value == 0u8`，外层结果仍发 `1i32` / `0i32`。
+  - comparison operand 继续走反转 comparison，例如 `!(value > 0)` value-position 发 `(if (value <= 0i32) { 1i32 } else { 0i32 })`，不发 `(value > 0) == 0`。
+  - operand 内含 call 时递归 fail closed；inc/dec、deref、pointer、unsupported type 等继续由 typed IR emitter fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_return_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_u8_operand_as_c_int_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_assignment_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_decl_initializer`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_comparison_return_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_as_comparison_condition_operand`，覆盖 `!value` 作为 condition comparison operand 的上下文。
+  - 新增 fail-closed 测试 `typed_ir_rejects_value_comparison_with_logical_not_operand`，明确 `return (!value) == 1` 这类 value-position comparison 仍属于下一切口。
+  - 新增 fail-closed 测试 `typed_ir_rejects_logical_not_value_with_call_operand`、`typed_ir_rejects_logical_not_value_with_incdec_operand`、`typed_ir_rejects_logical_not_value_with_deref_operand`、`typed_ir_rejects_logical_not_value_with_pointer_operand`、`typed_ir_rejects_logical_not_value_with_unsupported_operand_type` 和 `typed_ir_rejects_logical_not_value_with_non_int_result_type`。
+  - 新增 clang skeleton 测试 `clang_lowering_skeleton_maps_logical_not_return_value`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_logical_not_return_value_when_enabled`、`clang_ast_dump_emits_logical_not_decl_initializer_when_enabled` 和 `clang_ast_dump_emits_logical_not_assignment_value_when_enabled`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_logical_not_return_value -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_logical_not_return_value -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr unary op Not is unsupported`。
+- clang skeleton 已能 lowering 到 `IrUnOp::Not`，但 Rust 发射仍失败于 `stmt[0].return expr unary op Not is unsupported`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report logical_not -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 214 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not -- --nocapture`: PASS，4 real clang AST smoke tests actually ran。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 value-position logical not 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`return !value`、assignment RHS、declaration initializer 和 `!(value > 0)` value materialization 会生成 C `int` 0/1 结果，而不是 Rust integer bitwise `!`。
+- 可以说：operand 零值按 operand type 生成，result 固定为 C `int`，所以 `unsigned char value` 会发 `value == 0u8` 和 `1i32` / `0i32`。
+- 不应说：已经支持完整 C unary `!`、短路逻辑、pointer null test、float truthiness、call/deref/inc/dec side-effect operand、完整 usual scalar conversions、或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+下一步建议：
+- 下一小步核心翻译切口建议是 value-position comparison expression 的 C `int` 0/1 结果语义，例如 `return x > 0`、`out = x == y`、`int ok = x != 0`。
+- 该切口和本轮 logical not 共用 `bool condition -> C int materialization` 问题，但仍要保持 pointer comparison、float comparison、mixed-width/unsigned conversion、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
+
+English mirror summary:
+
+- Narrow value-position logical not now flows through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `emit_expr()` supports `IrUnOp::Not` by materializing C `int` 0/1 as `(if condition { 1i32 } else { 0i32 })`, not Rust `!value`.
+- `return !value`, assignment RHS, declaration initializer, and value-position `!(value > 0)` are covered.
+- Operand zero literals use the operand type, while the outer result remains C `int`; for example an `unsigned char` operand emits `value == 0u8` with `1i32` / `0i32` results.
+- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, full usual scalar conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

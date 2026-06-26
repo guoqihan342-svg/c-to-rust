@@ -11,8 +11,8 @@
 - Rust 输出项目名：`flashDB_rust`
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
-- 核心翻译架构和证据状态：见 `core-translation-architecture.md` / `core-translation-architecture.en.md`；typed IR candidate generation 当前是 `GenericTypedIr` / `Unsupported` 两路线模型，generic emitter 已覆盖局部固定长度整数数组读取/写入、窄化标量整数二元 `+`、`-`、`*`、`/`、`%`、`&`、`^`、`>>`、signed unary `-value`，以及仅条件位置的 logical not `!expr` candidate generation，新 evidence 可绑定 `candidate_generation.typed_ir`，clang-lowered direct call 也会进入 `call_expressions` / `direct_call_edges` 证据；external direct callee 的 call-site/signature/source binding 已有默认 validator 一致性校验，但这只证明证据链一致，不表示 external callee 语义已通过；alias risk floor 仍优先于 `GenericTypedIr` route signal，semantic acceptance 仍由 validation gates 决定。
-- 核心翻译边界：上述 signed unary minus 和 condition-only logical not 都只是 candidate generation only；value-position `!` 的 C `int` 结果语义、unsigned/wrapping 取负、浮点取负、特殊 literal/min-value 边界和完整 C unary semantics 仍 fail closed。
+- 核心翻译架构和证据状态：见 `core-translation-architecture.md` / `core-translation-architecture.en.md`；typed IR candidate generation 当前是 `GenericTypedIr` / `Unsupported` 两路线模型，generic emitter 已覆盖局部固定长度整数数组读取/写入、窄化标量整数二元 `+`、`-`、`*`、`/`、`%`、`&`、`^`、`>>`、signed unary `-value`，以及 logical not `!expr` 的条件位置和窄 value-position C `int` 0/1 结果 candidate generation，新 evidence 可绑定 `candidate_generation.typed_ir`，clang-lowered direct call 也会进入 `call_expressions` / `direct_call_edges` 证据；external direct callee 的 call-site/signature/source binding 已有默认 validator 一致性校验，但这只证明证据链一致，不表示 external callee 语义已通过；alias risk floor 仍优先于 `GenericTypedIr` route signal，semantic acceptance 仍由 validation gates 决定。
+- 核心翻译边界：上述 signed unary minus 和 logical not 都只是 candidate generation only；logical not 目前覆盖整数条件零比较，以及窄 value-position C `int` 0/1 结果语义，例如 `return !x`、assignment RHS 和 declaration initializer。它不是完整 C unary `!`；call/inc/dec/deref/side-effect operand、pointer null test、float truthiness、unsupported type、短路逻辑、完整 usual scalar conversions、unsigned/wrapping 取负、浮点取负、特殊 literal/min-value 边界和 semantic acceptance 仍 fail closed。
 
 ## 双语文档约定
 
