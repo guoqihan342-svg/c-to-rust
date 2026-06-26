@@ -1284,6 +1284,151 @@ fn clang_lowering_skeleton_maps_pointer_cast_assignment() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_array_subscript_expr() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let const_uint32_ty = ClangTypeSkeleton {
+        spelled: "const uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let const_uint32_ptr_ty = ClangTypeSkeleton {
+        spelled: "const uint32_t *".to_string(),
+        canonical: "uint32_t *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_uint32_ty),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "read_table".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "table".to_string(),
+                ty: const_uint32_ptr_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "idx".to_string(),
+                ty: uint32_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Index {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "table".to_string(),
+                    ty: const_uint32_ptr_ty,
+                }),
+                index: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "idx".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower array subscript skeleton");
+
+    let [IrStmt::Return {
+        value: Some(IrExpr::Index {
+            base, index, ty, ..
+        }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected return table index, got {:?}", ir.body);
+    };
+    assert!(matches!(base.as_ref(), IrExpr::Var { name, .. } if name == "table"));
+    assert!(matches!(index.as_ref(), IrExpr::Var { name, .. } if name == "idx"));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_const_array_type() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let const_uint32_array_ty = ClangTypeSkeleton {
+        spelled: "const uint32_t[256]".to_string(),
+        canonical: "uint32_t[256]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(uint32_ty.clone()),
+            len: Some(256),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "read_table".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "idx".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Index {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "table".to_string(),
+                    ty: const_uint32_array_ty,
+                }),
+                index: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "idx".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower const array skeleton");
+
+    let [IrStmt::Return {
+        value: Some(IrExpr::Index { base, .. }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected return table index, got {:?}", ir.body);
+    };
+    let IrExpr::Var { ty, .. } = base.as_ref() else {
+        panic!("expected array base variable, got {base:?}");
+    };
+    assert!(ty.is_const);
+    match &ty.kind {
+        IrTypeKind::Array { element, len } => {
+            assert_eq!(*len, Some(256));
+            assert!(matches!(
+                element.kind,
+                IrTypeKind::Integer {
+                    signed: false,
+                    width: 32
+                }
+            ));
+        }
+        other => panic!("expected array base type, got {other:?}"),
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_report_records_unavailable_without_clang_path() {
     let environment = std::collections::BTreeMap::new();
 
@@ -1748,6 +1893,156 @@ fn clang_ast_dump_lowers_pointer_cast_assignment_when_enabled() {
         }
         other => panic!("expected explicit cast value, got {other:?}"),
     }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_array_subscript_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-array-subscript");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_table.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t read_table(const uint32_t *table, uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Index {
+            base, index, ty, ..
+        }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected array subscript return, got {:?}", function.body);
+    };
+    assert!(matches!(base.as_ref(), IrExpr::Var { name, .. } if name == "table"));
+    assert!(matches!(index.as_ref(), IrExpr::Var { name, .. } if name == "idx"));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_global_const_array_subscript_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-global-array-subscript");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_global_table.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nstatic const uint32_t table[256];\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Index { base, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected global array subscript return, got {:?}",
+            function.body
+        );
+    };
+    let IrExpr::Var { name, ty, .. } = base.as_ref() else {
+        panic!("expected table variable, got {base:?}");
+    };
+    assert_eq!(name, "table");
+    assert!(ty.is_const);
+    assert!(matches!(ty.kind, IrTypeKind::Array { len: Some(256), .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_bitand_array_index_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-bitand-array-index");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_index.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nstatic const uint32_t table[256];\nuint32_t crc_index(uint32_t crc, uint32_t idx) { return table[(crc ^ idx) & 0xff]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_index");
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("opcode &"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

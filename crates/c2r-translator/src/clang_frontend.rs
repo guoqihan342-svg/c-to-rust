@@ -121,9 +121,20 @@ pub struct ClangTypeSkeleton {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangTypeKind {
     Void,
-    Integer { signed: bool, width: u16 },
-    Pointer { pointee: Box<ClangTypeSkeleton> },
-    Unsupported { reason: String },
+    Integer {
+        signed: bool,
+        width: u16,
+    },
+    Pointer {
+        pointee: Box<ClangTypeSkeleton>,
+    },
+    Array {
+        element: Box<ClangTypeSkeleton>,
+        len: Option<usize>,
+    },
+    Unsupported {
+        reason: String,
+    },
 }
 
 #[cfg(feature = "typed-ir")]
@@ -183,6 +194,11 @@ pub enum ClangExprSkeleton {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
         implicit: bool,
+    },
+    Index {
+        base: Box<ClangExprSkeleton>,
+        index: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
     },
     Unsupported {
         node: String,
@@ -833,6 +849,20 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 ty: expr_type(expr)?,
             })
         }
+        Some("ArraySubscriptExpr") => {
+            let children = inner(expr);
+            let [base, index] = children else {
+                return Err(ClangFrontendError {
+                    kind: "invalid_array_subscript_expr".to_string(),
+                    message: "ArraySubscriptExpr must have base and index operands".to_string(),
+                });
+            };
+            Ok(ClangExprSkeleton::Index {
+                base: Box::new(expr_skeleton_from_ast(base)?),
+                index: Box::new(expr_skeleton_from_ast(index)?),
+                ty: expr_type(expr)?,
+            })
+        }
         Some("UnaryOperator") => {
             if string_field(expr, "opcode").as_deref() == Some("--") {
                 if !expr
@@ -998,6 +1028,21 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
             kind: unqualified.kind,
         });
     }
+    if let Some((element, len)) = split_array_qual_type(trimmed)? {
+        let element = type_from_qual_type(element)?;
+        let canonical = match len {
+            Some(len) => format!("{}[{len}]", element.canonical),
+            None => format!("{}[]", element.canonical),
+        };
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical,
+            kind: ClangTypeKind::Array {
+                element: Box::new(element),
+                len,
+            },
+        });
+    }
 
     match trimmed {
         "void" => Ok(ClangTypeSkeleton {
@@ -1053,6 +1098,36 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
             },
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_array_qual_type(
+    qual_type: &str,
+) -> Result<Option<(&str, Option<usize>)>, ClangFrontendError> {
+    let Some(prefix) = qual_type.strip_suffix(']') else {
+        return Ok(None);
+    };
+    let Some(open_index) = prefix.rfind('[') else {
+        return Ok(None);
+    };
+    let element = prefix[..open_index].trim();
+    if element.is_empty() {
+        return Ok(None);
+    }
+    let len_spelling = prefix[open_index + 1..].trim();
+    let len = if len_spelling.is_empty() {
+        None
+    } else {
+        Some(
+            len_spelling
+                .parse::<usize>()
+                .map_err(|error| ClangFrontendError {
+                    kind: "invalid_array_type".to_string(),
+                    message: format!("array length is not usize: {error}"),
+                })?,
+        )
+    };
+    Ok(Some((element, len)))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1141,6 +1216,12 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             implicit: *implicit,
             source_span: None,
         }),
+        ClangExprSkeleton::Index { base, index, ty } => Ok(IrExpr::Index {
+            base: Box::new(lower_expr(base)?),
+            index: Box::new(lower_expr(index)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
         ClangExprSkeleton::Unsupported { node, reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_expr".to_string(),
             message: format!("{node}: {reason}"),
@@ -1202,6 +1283,17 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             width_bits: None,
             source_span: None,
         }),
+        ClangTypeKind::Array { element, len } => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Array {
+                element: Box::new(lower_type(element)?),
+                len: *len,
+            },
+            is_const: clang_type_is_const(ty),
+            width_bits: None,
+            source_span: None,
+        }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_type".to_string(),
             message: reason.clone(),
@@ -1250,4 +1342,67 @@ fn required_path(value: Option<&str>, field: &str) -> Result<PathBuf, ClangFront
         });
     };
     Ok(PathBuf::from(value))
+}
+
+#[cfg(all(test, feature = "typed-ir"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn type_from_qual_type_maps_fixed_array() {
+        let ty = type_from_qual_type("uint32_t[256]").expect("array type");
+
+        assert_eq!(ty.spelled, "uint32_t[256]");
+        assert_eq!(ty.canonical, "uint32_t[256]");
+        let ClangTypeKind::Array { element, len } = ty.kind else {
+            panic!("expected array type, got {:?}", ty.kind);
+        };
+        assert_eq!(len, Some(256));
+        assert!(matches!(
+            element.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_const_fixed_array() {
+        let ty = type_from_qual_type("const uint32_t[256]").expect("const array type");
+
+        assert_eq!(ty.spelled, "const uint32_t[256]");
+        assert_eq!(ty.canonical, "uint32_t[256]");
+        assert!(clang_type_is_const(&ty));
+        let ClangTypeKind::Array { element, len } = ty.kind else {
+            panic!("expected array type, got {:?}", ty.kind);
+        };
+        assert_eq!(len, Some(256));
+        assert!(matches!(
+            element.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_incomplete_array() {
+        let ty = type_from_qual_type("uint32_t[]").expect("incomplete array type");
+
+        assert_eq!(ty.spelled, "uint32_t[]");
+        assert_eq!(ty.canonical, "uint32_t[]");
+        let ClangTypeKind::Array { element, len } = ty.kind else {
+            panic!("expected array type, got {:?}", ty.kind);
+        };
+        assert_eq!(len, None);
+        assert!(matches!(
+            element.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+    }
 }

@@ -4117,3 +4117,112 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
 2. 如果继续按 report blocker 顺序，下一步应先为 `ArraySubscriptExpr` 写最小 skeleton，
    并让内部表达式继续 fail-closed 到 `BinaryOperator("&")` 或 `UnaryOperator("*")`。
 3. 不要同时打开 `++`、deref、index、`&`、`>>` 全套；继续每次只推进一个真实 blocker。
+
+## 58. 2026-06-26 clang ArraySubscriptExpr and array type lowering
+
+本轮承接第 57 节的真实 blocker：先为 clang AST lowering report 增加最小
+`ArraySubscriptExpr` 外壳支持，并在 real-fdb 验证后补上必要的 clang 数组类型
+`uint32_t[256]` / `const uint32_t[256]` 支持；不支持 `&`、`*p++`、postfix `++`
+或 `>>`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Index { base, index, ty }`。
+  - `expr_skeleton_from_ast()` 新增 `ArraySubscriptExpr` 分支，要求 child 恰好是
+    `[base, index]`，否则 `invalid_array_subscript_expr` fail-closed。
+  - `lower_expr()` 能把 clang index skeleton lower 成现有 `IrExpr::Index`。
+  - `ClangTypeKind` 新增 `Array { element, len }`。
+  - `type_from_qual_type()` 新增定长/不完整数组解析：
+    `uint32_t[256]`、`const uint32_t[256]`、`uint32_t[]`。
+  - `lower_type()` 能把 clang array type lower 成现有 `IrTypeKind::Array`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_array_subscript_expr`。
+  - 新增 `clang_lowering_skeleton_maps_const_array_type`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_array_subscript_expr_when_enabled`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_global_const_array_subscript_when_enabled`。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_rejects_bitand_array_index_expr_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_array_subscript_expr` 先失败在
+  `ClangExprSkeleton::Index` 不存在。
+- 绿灯 1：补 Index skeleton、`ArraySubscriptExpr` parser 和 `IrExpr::Index` lowering 后，
+  skeleton 与真实 clang `table[idx]` smoke 均通过。
+- real-fdb 中间验证显示 blocker 从 `ArraySubscriptExpr` 推进到
+  `unsupported_clang_type: uint32_t[256] is outside the current type skeleton`。
+- 红灯 2：`clang_lowering_skeleton_maps_const_array_type` 先失败在
+  `ClangTypeKind::Array` 不存在。
+- 绿灯 2：补 clang array type skeleton、`T[N]` / `T[]` parser 和 `IrTypeKind::Array`
+  lowering 后，真实 clang 全局数组 smoke 通过。
+- 负例：`table[(crc ^ idx) & 0xff]` 继续返回 unsupported，message 包含
+  `BinaryOperator: opcode &`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 57 节末尾：
+  `unsupported_clang_expr: ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton`。
+- 本轮实现 `ArraySubscriptExpr` 后的中间 blocker：
+  `unsupported_clang_type: uint32_t[256] is outside the current type skeleton`。
+- 本轮最终：
+  `unsupported_clang_expr: BinaryOperator: opcode & is outside the current skeleton`。
+- 这说明已经跨过 `crc32_tab[...]` 的下标表达式外壳和全局 `uint32_t[256]`
+  table 类型，当前真实 blocker 是 index 内部的 `& 0xff`。
+
+本轮并行只读审查结论：
+- Dirac：真实 clang AST 中 `ArraySubscriptExpr.inner` 顺序是 base 在前、index 在后；
+  `read_table` 的 index 是 `ImplicitCastExpr -> DeclRefExpr idx`，real-fdb 形态的 index
+  根节点是 `BinaryOperator opcode="&"`，不是 `*p++` 或 `>>`。
+- Heisenberg：`IrExpr::Index` 已存在，最小补法应只加 `ClangExprSkeleton::Index`、
+  `ArraySubscriptExpr` branch 和 `lower_expr()` 映射；child 数量异常必须 fail-closed。
+- Leibniz：real-fdb 的全局表会暴露 `uint32_t[256]` 类型，需把 clang array type
+  映射到已有 `IrTypeKind::Array`；`const uint32_t[256]` 应保留 outer const，
+  不要把数组悄悄当指针处理。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_array_subscript_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_array_subscript_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report type_from_qual_type_maps_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_global_const_array_subscript_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_bitand_array_index_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused array subscript skeleton test：`1 passed`。
+- 私有 clang array type parser tests：`3 passed`。
+- skeleton lowering filtered suite：`8 passed`。
+- 真实 clang array subscript smoke：`1 passed`。
+- 真实 clang global const array smoke：`1 passed`。
+- 真实 clang bitand array index 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `74 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode & is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳和全局 `uint32_t[256]` table 类型。
+- 当前真实 blocker 是循环体 table index 内部的 `BinaryOperator("&")`。
+- 后续仍需分层处理 `BinaryOperator("&")`、`UnaryOperator("*")`、postfix `++`、
+  `BinaryOperator(">>")` 以及最终把 clang lower 出的 typed IR 与 CRC32 emitter gate 对齐。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `BinaryOperator("&")` 写最小 skeleton/lowering，映射到现有 `IrBinOp::BitAnd`，
+   并补真实 clang `table[(crc ^ idx) & 0xff]` smoke 从 unsupported 变 lowered 的测试。
+2. 继续保持 fail-closed：`*p++`、postfix `++`、deref 和 `>>` 暂不顺手打开。
+3. 用 real-fdb 临时 report 验证 blocker 继续推进；预期下一层会落到 `UnaryOperator("*")`
+   或 postfix `++`，而不是直接完成完整 CRC32 lowering。
