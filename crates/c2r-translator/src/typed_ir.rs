@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceSpan {
@@ -207,6 +207,46 @@ pub struct IrEmitError {
     pub reason: String,
 }
 
+#[derive(Clone, Debug, Default)]
+struct EmitContext {
+    byte_slice_params: HashSet<String>,
+    byte_cursor_sources: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EmittedExpr {
+    prelude: String,
+    expr: String,
+}
+
+impl EmitContext {
+    fn from_function(function: &IrFunction) -> Self {
+        let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
+        let mut byte_slice_params = HashSet::new();
+        for source in byte_cursor_sources.values() {
+            if function
+                .params
+                .iter()
+                .any(|param| param.name == *source && is_const_void_pointer(&param.ty))
+            {
+                byte_slice_params.insert(source.clone());
+            }
+        }
+        Self {
+            byte_slice_params,
+            byte_cursor_sources,
+        }
+    }
+
+    fn byte_cursor_source(&self, cursor: &str) -> Option<&str> {
+        self.byte_cursor_sources.get(cursor).map(String::as_str)
+    }
+
+    fn is_byte_slice_param(&self, name: &str) -> bool {
+        self.byte_slice_params.contains(name)
+    }
+}
+
 pub fn emit_rust_from_ir(function: &IrFunction) -> Result<String, IrEmitError> {
     if is_crc32_byte_cursor_ir(function) {
         return Ok(emit_crc32_byte_cursor_rust(&function.name));
@@ -384,12 +424,13 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     if return_type.is_some() && !ends_with_return_value(&function.body) {
         return Err("non-void function must end with a return value".to_string());
     }
+    let context = EmitContext::from_function(function);
     let assigned_vars = collect_assigned_vars(&function.body);
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params
         .iter()
-        .map(|param| emit_param(param, &assigned_vars))
+        .map(|param| emit_param(param, &assigned_vars, &context))
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     let mut symbols = collect_param_symbols(&function.params)?;
@@ -401,7 +442,7 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     }
     rust.push_str(" {\n");
     for (index, stmt) in function.body.iter().enumerate() {
-        let line = emit_stmt(stmt, &function.return_type, 1, &mut symbols)
+        let line = emit_stmt(stmt, &function.return_type, 1, &mut symbols, &context)
             .map_err(|detail| format!("stmt[{index}].{detail}"))?;
         rust.push_str(&line);
     }
@@ -409,9 +450,17 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     Ok(rust)
 }
 
-fn emit_param(param: &IrParam, assigned_vars: &HashSet<String>) -> Result<String, String> {
-    let ty = emit_scalar_type(&param.ty)
-        .map_err(|detail| format!("param {} has {}", param.name, detail))?;
+fn emit_param(
+    param: &IrParam,
+    assigned_vars: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let ty = if context.is_byte_slice_param(&param.name) {
+        "&[u8]".to_string()
+    } else {
+        emit_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    };
     let name = emit_identifier(&param.name, "param")?;
     let mut_prefix = if assigned_vars.contains(&param.name) {
         "mut "
@@ -419,6 +468,14 @@ fn emit_param(param: &IrParam, assigned_vars: &HashSet<String>) -> Result<String
         ""
     };
     Ok(format!("{mut_prefix}{name}: {ty}"))
+}
+
+fn emit_param_type(ty: &IrType) -> Result<String, String> {
+    if let Some(element_ty) = readonly_pointer_slice_element_type(ty) {
+        let element_ty = emit_scalar_type(element_ty)?;
+        return Ok(format!("&[{element_ty}]"));
+    }
+    emit_scalar_type(ty)
 }
 
 fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
@@ -465,6 +522,7 @@ fn emit_stmt(
     return_type: &IrType,
     indent_level: usize,
     symbols: &mut HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let indent = "    ".repeat(indent_level);
     match stmt {
@@ -472,6 +530,10 @@ fn emit_stmt(
             let decl_name = emit_identifier(name, "decl")?;
             if symbols.contains(name) {
                 return Err(format!("decl {name} duplicates an existing symbol"));
+            }
+            if init.is_none() && context.byte_cursor_source(name).is_some() && is_u8_pointer(ty) {
+                symbols.insert(name.clone());
+                return Ok(format!("{indent}let mut {decl_name}: usize = 0;\n"));
             }
             let decl_ty =
                 emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
@@ -488,6 +550,9 @@ fn emit_stmt(
             }
         }
         IrStmt::Assign { target, value, .. } => {
+            if is_byte_cursor_cast_assignment(target, value, symbols, context)? {
+                return Ok(String::new());
+            }
             let (name, target_ty) = match target {
                 IrExpr::Var { name, ty, .. } => (name, ty),
                 _ => return Err("assign target must be Var".to_string()),
@@ -506,10 +571,25 @@ fn emit_stmt(
                 if is_void_type(return_type) {
                     return Err("return value in void function".to_string());
                 }
+                if let Some(line) = emit_post_increment_deref_return(
+                    value,
+                    return_type,
+                    indent_level,
+                    symbols,
+                    context,
+                )? {
+                    return Ok(line);
+                }
+                if count_post_increment_byte_reads(value) > 1 {
+                    return Err("multiple post-increment byte reads are unsupported".to_string());
+                }
                 validate_expr_matches_type(value, return_type, "return expr")?;
-                let value =
-                    emit_expr(value, symbols).map_err(|detail| format!("return expr {detail}"))?;
-                Ok(format!("{indent}return {value};\n"))
+                let emitted =
+                    emit_expr_with_prelude(value, symbols, context, indent_level, "return expr")?;
+                Ok(format!(
+                    "{}{indent}return {};\n",
+                    emitted.prelude, emitted.expr
+                ))
             }
             None if is_void_type(return_type) => Ok(format!("{indent}return;\n")),
             None => Err("return without value in non-void function".to_string()),
@@ -530,8 +610,14 @@ fn emit_stmt(
             block.push_str(&format!("{indent}if {condition} {{\n"));
             let mut then_symbols = symbols.clone();
             for (index, stmt) in then_body.iter().enumerate() {
-                let line = emit_stmt(stmt, return_type, indent_level + 1, &mut then_symbols)
-                    .map_err(|detail| format!("if then[{index}].{detail}"))?;
+                let line = emit_stmt(
+                    stmt,
+                    return_type,
+                    indent_level + 1,
+                    &mut then_symbols,
+                    context,
+                )
+                .map_err(|detail| format!("if then[{index}].{detail}"))?;
                 block.push_str(&line);
             }
             if else_body.is_empty() {
@@ -540,8 +626,14 @@ fn emit_stmt(
                 block.push_str(&format!("{indent}}} else {{\n"));
                 let mut else_symbols = symbols.clone();
                 for (index, stmt) in else_body.iter().enumerate() {
-                    let line = emit_stmt(stmt, return_type, indent_level + 1, &mut else_symbols)
-                        .map_err(|detail| format!("if else[{index}].{detail}"))?;
+                    let line = emit_stmt(
+                        stmt,
+                        return_type,
+                        indent_level + 1,
+                        &mut else_symbols,
+                        context,
+                    )
+                    .map_err(|detail| format!("if else[{index}].{detail}"))?;
                     block.push_str(&line);
                 }
                 block.push_str(&format!("{indent}}}\n"));
@@ -557,8 +649,14 @@ fn emit_stmt(
             let mut block = String::new();
             block.push_str(&format!("{indent}while {condition} {{\n"));
             for (index, stmt) in body.iter().enumerate() {
-                let line = emit_stmt(stmt, return_type, indent_level + 1, &mut loop_symbols)
-                    .map_err(|detail| format!("while body[{index}].{detail}"))?;
+                let line = emit_stmt(
+                    stmt,
+                    return_type,
+                    indent_level + 1,
+                    &mut loop_symbols,
+                    context,
+                )
+                .map_err(|detail| format!("while body[{index}].{detail}"))?;
                 block.push_str(&line);
             }
             block.push_str(&format!("{indent}}}\n"));
@@ -617,7 +715,9 @@ fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String>
             let expr = emit_expr(expr, symbols).map_err(|detail| format!("cast expr {detail}"))?;
             Ok(format!("({expr} as {target})"))
         }
-        IrExpr::Index { .. } => Err("index expression is unsupported".to_string()),
+        IrExpr::Index {
+            base, index, ty, ..
+        } => emit_index_expr(base, index, ty, symbols),
         IrExpr::Call { callee, .. } => Err(format!("call expression {callee} is unsupported")),
         IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
         IrExpr::Deref { .. } => Err("deref expression is unsupported".to_string()),
@@ -625,6 +725,407 @@ fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String>
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported expression {node}: {reason}"))
         }
+    }
+}
+
+fn emit_expr_with_prelude(
+    expr: &IrExpr,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<EmittedExpr, String> {
+    match expr {
+        IrExpr::Binary {
+            op, lhs, rhs, ty, ..
+        } => {
+            let op = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
+            validate_binary_operand_types(op, lhs, rhs, ty)
+                .map_err(|detail| format!("{path} {detail}"))?;
+            let lhs = emit_expr_with_prelude(
+                lhs,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} binary lhs"),
+            )?;
+            let rhs = emit_expr_with_prelude(
+                rhs,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} binary rhs"),
+            )?;
+            Ok(EmittedExpr {
+                prelude: format!("{}{}", lhs.prelude, rhs.prelude),
+                expr: format!("({} {op} {})", lhs.expr, rhs.expr),
+            })
+        }
+        IrExpr::Cast { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "{path} cast target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            let source_type =
+                expr_type(expr).ok_or_else(|| format!("{path} cast source type is unsupported"))?;
+            if !is_integer_type(source_type) {
+                return Err(format!(
+                    "{path} cast source {} is unsupported",
+                    type_label(source_type)
+                ));
+            }
+            let target = emit_scalar_type(target)
+                .map_err(|detail| format!("{path} cast target has {detail}"))?;
+            let emitted = emit_expr_with_prelude(
+                expr,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} cast expr"),
+            )?;
+            Ok(EmittedExpr {
+                prelude: emitted.prelude,
+                expr: format!("({} as {target})", emitted.expr),
+            })
+        }
+        IrExpr::Index {
+            base, index, ty, ..
+        } => {
+            let index = emit_expr_with_prelude(
+                index,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} index operand"),
+            )?;
+            let expr = emit_index_expr_with_emitted_index(base, &index.expr, ty, symbols)
+                .map_err(|detail| format!("{path} {detail}"))?;
+            Ok(EmittedExpr {
+                prelude: index.prelude,
+                expr,
+            })
+        }
+        IrExpr::Deref { ptr, ty, .. } => {
+            emit_post_increment_byte_read_expr(ptr, ty, symbols, context, indent_level, path)
+        }
+        _ => Ok(EmittedExpr {
+            prelude: String::new(),
+            expr: emit_expr(expr, symbols).map_err(|detail| format!("{path} {detail}"))?,
+        }),
+    }
+}
+
+fn emit_post_increment_byte_read_expr(
+    ptr: &IrExpr,
+    ty: &IrType,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<EmittedExpr, String> {
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ..
+    } = ptr
+    else {
+        return Err(format!("{path} deref expression is unsupported"));
+    };
+    let IrExpr::Var {
+        name: cursor,
+        ty: cursor_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Err(format!("{path} post-increment target is unsupported"));
+    };
+    if !symbols.contains(cursor) {
+        return Err(format!(
+            "{path} post-increment cursor {cursor} is not declared"
+        ));
+    }
+    let element_ty = readonly_pointer_slice_element_type(cursor_ty)
+        .filter(|element_ty| is_u8(element_ty))
+        .ok_or_else(|| {
+            format!(
+                "{path} post-increment cursor {cursor} has unsupported type {}",
+                type_label(cursor_ty)
+            )
+        })?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("{path} post-increment element has {detail}"))?;
+    let deref_ty = emit_scalar_type(ty).map_err(|detail| format!("{path} deref has {detail}"))?;
+    if deref_ty != element_ty {
+        return Err(format!(
+            "{path} deref type {deref_ty} does not match cursor element type {element_ty}"
+        ));
+    }
+    let (source, cursor, declare_cursor) = if let Some(source) = context.byte_cursor_source(cursor)
+    {
+        if !symbols.contains(source) {
+            return Err(format!("{path} byte source {source} is not declared"));
+        }
+        (
+            emit_identifier(source, "byte source")?,
+            emit_identifier(cursor, "byte cursor")?,
+            false,
+        )
+    } else {
+        let source = emit_identifier(cursor, "byte source")?;
+        let cursor = first_available_named_temp(&format!("{source}_index"), symbols);
+        (source, emit_identifier(&cursor, "byte cursor")?, true)
+    };
+    let temp = first_available_temp_name("byte", symbols);
+    let indent = "    ".repeat(indent_level);
+    let mut prelude = String::new();
+    if declare_cursor {
+        prelude.push_str(&format!("{indent}let mut {cursor}: usize = 0;\n"));
+    }
+    prelude.push_str(&format!(
+        "{indent}let {temp}: {element_ty} = {source}[{cursor}];\n\
+         {indent}{cursor} += 1;\n"
+    ));
+    Ok(EmittedExpr {
+        prelude,
+        expr: temp,
+    })
+}
+
+fn emit_index_expr(
+    base: &IrExpr,
+    index: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("index base must be Var".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!("index base {base_name} is not declared"));
+    }
+    let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
+        format!(
+            "index base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let element_ty =
+        emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
+    let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
+    if result_ty != element_ty {
+        return Err(format!(
+            "index result type {result_ty} does not match element type {element_ty}"
+        ));
+    }
+    let index_ty =
+        expr_type(index).ok_or_else(|| "index operand type is unsupported".to_string())?;
+    if !is_integer_type(index_ty) {
+        return Err(format!(
+            "index operand type {} is unsupported",
+            type_label(index_ty)
+        ));
+    }
+    let base_name = emit_identifier(base_name, "index base")?;
+    let index = emit_expr(index, symbols).map_err(|detail| format!("index operand {detail}"))?;
+    Ok(format!("{base_name}[{index} as usize]"))
+}
+
+fn emit_index_expr_with_emitted_index(
+    base: &IrExpr,
+    emitted_index: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("index base must be Var".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!("index base {base_name} is not declared"));
+    }
+    let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
+        format!(
+            "index base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let element_ty =
+        emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
+    let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
+    if result_ty != element_ty {
+        return Err(format!(
+            "index result type {result_ty} does not match element type {element_ty}"
+        ));
+    }
+    let base_name = emit_identifier(base_name, "index base")?;
+    Ok(format!("{base_name}[{emitted_index} as usize]"))
+}
+
+fn is_byte_cursor_cast_assignment(
+    target: &IrExpr,
+    value: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<bool, String> {
+    let IrExpr::Var {
+        name: cursor,
+        ty: cursor_ty,
+        ..
+    } = target
+    else {
+        return Ok(false);
+    };
+    let Some(source) = context.byte_cursor_source(cursor) else {
+        return Ok(false);
+    };
+    let IrExpr::Cast {
+        target,
+        expr,
+        implicit: false,
+        ..
+    } = value
+    else {
+        return Ok(false);
+    };
+    let IrExpr::Var {
+        name: source_name,
+        ty: source_ty,
+        ..
+    } = expr.as_ref()
+    else {
+        return Ok(false);
+    };
+    if source_name != source || !is_u8_pointer(cursor_ty) || !is_u8_pointer(target) {
+        return Ok(false);
+    }
+    if !is_const_void_pointer(source_ty) {
+        return Ok(false);
+    }
+    if !symbols.contains(cursor) {
+        return Err(format!("byte cursor {cursor} is not declared"));
+    }
+    if !symbols.contains(source_name) {
+        return Err(format!("byte cursor source {source_name} is not declared"));
+    }
+    Ok(true)
+}
+
+fn emit_post_increment_deref_return(
+    value: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Deref { ptr, ty, .. } = value else {
+        return Ok(None);
+    };
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ..
+    } = ptr.as_ref()
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!("post-increment cursor {base_name} is not declared"));
+    }
+    let element_ty = readonly_pointer_slice_element_type(base_ty)
+        .filter(|element_ty| is_u8(element_ty))
+        .ok_or_else(|| {
+            format!(
+                "post-increment cursor {base_name} has unsupported type {}",
+                type_label(base_ty)
+            )
+        })?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("post-increment element has {detail}"))?;
+    let deref_ty = emit_scalar_type(ty).map_err(|detail| format!("deref result has {detail}"))?;
+    let return_ty =
+        emit_scalar_type(return_type).map_err(|detail| format!("return type has {detail}"))?;
+    if deref_ty != element_ty || return_ty != element_ty {
+        return Err(format!(
+            "post-increment deref type must match element and return type: element={element_ty}, deref={deref_ty}, return={return_ty}"
+        ));
+    }
+    let (slice_name, cursor_name, declare_cursor) =
+        if let Some(source_name) = context.byte_cursor_source(base_name) {
+            if !symbols.contains(source_name) {
+                return Err(format!(
+                    "post-increment source {source_name} is not declared"
+                ));
+            }
+            (
+                emit_identifier(source_name, "post-increment source")?,
+                emit_identifier(base_name, "post-increment cursor")?,
+                false,
+            )
+        } else {
+            let slice_name = emit_identifier(base_name, "post-increment base")?;
+            let cursor_name = emit_identifier(
+                &first_available_named_temp(&format!("{slice_name}_index"), symbols),
+                "post-increment cursor",
+            )?;
+            (slice_name, cursor_name, true)
+        };
+    let temp_name = first_available_temp_name("byte", symbols);
+    let indent = "    ".repeat(indent_level);
+    let mut rust = String::new();
+    if declare_cursor {
+        rust.push_str(&format!("{indent}let mut {cursor_name}: usize = 0;\n"));
+    }
+    rust.push_str(&format!(
+        "{indent}let {temp_name}: {element_ty} = {slice_name}[{cursor_name}];\n\
+         {indent}{cursor_name} += 1;\n\
+         {indent}return {temp_name};\n"
+    ));
+    Ok(Some(rust))
+}
+
+fn first_available_temp_name(prefix: &str, symbols: &HashSet<String>) -> String {
+    let mut index = 0usize;
+    loop {
+        let candidate = format!("{prefix}{index}");
+        if !symbols.contains(&candidate) {
+            return candidate;
+        }
+        index += 1;
+    }
+}
+
+fn first_available_named_temp(preferred: &str, symbols: &HashSet<String>) -> String {
+    if !symbols.contains(preferred) {
+        return preferred.to_string();
+    }
+    let mut index = 1usize;
+    loop {
+        let candidate = format!("{preferred}{index}");
+        if !symbols.contains(&candidate) {
+            return candidate;
+        }
+        index += 1;
     }
 }
 
@@ -829,6 +1330,157 @@ fn collect_assigned_vars(body: &[IrStmt]) -> HashSet<String> {
     assigned_vars
 }
 
+fn collect_byte_cursor_sources(body: &[IrStmt]) -> HashMap<String, String> {
+    let mut candidates = HashMap::new();
+    collect_byte_cursor_sources_from_body(body, &mut candidates);
+    candidates
+        .into_iter()
+        .filter(|(cursor, _)| body_has_post_increment_byte_read(body, cursor))
+        .collect()
+}
+
+fn collect_byte_cursor_sources_from_body(
+    body: &[IrStmt],
+    cursor_sources: &mut HashMap<String, String>,
+) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, value, .. } => {
+                if let Some((cursor, source)) = byte_cursor_cast_assignment_parts(target, value) {
+                    cursor_sources.insert(cursor.to_string(), source.to_string());
+                }
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_byte_cursor_sources_from_body(then_body, cursor_sources);
+                collect_byte_cursor_sources_from_body(else_body, cursor_sources);
+            }
+            IrStmt::While { body, .. } => {
+                collect_byte_cursor_sources_from_body(body, cursor_sources);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn byte_cursor_cast_assignment_parts<'a>(
+    target: &'a IrExpr,
+    value: &'a IrExpr,
+) -> Option<(&'a str, &'a str)> {
+    let IrExpr::Var {
+        name: cursor,
+        ty: cursor_ty,
+        ..
+    } = target
+    else {
+        return None;
+    };
+    let IrExpr::Cast {
+        target,
+        expr,
+        implicit: false,
+        ..
+    } = value
+    else {
+        return None;
+    };
+    let IrExpr::Var {
+        name: source,
+        ty: source_ty,
+        ..
+    } = expr.as_ref()
+    else {
+        return None;
+    };
+    if is_u8_pointer(cursor_ty) && is_u8_pointer(target) && is_const_void_pointer(source_ty) {
+        Some((cursor.as_str(), source.as_str()))
+    } else {
+        None
+    }
+}
+
+fn body_has_post_increment_byte_read(body: &[IrStmt], cursor: &str) -> bool {
+    body.iter()
+        .any(|stmt| stmt_has_post_increment_byte_read(stmt, cursor))
+}
+
+fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
+    match stmt {
+        IrStmt::Decl { init, .. } => init
+            .as_ref()
+            .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor)),
+        IrStmt::Assign { target, value, .. } => {
+            expr_has_post_increment_byte_read(target, cursor)
+                || expr_has_post_increment_byte_read(value, cursor)
+        }
+        IrStmt::Return { value, .. } => value
+            .as_ref()
+            .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor)),
+        IrStmt::Expr { expr, .. } => expr_has_post_increment_byte_read(expr, cursor),
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            expr_has_post_increment_byte_read(condition, cursor)
+                || body_has_post_increment_byte_read(then_body, cursor)
+                || body_has_post_increment_byte_read(else_body, cursor)
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            expr_has_post_increment_byte_read(condition, cursor)
+                || body_has_post_increment_byte_read(body, cursor)
+        }
+        IrStmt::Unsupported { .. } => false,
+    }
+}
+
+fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
+    match expr {
+        IrExpr::Deref { ptr, ty, .. } => is_u8(ty) && is_post_inc_var(ptr, cursor),
+        IrExpr::Binary { lhs, rhs, .. } => {
+            expr_has_post_increment_byte_read(lhs, cursor)
+                || expr_has_post_increment_byte_read(rhs, cursor)
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
+        IrExpr::Index { base, index, .. } => {
+            expr_has_post_increment_byte_read(base, cursor)
+                || expr_has_post_increment_byte_read(index, cursor)
+        }
+        IrExpr::Call { args, .. } => args
+            .iter()
+            .any(|arg| expr_has_post_increment_byte_read(arg, cursor)),
+        IrExpr::IncDec { target, .. } => expr_has_post_increment_byte_read(target, cursor),
+        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => false,
+    }
+}
+
+fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
+    match expr {
+        IrExpr::Deref { ptr, ty, .. } if is_u8(ty) && is_post_inc_expr(ptr) => 1,
+        IrExpr::Deref { ptr, .. } => count_post_increment_byte_reads(ptr),
+        IrExpr::Binary { lhs, rhs, .. } => {
+            count_post_increment_byte_reads(lhs) + count_post_increment_byte_reads(rhs)
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
+        IrExpr::Index { base, index, .. } => {
+            count_post_increment_byte_reads(base) + count_post_increment_byte_reads(index)
+        }
+        IrExpr::Call { args, .. } => args.iter().map(count_post_increment_byte_reads).sum(),
+        IrExpr::IncDec { target, .. } => count_post_increment_byte_reads(target),
+        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => 0,
+    }
+}
+
 fn collect_param_symbols(params: &[IrParam]) -> Result<HashSet<String>, String> {
     let mut symbols = HashSet::new();
     for param in params {
@@ -886,6 +1538,15 @@ fn is_integer_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Integer { .. })
 }
 
+fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } if pointee.is_const && is_integer_type(pointee) => {
+            Some(pointee.as_ref())
+        }
+        _ => None,
+    }
+}
+
 fn is_c_int_type(ty: &IrType) -> bool {
     matches!(
         ty.kind,
@@ -898,6 +1559,15 @@ fn is_c_int_type(ty: &IrType) -> bool {
 
 fn is_void_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Void)
+}
+
+fn is_const_void_pointer(ty: &IrType) -> bool {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } => {
+            pointee.is_const && matches!(pointee.kind, IrTypeKind::Void)
+        }
+        _ => false,
+    }
 }
 
 fn is_size_t_type(ty: &IrType) -> bool {
@@ -1329,6 +1999,18 @@ fn is_post_inc_var(expr: &IrExpr, expected_name: &str) -> bool {
             prefix: false,
             ..
         } if var_name(target) == Some(expected_name)
+    )
+}
+
+fn is_post_inc_expr(expr: &IrExpr) -> bool {
+    matches!(
+        expr,
+        IrExpr::IncDec {
+            target,
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ..
+        } if matches!(target.as_ref(), IrExpr::Var { .. })
     )
 }
 

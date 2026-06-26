@@ -5043,3 +5043,91 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - real clang AST focused suite 当前为 `31 passed`。
 - translator crate with `typed-ir,clang-frontend`：lib `9 passed`，`bounded_translation` `133 passed`，doc tests `0`。
 - 下一步建议：继续补无大括号 `IfStmt`/`WhileStmt` unsupported/positive smoke，或把 initialized decl/comparison 这类真实 clang 能力接入 lowering-report evidence。
+
+## 71. 2026-06-26 clang no-brace IfStmt/WhileStmt bodies
+
+本轮承接第 70 节后的小缺口：真实 clang AST 对 `if (...) stmt; else stmt;` 和 `while (...) stmt;` 会把 then/else/body 直接放成单条语句，而不是 `CompoundStmt`。之前 `if_stmt_skeleton_from_ast()` / `while_stmt_skeleton_from_ast()` 对这种结构 fail-closed，导致 scalar 已支持的控制流无法端到端通过。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `stmt_body_skeleton_from_ast()`：如果 body 是 `CompoundStmt`，继续展开 compound body；否则把该 AST 节点按 `stmt_skeleton_from_ast()` lower 成单条 body statement。
+  - `if_stmt_skeleton_from_ast()` 的 then/else body 改为复用该 helper；缺失 else 仍 lower 成空 `else_body`。
+  - `while_stmt_skeleton_from_ast()` 的 body 改为复用该 helper。
+  - 这是 clang frontend 结构补丁，不改变 typed IR emitter，也不放开 `CallExpr`、`IncDec` condition、pointer/deref/index 等语义边界。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - 新增 `if_stmt_skeleton_from_ast_maps_single_statement_bodies`。
+  - 新增 `while_stmt_skeleton_from_ast_maps_single_statement_body`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST opt-in smoke：`clang_ast_dump_emits_if_without_braces_when_enabled`。
+  - 新增真实 clang AST opt-in smoke：`clang_ast_dump_emits_while_without_braces_when_enabled`。
+
+TDD/验证要点：
+- 两个内部 parser 测试先红，分别失败于 `IfStmt without CompoundStmt then body` 和 `WhileStmt without CompoundStmt body`。
+- 实现 helper 后内部 parser 测试通过。
+- 真实 clang no-brace focused suite 当前为 `2 passed`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::if_stmt_skeleton_from_ast_maps_single_statement_bodies -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::while_stmt_skeleton_from_ast_maps_single_statement_body -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation without_braces -- --nocapture
+```
+
+当前核心翻译状态：
+- scalar typed IR 路径继续覆盖 `If` / `While` / comparison / initialized local decl 等非 pointer 子集。
+- no-brace control body 已接入真实 clang AST -> typed IR -> emitter -> rustc smoke。
+- FlashDB crc32 的核心泛化仍未完成：`is_crc32_byte_cursor_ir()`、旧 `is_crc32_byte_cursor_loop()` 和 crc32 canned Rust 路径仍在；pointer-to-slice、`*p++`、`crc32_table[index]` 仍是下一阶段主线。
+
+## 72. 2026-06-26 generic pointer slice and byte cursor emitter step
+
+本轮继续推进 phase1b 的 typed IR -> 可编译 Rust 通路，重点不是删除 crc32 canned path，而是先把 crc32 所需的关键子能力做成通用 emitter 能力，并用真实 clang AST smoke 证明路径可跑。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 增加 byte cursor source 记录：只有在函数体中能证明存在 `const uint8_t *p = (const uint8_t *)buf` 后续 byte post-increment read 时，才把 `const void *buf` 作为 `&[u8]` 参数暴露。
+  - `emit_param()` 支持只读整数指针参数映射为 slice：`const uint32_t *table -> table: &[u32]`，`const uint8_t *p -> p: &[u8]`；必须是 pointee const，mutable pointer 继续 fail-closed。
+  - `const void *` 只在 proven byte cursor 场景下映射为 `&[u8]`，避免宽松接受任意 void pointer。
+  - byte cursor local declaration `const uint8_t *p;` 在 proven source 场景下降成 `let mut p: usize = 0;`，对应 cast assignment 不再输出 Rust 语句。
+  - 新增 `emit_expr_with_prelude()`，递归处理 `Binary` / integer `Cast` / `Index` / `Deref(PostInc)` 的最小子集，使 `return crc ^ (uint32_t)*p++;` 能输出 byte temp prelude。
+  - 嵌套 `*p++` 支持两条通用路径：`const void *buf` 经 byte cursor 读 `buf[p]`，以及 direct `const uint8_t *p` 参数读 `p[p_index]`。
+  - 同一 return 表达式里多个 `*p++` 直接拒绝，错误为 `multiple post-increment byte reads are unsupported`，避免假设 C 子表达式求值顺序。
+  - `const uint32_t *p` 的 `*p++`、non-const pointer、comparison return 等仍 fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 复用上一轮 no-brace body helper，使真实 clang 的 single-statement `if`/`while` body 可以端到端 lower。
+  - `CStyleCastExpr` 从只接受 `BitCast` 扩到接受 `IntegralCast` / `IntegralPromotion`，用于 `(uint32_t)*p++` 这类真实 clang AST。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增/补强 typed IR 覆盖：`const uint32_t *` index read、direct `const uint8_t *p` `return *p++`、`const void * -> const uint8_t *` cursor read、nested byte cursor read、byte temp 名称冲突、cursor temp 名称冲突、生成临时不污染源符号表、多 `*p++` fail-closed、mutable/non-const/const-u32 postinc 负例。
+  - 新增真实 clang AST opt-in smoke：`const uint32_t *table` index emit、`const void *` byte cursor emit、nested `const void *` byte cursor emit、nested direct `const uint8_t *p` byte cursor emit、integral C cast emit。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_comparison_expression_outside_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_avoids_byte_temp_name_collision_for_nested_post_increment_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_nested_post_increment_reads_in_one_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation nested_const_u8_byte_cursor_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation nested_const_void_byte_cursor_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前验证结果：
+- `bounded_translation`: `151 passed`
+- translator crate with `typed-ir,clang-frontend`: lib `11 passed`, bounded `151 passed`, doc tests `0`
+- real clang AST opt-in focused suite: `37 passed`
+
+当前核心翻译状态：
+- typed IR generic emitter 已经不再只是 scalar：只读整数 pointer-to-slice、slice index read、direct byte cursor `*p++`、`const void *` proven byte cursor、nested byte read prelude 都已能输出可编译 Rust。
+- 这仍不是“全程零 crc32 专用代码”：`is_crc32_byte_cursor_ir()`、旧 `is_crc32_byte_cursor_loop()`、`emit_crc32_byte_cursor_rust()` 和相关 crc32 rule 记录路径仍在。下一轮如果要回应“翻译能力不是 0”的质疑，必须继续把 crc32 主体从 generic emitter 跑出来，再删除 canned matcher。
+- 下一步建议：把 crc32 table/global const array 与 loop 内 `crc = crc32_table[(crc ^ *p++) & 0xff] ^ (crc >> 8)` 拆成 generic `Index + Deref(PostInc) + Assign` emitter 能力；在 full generic 路径通过前，不要提前删除旧 canned path。

@@ -88,6 +88,12 @@ fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrTyp
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_const(mut ty: IrType) -> IrType {
+    ty.is_const = true;
+    ty
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_pointer(spelled: &str, canonical: &str, pointee: IrType, is_const: bool) -> IrType {
     IrType {
         spelled: spelled.to_string(),
@@ -335,6 +341,690 @@ fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
     assert!(!rust.contains("*p++"));
     assert!(!rust.contains("crc32_table"));
     assert_rust_snippet_compiles("typed-ir-crc32", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_index_over_const_u32_pointer_param() {
+    let u32_ty = ir_u32();
+    let const_u32_ptr = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        ir_const(u32_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "read_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "table".to_string(),
+                ty: const_u32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "idx".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Index {
+                base: Box::new(ir_var("table", const_u32_ptr)),
+                index: Box::new(ir_var("idx", u32_ty.clone())),
+                ty: u32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit const u32 pointer index");
+
+    assert!(rust.contains("pub fn read_table(table: &[u32], idx: u32) -> u32"));
+    assert!(rust.contains("return table[idx as usize];"));
+    assert_rust_snippet_compiles("typed-ir-const-u32-pointer-index", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_const_u8_pointer_param_post_increment_read() {
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "read_byte".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Deref {
+                ptr: Box::new(IrExpr::IncDec {
+                    target: Box::new(ir_var("p", const_u8_ptr.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: const_u8_ptr,
+                    source_span: None,
+                }),
+                ty: u8_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit const u8 post-increment read");
+
+    assert!(rust.contains("pub fn read_byte(p: &[u8]) -> u8"));
+    assert!(rust.contains("let mut p_index: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = p[p_index];"));
+    assert!(rust.contains("p_index += 1;"));
+    assert!(rust.contains("return byte0;"));
+    assert_rust_snippet_compiles("typed-ir-const-u8-post-increment-read", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_const_void_cast_cursor_post_increment_read() {
+    let u8_ty = ir_u8();
+    let const_void_ptr = ir_pointer(
+        "const void *",
+        "const void *",
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        true,
+    );
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "read_byte_from_void".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "buf".to_string(),
+            ty: const_void_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "p".to_string(),
+                ty: const_u8_ptr.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: ir_var("p", const_u8_ptr.clone()),
+                value: IrExpr::Cast {
+                    target: const_u8_ptr.clone(),
+                    expr: Box::new(ir_var("buf", const_void_ptr)),
+                    implicit: false,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Deref {
+                    ptr: Box::new(IrExpr::IncDec {
+                        target: Box::new(ir_var("p", const_u8_ptr.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: const_u8_ptr,
+                        source_span: None,
+                    }),
+                    ty: u8_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit const void byte cursor read");
+
+    assert!(rust.contains("pub fn read_byte_from_void(buf: &[u8]) -> u8"));
+    assert!(rust.contains("let mut p: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains("return byte0;"));
+    assert_rust_snippet_compiles("typed-ir-const-void-byte-cursor-read", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_const_void_cast_cursor_nested_post_increment_read_in_binary_expr() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_void_ptr = ir_pointer(
+        "const void *",
+        "const void *",
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        false,
+    );
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "crc_xor_byte".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "buf".to_string(),
+                ty: const_void_ptr.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "p".to_string(),
+                ty: const_u8_ptr.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: ir_var("p", const_u8_ptr.clone()),
+                value: IrExpr::Cast {
+                    target: const_u8_ptr,
+                    expr: Box::new(ir_var("buf", const_void_ptr)),
+                    implicit: false,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::BitXor,
+                    ir_var("crc", u32_ty.clone()),
+                    IrExpr::Cast {
+                        target: u32_ty.clone(),
+                        expr: Box::new(byte_read),
+                        implicit: true,
+                        source_span: None,
+                    },
+                    u32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit nested post-increment byte read");
+
+    assert!(rust.contains("pub fn crc_xor_byte(crc: u32, buf: &[u8]) -> u32"));
+    assert!(rust.contains("let mut p: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains("return (crc ^ (byte0 as u32));"));
+    assert_rust_snippet_compiles("typed-ir-nested-post-increment-byte-read", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_avoids_byte_temp_name_collision_for_nested_post_increment_read() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "crc_xor_byte_collision".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr,
+                source_span: None,
+            },
+            IrParam {
+                name: "byte0".to_string(),
+                ty: u8_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::BitXor,
+                ir_var("crc", u32_ty.clone()),
+                IrExpr::Cast {
+                    target: u32_ty.clone(),
+                    expr: Box::new(byte_read),
+                    implicit: true,
+                    source_span: None,
+                },
+                u32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit nested byte read without temp collision");
+
+    assert!(rust.contains("let mut p_index: usize = 0;"));
+    assert!(rust.contains("let byte1: u8 = p[p_index];"));
+    assert!(rust.contains("return (crc ^ (byte1 as u32));"));
+    assert_rust_snippet_compiles("typed-ir-nested-byte-temp-collision", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_avoids_cursor_temp_name_collision_for_nested_post_increment_read() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "crc_xor_byte_cursor_collision".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr,
+                source_span: None,
+            },
+            IrParam {
+                name: "p_index".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::BitXor,
+                ir_binary(
+                    IrBinOp::BitXor,
+                    ir_var("crc", u32_ty.clone()),
+                    IrExpr::Cast {
+                        target: u32_ty.clone(),
+                        expr: Box::new(byte_read),
+                        implicit: true,
+                        source_span: None,
+                    },
+                    u32_ty.clone(),
+                ),
+                ir_var("p_index", u32_ty.clone()),
+                u32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit nested byte read without cursor collision");
+
+    assert!(rust.contains("let mut p_index1: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = p[p_index1];"));
+    assert!(rust.contains("p_index1 += 1;"));
+    assert!(rust.contains("return ((crc ^ (byte0 as u32)) ^ p_index);"));
+    assert_rust_snippet_compiles("typed-ir-nested-byte-cursor-collision", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_undeclared_var_named_like_generated_byte_temp() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_generated_temp_ref".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::BitXor,
+                IrExpr::Cast {
+                    target: u32_ty.clone(),
+                    expr: Box::new(byte_read),
+                    implicit: true,
+                    source_span: None,
+                },
+                ir_var("byte0", u32_ty.clone()),
+                u32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("generated temp must not declare source var");
+
+    assert!(error.reason.contains("return expr binary rhs"));
+    assert!(error.reason.contains("var byte0 is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_multiple_nested_post_increment_reads_in_one_expr() {
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = || IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "double_byte_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::BitXor,
+                byte_read(),
+                byte_read(),
+                u8_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("multiple post-increment reads must fail closed");
+
+    assert!(error
+        .reason
+        .contains("multiple post-increment byte reads are unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_const_void_cast_cursor_without_byte_read() {
+    let u8_ty = ir_u8();
+    let const_void_ptr = ir_pointer(
+        "const void *",
+        "const void *",
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        false,
+    );
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "cast_without_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "buf".to_string(),
+            ty: const_void_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "p".to_string(),
+                ty: const_u8_ptr.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: ir_var("p", const_u8_ptr),
+                value: IrExpr::Cast {
+                    target: ir_pointer(
+                        "const uint8_t *",
+                        "const unsigned char *",
+                        ir_const(u8_ty.clone()),
+                        false,
+                    ),
+                    expr: Box::new(ir_var("buf", const_void_ptr)),
+                    implicit: false,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", u8_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("cast without byte read must fail closed");
+
+    assert!(error
+        .reason
+        .contains("param buf has pointer type const void * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_const_u32_pointer_param_post_increment_read() {
+    let u32_ty = ir_u32();
+    let const_u32_ptr = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        ir_const(u32_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "read_word".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u32_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Deref {
+                ptr: Box::new(IrExpr::IncDec {
+                    target: Box::new(ir_var("p", const_u32_ptr.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: const_u32_ptr,
+                    source_span: None,
+                }),
+                ty: u32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("u32 post-increment read must fail closed");
+
+    assert!(error
+        .reason
+        .contains("post-increment cursor p has unsupported type const uint32_t *"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_pointer_param_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty, false);
+    let ir = IrFunction {
+        name: "mutable_pointer".to_string(),
+        return_type: IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        },
+        params: vec![IrParam {
+            name: "out".to_string(),
+            ty: mutable_i32_ptr,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: None,
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("mutable pointer param must fail closed");
+
+    assert!(error
+        .reason
+        .contains("param out has pointer type int * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_non_const_pointer_param_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let mutable_u32_ptr = ir_pointer("uint32_t *", "unsigned int *", u32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "read_mutable_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "table".to_string(),
+                ty: mutable_u32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "idx".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Index {
+                base: Box::new(ir_var("table", mutable_u32_ptr)),
+                index: Box::new(ir_var("idx", u32_ty.clone())),
+                ty: u32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("non-const pointer param must fail closed");
+
+    assert!(error
+        .reason
+        .contains("param table has pointer type uint32_t * is unsupported"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4275,6 +4965,183 @@ fn clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_const_pointer_table_index_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-const-pointer-table-index-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_table.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t read_table(const uint32_t *table, uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit const pointer table index");
+    assert!(rust.contains("pub fn read_table(table: &[u32], idx: u32) -> u32"));
+    assert!(rust.contains("return table[idx as usize];"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-const-pointer-table-index", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_const_void_byte_cursor_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-const-void-byte-cursor-read-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_byte_from_void.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint8_t read_byte_from_void(const void *buf) { const uint8_t *p; p = (const uint8_t *)buf; return *p++; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "read_byte_from_void",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit const void byte cursor read");
+    assert!(rust.contains("pub fn read_byte_from_void(buf: &[u8]) -> u8"));
+    assert!(rust.contains("let mut p: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains("return byte0;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-const-void-byte-cursor-read", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_nested_const_void_byte_cursor_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-nested-const-void-byte-cursor-read-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_xor_byte.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_xor_byte(uint32_t crc, const void *buf) { const uint8_t *p; p = (const uint8_t *)buf; return crc ^ (uint32_t)*p++; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_xor_byte");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit nested const void byte cursor read");
+    assert!(rust.contains("pub fn crc_xor_byte(crc: u32, buf: &[u8]) -> u32"));
+    assert!(rust.contains("let mut p: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains("return (crc ^ (byte0 as u32));"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-nested-const-void-byte-cursor-read",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_nested_const_u8_byte_cursor_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-nested-const-u8-byte-cursor-read-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_xor_byte_from_u8.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_xor_byte_from_u8(uint32_t crc, const uint8_t *p) { return crc ^ (uint32_t)*p++; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "crc_xor_byte_from_u8",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit nested const u8 byte cursor read");
+    assert!(rust.contains("pub fn crc_xor_byte_from_u8(crc: u32, p: &[u8]) -> u32"));
+    assert!(rust.contains("let mut p_index: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = p[p_index];"));
+    assert!(rust.contains("p_index += 1;"));
+    assert!(rust.contains("return (crc ^ (byte0 as u32));"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-nested-const-u8-byte-cursor-read",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -4713,6 +5580,70 @@ fn clang_ast_dump_lowers_simple_while_statement_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_while_without_braces_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-while-without-braces");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("countdown_no_braces.c");
+    fs::write(
+        &source_file,
+        "int countdown_no_braces(int value) { while (value > 0) value = value + ~0; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "countdown_no_braces",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::While {
+        condition, body, ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!("expected while followed by return, got {:?}", function.body);
+    };
+    assert!(matches!(
+        condition,
+        IrExpr::Binary {
+            op: IrBinOp::Gt,
+            ..
+        }
+    ));
+    assert!(matches!(
+        body.as_slice(),
+        [IrStmt::Assign { target, value, .. }]
+            if matches!(target, IrExpr::Var { name, .. } if name == "value")
+                && matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+
+    let rust = emit_rust_from_ir(function).expect("emit no-brace while from real clang AST");
+    assert!(rust.contains("pub fn countdown_no_braces(mut value: i32) -> i32"));
+    assert!(rust.contains("while (value > 0i32) {"));
+    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-while-without-braces", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -4774,6 +5705,71 @@ fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
     assert!(rust.contains("value = (value + !0i32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_if_without_braces_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-if-without-braces");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("adjust_if_no_braces.c");
+    fs::write(
+        &source_file,
+        "int adjust_if_no_braces(int value, int flag) { if (flag) value = value + 1; else value = value + ~0; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "adjust_if_no_braces",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::If {
+        condition,
+        then_body,
+        else_body,
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!("expected if followed by return, got {:?}", function.body);
+    };
+    assert!(matches!(condition, IrExpr::Var { name, .. } if name == "flag"));
+    assert!(matches!(
+        then_body.as_slice(),
+        [IrStmt::Assign { value, .. }] if matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+    assert!(matches!(
+        else_body.as_slice(),
+        [IrStmt::Assign { value, .. }] if matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+
+    let rust = emit_rust_from_ir(function).expect("emit no-brace if from real clang AST");
+    assert!(rust.contains("pub fn adjust_if_no_braces(mut value: i32, flag: i32) -> i32"));
+    assert!(rust.contains("if flag != 0i32 {"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("} else {"));
+    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-if-without-braces", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5123,7 +6119,7 @@ fn clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled() {
+fn clang_ast_dump_emits_integral_c_style_cast_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -5151,20 +6147,12 @@ fn clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled() {
 
     let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "narrow");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_expr")
-    );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| error.message.contains("castKind IntegralCast"))
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
-    );
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit integral C-style cast");
+    assert!(rust.contains("pub fn narrow(value: u64) -> u32"));
+    assert!(rust.contains("return (value as u32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-integral-c-style-cast", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

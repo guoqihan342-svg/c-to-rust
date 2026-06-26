@@ -707,6 +707,15 @@ fn compound_body_skeleton_from_ast(
 }
 
 #[cfg(feature = "typed-ir")]
+fn stmt_body_skeleton_from_ast(body: &Value) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
+    if string_field(body, "kind").as_deref() == Some("CompoundStmt") {
+        compound_body_skeleton_from_ast(body)
+    } else {
+        Ok(vec![stmt_skeleton_from_ast(body)?])
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let children = inner(stmt);
     let [target, value] = children else {
@@ -735,30 +744,14 @@ fn if_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
             })
         }
     };
-    if string_field(then_body, "kind").as_deref() != Some("CompoundStmt") {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason:
-                "IfStmt without CompoundStmt then body is outside the current clang lowering skeleton"
-                    .to_string(),
-        });
-    }
     let else_body = match else_body {
-        Some(else_body) if string_field(else_body, "kind").as_deref() == Some("CompoundStmt") => {
-            compound_body_skeleton_from_ast(else_body)?
-        }
-        Some(_) => {
-            return Ok(ClangStmtSkeleton::Unsupported {
-                reason:
-                    "IfStmt without CompoundStmt else body is outside the current clang lowering skeleton"
-                        .to_string(),
-            });
-        }
+        Some(else_body) => stmt_body_skeleton_from_ast(else_body)?,
         None => Vec::new(),
     };
 
     Ok(ClangStmtSkeleton::If {
         condition: expr_skeleton_from_ast(condition)?,
-        then_body: compound_body_skeleton_from_ast(then_body)?,
+        then_body: stmt_body_skeleton_from_ast(then_body)?,
         else_body,
     })
 }
@@ -772,17 +765,9 @@ fn while_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clang
             message: "WhileStmt must have condition and body".to_string(),
         });
     };
-    if string_field(body, "kind").as_deref() != Some("CompoundStmt") {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason:
-                "WhileStmt without CompoundStmt body is outside the current clang lowering skeleton"
-                    .to_string(),
-        });
-    }
-
     Ok(ClangStmtSkeleton::While {
         condition: expr_skeleton_from_ast(condition)?,
-        body: compound_body_skeleton_from_ast(body)?,
+        body: stmt_body_skeleton_from_ast(body)?,
     })
 }
 
@@ -1047,7 +1032,10 @@ fn expr_skeleton_from_ast_with_options(
             })
         }
         Some("CStyleCastExpr") => {
-            if string_field(expr, "castKind").as_deref() != Some("BitCast") {
+            if !matches!(
+                string_field(expr, "castKind").as_deref(),
+                Some("BitCast" | "IntegralCast" | "IntegralPromotion")
+            ) {
                 return Ok(ClangExprSkeleton::Unsupported {
                     node: "CStyleCastExpr".to_string(),
                     reason: match string_field(expr, "castKind") {
@@ -1773,6 +1761,217 @@ mod tests {
             panic!("expected unsupported decl skeleton, got {skeleton:?}");
         };
         assert!(reason.contains("VarDecl initializer marker without initializer child"));
+    }
+
+    #[test]
+    fn if_stmt_skeleton_from_ast_maps_single_statement_bodies() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "flag" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": "=",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        },
+                        {
+                            "kind": "BinaryOperator",
+                            "opcode": "+",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "LValueToRValue",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "DeclRefExpr",
+                                            "type": { "qualType": "int" },
+                                            "referencedDecl": { "name": "value" }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "1"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": "=",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        },
+                        {
+                            "kind": "BinaryOperator",
+                            "opcode": "+",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "LValueToRValue",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "DeclRefExpr",
+                                            "type": { "qualType": "int" },
+                                            "referencedDecl": { "name": "value" }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "UnaryOperator",
+                                    "opcode": "~",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "0"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If {
+            condition,
+            then_body,
+            else_body,
+        } = skeleton
+        else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(condition, ClangExprSkeleton::DeclRef { name, .. } if name == "flag"));
+        assert!(matches!(
+            then_body.as_slice(),
+            [ClangStmtSkeleton::Assign { .. }]
+        ));
+        assert!(matches!(
+            else_body.as_slice(),
+            [ClangStmtSkeleton::Assign { .. }]
+        ));
+    }
+
+    #[test]
+    fn while_stmt_skeleton_from_ast_maps_single_statement_body() {
+        let stmt = serde_json::json!({
+            "kind": "WhileStmt",
+            "inner": [
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": ">",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "0"
+                        }
+                    ]
+                },
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": "=",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        },
+                        {
+                            "kind": "BinaryOperator",
+                            "opcode": "+",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "LValueToRValue",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "DeclRefExpr",
+                                            "type": { "qualType": "int" },
+                                            "referencedDecl": { "name": "value" }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "UnaryOperator",
+                                    "opcode": "~",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "0"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = while_stmt_skeleton_from_ast(&stmt).expect("while skeleton");
+        let ClangStmtSkeleton::While { condition, body } = skeleton else {
+            panic!("expected while skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Gt,
+                ..
+            }
+        ));
+        assert!(matches!(
+            body.as_slice(),
+            [ClangStmtSkeleton::Assign { .. }]
+        ));
     }
 
     #[test]
