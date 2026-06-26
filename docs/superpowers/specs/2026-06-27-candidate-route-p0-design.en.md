@@ -164,6 +164,7 @@ Minimum verification:
 4. `validation_profile.candidate_generation` exactly matches the route decision.
 5. The schema accepts legacy route/profile evidence without `candidate_generation`, but rejects new typed IR candidate evidence containing `DeprecatedLegacyCrc32` or `semantic_pass=true`.
 6. A `GenericTypedIr` candidate must not override alias route floors: `requires_noalias_contract` / `unknown_alias` routes to L2, and `alias_blocked` routes to L3.
+7. `GenericTypedIr` direct-call candidates from clang lowering must emit `call_expressions` evidence matching the bounded direct calls while keeping `semantic_pass=false`.
 
 Suggested verification commands:
 

@@ -530,6 +530,7 @@ fn record_clang_lowered_ir_evidence(
         record_ir_type_mapping(&param.name, &param.ty, &spec.build_profile, result);
     }
     record_ir_decl_type_mappings(&function.body, &spec.build_profile, result);
+    record_ir_call_expression_evidence(&function.body, result);
     result.cfg.functions.push(CfgFunction {
         name: function.name.clone(),
         blocks: vec![CfgBlock {
@@ -592,6 +593,202 @@ fn record_ir_decl_type_mappings(
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn record_ir_call_expression_evidence(
+    statements: &[typed_ir::IrStmt],
+    result: &mut TranslationResult,
+) {
+    for statement in statements {
+        match statement {
+            typed_ir::IrStmt::Decl {
+                init: Some(init), ..
+            } => {
+                record_ir_call_expression_evidence_for_expr(init, "declaration_initializer", result)
+            }
+            typed_ir::IrStmt::Decl { init: None, .. } => {}
+            typed_ir::IrStmt::Assign { value, .. } => {
+                record_ir_call_expression_evidence_for_expr(value, "assignment", result);
+            }
+            typed_ir::IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                record_ir_call_expression_evidence(then_body, result);
+                record_ir_call_expression_evidence(else_body, result);
+            }
+            typed_ir::IrStmt::While { body, .. } => {
+                record_ir_call_expression_evidence(body, result);
+            }
+            typed_ir::IrStmt::Return {
+                value: Some(value), ..
+            } => record_ir_call_expression_evidence_for_expr(value, "return", result),
+            typed_ir::IrStmt::Return { value: None, .. } => {}
+            typed_ir::IrStmt::Expr { expr, .. } => {
+                record_ir_call_expression_evidence_for_expr(expr, "expression", result);
+            }
+            typed_ir::IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn record_ir_call_expression_evidence_for_expr(
+    expr: &typed_ir::IrExpr,
+    statement_context: &str,
+    result: &mut TranslationResult,
+) {
+    match expr {
+        typed_ir::IrExpr::Call { callee, args, .. } => {
+            let arguments = args.iter().map(ir_expr_source_text).collect::<Vec<_>>();
+            let call = CallExpressionEvidence {
+                callee: callee.clone(),
+                source_expression: format!("{callee}({})", arguments.join(", ")),
+                arguments,
+                statement_context: statement_context.to_string(),
+            };
+            result.plan.call_expressions.push(call);
+            push_rule_once(
+                &mut result.plan.translation_rule_ids,
+                "bounded-call-expression",
+            );
+            for arg in args {
+                record_ir_call_expression_evidence_for_expr(arg, statement_context, result);
+            }
+        }
+        typed_ir::IrExpr::Binary { lhs, rhs, .. } => {
+            record_ir_call_expression_evidence_for_expr(lhs, statement_context, result);
+            record_ir_call_expression_evidence_for_expr(rhs, statement_context, result);
+        }
+        typed_ir::IrExpr::Unary { operand, .. } => {
+            record_ir_call_expression_evidence_for_expr(operand, statement_context, result);
+        }
+        typed_ir::IrExpr::Cast { expr, .. } => {
+            record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
+        }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            record_ir_call_expression_evidence_for_expr(base, statement_context, result);
+            record_ir_call_expression_evidence_for_expr(index, statement_context, result);
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                record_ir_call_expression_evidence_for_expr(element, statement_context, result);
+            }
+        }
+        typed_ir::IrExpr::IncDec { target, .. } => {
+            record_ir_call_expression_evidence_for_expr(target, statement_context, result);
+        }
+        typed_ir::IrExpr::Deref { ptr, .. } => {
+            record_ir_call_expression_evidence_for_expr(ptr, statement_context, result);
+        }
+        typed_ir::IrExpr::AddrOf { operand, .. } => {
+            record_ir_call_expression_evidence_for_expr(operand, statement_context, result);
+        }
+        typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::Var { .. }
+        | typed_ir::IrExpr::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
+    match expr {
+        typed_ir::IrExpr::Var { name, .. } => name.clone(),
+        typed_ir::IrExpr::LitInt { spelling, .. } => spelling.clone(),
+        typed_ir::IrExpr::Binary { op, lhs, rhs, .. } => format!(
+            "({} {} {})",
+            ir_expr_source_text(lhs),
+            ir_bin_op_source(op),
+            ir_expr_source_text(rhs)
+        ),
+        typed_ir::IrExpr::Unary { op, operand, .. } => {
+            format!("({}{})", ir_un_op_source(op), ir_expr_source_text(operand))
+        }
+        typed_ir::IrExpr::Cast { target, expr, .. } => {
+            format!("({} as {})", ir_expr_source_text(expr), ir_c_type(target))
+        }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            format!(
+                "{}[{}]",
+                ir_expr_source_text(base),
+                ir_expr_source_text(index)
+            )
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => format!(
+            "[{}]",
+            elements
+                .iter()
+                .map(ir_expr_source_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        typed_ir::IrExpr::Call { callee, args, .. } => format!(
+            "{callee}({})",
+            args.iter()
+                .map(ir_expr_source_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        typed_ir::IrExpr::IncDec {
+            target, op, prefix, ..
+        } => {
+            let marker = ir_inc_dec_op_source(op);
+            let target = ir_expr_source_text(target);
+            if *prefix {
+                format!("{marker}{target}")
+            } else {
+                format!("{target}{marker}")
+            }
+        }
+        typed_ir::IrExpr::Deref { ptr, .. } => format!("*{}", ir_expr_source_text(ptr)),
+        typed_ir::IrExpr::AddrOf { operand, .. } => format!("&{}", ir_expr_source_text(operand)),
+        typed_ir::IrExpr::Unsupported { node, .. } => format!("unsupported({node})"),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_bin_op_source(op: &typed_ir::IrBinOp) -> &'static str {
+    match op {
+        typed_ir::IrBinOp::Add => "+",
+        typed_ir::IrBinOp::Sub => "-",
+        typed_ir::IrBinOp::Mul => "*",
+        typed_ir::IrBinOp::Div => "/",
+        typed_ir::IrBinOp::Mod => "%",
+        typed_ir::IrBinOp::BitAnd => "&",
+        typed_ir::IrBinOp::BitOr => "|",
+        typed_ir::IrBinOp::BitXor => "^",
+        typed_ir::IrBinOp::Shl => "<<",
+        typed_ir::IrBinOp::Shr => ">>",
+        typed_ir::IrBinOp::Eq => "==",
+        typed_ir::IrBinOp::Neq => "!=",
+        typed_ir::IrBinOp::Lt => "<",
+        typed_ir::IrBinOp::Le => "<=",
+        typed_ir::IrBinOp::Gt => ">",
+        typed_ir::IrBinOp::Ge => ">=",
+        typed_ir::IrBinOp::LogAnd => "&&",
+        typed_ir::IrBinOp::LogOr => "||",
+        typed_ir::IrBinOp::Assign => "=",
+        typed_ir::IrBinOp::Comma => ",",
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_un_op_source(op: &typed_ir::IrUnOp) -> &'static str {
+    match op {
+        typed_ir::IrUnOp::Neg => "-",
+        typed_ir::IrUnOp::Not => "!",
+        typed_ir::IrUnOp::BitNot => "~",
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_inc_dec_op_source(op: &typed_ir::IrIncDecOp) -> &'static str {
+    match op {
+        typed_ir::IrIncDecOp::Inc => "++",
+        typed_ir::IrIncDecOp::Dec => "--",
     }
 }
 
@@ -3543,6 +3740,20 @@ mod clang_lowered_ir_evidence_tests {
         }
     }
 
+    fn signed_ty(spelled: &str, canonical: &str, width: u16) -> IrType {
+        IrType {
+            spelled: spelled.to_string(),
+            canonical: canonical.to_string(),
+            kind: IrTypeKind::Integer {
+                signed: true,
+                width,
+            },
+            is_const: false,
+            width_bits: Some(width),
+            source_span: None,
+        }
+    }
+
     fn void_ty(is_const: bool) -> IrType {
         IrType {
             spelled: "void".to_string(),
@@ -3573,6 +3784,184 @@ mod clang_lowered_ir_evidence_tests {
             ty,
             source_span: None,
         }
+    }
+
+    fn var(name: &str, ty: IrType) -> IrExpr {
+        IrExpr::Var {
+            name: name.to_string(),
+            ty,
+            source_span: None,
+        }
+    }
+
+    fn call(callee: &str, args: Vec<IrExpr>, ty: IrType) -> IrExpr {
+        IrExpr::Call {
+            callee: callee.to_string(),
+            args,
+            ty,
+            source_span: None,
+        }
+    }
+
+    #[test]
+    fn clang_lowered_ir_records_direct_call_expression_evidence() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let function = IrFunction {
+            name: "call_expression".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![param("value", i32_ty.clone())],
+            body: vec![
+                IrStmt::Decl {
+                    name: "first".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(call(
+                        "helper",
+                        vec![var("value", i32_ty.clone())],
+                        i32_ty.clone(),
+                    )),
+                    source_span: None,
+                },
+                IrStmt::Assign {
+                    target: var("value", i32_ty.clone()),
+                    value: call("helper", vec![var("first", i32_ty.clone())], i32_ty.clone()),
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(call("helper", vec![var("value", i32_ty.clone())], i32_ty)),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "call-expression".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "call_expression".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        assert_eq!(result.plan.call_expressions.len(), 3);
+        assert!(result
+            .plan
+            .translation_rule_ids
+            .contains(&"bounded-call-expression".to_string()));
+        assert_eq!(result.plan.call_expressions[0].callee, "helper");
+        assert_eq!(result.plan.call_expressions[0].arguments, vec!["value"]);
+        assert_eq!(
+            result.plan.call_expressions[0].source_expression,
+            "helper(value)"
+        );
+        assert_eq!(
+            result.plan.call_expressions[0].statement_context,
+            "declaration_initializer"
+        );
+        assert_eq!(
+            result.plan.call_expressions[1].source_expression,
+            "helper(first)"
+        );
+        assert_eq!(
+            result.plan.call_expressions[1].statement_context,
+            "assignment"
+        );
+        assert_eq!(result.plan.call_expressions[2].statement_context, "return");
+    }
+
+    #[test]
+    fn clang_lowered_ir_preserves_repeated_direct_call_sites_in_same_context() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let function = IrFunction {
+            name: "repeat_call".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![param("value", i32_ty.clone())],
+            body: vec![
+                IrStmt::Assign {
+                    target: var("value", i32_ty.clone()),
+                    value: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
+                    source_span: None,
+                },
+                IrStmt::Assign {
+                    target: var("value", i32_ty.clone()),
+                    value: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(var("value", i32_ty)),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "repeat-call".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "repeat_call".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        assert_eq!(result.plan.call_expressions.len(), 2);
+        assert!(result
+            .plan
+            .call_expressions
+            .iter()
+            .all(|call| call.source_expression == "helper(value)"));
+        assert!(result
+            .plan
+            .call_expressions
+            .iter()
+            .all(|call| call.statement_context == "assignment"));
+    }
+
+    #[test]
+    fn clang_lowered_ir_does_not_record_condition_call_as_success_evidence() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let function = IrFunction {
+            name: "condition_call".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![param("value", i32_ty.clone())],
+            body: vec![
+                IrStmt::If {
+                    condition: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
+                    then_body: vec![IrStmt::Return {
+                        value: Some(var("value", i32_ty.clone())),
+                        source_span: None,
+                    }],
+                    else_body: Vec::new(),
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(var("value", i32_ty)),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "condition-call".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "condition_call".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        assert!(result.plan.call_expressions.is_empty());
+        assert!(!result
+            .plan
+            .translation_rule_ids
+            .contains(&"bounded-call-expression".to_string()));
     }
 
     #[test]

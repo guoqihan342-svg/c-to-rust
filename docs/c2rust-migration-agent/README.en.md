@@ -11,7 +11,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - Rust output project name: `flashDB_rust`
 - C2Rust role: baseline/oracle only, not final deliverable
 - Safety target: first-party non-test unsafe below 10%
-- Core translation architecture and evidence status: see `core-translation-architecture.md` / `core-translation-architecture.en.md`; typed IR candidate generation is currently a `GenericTypedIr` / `Unsupported` two-route model, new evidence can bind `candidate_generation.typed_ir`, and alias risk floors plus semantic acceptance still depend on validation gates.
+- Core translation architecture and evidence status: see `core-translation-architecture.md` / `core-translation-architecture.en.md`; typed IR candidate generation is currently a `GenericTypedIr` / `Unsupported` two-route model, new evidence can bind `candidate_generation.typed_ir`, clang-lowered direct calls also flow into `call_expressions` / `direct_call_edges` evidence, and alias risk floors plus semantic acceptance still depend on validation gates.
 
 ## Bilingual Documentation Convention
 
@@ -28,7 +28,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `build-and-c2rust-baseline.md`: FlashDB build capture, C2Rust baseline, and C oracle fallback.
 - `agent-contract.md`: OpenCode/Codex runtime contract, phases, IO, subagents, AI policy, async/thread policy.
 - `context-store-and-self-healing.md`: SQLite/JSONL schema, ContextPack, impact sets, rustc repair loop, PatchPlan.
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, two-route typed IR candidate model, candidate_generation evidence schema, and typed IR legacy cleanup boundary.
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, two-route typed IR candidate model, candidate_generation evidence schema, clang-lowered direct-call evidence, and typed IR legacy cleanup boundary.
 - `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide.

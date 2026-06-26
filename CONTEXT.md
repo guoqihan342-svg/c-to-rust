@@ -5785,3 +5785,50 @@ English mirror summary:
 - Local fixed-size integer-array `InitListExpr` now lowers to `IrExpr::ArrayLiteral` and reaches compilable Rust through the generic typed IR emitter.
 - The route decision now keeps `GenericTypedIr` provenance but does not let it override alias-blocked, requires-noalias, unknown-alias, or unknown pointer-ownership floors.
 - Next soundness cut: direct-call callee signature evidence binding across plan/context/validator.
+
+## 84. 2026-06-27 clang-lowered direct-call evidence
+
+本轮按多智能体并行继续 direct-call soundness 切口。三个只读线程结论：
+
+- Rust translator 侧已经能从真实 clang `CallExpr` 走到 `ClangExprSkeleton::Call -> IrExpr::Call -> emit_call_expr()`，但 clang-lowered typed IR 路径此前没有把 `IrExpr::Call` 写入 `TranslationPlan.call_expressions`。
+- validation 侧已有 `external_direct_callees` / `signature_ref` / `callee_signature_id` / context-pack binding 机制；它只消费 plan 里的 `call_expressions`，不需要新增字段。
+- 文档需要同步核心架构、README、candidate route P0 设计和本 `CONTEXT.md`，并继续避免触碰预存 dirty `validation/evidence/**`。
+
+核心改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - `record_clang_lowered_ir_evidence()` 现在会调用新的 IR call evidence collector。
+  - 新增递归扫描 `IrStmt` / `IrExpr` 的 helper，把 clang-lowered typed IR 中的 `IrExpr::Call` 转成现有 `CallExpressionEvidence { callee, arguments, source_expression, statement_context }` 形状。
+  - 支持 decl initializer、assignment RHS、return value、expr statement，以及 if/while body 内的递归遍历；condition 中的 call 仍属于当前 typed IR emitter 的 fail-closed 边界，不作为成功路径 evidence 宣称。
+  - 只要记录到 direct call evidence，就同步写入 `bounded-call-expression` rule id，保持与旧 bounded string 路径的 evidence 语义一致。
+  - 新增 crate 内部 TDD 单测 `clang_lowered_ir_records_direct_call_expression_evidence`。红测先失败于 `call_expressions.len() == 0`，实现后通过；随后补 rule id 断言，先失败再通过。
+  - code review 后补 `clang_lowered_ir_preserves_repeated_direct_call_sites_in_same_context` 和 `clang_lowered_ir_does_not_record_condition_call_as_success_evidence`，确保重复 call site 不被文本去重吞掉，同时 condition call 不被当成成功路径 evidence。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+本轮已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_ir_records_direct_call_expression_evidence -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report direct_identifier_call -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report translates_direct_call_expressions_and_records_callee_evidence -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_call_expression_evidence_flows_through_auto_migrate validation.tools.test_auto_migrate.AutoMigrateTests.test_declared_external_callee_context_allows_helper_rust_check
+```
+
+当前边界：
+
+- 可以说：clang-lowered typed IR direct calls 现在会进入现有 plan `call_expressions`，后续 `auto_migrate.py` 可继续生成 `translation_summary.call_expressions`、context-pack `direct_call_edges`、外部 callee signature binding。
+- 不应说：完整 direct-call signature system 已完成。当前只是把 typed IR call provenance 接入既有 evidence 通路；semantic acceptance 仍由 validation gates 决定。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Clang-lowered typed IR direct calls now populate the existing `TranslationPlan.call_expressions` evidence shape.
+- The existing validation tooling can map those calls into `translation_summary.call_expressions`, context-pack `direct_call_edges`, and external-callee signature bindings when the slice spec declares them.
+- This is provenance only; `semantic_pass` remains owned by the validation pipeline.
