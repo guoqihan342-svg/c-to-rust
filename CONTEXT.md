@@ -3469,3 +3469,101 @@ python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_v
 2. 为该 opt-in 增加 cache identity：至少记录 command arg、feature set、`CLANG_PATH` /
    `LIBCLANG_PATH` 配置状态和 clang version。
 3. 再做 real-fdb `fdb_calc_crc32` 的 AST 结构审计 report，不直接承诺全函数 lowering。
+
+## 51. 2026-06-26 Python opt-in for clang lowering report artifact
+
+本轮承接第 50 节第 1/2 条下一步：给 Python `auto_migrate.py` 增加独立、默认关闭的
+`--emit-clang-lowering-report` opt-in。该 flag 只在显式传入时启用 Rust translator 的
+`clang-lowering-report` feature，并记录 lowering report 相关 cache identity；不复用
+`--emit-clang-dry-run`，不刷新仓库 `validation/evidence/**`，不改变默认 pipeline、
+manifest status 或 semantic pass 边界。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 CLI 参数 `--emit-clang-lowering-report`，默认 `False`。
+  - `main()` 将该参数传入 `run_translator()` 和 `emit_cache_metadata()`。
+  - `run_translator()` 新增 `emit_clang_lowering_report` 参数，并通过
+    `translator_feature_set()` 统一构造 cargo feature：
+    - 默认：不传 `--features`。
+    - `--emit-clang-dry-run`：只传 `clang-frontend`。
+    - `--emit-clang-lowering-report`：传 `clang-lowering-report`，位置仍在
+      cargo 参数区、`--bin` 之前。
+  - cache metadata 新增动态 `cache_input_fields()`：
+    - 默认 cache input fields 保持原基线，不强制旧/默认 evidence 带新 clang 字段。
+    - 只有 lowering report opt-in 时追加 `translator_feature_set` 和
+      `clang_lowering_identity`。
+  - `cache_identity()` 仅在 lowering report opt-in 时记录：
+    - `command_arguments` 追加 `--emit-clang-lowering-report`。
+    - `translator_feature_set`。
+    - `clang_lowering_identity`，包含 `CLANG_PATH` / `LIBCLANG_PATH` 配置状态、路径和
+      `clang_version`。`clang_version` 仅在 opt-in 且 `CLANG_PATH` 非空时通过
+      `command_version([CLANG_PATH, "--version"])` 探测；不加入全局 `tool_versions()`。
+  - `cache_drift_report()` 改为读取 previous/current payload 自带的 `cache_input_fields`
+    并与基线字段取并集，确保 opt-in 字段变化会使 cache drift，但旧 cache 不被新字段硬性破坏。
+- `validation/tools/test_auto_migrate.py`
+  - 新增默认路径不启用 clang feature 的 mock 命令测试。
+  - 新增 dry-run opt-in 不启用 lowering report feature 的测试。
+  - 新增 lowering report opt-in 命令构造测试。
+  - 新增默认 cache identity 不写 lowering 字段的测试。
+  - 新增 lowering report opt-in cache identity 测试，mock `command_version()` 验证
+    clang version 记录。
+  - 新增真实 CLI + 临时 `--out-root` 的 real-fdb lowering report artifact 测试，
+    并清空 `CLANG_PATH` / `LIBCLANG_PATH`，验证 fail-closed `status=unavailable`、
+    `missing_clang_path`、`claim_boundary=diagnostic_only` 和 opt-in cache fields。
+  - 新增 cache drift 测试，确认 `command_arguments`、`translator_feature_set`、
+    `clang_lowering_identity` 变化会进入 `drifted_keys`。
+
+TDD 红绿过程：
+- 红灯：
+  - 新增 focused tests 后，`run_translator()` 首先因为不接受
+    `emit_clang_lowering_report` keyword 失败。
+  - `cache_identity()` 因不接受 `emit_clang_lowering_report` / `environment` keyword 失败。
+  - CLI 真实临时 out-root 测试因 argparse 不认识 `--emit-clang-lowering-report` 失败。
+- 绿灯：
+  - 增加 CLI flag、参数透传、cargo feature 注入、动态 cache identity 和 drift 字段选择后，
+    focused tests 通过。
+  - 根据并行只读审查建议，把 `translator_feature_set` / `clang_lowering_identity`
+    从静态 `CACHE_INPUT_FIELDS` 移出，改成 lowering report opt-in 时动态加入，避免默认
+    cache identity 漂移。
+
+本轮并行只读审查结论：
+- Aristotle：建议复用现有 dry-run 三层测试模式：mock cargo 命令、直接测 cache identity、
+  真实 CLI + 临时 out-root；并补默认不变、dry-run 不启用 lowering、cache drift 覆盖。
+  本轮已采纳。
+- Wegener：确认最小实现应只改 `main()`、`run_translator()`、`emit_cache_metadata()`、
+  `cache_identity()`；提醒不要刷新 repo evidence，不要把 clang version 放入全局
+  `tool_versions()`，并建议 lowering identity 字段只在 opt-in cache input 中动态加入。
+  本轮已采纳。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_drift_invalidates_on_clang_lowering_report_identity_change validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_does_not_emit_lowering_report_without_opt_in
+git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py
+```
+
+完整结果：
+- focused Python opt-in tests：`Ran 7 tests ... OK`。
+- `validation.tools.test_auto_migrate`：`Ran 54 tests ... OK`。
+- 相关 Python 回归：`Ran 107 tests ... OK`。
+- 两条 Rust focused tests 均通过。
+- `git diff --check` 通过。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不启用 clang frontend/lowering report。
+- `--emit-clang-dry-run` 仍只启用 dry-run artifact，不会启用 lowering report。
+- `--emit-clang-lowering-report` 现在能通过 Python pipeline 在临时 out-root 中产出
+  `l3-{slice_id}-clang-lowering-report.json`，并把该 opt-in 的 feature/env/version 身份写入
+  cache metadata。
+- lowering report 仍是 diagnostic-only，不影响 route、manifest status 或 semantic pass。
+- real-fdb `fdb_calc_crc32` 仍未改为真实 AST 驱动生成；下一步应先做 AST 结构审计 report。
+
+下一步建议：
+1. 用 `--emit-clang-lowering-report` 和已安装 LLVM 环境对 real-fdb `fdb_calc_crc32` 做一次
+   临时 out-root report，审计 AST 中真实未支持节点，而不是刷新仓库 evidence。
+2. 基于 report 增加专门的 AST subset audit artifact 或测试，明确 `while(size--)`、
+   `*p++`、table lookup 等节点的 lowering 缺口。
+3. 再选择最小 AST lowering 子集，不要直接承诺全函数 lowering。

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shlex
 import shutil
@@ -36,6 +37,10 @@ CACHE_INPUT_FIELDS = [
     "validation_profile_identity",
     "global_dependency_identity",
     "c_oracle_harness_identity",
+]
+CLANG_LOWERING_CACHE_INPUT_FIELDS = [
+    "translator_feature_set",
+    "clang_lowering_identity",
 ]
 CACHE_INVALIDATED_ARTIFACTS = [
     "context_pack",
@@ -71,6 +76,11 @@ def main() -> int:
         help="Opt in to the translator clang-frontend dry-run artifact under a temporary or explicit out-root.",
     )
     parser.add_argument(
+        "--emit-clang-lowering-report",
+        action="store_true",
+        help="Opt in to the translator clang lowering report artifact under a temporary or explicit out-root.",
+    )
+    parser.add_argument(
         "--accept-existing-evidence",
         action="store_true",
         help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
@@ -88,6 +98,7 @@ def main() -> int:
         translator_spec,
         evidence_dir,
         emit_clang_dry_run=args.emit_clang_dry_run,
+        emit_clang_lowering_report=args.emit_clang_lowering_report,
     )
     normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
@@ -116,6 +127,7 @@ def main() -> int:
         oracle=oracle,
         accept_existing_evidence=args.accept_existing_evidence,
         emit_clang_dry_run=args.emit_clang_dry_run,
+        emit_clang_lowering_report=args.emit_clang_lowering_report,
     )
     manifest = emit_manifest(
         spec,
@@ -570,8 +582,23 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     return True
 
 
+def translator_feature_set(
+    *, emit_clang_dry_run: bool = False, emit_clang_lowering_report: bool = False
+) -> list[str]:
+    features: list[str] = []
+    if emit_clang_dry_run:
+        features.append("clang-frontend")
+    if emit_clang_lowering_report:
+        features.append("clang-lowering-report")
+    return features
+
+
 def run_translator(
-    slice_spec: Path, evidence_dir: Path, *, emit_clang_dry_run: bool = False
+    slice_spec: Path,
+    evidence_dir: Path,
+    *,
+    emit_clang_dry_run: bool = False,
+    emit_clang_lowering_report: bool = False,
 ) -> dict[str, Any]:
     cmd = [
         "cargo",
@@ -580,17 +607,21 @@ def run_translator(
         "--manifest-path",
         str(TRANSLATOR_MANIFEST),
     ]
-    if emit_clang_dry_run:
-        cmd.extend(["--features", "clang-frontend"])
+    features = translator_feature_set(
+        emit_clang_dry_run=emit_clang_dry_run,
+        emit_clang_lowering_report=emit_clang_lowering_report,
+    )
+    if features:
+        cmd.extend(["--features", ",".join(features)])
     cmd.extend(
         [
-        "--bin",
-        "c2r_translate",
-        "--",
-        "--slice-spec",
-        str(slice_spec),
-        "--out-dir",
-        str(evidence_dir),
+            "--bin",
+            "c2r_translate",
+            "--",
+            "--slice-spec",
+            str(slice_spec),
+            "--out-dir",
+            str(evidence_dir),
         ]
     )
     result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
@@ -2707,12 +2738,14 @@ def emit_cache_metadata(
     oracle: dict[str, Any] | None = None,
     accept_existing_evidence: bool = False,
     emit_clang_dry_run: bool = False,
+    emit_clang_lowering_report: bool = False,
 ) -> dict[str, Any]:
     identity = cache_identity(
         spec,
         slice_spec,
         accept_existing_evidence=accept_existing_evidence,
         emit_clang_dry_run=emit_clang_dry_run,
+        emit_clang_lowering_report=emit_clang_lowering_report,
         c2rust_baseline=c2rust_baseline,
         route_decision=route_decision,
         validation_profile=validation_profile,
@@ -2729,11 +2762,20 @@ def emit_cache_metadata(
         "slice_id": spec.get("slice_id"),
         **identity,
         "dependent_artifacts": dependent_artifacts,
-        "cache_input_fields": CACHE_INPUT_FIELDS,
+        "cache_input_fields": cache_input_fields(
+            emit_clang_lowering_report=emit_clang_lowering_report
+        ),
         "invalidates": CACHE_INVALIDATED_ARTIFACTS,
     }
     write_json(evidence_dir / f"l3-{spec.get('slice_id')}-auto-cache-metadata.json", payload)
     return payload
+
+
+def cache_input_fields(*, emit_clang_lowering_report: bool = False) -> list[str]:
+    fields = list(CACHE_INPUT_FIELDS)
+    if emit_clang_lowering_report:
+        fields.extend(CLANG_LOWERING_CACHE_INPUT_FIELDS)
+    return fields
 
 
 def artifact_cache_identity(artifact: dict[str, Any] | None) -> dict[str, Any]:
@@ -4501,17 +4543,21 @@ def cache_identity(
     slice_spec_path: Path,
     accept_existing_evidence: bool = False,
     emit_clang_dry_run: bool = False,
+    emit_clang_lowering_report: bool = False,
     c2rust_baseline: dict[str, Any] | None = None,
     route_decision: dict[str, Any] | None = None,
     validation_profile: dict[str, Any] | None = None,
     oracle: dict[str, Any] | None = None,
+    environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:
         command_arguments.append("--accept-existing-evidence")
     if emit_clang_dry_run:
         command_arguments.append("--emit-clang-dry-run")
-    return {
+    if emit_clang_lowering_report:
+        command_arguments.append("--emit-clang-lowering-report")
+    identity = {
         "source_commit": source_commit(spec),
         "source_file_hashes": source_file_hashes(spec),
         "slice_spec_sha256": sha256(slice_spec_path),
@@ -4540,6 +4586,36 @@ def cache_identity(
             "names": [item["name"] for item in global_dependency_requirements(spec)],
         },
         "c_oracle_harness_identity": oracle_harness_identity(oracle),
+    }
+    if emit_clang_lowering_report:
+        identity["translator_feature_set"] = translator_feature_set(
+            emit_clang_dry_run=emit_clang_dry_run,
+            emit_clang_lowering_report=emit_clang_lowering_report,
+        )
+        identity["clang_lowering_identity"] = clang_lowering_identity(
+            environment=environment,
+        )
+    return identity
+
+
+def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dict[str, Any]:
+    env = os.environ if environment is None else environment
+    clang_path = str(env.get("CLANG_PATH", "")).strip()
+    libclang_path = str(env.get("LIBCLANG_PATH", "")).strip()
+    clang_path_status = "configured" if clang_path else "not_configured"
+    libclang_path_status = "configured" if libclang_path else "not_configured"
+    if clang_path:
+        clang_version = command_version([clang_path, "--version"])
+    else:
+        clang_version = "not_configured"
+    return {
+        "enabled": True,
+        "features": ["clang-lowering-report"],
+        "clang_path_status": clang_path_status,
+        "clang_path": clang_path,
+        "libclang_path_status": libclang_path_status,
+        "libclang_path": libclang_path,
+        "clang_version": clang_version,
     }
 
 
@@ -4584,8 +4660,9 @@ def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    fields = cache_drift_input_fields(previous, current)
     drifted_keys = [
-        key for key in CACHE_INPUT_FIELDS if previous.get(key) != current.get(key)
+        key for key in fields if previous.get(key) != current.get(key)
     ]
     if not drifted_keys:
         return {
@@ -4603,6 +4680,21 @@ def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dic
         "invalidated_artifacts": CACHE_INVALIDATED_ARTIFACTS,
         "required_action": "regenerate artifacts or attach explicit evidence review before reuse",
     }
+
+
+def cache_drift_input_fields(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+    for source in (
+        CACHE_INPUT_FIELDS,
+        previous.get("cache_input_fields", []),
+        current.get("cache_input_fields", []),
+    ):
+        if not isinstance(source, list):
+            continue
+        for field in source:
+            if isinstance(field, str) and field not in fields:
+                fields.append(field)
+    return fields
 
 
 def source_file_hashes(spec: dict[str, Any]) -> dict[str, str]:
