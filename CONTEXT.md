@@ -4029,3 +4029,91 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
 2. 同时补负例：prefix decrement 或 unsupported unary opcode 不应被误收。
 3. 继续用 real-fdb 临时 report 验证 blocker 推进；预期下一层进入循环体里的
    table/index/deref 表达式。
+
+## 57. 2026-06-26 clang postfix decrement lowering
+
+本轮承接第 56 节的真实 blocker：只为 clang AST lowering report 增加最小
+`UnaryOperator("--") isPostfix=true` 支持，让 `while (size--)` 的 condition lower
+成现有 typed IR `IrExpr::IncDec`；prefix `--size` 和 `++` 仍 fail-closed。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `IncDec { target, op, prefix, ty }`。
+  - 新增 `ClangIncDecOperator::Dec`。
+  - `expr_skeleton_from_ast()` 在 `UnaryOperator opcode "--"` 且 `isPostfix == true`
+    时生成 `ClangExprSkeleton::IncDec { prefix=false }`。
+  - `UnaryOperator opcode "--"` 但不是 postfix 时返回
+    `unsupported_clang_expr: prefix opcode -- ...`。
+  - `lower_expr()` 能把 clang inc/dec lower 成 `IrExpr::IncDec`。
+  - 新增 `lower_inc_dec_operator()`，当前只映射 `Dec -> IrIncDecOp::Dec`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_postfix_decrement_condition`。
+  - 将真实 clang smoke 改为
+    `clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled`。
+  - 新增真实 clang 负例：
+    `clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_postfix_decrement_condition` 先失败在
+  `ClangIncDecOperator` 和 `ClangExprSkeleton::IncDec` 不存在。
+- 绿灯 1：补专用 IncDec skeleton、postfix `--` parser 和 `IrExpr::IncDec` lowering 后，
+  skeleton 与真实 clang postfix decrement smoke 均通过。
+- 负例：`while (--size)` 继续返回 unsupported，message 包含 `prefix opcode --`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 56 节末尾：
+  `unsupported_clang_expr: UnaryOperator: opcode -- is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton`。
+- 这说明已经跨过 `while (size--)` condition，进入循环体中
+  `crc32_tab[(crc ^ *p++) & 0xff]` 的 table/index 表达式层。
+
+本轮并行只读审查结论：
+- Hegel：真实 clang AST 用 `UnaryOperator opcode="--"` 表示 prefix/postfix decrement，
+  必须看 `isPostfix`；`while(size--)` 是 `isPostfix=true`，
+  `while(--size)` 是 `isPostfix=false`。`*p++` 后续形状是
+  `UnaryOperator("*") -> UnaryOperator("++" isPostfix=true) -> DeclRefExpr(p)`。
+- Plato：`IrExpr::IncDec { target, op, prefix, ty }` 已能表达 `size--`；
+  应使用专用 clang IncDec skeleton，不应复用纯 `Unary(BitNot)`；
+  `++`、复杂 lvalue、`return value++`、`helper(value++)` 仍应 fail-closed。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_postfix_decrement_condition -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused postfix decrement skeleton test：`1 passed`。
+- 真实 clang postfix decrement smoke：`1 passed`。
+- 真实 clang prefix decrement 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：`69 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳和 `while(size--)` condition。
+- 当前真实 blocker 是循环体里的 `ArraySubscriptExpr`，来自
+  `crc32_tab[(crc ^ *p++) & 0xff]`。
+- 后续仍需分层处理 `ArraySubscriptExpr`、`BinaryOperator("&")`、`UnaryOperator("*")`、
+  postfix `++`、`BinaryOperator(">>")` 以及 table lookup。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 先采样/测试 `crc32_tab[(crc ^ *p++) & 0xff]` 的真实 AST，决定先补
+   `ArraySubscriptExpr` 外壳还是先补内部 `&`/`*p++`。
+2. 如果继续按 report blocker 顺序，下一步应先为 `ArraySubscriptExpr` 写最小 skeleton，
+   并让内部表达式继续 fail-closed 到 `BinaryOperator("&")` 或 `UnaryOperator("*")`。
+3. 不要同时打开 `++`、deref、index、`&`、`>>` 全套；继续每次只推进一个真实 blocker。
