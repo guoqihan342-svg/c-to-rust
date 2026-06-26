@@ -3051,3 +3051,78 @@ git diff --check -- crates/c2r-translator/src/lib.rs crates/c2r-translator/tests
 2. 再做真实 libclang lowering 的最小 fixture：先不碰 real-fdb，先用小 C 文件证明能 lower 出
    一个 `IrFunction` skeleton。
 3. 最后把 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 46. 2026-06-26 Python opt-in for clang dry-run artifact
+
+本轮承接第 45 节第 1 条下一步：给 `auto_migrate.py` 增加默认关闭的显式 opt-in，
+允许在临时 `--out-root` 中通过 translator 的 `clang-frontend` feature 产出
+`l3-{slice_id}-clang-dry-run.json`。默认 pipeline、默认 cargo 命令、repo `validation/evidence`
+和 semantic-pass 边界都不改变。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 CLI 参数 `--emit-clang-dry-run`，默认 `False`。
+  - `main()` 将 `args.emit_clang_dry_run` 传给 `run_translator()`。
+  - `run_translator(..., emit_clang_dry_run=False)` 仅在 opt-in 时给 cargo 命令追加：
+    `--features clang-frontend`，位置在 Cargo 参数区，即 `--manifest-path <Cargo.toml>` 之后、
+    `--bin c2r_translate` 之前。
+  - `emit_cache_metadata()` / `cache_identity()` 增加同名参数；opt-in 时
+    `command_arguments` 记录 `--emit-clang-dry-run`，避免后续 cache/reuse 混淆默认路径和 clang
+    dry-run 路径。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature`：
+    mock `subprocess.run`，只断言命令构造，确认 `--features clang-frontend` 在 `--bin` 之前，
+    且 `cwd/text/capture_output` 仍按原路径。
+  - 新增 `test_cache_identity_records_emit_clang_dry_run_opt_in`：
+    验证 cache identity 的 `command_arguments` 记录 opt-in。
+  - 新增 `test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact`：
+    用真实 CLI 但只写临时 `--out-root`，并带 `--skip-c-oracle --skip-rust-check`，验证 real-fdb
+    translator input 在 opt-in 下生成 `l3-real-fdb-calc-crc32-clang-dry-run.json`，状态为
+    `ready_without_libclang`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature` 初始失败：
+  `run_translator()` 没有 `emit_clang_dry_run` keyword。
+- 红灯 2：
+  `test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact` 初始失败：
+  argparse 不认识 `--emit-clang-dry-run`。
+- 绿灯 1/2：
+  增加 CLI flag 和 `run_translator()` opt-in cargo feature plumbing 后，两条测试通过。
+- 红灯 3：
+  `test_cache_identity_records_emit_clang_dry_run_opt_in` 初始失败：
+  `cache_identity()` 没有 `emit_clang_dry_run` keyword。
+- 绿灯 3：
+  将 opt-in 贯穿到 `emit_cache_metadata()` / `cache_identity()` 后，cache identity 测试通过。
+
+本轮并行只读审查结论：
+- Hume：确认最小实现应只在 opt-in 时追加 `--features clang-frontend`，且必须放在 Cargo 参数区；
+  默认 flag 为 false 时 cargo 命令完全不变。另建议 cache identity 记录该 opt-in，本轮已补。
+- Ramanujan：建议用 mock 测 `run_translator()` 命令构造，断言 `--features` 在 `--bin` 之前，
+  并避免 repo evidence 写入。本轮 mock 测试按该建议实现；另保留一个真实临时 `--out-root`
+  集成测试，用于验证端到端 artifact 产出，未写仓库 evidence。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_dry_run_opt_in
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py CONTEXT.md
+```
+
+完整结果：
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+- `git diff --check` 通过。
+
+当前核心翻译功能状态：
+- 默认 auto_migrate 路径仍不启用 clang frontend，不写 clang dry-run artifact。
+- 显式 `--emit-clang-dry-run` 可在临时 out-root 中用 Rust translator feature 产出 clang dry-run JSON。
+- 仍未接真实 libclang lowering；当前 dry-run artifact 只是后续 libclang 前端接入前的可观测诊断面。
+
+下一步建议：
+1. 先做最小 libclang 环境探测/feature plumbing：检测环境里是否可用 libclang，但默认仍 fail-closed。
+2. 用小 C fixture 做真实 TU parse/lowering skeleton，先 lower 一个简单函数到 `IrFunction`。
+3. 再将 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。

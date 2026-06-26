@@ -3094,6 +3094,93 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(translator_input["source_file"], "src/target_fn.c")
 
+    def test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = Path(tmp) / "translator-input.json"
+            slice_spec.write_text("{}", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "target_id": "demo",
+                        "slice_id": "add-one",
+                        "status": "generated",
+                        "artifact_paths": [],
+                    }
+                ),
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                module.run_translator(slice_spec, evidence_dir, emit_clang_dry_run=True)
+
+            cmd = run.call_args.args[0]
+            kwargs = run.call_args.kwargs
+            self.assertIn("--features", cmd)
+            self.assertIn("clang-frontend", cmd)
+            self.assertLess(cmd.index("--features"), cmd.index("--bin"))
+            self.assertEqual(kwargs["cwd"], module.REPO_ROOT)
+            self.assertTrue(kwargs["text"])
+            self.assertTrue(kwargs["capture_output"])
+
+    def test_cache_identity_records_emit_clang_dry_run_opt_in(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+
+            identity = module.cache_identity(spec, spec_path, emit_clang_dry_run=True)
+
+            self.assertIn("--emit-clang-dry-run", identity["command_arguments"])
+
+    def test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            dry_run = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-clang-dry-run.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertEqual(dry_run["frontend"], "clang")
+            self.assertEqual(dry_run["status"], "ready_without_libclang")
+            self.assertEqual(dry_run["dry_run"]["source_file"], "src/fdb_utils.c")
+            self.assertEqual(dry_run["errors"], [])
+
     def test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"

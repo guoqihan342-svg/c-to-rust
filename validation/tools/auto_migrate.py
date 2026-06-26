@@ -66,6 +66,11 @@ def main() -> int:
     parser.add_argument("--skip-c-oracle", action="store_true")
     parser.add_argument("--skip-rust-check", action="store_true")
     parser.add_argument(
+        "--emit-clang-dry-run",
+        action="store_true",
+        help="Opt in to the translator clang-frontend dry-run artifact under a temporary or explicit out-root.",
+    )
+    parser.add_argument(
         "--accept-existing-evidence",
         action="store_true",
         help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
@@ -79,7 +84,11 @@ def main() -> int:
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
     translator_spec = write_translator_spec(spec, args.slice_spec, evidence_dir)
-    translator_summary = run_translator(translator_spec, evidence_dir)
+    translator_summary = run_translator(
+        translator_spec,
+        evidence_dir,
+        emit_clang_dry_run=args.emit_clang_dry_run,
+    )
     normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
@@ -106,6 +115,7 @@ def main() -> int:
         validation_profile=validation_profile,
         oracle=oracle,
         accept_existing_evidence=args.accept_existing_evidence,
+        emit_clang_dry_run=args.emit_clang_dry_run,
     )
     manifest = emit_manifest(
         spec,
@@ -560,13 +570,20 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     return True
 
 
-def run_translator(slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+def run_translator(
+    slice_spec: Path, evidence_dir: Path, *, emit_clang_dry_run: bool = False
+) -> dict[str, Any]:
     cmd = [
         "cargo",
         "run",
         "--quiet",
         "--manifest-path",
         str(TRANSLATOR_MANIFEST),
+    ]
+    if emit_clang_dry_run:
+        cmd.extend(["--features", "clang-frontend"])
+    cmd.extend(
+        [
         "--bin",
         "c2r_translate",
         "--",
@@ -574,7 +591,8 @@ def run_translator(slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
         str(slice_spec),
         "--out-dir",
         str(evidence_dir),
-    ]
+        ]
+    )
     result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
     write_log_text(evidence_dir / "translator-command.stdout.log", result.stdout)
     write_log_text(evidence_dir / "translator-command.stderr.log", result.stderr)
@@ -2688,15 +2706,17 @@ def emit_cache_metadata(
     validation_profile: dict[str, Any] | None = None,
     oracle: dict[str, Any] | None = None,
     accept_existing_evidence: bool = False,
+    emit_clang_dry_run: bool = False,
 ) -> dict[str, Any]:
     identity = cache_identity(
         spec,
         slice_spec,
-        accept_existing_evidence,
-        c2rust_baseline,
-        route_decision,
-        validation_profile,
-        oracle,
+        accept_existing_evidence=accept_existing_evidence,
+        emit_clang_dry_run=emit_clang_dry_run,
+        c2rust_baseline=c2rust_baseline,
+        route_decision=route_decision,
+        validation_profile=validation_profile,
+        oracle=oracle,
     )
     dependent_artifacts = {
         "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
@@ -4480,6 +4500,7 @@ def cache_identity(
     spec: dict[str, Any],
     slice_spec_path: Path,
     accept_existing_evidence: bool = False,
+    emit_clang_dry_run: bool = False,
     c2rust_baseline: dict[str, Any] | None = None,
     route_decision: dict[str, Any] | None = None,
     validation_profile: dict[str, Any] | None = None,
@@ -4488,6 +4509,8 @@ def cache_identity(
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:
         command_arguments.append("--accept-existing-evidence")
+    if emit_clang_dry_run:
+        command_arguments.append("--emit-clang-dry-run")
     return {
         "source_commit": source_commit(spec),
         "source_file_hashes": source_file_hashes(spec),
