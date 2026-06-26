@@ -315,6 +315,69 @@ fn bounded_pointer_arithmetic_read_generates_safe_slice_boundary_and_decisions()
 }
 
 #[test]
+fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
+    let spec = SliceSpec {
+        target_id: "flashdb".to_string(),
+        slice_id: "real-fdb-calc-crc32".to_string(),
+        source_commit: "93d1755".to_string(),
+        function_name: "fdb_calc_crc32".to_string(),
+        c_source: "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)
+{
+    const uint8_t *p;
+
+    p = (const uint8_t *)buf;
+    crc = crc ^ ~0U;
+
+    while (size--) {
+        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+    }
+
+    return crc ^ ~0U;
+}"
+        .to_string(),
+        fixture_hash: "real-fdb-calc-crc32-fixture".to_string(),
+        build_profile: profile(true),
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
+    assert!(result.rust_code.contains("let mut p: usize = 0;"));
+    assert!(result.rust_code.contains("let mut remaining = size;"));
+    assert!(result.rust_code.contains("while remaining != 0 {"));
+    assert!(result.rust_code.contains("let byte = buf[p];"));
+    assert!(result.rust_code.contains("p += 1;"));
+    assert!(result
+        .rust_code
+        .contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(!result.rust_code.contains("*p++"));
+    assert!(!result.rust_code.contains("crc32_table"));
+    let buf = result
+        .pointer_graph
+        .nodes
+        .iter()
+        .find(|node| node.id == "buf")
+        .expect("buf pointer node");
+    assert_eq!(buf.role, "borrowed_input");
+    assert_eq!(buf.rust_boundary, "&[u8]");
+    assert!(buf.read_effects.contains(&"*p++".to_string()));
+    for rule in [
+        "const-void-byte-slice",
+        "byte-cursor-post-increment-read",
+        "crc32-byte-cursor-loop",
+    ] {
+        assert!(
+            result.plan.translation_rule_ids.contains(&rule.to_string()),
+            "{rule}: {:?}",
+            result.plan.translation_rule_ids
+        );
+    }
+}
+
+#[test]
 fn bounded_pointer_arithmetic_output_write_generates_safe_mut_slice_boundary_and_decisions() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),

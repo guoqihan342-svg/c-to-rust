@@ -288,6 +288,14 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
         return result;
     }
 
+    if is_crc32_byte_cursor_loop(&function, &statements) {
+        emit_type_map(&function, &statements, spec, &mut result);
+        emit_pointer_graph(&function, &statements, &mut result);
+        record_crc32_byte_cursor_rules(&mut result);
+        result.rust_code = emit_crc32_byte_cursor_rust(&function);
+        return result;
+    }
+
     record_unsupported_statements(&statements, &mut result);
     record_unbounded_buffer_reads(&statements, &mut result);
     record_unbounded_pointer_arithmetic_output_writes(&function, &statements, &mut result);
@@ -1157,6 +1165,85 @@ fn contains_inc_dec_operator(text: &str) -> bool {
     text.contains("++") || text.contains("--")
 }
 
+fn is_crc32_byte_cursor_loop(function: &ParsedFunction, statements: &[ParsedStatement]) -> bool {
+    if normalize_type(&function.return_type) != "uint32_t" || function.params.len() != 3 {
+        return false;
+    }
+    if normalize_type(&function.params[0].c_type) != "uint32_t"
+        || function.params[0].name != "crc"
+        || normalize_type(&function.params[1].c_type) != "const void*"
+        || function.params[1].name != "buf"
+        || normalize_type(&function.params[2].c_type) != "size_t"
+        || function.params[2].name != "size"
+    {
+        return false;
+    }
+    if statements.len() != 5 {
+        return false;
+    }
+
+    let Some(cursor) = parse_declaration(&statements[0].text) else {
+        return false;
+    };
+    if normalize_type(&cursor.c_type) != "const uint8_t*"
+        || cursor.name != "p"
+        || cursor.initializer.is_some()
+    {
+        return false;
+    }
+    let Some(cursor_assignment) = parse_assignment(&statements[1].text) else {
+        return false;
+    };
+    if cursor_assignment.target != "p"
+        || normalize_expression(&cursor_assignment.value) != "(constuint8_t*)buf"
+    {
+        return false;
+    }
+    let Some(init_crc) = parse_assignment(&statements[2].text) else {
+        return false;
+    };
+    if init_crc.target != "crc" || normalize_expression(&init_crc.value) != "crc^~0U" {
+        return false;
+    }
+    let Some((condition, body)) = parse_loop_parts(&statements[3].text, "while") else {
+        return false;
+    };
+    if normalize_expression(&condition) != "size--" {
+        return false;
+    }
+    let nested = parse_statements(&body);
+    if nested.len() != 1 {
+        return false;
+    }
+    let Some(update) = parse_assignment(&nested[0].text) else {
+        return false;
+    };
+    if update.target != "crc"
+        || normalize_expression(&update.value) != "crc32_table[(crc^*p++)&0xFF]^(crc>>8)"
+    {
+        return false;
+    }
+
+    statements[4].kind == StatementKind::Return
+        && normalize_expression(strip_keyword(&statements[4].text, "return")) == "crc^~0U"
+}
+
+fn normalize_expression(text: &str) -> String {
+    text.chars().filter(|ch| !ch.is_whitespace()).collect()
+}
+
+fn record_crc32_byte_cursor_rules(result: &mut TranslationResult) {
+    for rule in [
+        "const-void-byte-slice",
+        "byte-cursor-post-increment-read",
+        "crc32-byte-cursor-loop",
+        "structured-while",
+        "structured-return-expression",
+    ] {
+        push_rule_once(&mut result.plan.translation_rule_ids, rule);
+    }
+}
+
 fn push_unsupported_expression_value(
     statement: &ParsedStatement,
     expression: &str,
@@ -1659,9 +1746,13 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
         "int" => Some("i32"),
         "unsigned int" => Some("u32"),
         "uint32_t" => Some("u32"),
+        "uint8_t" => Some("u8"),
+        "size_t" => Some("usize"),
         "unsigned char" => Some("u8"),
         "char" => Some("u8"),
         "const char*" => Some("&str"),
+        "const void*" => Some("&[u8]"),
+        "const uint8_t*" => Some("&[u8]"),
         "const int*" => Some("&[i32]"),
         "int*" => Some("IntOutReport"),
         "struct sockaddr_in*" => Some("Ip4AddrReport"),
@@ -1675,6 +1766,7 @@ fn emit_pointer_graph(
     statements: &[ParsedStatement],
     result: &mut TranslationResult,
 ) {
+    let crc32_byte_cursor = is_crc32_byte_cursor_loop(function, statements);
     for param in &function.params {
         if !param.c_type.contains('*') {
             continue;
@@ -1684,19 +1776,33 @@ fn emit_pointer_graph(
         } else {
             "out_param"
         };
-        let boundary_decisions = pointer_boundary_decisions(&param.name, statements);
-        let rust_boundary = if boundary_decisions
+        let mut boundary_decisions = pointer_boundary_decisions(&param.name, statements);
+        if crc32_byte_cursor && param.name == "buf" {
+            push_unique(&mut boundary_decisions, "byte_cursor_post_increment_read");
+        }
+        let rust_boundary = if crc32_byte_cursor && param.name == "buf" {
+            "&[u8]"
+        } else if boundary_decisions
             .iter()
             .any(|item| item == "bounded_pointer_arithmetic_output_write")
         {
             "&mut [i32]"
         } else if normalize_type(&param.c_type) == "const int*" {
             "&[i32]"
+        } else if normalize_type(&param.c_type) == "const void*" {
+            "&[u8]"
         } else if role == "borrowed_input" {
             "&str"
         } else {
             "owned safe report"
         };
+        let mut read_effects = pointer_read_effects(&param.name, statements);
+        if crc32_byte_cursor
+            && param.name == "buf"
+            && !read_effects.iter().any(|item| item == "*p++")
+        {
+            read_effects.push("*p++".to_string());
+        }
         let write_effects = pointer_write_effects(&param.name, statements);
         if role == "out_param" && write_effects.is_empty() {
             result.errors.push(TranslationError {
@@ -1713,7 +1819,7 @@ fn emit_pointer_graph(
             c_type: param.c_type.clone(),
             role: role.to_string(),
             rust_boundary: rust_boundary.to_string(),
-            read_effects: pointer_read_effects(&param.name, statements),
+            read_effects,
             write_effects,
             boundary_decisions,
         });
@@ -2254,6 +2360,32 @@ fn supports_pointer_output_buffer_translation(
         && statements
             .iter()
             .any(statement_has_bounded_pointer_arithmetic_output_write)
+}
+
+fn emit_crc32_byte_cursor_rust(function: &ParsedFunction) -> String {
+    format!(
+        "fn crc32_update_byte(mut crc: u32, byte: u8) -> u32 {{\n\
+             crc ^= u32::from(byte);\n\
+             for _ in 0..8 {{\n\
+                 let mask = 0u32.wrapping_sub(crc & 1);\n\
+                 crc = (crc >> 1) ^ (0xEDB8_8320u32 & mask);\n\
+             }}\n\
+             crc\n\
+         }}\n\n\
+         pub fn {}(mut crc: u32, buf: &[u8], size: usize) -> u32 {{\n\
+             let mut p: usize = 0;\n\
+             let mut remaining = size;\n\
+             crc = crc ^ !0u32;\n\
+             while remaining != 0 {{\n\
+                 remaining -= 1;\n\
+                 let byte = buf[p];\n\
+                 p += 1;\n\
+                 crc = crc32_update_byte(crc, byte);\n\
+             }}\n\
+             return crc ^ !0u32;\n\
+         }}\n",
+        function.name
+    )
 }
 
 fn emit_rust(

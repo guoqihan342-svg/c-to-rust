@@ -2500,3 +2500,84 @@ cargo test --manifest-path validation/l2_slices/Cargo.toml
    oracle path 的更多交叉校验。
 2. 若转向核心 translator，先写 byte-cursor CRC loop capability 的红测和最小实现，不要直接泛化到完整
    C pointer side-effect 表达式。
+
+## 40. 2026-06-26 real-fdb byte-cursor CRC translator candidate
+
+本轮承接第 39 节的核心 translator 下一步，做受限 FlashDB `fdb_calc_crc32` byte-cursor CRC loop
+能力，不泛化到完整 C pointer side-effect 表达式。目标是让 generated Rust draft 能作为候选生成并通过
+Rust compile check；不声称 generated draft 已语义通过。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - 在通用 unsupported 检测前加入严格 recognizer：
+    `uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)`、
+    `const uint8_t *p`、`p = (const uint8_t *)buf`、`while (size--)`、
+    `crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)`。
+  - 增加 C 类型映射：`uint8_t -> u8`、`size_t -> usize`、`const void* -> &[u8]`、
+    `const uint8_t* -> &[u8]`。
+  - 为该受限模式生成安全 Rust draft：
+    `pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32`，
+    用 `usize` cursor 和 `crc32_update_byte()` bitwise helper 替代 `crc32_table` 与 `*p++`。
+  - pointer graph 记录 `buf` 为 `&[u8]` borrowed input，read effect 包含 `*p++`，
+    boundary decision 包含 `byte_cursor_post_increment_read`。
+- `validation/tools/auto_migrate.py`
+  - 将 `byte_cursor_post_increment_read` 归一化为 input buffer decision，并把 `buf` 的
+    length companion 推断为 `size`。
+  - 增加 rule mapping：`byte-cursor-post-increment-read`。
+  - 修正 `--accept-existing-evidence` 的优先级：即使 translator 现在能生成 L1 candidate，
+    显式 accepted evidence 运行仍强制走 `L4/refused` + `L4-accepted-evidence`，
+    保持旧 semantic boundary 不漂移。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules`。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 real-fdb candidate-only 端到端测试，断言：
+    `status=candidate_generated`、route `L1/recorded/tier1`、plan `draft_generated`、
+    pointer node 为 `buffer/input/size`、draft 不含 `*p++`/`crc32_table`、`rust_check=passed`。
+
+TDD 红绿过程：
+- 红灯：
+  - translator 单测最初失败在 `const uint8_t *p`、`size--`、`*p++` unsupported。
+  - auto_migrate 目标测试最初返回 `candidate_refused`。
+- 绿灯：
+  - 受限 recognizer + Rust emitter + pointer normalization 后，两条目标测试均通过。
+  - 回归中发现 `--accept-existing-evidence` 正例不再 authoritative；根因是 route 已变 L1，
+    原 override 只接受已有 L4/refused。修正为显式 accepted evidence 请求强制 authoritative route 后通过。
+
+本轮并行只读审查结论：
+- Godel：确认 translator 主入口、route 分级和 real-fdb 当前拒绝点；建议最小写集限制在
+  translator、auto_migrate 归一化和对应测试，不刷新 repo 内 real-fdb evidence。
+- Galileo：确认当前语义通过是 accepted evidence authoritative，而非 generated draft semantic pass；
+  若只生成候选，应保持 `semantic_pass=false`，route 用非 L4 candidate-only 状态。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_byte_cursor_translator_generates_candidate_route
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle
+```
+
+完整结果：
+- translator crate：`33 passed`。
+- Python 相关回归：`Ran 92 tests ... OK`。
+- 当前仓库 accepted evidence validator：`semantic_pass=true`。
+- 临时 candidate-only auto_migrate：`status=candidate_generated`、route `L1`、`rust_check=passed`、
+  `semantic_pass=false`。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 的 generated Rust draft 现在能生成候选并通过 Rust compile check。
+- candidate-only 路径不再是 `L4/refused`；它是 `L1/recorded`，但仍不是 semantic pass。
+- `--accept-existing-evidence` 路径仍保持 `L4/refused` + accepted evidence authoritative，
+  用于现有 `--require-semantic-pass` 语义通过声明。
+
+下一步建议：
+1. 若要把 generated draft 从 candidate 推进到 semantic pass，需要补真实 C oracle/Rust replay/diff/
+   negative diff/unsafe/final verification gates，并让 profile/manifest/final 同步引用 generated draft。
+2. 若继续扩 translator 表面积，先沿此模式小步扩展相近 byte cursor 形态，不要一次泛化所有
+   `++/--` value semantics。
+3. 提交时只 stage `crates/c2r-translator/*`、`validation/tools/auto_migrate.py`、
+   `validation/tools/test_auto_migrate.py` 和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。

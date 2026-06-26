@@ -857,11 +857,17 @@ def mark_route_refused_candidate_artifacts(
 
 
 def pointer_node_kind(node: dict[str, Any]) -> str:
+    boundary_decisions = node.get("boundary_decisions", [])
+    c_type = str(node.get("c_type", "")).replace(" ", "")
+    if "byte_cursor_post_increment_read" in boundary_decisions:
+        return "buffer"
     if "bounded_pointer_arithmetic_output_write" in node.get("boundary_decisions", []):
         return "buffer"
     if node.get("role") == "out_param":
         return "struct_pointer"
     if str(node.get("c_type", "")).strip() == "const int*":
+        return "buffer"
+    if c_type in {"constvoid*", "constuint8_t*"}:
         return "buffer"
     return "raw_pointer"
 
@@ -890,9 +896,15 @@ def input_buffer_length_companion(spec: dict[str, Any], pointer_id: str) -> str:
         if item.get("name") == pointer_id and item.get("length_companion"):
             return str(item["length_companion"])
     for signature in spec.get("c_boundary", {}).get("signatures", []):
-        for param in signature.get("parameters", []):
+        parameters = signature.get("parameters", [])
+        for param in parameters:
             if param.get("name") == pointer_id and param.get("buffer_length_parameter"):
                 return str(param["buffer_length_parameter"])
+            c_type = str(param.get("c_type", "")).replace(" ", "")
+            if param.get("name") == pointer_id and c_type in {"constvoid*", "constuint8_t*"}:
+                for companion in parameters:
+                    if companion.get("name") == "size" and str(companion.get("c_type", "")).strip() == "size_t":
+                        return "size"
     return "len"
 
 
@@ -2991,8 +3003,9 @@ def mark_accepted_evidence_authoritative_route(
 ) -> dict[str, Any]:
     if not accepted_evidence_authoritative_requested(spec, accepted):
         return route_decision
-    if route_decision.get("level") != "L4" or route_decision.get("status") != "refused":
-        return route_decision
+    route_decision["level"] = "L4"
+    route_decision["status"] = "refused"
+    route_decision["translator"] = {"kind": "refuse", "candidate_generation_allowed": False}
     policy = route_decision.setdefault("policy", {})
     policy["accepted_evidence_authoritative"] = True
     policy["generated_draft_semantic_pass"] = False
@@ -4151,6 +4164,8 @@ def pointer_decision_lvalue_kind(decision: str) -> str:
         return "bounded_pointer_index"
     if decision == "bounded_input_buffer":
         return "bounded_input_buffer"
+    if decision == "byte_cursor_post_increment_read":
+        return "bounded_input_buffer"
     if decision == "bounded_pointer_arithmetic_input_read":
         return "bounded_pointer_arithmetic_input_buffer"
     if decision == "bounded_pointer_arithmetic_output_write":
@@ -4163,6 +4178,8 @@ def pointer_decision_translation_rule(decision: str) -> str:
         return "bounded-pointer-index-write"
     if decision == "bounded_input_buffer":
         return "bounded-input-buffer-read"
+    if decision == "byte_cursor_post_increment_read":
+        return "byte-cursor-post-increment-read"
     if decision == "bounded_pointer_arithmetic_input_read":
         return "bounded-pointer-arithmetic-input-read"
     if decision == "bounded_pointer_arithmetic_output_write":

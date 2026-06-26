@@ -2869,6 +2869,61 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
 
+    def test_real_fdb_calc_crc32_byte_cursor_translator_generates_candidate_route(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            route = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-route-decision.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            pointer = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            rust_check = json.loads((evidence_dir / "rust-check.json").read_text(encoding="utf-8"))
+            draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-draft.rs").read_text(encoding="utf-8")
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertEqual(route["status"], "recorded")
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["translator"]["kind"], "tier1")
+            self.assertTrue(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(plan["status"], "draft_generated")
+            self.assertIn("crc32-byte-cursor-loop", plan["translation_summary"]["translation_rule_ids"])
+            self.assertEqual(pointer["pointer_nodes"][0]["symbol"], "buf")
+            self.assertEqual(pointer["pointer_nodes"][0]["kind"], "buffer")
+            self.assertEqual(pointer["pointer_nodes"][0]["buffer_role"], "input")
+            self.assertEqual(pointer["pointer_nodes"][0]["length_companion"], "size")
+            self.assertIn("byte_cursor_post_increment_read", pointer["pointer_nodes"][0]["boundary_decisions"])
+            self.assertIn("crc32_update_byte", draft)
+            self.assertNotIn("*p++", draft)
+            self.assertNotIn("crc32_table", draft)
+            self.assertEqual(rust_check["status"], "passed")
+
     def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
         auto_migrate = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
