@@ -190,6 +190,10 @@ pub enum ClangExprSkeleton {
         prefix: bool,
         ty: ClangTypeSkeleton,
     },
+    Deref {
+        ptr: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     Cast {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
@@ -888,6 +892,16 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                     ty: expr_type(expr)?,
                 });
             }
+            if string_field(expr, "opcode").as_deref() == Some("*") {
+                let ptr = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_unary_operator".to_string(),
+                    message: "UnaryOperator is missing operand".to_string(),
+                })?;
+                return Ok(ClangExprSkeleton::Deref {
+                    ptr: Box::new(expr_skeleton_from_ast(ptr)?),
+                    ty: expr_type(expr)?,
+                });
+            }
 
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("~") => ClangUnaryOperator::BitNot,
@@ -1205,6 +1219,11 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             target: Box::new(lower_expr(target)?),
             op: lower_inc_dec_operator(op),
             prefix: *prefix,
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::Deref { ptr, ty } => Ok(IrExpr::Deref {
+            ptr: Box::new(lower_expr(ptr)?),
             ty: lower_type(ty)?,
             source_span: None,
         }),
