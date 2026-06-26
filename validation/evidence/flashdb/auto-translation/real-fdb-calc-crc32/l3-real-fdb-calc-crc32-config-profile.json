@@ -5,12 +5,12 @@
     "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "70c3bcef167c436abcd0eb7512a65da5097628ab06ad28a3fe748936a7ff501a",
+      "c_oracle": "1ee9b240ea08cb1d32b2cb8f1c3108bdbc826e6994192a63034302eb1d063334",
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "d50bd70e93f44df80492398a8d28123a89081278b6e34f574fb6f2a4d0243c5c",
-      "unsafe_scan": "5deff6143bd4e44f18cc41bd2f5576c7d91f0ce0cd31dc1fc6c930520ad8fb69"
+      "unsafe_ledger": "048e51d55a11c48e43614b17520154213d61ccd959da2ae9500b6f1bf16bcd91",
+      "unsafe_scan": "2db95b5794b8f25bc008e090b855cc4a982089b5268120045f189b4df0330be0"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "b514e14de7bb315bb137ed31db1f55ec319243ec",
+  "repo_commit": "4b89e9dcc5b0c411242089e284927b686be40811",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

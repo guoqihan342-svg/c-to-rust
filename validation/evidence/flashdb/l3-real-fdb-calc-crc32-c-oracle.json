@@ -20,6 +20,50 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
   "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32",
   "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json"
+    },
+    "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+    "global_dependencies": [
+      {
+        "definition_status": "same_file_top_level_declared",
+        "kind": "global",
+        "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+        "name": "crc32_table",
+        "semantic_status": "required_before_acceptance",
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+        "source": "extracted_function_body_reference",
+        "source_span": {
+          "byte_end": 3575,
+          "byte_start": 290,
+          "file": "src/fdb_utils.c",
+          "line_end": 66,
+          "line_start": 21,
+          "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+        }
+      }
+    ],
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    },
+    "source_span_sha256": "523e88f41d20405f6aed4fbd62e1ddc2c7127473864d9ca80d2aca4874549007"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "real-fdb-calc-crc32",

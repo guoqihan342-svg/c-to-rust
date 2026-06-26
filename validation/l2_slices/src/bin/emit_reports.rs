@@ -401,6 +401,50 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
         .join("evidence")
         .join("flashdb");
     fs::create_dir_all(&evidence_dir)?;
+    let slice_spec_path = repo_root
+        .join("validation")
+        .join("slice-specs")
+        .join("flashdb-real-fdb-calc-crc32.json");
+    let oracle_status_path = evidence_dir
+        .join("auto-translation")
+        .join("real-fdb-calc-crc32")
+        .join("l3-real-fdb-calc-crc32-c-oracle-status.json");
+    let slice_spec: Value = read_json(&slice_spec_path)?;
+    let oracle_status: Value = read_json(&oracle_status_path)?;
+    let source_file_hashes = required_json_value(
+        &slice_spec,
+        "/source/source_file_hashes",
+        "real-fdb slice spec",
+    )?
+    .clone();
+    let source_span_sha256 = required_json_value(
+        &slice_spec,
+        "/c_boundary/signatures/0/source_span/sha256",
+        "real-fdb slice spec",
+    )?
+    .clone();
+    let global_dependencies = required_json_value(
+        &oracle_status,
+        "/global_linkage_requirements",
+        "real-fdb c oracle status",
+    )?
+    .clone();
+    let harness_draft_ref = required_json_value(
+        &oracle_status,
+        "/harness_draft_ref",
+        "real-fdb c oracle status",
+    )?
+    .clone();
+    let compile_execution = json!({
+        "status": required_json_value(&oracle_status, "/compile_execution/status", "real-fdb c oracle status")?.clone(),
+        "semantic_pass": required_json_value(&oracle_status, "/compile_execution/semantic_pass", "real-fdb c oracle status")?.clone(),
+        "toolchain_adapter": required_json_value(&oracle_status, "/compile_execution/toolchain_adapter", "real-fdb c oracle status")?.clone(),
+        "toolchain_status_after_attempt": required_json_value(
+            &oracle_status,
+            "/compile_execution/toolchain_status_after_attempt",
+            "real-fdb c oracle status",
+        )?.clone()
+    });
 
     let mut rust_cases = Vec::with_capacity(report.cases.len());
     let mut first_mismatch = None;
@@ -463,6 +507,21 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
             "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32",
             "case_count": report.case_count,
             "compared_fields": report.compared_fields,
+            "provenance": {
+                "fixture_sha256": required_json_value(&oracle_status, "/fixture_sha256", "real-fdb c oracle status")?.clone(),
+                "source_file_hashes": source_file_hashes,
+                "source_span_sha256": source_span_sha256,
+                "global_dependencies": global_dependencies,
+                "harness_draft_ref": harness_draft_ref,
+                "compile_execution": compile_execution,
+                "evidence_refs": {
+                    "slice_spec": relative_path(&slice_spec_path),
+                    "c_oracle_status": relative_path(&oracle_status_path),
+                    "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json",
+                    "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-evidence-manifest.json"
+                },
+                "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration."
+            },
             "cases": c_oracle_cases,
             "accepted_boundary": "Accepted C oracle report is bound to the fixture cases and WSL compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative."
         }),
@@ -5662,6 +5721,16 @@ fn emit_summary(
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, Box<dyn Error>> {
     let text = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&text)?)
+}
+
+fn required_json_value<'a>(
+    value: &'a Value,
+    pointer: &str,
+    context: &str,
+) -> Result<&'a Value, Box<dyn Error>> {
+    value
+        .pointer(pointer)
+        .ok_or_else(|| format!("{context} missing required JSON pointer {pointer}").into())
 }
 
 fn write_json(path: &Path, value: &Value) -> Result<(), Box<dyn Error>> {

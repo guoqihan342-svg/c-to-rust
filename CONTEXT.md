@@ -2370,3 +2370,68 @@ cargo test --manifest-path validation/l2_slices/Cargo.toml
    pointer side-effect 表达式。
 3. 提交时继续只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
    `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 38. 2026-06-26 real-fdb root C oracle non-cyclic provenance
+
+本轮承接第 37 节第一条下一步，继续增强 root accepted C oracle 的 provenance，但仍保持非循环边界：
+root C oracle 不写入自身 sha256，也不写入包含自身 sha256 的 status/version/evidence manifest hash。
+这些 hash 仍由外层 auto evidence 绑定。
+
+核心改动：
+- `validation/l2_slices/src/bin/emit_reports.rs`
+  - `emit_real_fdb_calc_crc32()` 现在会读取：
+    - `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+    - `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json`
+  - root C oracle 新增 `provenance` 对象：
+    - `fixture_sha256`
+    - `source_file_hashes`
+    - `source_span_sha256`
+    - `global_dependencies`，保留 `crc32_table` linkage/hash/span
+    - `harness_draft_ref`
+    - `compile_execution` 摘要：`status`、`semantic_pass`、`toolchain_adapter`、
+      `toolchain_status_after_attempt`
+    - `evidence_refs` 仅记录 path，不记录这些 ref 的 sha256
+    - `cycle_boundary` 明确说明 root self-hash 由外层 auto evidence 记录
+  - 新增 `required_json_value()` helper：必需 provenance 字段缺失时 fail closed。
+- `validation/tools/test_real_fdb_calc_crc32_l3_evidence.py`
+  - 先红后绿新增 root C oracle provenance 断言。
+  - 明确断言 `provenance` 不包含 `c_oracle_sha256`，避免把 root 文件自身 hash 写回自身。
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - accepted evidence binding 中 root C oracle sha256 更新为
+    `1ee9b240ea08cb1d32b2cb8f1c3108bdbc826e6994192a63034302eb1d063334`。
+  - validator 仍报告 `semantic_pass=true`。
+
+TDD 红绿过程：
+- 红灯：
+  `KeyError: 'provenance'`
+- 绿灯：
+  `python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates`
+  通过。
+
+本轮并行只读审查结论：
+- Pascal：确认当前 provenance 字段都是非循环来源；不要把 `c_oracle_sha256` 或
+  `c_oracle_status/version/evidence-manifest` 的 sha256 写回 root C oracle。
+- Erdos：确认 auto evidence 是按 root C oracle 实际 sha256 绑定，而不是复制 provenance 全量；
+  本轮只加可选 provenance 不需要改 schema/validator。若后续要让 validator 主动 rehash root
+  accepted oracle 文件，需要另起一轮加负例测试和 validator 检查。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+下一步建议：
+1. 如果继续强化 accepted evidence，可以按 Erdos 的建议增加 validator 对
+   `accepted_evidence_binding.paths.c_oracle` / `c-oracle-status.accepted_oracle` 的实际文件 hash
+   rehash 检查，并补伪造 hash 负例。
+2. 如果转向 translator，仍单独做受限 byte-cursor CRC loop capability change。
+3. 提交时仍只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
+   `CONTEXT.md`。

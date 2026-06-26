@@ -53,6 +53,47 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
             [case["return_code"] for case in c_oracle["cases"]],
             [0, 3421780262],
         )
+        provenance = c_oracle["provenance"]
+        self.assertEqual(
+            provenance["fixture_sha256"],
+            "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+        )
+        self.assertEqual(
+            provenance["source_file_hashes"]["src/fdb_utils.c"],
+            "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+        )
+        self.assertEqual(
+            provenance["source_span_sha256"],
+            "523e88f41d20405f6aed4fbd62e1ddc2c7127473864d9ca80d2aca4874549007",
+        )
+        self.assertEqual(provenance["global_dependencies"][0]["name"], "crc32_table")
+        self.assertEqual(
+            provenance["global_dependencies"][0]["sha256"],
+            "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+        )
+        self.assertEqual(
+            provenance["harness_draft_ref"]["path"],
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+        )
+        self.assertEqual(
+            provenance["harness_draft_ref"]["sha256"],
+            "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+        )
+        self.assertEqual(provenance["compile_execution"]["toolchain_adapter"], "wsl")
+        self.assertEqual(
+            provenance["compile_execution"]["status"],
+            "compile_succeeded_not_oracle",
+        )
+        self.assertFalse(provenance["compile_execution"]["semantic_pass"])
+        self.assertEqual(
+            provenance["compile_execution"]["toolchain_status_after_attempt"],
+            "COMPILE_SUCCEEDED_NOT_ORACLE",
+        )
+        self.assertEqual(
+            provenance["evidence_refs"]["c_oracle_status"],
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
+        )
+        self.assertNotIn("c_oracle_sha256", provenance)
 
         self.assertEqual(rust_report["target_id"], "flashdb")
         self.assertEqual(rust_report["slice_id"], "real-fdb-calc-crc32")
