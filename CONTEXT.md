@@ -3941,3 +3941,91 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
 2. 继续把 `ParenExpr`/`ImplicitCastExpr` 当作透明包装处理，避免真实 clang AST 的无害包装
    让 report 提前 fail。
 3. 暂不扩展通用 emitter，等 CRC32 typed IR 形状能从 clang lowering 串起来后再决定。
+
+## 56. 2026-06-26 clang WhileStmt outer-shell lowering
+
+本轮承接第 55 节的真实 blocker：只为 clang AST lowering report 增加最小 `WhileStmt`
+外壳支持，把 real-fdb `fdb_calc_crc32` 从 `WhileStmt` 推进到 condition 内的
+postfix decrement；不支持 `size--` 本身，也不扩展 emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `While { condition, body }`。
+  - `function_skeleton_from_ast()` 现在复用 `compound_body_skeleton_from_ast()` 展开
+    顶层 `CompoundStmt`。
+  - 新增 `compound_body_skeleton_from_ast()`，把 `CompoundStmt.inner` 递归映射为
+    `Vec<ClangStmtSkeleton>`。
+  - `stmt_skeleton_from_ast()` 现在识别 `WhileStmt`。
+  - 新增 `while_stmt_skeleton_from_ast()`，要求 `WhileStmt` 恰好有 condition/body 两个
+    child，且 body 必须是 `CompoundStmt`。
+  - `lower_stmt()` 现在能把 skeleton while lower 成 `IrStmt::While`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_simple_while_statement`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_simple_while_statement_when_enabled`。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_simple_while_statement` 先失败在
+  `ClangStmtSkeleton::While` 不存在。
+- 绿灯 1：补 `While` skeleton、`WhileStmt` parser、`CompoundStmt` body 展开和
+  `IrStmt::While` lowering 后，skeleton 与真实 clang simple while smoke 均通过。
+- `clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled` 确认
+  `while (size--)` 仍 fail-closed 到 `unsupported_clang_expr`，message 包含
+  `UnaryOperator: opcode --`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 55 节末尾：
+  `unsupported_clang_stmt: WhileStmt is outside the current clang lowering skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: UnaryOperator: opcode -- is outside the current skeleton`。
+- 这对应 `while (size--)` 的 condition 层。
+
+本轮并行只读审查结论：
+- Ohm：真实 `fdb_calc_crc32` 顶层顺序仍为
+  `DeclStmt -> BinaryOperator("=") -> BinaryOperator("=") -> WhileStmt -> ReturnStmt`；
+  `WhileStmt.inner[0]` 是 `UnaryOperator opcode="--" isPostfix=true`，`inner[1]`
+  是 `CompoundStmt`；循环体第一层是 assignment。
+- Arendt：typed IR 已有 `IrStmt::While { condition, body }`，不需要新增 compound IR；
+  当前 emitter 仍不是通用 while emitter；`while(size--)`、无大括号 body、`break`/`continue`
+  等仍应 fail-closed。本轮保留 body 必须是 `CompoundStmt` 的窄边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_simple_while_statement -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_simple_while_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused while skeleton test：`1 passed`。
+- 两条真实 clang while smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`67 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="UnaryOperator: opcode -- is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;` 和 `WhileStmt` 外壳。
+- 当前真实 blocker 是 `while (size--)` 的 postfix decrement condition。
+- 真实循环体后续仍有 `*p++`、`& 0xff`、`>> 8`、`crc32_table[...]`、table lookup 和
+  后续 `^` 等缺口。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `UnaryOperator("--") isPostfix=true` 写最小 lowering，映射到现有
+   `IrExpr::IncDec { op: Dec, prefix: false }`。
+2. 同时补负例：prefix decrement 或 unsupported unary opcode 不应被误收。
+3. 继续用 real-fdb 临时 report 验证 blocker 推进；预期下一层进入循环体里的
+   table/index/deref 表达式。

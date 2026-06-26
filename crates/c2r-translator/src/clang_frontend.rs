@@ -136,6 +136,10 @@ pub enum ClangStmtSkeleton {
         target: ClangExprSkeleton,
         value: ClangExprSkeleton,
     },
+    While {
+        condition: ClangExprSkeleton,
+        body: Vec<ClangStmtSkeleton>,
+    },
     Return {
         value: Option<ClangExprSkeleton>,
     },
@@ -583,10 +587,7 @@ fn function_skeleton_from_ast(
             kind: "unsupported_function_body".to_string(),
             message: format!("FunctionDecl {name} does not contain a CompoundStmt body"),
         })?;
-    let body = inner(compound)
-        .iter()
-        .map(stmt_skeleton_from_ast)
-        .collect::<Result<Vec<_>, ClangFrontendError>>()?;
+    let body = compound_body_skeleton_from_ast(compound)?;
 
     Ok(ClangFunctionSkeleton {
         name,
@@ -621,6 +622,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
             assign_stmt_skeleton_from_ast(stmt)
         }
+        Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
         Some("ReturnStmt") => {
             let value = inner(stmt)
                 .first()
@@ -639,6 +641,23 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
 }
 
 #[cfg(feature = "typed-ir")]
+fn compound_body_skeleton_from_ast(
+    compound: &Value,
+) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
+    if string_field(compound, "kind").as_deref() != Some("CompoundStmt") {
+        return Err(ClangFrontendError {
+            kind: "invalid_compound_stmt".to_string(),
+            message: "expected CompoundStmt body".to_string(),
+        });
+    }
+
+    inner(compound)
+        .iter()
+        .map(stmt_skeleton_from_ast)
+        .collect::<Result<Vec<_>, ClangFrontendError>>()
+}
+
+#[cfg(feature = "typed-ir")]
 fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let children = inner(stmt);
     let [target, value] = children else {
@@ -651,6 +670,29 @@ fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clan
     Ok(ClangStmtSkeleton::Assign {
         target: expr_skeleton_from_ast(target)?,
         value: expr_skeleton_from_ast(value)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn while_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let children = inner(stmt);
+    let [condition, body] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_while_stmt".to_string(),
+            message: "WhileStmt must have condition and body".to_string(),
+        });
+    };
+    if string_field(body, "kind").as_deref() != Some("CompoundStmt") {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason:
+                "WhileStmt without CompoundStmt body is outside the current clang lowering skeleton"
+                    .to_string(),
+        });
+    }
+
+    Ok(ClangStmtSkeleton::While {
+        condition: expr_skeleton_from_ast(condition)?,
+        body: compound_body_skeleton_from_ast(body)?,
     })
 }
 
@@ -988,6 +1030,14 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
         ClangStmtSkeleton::Assign { target, value } => Ok(IrStmt::Assign {
             target: lower_expr(target)?,
             value: lower_expr(value)?,
+            source_span: None,
+        }),
+        ClangStmtSkeleton::While { condition, body } => Ok(IrStmt::While {
+            condition: lower_expr(condition)?,
+            body: body
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             source_span: None,
         }),
         ClangStmtSkeleton::Return { value } => Ok(IrStmt::Return {
