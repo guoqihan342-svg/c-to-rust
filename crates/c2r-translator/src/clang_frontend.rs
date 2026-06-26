@@ -822,18 +822,26 @@ fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangF
             message: format!("VarDecl {name} is missing qualType"),
         })
         .and_then(|qual_type| type_from_qual_type(&qual_type))?;
-    if var_decl.get("init").is_some() || !inner(var_decl).is_empty() {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason: "VarDecl initializer is outside the current clang lowering skeleton"
-                .to_string(),
-        });
-    }
+    let initializer_children = inner(var_decl);
+    let init = match initializer_children {
+        [] if var_decl.get("init").is_none() => None,
+        [] => {
+            return Ok(ClangStmtSkeleton::Unsupported {
+                reason: "VarDecl initializer marker without initializer child is outside the current clang lowering skeleton".to_string(),
+            });
+        }
+        [initializer] => Some(expr_skeleton_from_ast(initializer)?),
+        _ => {
+            return Ok(ClangStmtSkeleton::Unsupported {
+                reason: format!(
+                    "VarDecl with {} initializer children is outside the current clang lowering skeleton",
+                    initializer_children.len()
+                ),
+            });
+        }
+    };
 
-    Ok(ClangStmtSkeleton::Decl {
-        name,
-        ty,
-        init: None,
-    })
+    Ok(ClangStmtSkeleton::Decl { name, ty, init })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1662,6 +1670,109 @@ mod tests {
             rhs.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 255, .. }
         ));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_maps_scalar_initializer() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "next",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "uint32_t" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "uint32_t" },
+                                    "referencedDecl": { "name": "crc" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Decl {
+            name,
+            ty,
+            init: Some(init),
+        } = skeleton
+        else {
+            panic!("expected initialized decl skeleton, got {skeleton:?}");
+        };
+        assert_eq!(name, "next");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            init,
+            ClangExprSkeleton::DeclRef { name, .. } if name == "crc"
+        ));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_rejects_multiple_initializer_children() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "next",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "1"
+                        },
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "2"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected unsupported decl skeleton, got {skeleton:?}");
+        };
+        assert!(reason.contains("VarDecl with 2 initializer children"));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_rejects_init_marker_without_initializer_child() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "next",
+                    "type": { "qualType": "uint32_t" },
+                    "init": "c"
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected unsupported decl skeleton, got {skeleton:?}");
+        };
+        assert!(reason.contains("VarDecl initializer marker without initializer child"));
     }
 
     #[test]

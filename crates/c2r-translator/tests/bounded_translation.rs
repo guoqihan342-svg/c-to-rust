@@ -5169,7 +5169,7 @@ fn clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_initialized_decl_stmt_when_enabled() {
+fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -5197,6 +5197,108 @@ fn clang_ast_dump_rejects_initialized_decl_stmt_when_enabled() {
 
     let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_init");
 
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        name,
+        init: Some(IrExpr::Var {
+            name: init_name, ..
+        }),
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected initialized decl followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "next");
+    assert_eq!(init_name, "crc");
+
+    let rust = emit_rust_from_ir(function).expect("emit initialized decl from real clang AST");
+    assert!(rust.contains("pub fn crc_init(crc: u32) -> u32"));
+    assert!(rust.contains("let mut next: u32 = crc;"));
+    assert!(rust.contains("return next;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-initialized-decl", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_initialized_decl_with_call_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-initialized-decl-call-reject");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("init_call.c");
+    fs::write(
+        &source_file,
+        "int helper(void);\nint init_call(void) { int value = helper(); return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "init_call");
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("CallExpr"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_multi_var_decl_stmt_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-multi-var-decl-reject");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("multi_decl.c");
+    fs::write(
+        &source_file,
+        "int multi_decl(void) { int a = 1, b = 2; return a + b; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "multi_decl");
+
     assert_eq!(report.status, "unsupported", "{:?}", report.errors);
     assert_eq!(
         report.errors.first().map(|error| error.kind.as_str()),
@@ -5206,7 +5308,7 @@ fn clang_ast_dump_rejects_initialized_decl_stmt_when_enabled() {
         report
             .errors
             .first()
-            .map(|error| error.message.contains("VarDecl initializer"))
+            .map(|error| error.message.contains("DeclStmt with 2 VarDecl children"))
             .unwrap_or(false),
         "{:?}",
         report.errors

@@ -4994,3 +4994,52 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - translator crate with `typed-ir,clang-frontend`：lib `6 passed`，`bounded_translation` `131 passed`，doc tests `0`。
 - 副作用条件仍 fail-closed：`IncDec` condition 不会被普通化成 Rust。
 - 下一步建议：可以考虑把 comparison condition 支持接入 clang-lowering-report 的 evidence 路径，或继续补无大括号 `IfStmt`/`WhileStmt` unsupported smoke。
+
+## 70. 2026-06-26 scalar initialized local declaration from clang AST
+
+本轮承接第 69 节后的核心翻译小步：打开真实 clang AST 中的 scalar initialized local declaration，例如 `uint32_t next = crc;`。选择这一步的原因是 typed IR emitter 早已支持 `IrStmt::Decl { init: Some(_) }` 并做类型校验，缺口集中在 clang frontend 之前把所有 `VarDecl` initializer 拒掉。这个改动能扩大真实 C 覆盖，但不碰 pointer/deref/index/call，也不处理副作用条件。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `decl_stmt_skeleton_from_ast()` 对单个 `VarDecl` 的单个 initializer child 调用 `expr_skeleton_from_ast()`。
+  - 生成 `ClangStmtSkeleton::Decl { init: Some(expr) }`，后续复用既有 `lower_stmt()` 到 typed IR。
+  - 无 initializer 且无 `init` marker 时仍生成 `init: None`；存在 `init` marker 但缺少 initializer child 时继续 `Unsupported`。
+  - 多个 initializer child 继续 `Unsupported`。
+  - initializer 如果是当前表达式子集外的节点，例如 `CallExpr`，会在 lower 阶段继续 fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - ungated JSON AST parser 测试覆盖 `uint32_t next = crc;`。
+  - ungated JSON AST parser 测试覆盖多个 initializer child 拒绝。
+  - ungated JSON AST parser 测试覆盖 `init` marker 无 initializer child 时拒绝，避免把有初始化但缺 AST child 的声明误降成无初始化。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - real clang AST 正例：`uint32_t crc_init(uint32_t crc) { uint32_t next = crc; return next; }` lower+emit+rustc。
+  - real clang AST 负例：`int value = helper();` 仍因 `CallExpr` fail-closed。
+  - real clang AST 负例：`int a = 1, b = 2;` 多 `VarDecl` 的 `DeclStmt` 仍 fail-closed。
+
+TDD/验证要点：
+- 内部 parser 红灯最初失败于 `VarDecl initializer is outside the current clang lowering skeleton`。
+- real clang AST 红灯最初报告 `unsupported_clang_stmt` / `VarDecl initializer is outside...`。
+- code review 后补红灯：`init` marker 但无 initializer child 曾被误降成 `init: None`，现改为 fail-closed。
+- 实现后，initialized decl 正例生成 `let mut next: u32 = crc;` 并通过 rustc smoke。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::decl_stmt_skeleton_from_ast -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation initialized_decl -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation "decl" -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- clang frontend 已能把 scalar initialized local decl 接到 typed IR emitter。
+- call initializer 仍 fail-closed；这一步没有打开通用 call expression、pointer/deref/index emitter。
+- real clang AST focused suite 当前为 `31 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `9 passed`，`bounded_translation` `133 passed`，doc tests `0`。
+- 下一步建议：继续补无大括号 `IfStmt`/`WhileStmt` unsupported/positive smoke，或把 initialized decl/comparison 这类真实 clang 能力接入 lowering-report evidence。
