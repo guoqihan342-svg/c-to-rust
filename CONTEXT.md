@@ -5832,3 +5832,53 @@ English mirror summary:
 - Clang-lowered typed IR direct calls now populate the existing `TranslationPlan.call_expressions` evidence shape.
 - The existing validation tooling can map those calls into `translation_summary.call_expressions`, context-pack `direct_call_edges`, and external-callee signature bindings when the slice spec declares them.
 - This is provenance only; `semantic_pass` remains owned by the validation pipeline.
+
+## 85. 2026-06-27 local fixed array index assignment
+
+本轮继续按多智能体并行推进核心翻译能力。五个只读线程给出的排序里，direct-call signature binding 是下一步 soundness 切口，标量减法是更小的 C 子集扩展；本轮主线选择了文档中明确仍 fail-closed 的局部数组元素写入，因为它直接补齐已有 `InitListExpr -> ArrayLiteral -> Index read` 通路的下一步。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 现在保存 `assigned_vars`，供参数和局部声明统一判断 `mut`。
+  - `IrStmt::Assign` 的 target 发射拆为 `emit_assignment_target()`；`Var` 保持原逻辑，`Index` 只允许“已声明的 local fixed integer array + integer index”。
+  - 新增 `emit_local_array_index_assignment_target()`，显式拒绝 readonly global array 写入、const pointer slice 写入、非数组 base、非整数 index 和元素类型不匹配。
+  - `collect_assigned_vars_from_body()` 现在会把 `Assign target = Index(base Var, ...)` 的 base 计入 assigned vars，因此 `uint32_t table[3]...; table[i] = value;` 会发射 `let mut table: [u32; 3] = ...;`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_assignment`。红测先失败于 `stmt[1].assign target must be Var`，实现后通过并用 rustc smoke 验证。
+  - 新增 `typed_ir_emits_local_fixed_array_index_assignment_from_clang_lowered_ir`，证明 `ClangFunctionSkeleton -> IrFunction -> Rust` 不需要前端新增节点即可走通。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled`，验证真实 C：
+    `uint32_t replace_local_table_slot(size_t i, uint32_t value) { uint32_t table[3] = {1U, 2U, 3U}; table[i] = value; return table[i]; }`
+  - 新增 fail-closed 负例 `typed_ir_rejects_readonly_global_array_index_assignment` 和 `typed_ir_rejects_const_pointer_index_assignment`，避免误放开 readonly global 或 const pointer slice 写入。
+  - 更新旧的复杂左值负例断言，继续保证 while/if 中非 `Var` / local fixed array `Index` target 仍 fail closed。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+本轮已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_local_fixed_array_index_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_local_fixed_array_index_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir index_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir non_var_assignment_target -- --nocapture
+```
+
+当前边界：
+
+- 可以说：真实 clang AST 中的局部固定长度整数数组 initializer、下标读取和元素写入现在能进入 typed IR，并通过 generic typed IR emitter 生成可编译 Rust。
+- 不应说：已支持 C 数组完整语义。当前写入目标只允许已声明的局部固定长度整数数组；readonly global array 写入、const pointer slice 写入、array-to-pointer decay、VLA/incomplete array、nested/struct array 和副作用 initializer 仍 fail closed。
+- 不应说：`GenericTypedIr` candidate 表示 semantic acceptance；它仍只是候选生成 provenance，接受结论由 validation gates 决定。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Local fixed-size integer-array initializer, index reads, and element writes now flow from real clang AST through typed IR into compilable Rust.
+- Writes are deliberately narrow: only declared local fixed-size integer arrays are accepted. Readonly global writes, const pointer-slice writes, array-to-pointer decay, VLAs/incomplete arrays, nested/struct arrays, and side-effecting initializers still fail closed.
+- This remains candidate generation only; semantic acceptance belongs to the validation gates.
+- Recommended next cut remains external direct-callee signature/call-site binding hardening across plan, context pack, and validator, or the small scalar subtraction `-` expansion if prioritizing C subset breadth.

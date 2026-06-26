@@ -24,7 +24,7 @@ flowchart TD
     comparison conditions,
     const pointer slices,
     readonly global const integer arrays,
-    local fixed integer arrays,
+    local fixed integer array reads/writes,
     table index via slice param or global,
     bounded direct calls,
     nested byte *p++ prelude,
@@ -46,7 +46,7 @@ flowchart TD
   - `emit_rust_from_ir()` 仍保留无 globals 的兼容入口。
   - `emit_rust_from_ir_with_globals(function, globals)` 是 clang lowering 路径的核心入口，会生成 `EmittedRust { rust, route }`。
   - generic emitter 已支持 readonly global const integer array 的 Rust `const` 输出和 `CRC32_TABLE[...]` 形式的下标访问。
-  - generic emitter 也支持 typed IR 层的局部固定长度整数数组字面量和只读下标读取，生成 Rust `[T; N]` 局部数组。
+  - generic emitter 也支持 typed IR 层的局部固定长度整数数组字面量、下标读取和局部数组元素赋值，生成 Rust `[T; N]` 局部数组，并在元素被写入时发射 `let mut`。
   - typed IR 层的旧 crc32 matcher、canned emitter 和 `DeprecatedLegacyCrc32` fallback 已删除；无 globals 的 crc32 IR 会 fail closed，而不是偷偷走模板。
 - `crates/c2r-translator/src/translation_route.rs`
   - 定义 typed IR candidate generation 的 route 元数据。
@@ -91,7 +91,7 @@ generic typed IR emission 现在覆盖：
 - 来自 clang AST 的无大括号 `if` / `while` body；
 - readonly integer pointer parameter 到 Rust slice，例如 `const uint32_t *table -> table: &[u32]`；
 - `static const` readonly integer array initializer 到 Rust `const`，例如 `crc32_table[] -> const CRC32_TABLE: [u32; 256]`；
-- clang-lowered typed IR 的局部固定长度整数数组字面量和下标读取，例如 `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`；只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素。partial initializer zero-fill、nested array、struct array、非 literal 或有副作用的 initializer、VLA/incomplete array 仍 fail closed；
+- clang-lowered typed IR 的局部固定长度整数数组字面量、下标读取和元素写入，例如 `uint32_t table[3] = {1,2,3}; table[i] = value; return table[i]; -> let mut table: [u32; 3] = ...; table[i as usize] = value;`；只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素，且写入目标必须是已声明的局部固定长度整数数组。partial initializer zero-fill、nested array、struct array、非 literal 或有副作用的 initializer、VLA/incomplete array、readonly global array 写入、const pointer slice 写入和 array-to-pointer decay 仍 fail closed；
 - 当已经证明存在 `const uint8_t *p` byte cursor 和 byte read 时，把 `const void *buf` 翻译成 `&[u8]`；
 - 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
 - assignment RHS prelude，覆盖 `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`；

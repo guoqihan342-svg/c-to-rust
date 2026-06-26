@@ -11,7 +11,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - Rust output project name: `flashDB_rust`
 - C2Rust role: baseline/oracle only, not final deliverable
 - Safety target: first-party non-test unsafe below 10%
-- Core translation architecture and evidence status: see `core-translation-architecture.md` / `core-translation-architecture.en.md`; typed IR candidate generation is currently a `GenericTypedIr` / `Unsupported` two-route model, new evidence can bind `candidate_generation.typed_ir`, clang-lowered direct calls also flow into `call_expressions` / `direct_call_edges` evidence, and alias risk floors plus semantic acceptance still depend on validation gates.
+- Core translation architecture and evidence status: see `core-translation-architecture.md` / `core-translation-architecture.en.md`; typed IR candidate generation is currently a `GenericTypedIr` / `Unsupported` two-route model, the generic emitter now covers local fixed-length integer array reads/writes, new evidence can bind `candidate_generation.typed_ir`, clang-lowered direct calls also flow into `call_expressions` / `direct_call_edges` evidence, and alias risk floors plus semantic acceptance still depend on validation gates.
 
 ## Bilingual Documentation Convention
 

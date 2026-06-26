@@ -24,7 +24,7 @@ flowchart TD
     comparison conditions,
     const pointer slices,
     readonly global const integer arrays,
-    local fixed integer arrays,
+    local fixed integer array reads/writes,
     table index via slice param or global,
     bounded direct calls,
     nested byte *p++ prelude,
@@ -46,7 +46,7 @@ flowchart TD
   - `emit_rust_from_ir()` remains the no-globals compatibility entrypoint.
   - `emit_rust_from_ir_with_globals(function, globals)` is the main entrypoint for the clang lowering path and returns `EmittedRust { rust, route }`.
   - The generic emitter now emits readonly global integer arrays as Rust `const` items and supports table indexing such as `CRC32_TABLE[...]`.
-  - The generic emitter also supports typed IR local fixed-length integer array literals and readonly index reads, emitting Rust local `[T; N]` arrays.
+  - The generic emitter also supports typed IR local fixed-length integer array literals, index reads, and local array element assignment, emitting Rust local `[T; N]` arrays and `let mut` when an element is written.
   - The typed IR legacy crc32 matcher, canned emitter, and `DeprecatedLegacyCrc32` fallback have been removed. A crc32 IR without modeled globals now fails closed instead of silently using a template.
 - `crates/c2r-translator/src/translation_route.rs`
   - Defines route metadata for typed IR candidate generation.
@@ -91,7 +91,7 @@ Generic typed IR emission now covers:
 - no-brace `if` / `while` bodies from clang AST;
 - readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
 - `static const` readonly integer array initializers as Rust `const`, for example `crc32_table[] -> const CRC32_TABLE: [u32; 256]`;
-- clang-lowered typed IR local fixed-length integer array literals and index reads, for example `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`; only initializer elements canonicalized by clang AST to pure integer literals/casts are supported. Partial-initializer zero fill, nested arrays, struct arrays, non-literal or side-effecting initializers, VLAs, and incomplete arrays still fail closed;
+- clang-lowered typed IR local fixed-length integer array literals, index reads, and element writes, for example `uint32_t table[3] = {1,2,3}; table[i] = value; return table[i]; -> let mut table: [u32; 3] = ...; table[i as usize] = value;`; only initializer elements canonicalized by clang AST to pure integer literals/casts are supported, and writes must target a declared local fixed-length integer array. Partial-initializer zero fill, nested arrays, struct arrays, non-literal or side-effecting initializers, VLAs, incomplete arrays, writes to readonly global arrays, writes to const pointer slices, and array-to-pointer decay still fail closed;
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
 - nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
 - assignment RHS prelude, covering `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`;

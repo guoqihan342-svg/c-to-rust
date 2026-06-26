@@ -537,6 +537,171 @@ fn typed_ir_emits_local_fixed_array_index_read() {
     assert_rust_snippet_compiles("typed-ir-local-fixed-array-index-read", rust);
 }
 
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_fixed_array_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let table_ty = ir_array(u32_ty.clone(), 3);
+    let table_var = || ir_var("table", table_ty.clone());
+    let index_var = || ir_var("i", usize_ty.clone());
+    let ir = IrFunction {
+        name: "replace_local_table_slot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: table_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1U", u32_ty.clone()),
+                        ir_lit(2, "2U", u32_ty.clone()),
+                        ir_lit(3, "3U", u32_ty.clone()),
+                    ],
+                    ty: table_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(table_var()),
+                    index: Box::new(index_var()),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("value", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Index {
+                    base: Box::new(table_var()),
+                    index: Box::new(index_var()),
+                    ty: u32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit local fixed array index assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("let mut table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("table[i as usize] = value;"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-local-fixed-array-index-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_global_array_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let global = ir_u32_global_array("table", 3, vec![1, 2, 3]);
+    let ir = IrFunction {
+        name: "write_global_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "i".to_string(),
+            ty: usize_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("table", global.ty.clone())),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(0, "0U", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0U", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir_with_globals(&ir, &[global])
+        .expect_err("readonly global array assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("assign index base table"));
+    assert!(error.reason.contains("readonly global"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_const_pointer_index_assignment() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let const_u32_ptr = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        ir_const(u32_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "write_const_pointer_slot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "table".to_string(),
+                ty: const_u32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("table", const_u32_ptr)),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(0, "0U", u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0U", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("const pointer index assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("assign index base table"));
+    assert!(error.reason.contains("unsupported type"));
+}
+
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 fn typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir() {
@@ -632,6 +797,122 @@ fn typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir() {
     assert!(rust.contains("let table: [u32; 3] = [(1i32 as u32), 2u32, 3u32];"));
     assert!(rust.contains("return table[i as usize];"));
     assert_rust_snippet_compiles("clang-lowered-local-fixed-array-index-read", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_local_fixed_array_index_assignment_from_clang_lowered_ir() {
+    let u32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let usize_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let table_ty = ClangTypeSkeleton {
+        spelled: "uint32_t[3]".to_string(),
+        canonical: "uint32_t[3]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(u32_ty.clone()),
+            len: Some(3),
+        },
+    };
+    let table_ref = || ClangExprSkeleton::DeclRef {
+        name: "table".to_string(),
+        ty: table_ty.clone(),
+    };
+    let index_ref = || ClangExprSkeleton::DeclRef {
+        name: "i".to_string(),
+        ty: usize_ty.clone(),
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "replace_local_table_slot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "table".to_string(),
+                ty: table_ty.clone(),
+                init: Some(ClangExprSkeleton::ArrayLiteral {
+                    elements: vec![
+                        ClangExprSkeleton::IntegerLiteral {
+                            value: 1,
+                            spelling: "1U".to_string(),
+                            ty: u32_ty.clone(),
+                        },
+                        ClangExprSkeleton::IntegerLiteral {
+                            value: 2,
+                            spelling: "2U".to_string(),
+                            ty: u32_ty.clone(),
+                        },
+                        ClangExprSkeleton::IntegerLiteral {
+                            value: 3,
+                            spelling: "3U".to_string(),
+                            ty: u32_ty.clone(),
+                        },
+                    ],
+                    ty: table_ty.clone(),
+                }),
+            },
+            ClangStmtSkeleton::Assign {
+                target: ClangExprSkeleton::Index {
+                    base: Box::new(table_ref()),
+                    index: Box::new(index_ref()),
+                    ty: u32_ty.clone(),
+                },
+                value: ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: u32_ty.clone(),
+                },
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::Index {
+                    base: Box::new(table_ref()),
+                    index: Box::new(index_ref()),
+                    ty: u32_ty.clone(),
+                }),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower local array assignment skeleton");
+    let [IrStmt::Decl { .. }, IrStmt::Assign { target, .. }, IrStmt::Return { .. }] =
+        ir.body.as_slice()
+    else {
+        panic!(
+            "expected local array declaration, assignment, and return, got {:?}",
+            ir.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Index { .. }));
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit local array assignment from clang-lowered IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("let mut table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("table[i as usize] = value;"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("clang-lowered-local-fixed-array-index-assignment", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2063,7 +2344,9 @@ fn typed_ir_rejects_while_with_non_var_assignment_target() {
         .reason
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("stmt[0].while body[0]"));
-    assert!(error.reason.contains("assign target must be Var"));
+    assert!(error
+        .reason
+        .contains("assign target must be Var or local fixed array Index"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2748,7 +3031,9 @@ fn typed_ir_rejects_if_with_non_var_assignment_target() {
         .reason
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("stmt[0].if else[0]"));
-    assert!(error.reason.contains("assign target must be Var"));
+    assert!(error
+        .reason
+        .contains("assign target must be Var or local fixed array Index"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7352,6 +7637,61 @@ fn clang_ast_dump_emits_local_fixed_array_initializer_when_enabled() {
     assert!(rust.contains("let table: [u32; 3] = [1u32, 2u32, 3u32];"));
     assert!(rust.contains("return table[i as usize];"));
     assert_rust_snippet_compiles("typed-ir-real-clang-local-array-init", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-local-array-index-assign");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("replace_local_table_slot.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\n#include <stddef.h>\nuint32_t replace_local_table_slot(size_t i, uint32_t value) { uint32_t table[3] = {1U, 2U, 3U}; table[i] = value; return table[i]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "replace_local_table_slot",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { name, .. }, IrStmt::Assign { target, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected local array declaration, index assignment, and return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "table");
+    assert!(matches!(target, IrExpr::Index { .. }));
+
+    let rust = emit_rust_from_ir(function).expect("emit local array index assignment");
+    assert!(rust.contains("pub fn replace_local_table_slot(i: usize, value: u32) -> u32"));
+    assert!(rust.contains("let mut table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("table[i as usize] = value;"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-local-array-index-assignment", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

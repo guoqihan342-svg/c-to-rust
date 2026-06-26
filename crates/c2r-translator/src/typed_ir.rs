@@ -230,6 +230,7 @@ pub struct IrEmitError {
 
 #[derive(Clone, Debug, Default)]
 struct EmitContext {
+    assigned_vars: HashSet<String>,
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
     readonly_globals: HashMap<String, IrGlobal>,
@@ -246,6 +247,7 @@ impl EmitContext {
         function: &IrFunction,
         globals: &[IrGlobal],
     ) -> Result<Self, String> {
+        let assigned_vars = collect_assigned_vars(&function.body);
         let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
         let mut byte_slice_params = HashSet::new();
         for source in byte_cursor_sources.values() {
@@ -270,10 +272,15 @@ impl EmitContext {
             }
         }
         Ok(Self {
+            assigned_vars,
             byte_slice_params,
             byte_cursor_sources,
             readonly_globals,
         })
+    }
+
+    fn is_assigned_var(&self, name: &str) -> bool {
+        self.assigned_vars.contains(name)
     }
 
     fn byte_cursor_source(&self, cursor: &str) -> Option<&str> {
@@ -345,12 +352,11 @@ fn emit_scalar_rust_from_ir_with_globals(
         return Err("non-void function must end with a return value".to_string());
     }
     let context = EmitContext::from_function_and_globals(function, globals)?;
-    let assigned_vars = collect_assigned_vars(&function.body);
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params
         .iter()
-        .map(|param| emit_param(param, &assigned_vars, &context))
+        .map(|param| emit_param(param, &context.assigned_vars, &context))
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     let mut symbols = collect_param_symbols(&function.params)?;
@@ -580,7 +586,14 @@ fn emit_stmt(
                     &format!("decl {name} initializer"),
                 )?;
                 symbols.insert(name.clone());
-                return Ok(format!("{indent}let {decl_name}: {decl_ty} = {init};\n"));
+                let mut_prefix = if context.is_assigned_var(name) {
+                    "mut "
+                } else {
+                    ""
+                };
+                return Ok(format!(
+                    "{indent}let {mut_prefix}{decl_name}: {decl_ty} = {init};\n"
+                ));
             }
             let decl_ty =
                 emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
@@ -600,14 +613,7 @@ fn emit_stmt(
             if is_byte_cursor_cast_assignment(target, value, symbols, context)? {
                 return Ok(String::new());
             }
-            let (name, target_ty) = match target {
-                IrExpr::Var { name, ty, .. } => (name, ty),
-                _ => return Err("assign target must be Var".to_string()),
-            };
-            if !symbols.contains(name) {
-                return Err(format!("assign target {name} is not declared"));
-            }
-            let target_name = emit_identifier(name, "assign target")?;
+            let (target_name, target_ty) = emit_assignment_target(target, symbols, context)?;
             if count_post_increment_byte_reads(value) > 1 {
                 return Err(
                     "assign value multiple post-increment byte reads are unsupported".to_string(),
@@ -732,6 +738,88 @@ fn emit_stmt(
             Err(format!("unsupported statement {node}: {reason}"))
         }
     }
+}
+
+fn emit_assignment_target<'a>(
+    target: &'a IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<(String, &'a IrType), String> {
+    match target {
+        IrExpr::Var { name, ty, .. } => {
+            if !symbols.contains(name) {
+                return Err(format!("assign target {name} is not declared"));
+            }
+            let name = emit_identifier(name, "assign target")?;
+            Ok((name, ty))
+        }
+        IrExpr::Index {
+            base, index, ty, ..
+        } => {
+            let target =
+                emit_local_array_index_assignment_target(base, index, ty, symbols, context)?;
+            Ok((target, ty))
+        }
+        _ => Err("assign target must be Var or local fixed array Index".to_string()),
+    }
+}
+
+fn emit_local_array_index_assignment_target(
+    base: &IrExpr,
+    index: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("assign index base must be Var".to_string());
+    };
+    if context.readonly_global(base_name).is_some() {
+        return Err(format!(
+            "assign index base {base_name} is a readonly global"
+        ));
+    }
+    if !symbols.contains(base_name) {
+        return Err(format!("assign index base {base_name} is not declared"));
+    }
+    if base_ty.is_const {
+        return Err(format!(
+            "assign index base {base_name} has const type {}",
+            type_label(base_ty)
+        ));
+    }
+    let element_ty = fixed_integer_array_element_type(base_ty).ok_or_else(|| {
+        format!(
+            "assign index base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("assign index element has {detail}"))?;
+    let result_ty =
+        emit_scalar_type(ty).map_err(|detail| format!("assign index result has {detail}"))?;
+    if result_ty != element_ty {
+        return Err(format!(
+            "assign index result type {result_ty} does not match element type {element_ty}"
+        ));
+    }
+    let index_ty =
+        expr_type(index).ok_or_else(|| "assign index operand type is unsupported".to_string())?;
+    if !is_integer_type(index_ty) {
+        return Err(format!(
+            "assign index operand type {} is unsupported",
+            type_label(index_ty)
+        ));
+    }
+    let base = emit_identifier(base_name, "assign index base")?;
+    let index = emit_expr(index, symbols, context)
+        .map_err(|detail| format!("assign index operand {detail}"))?;
+    Ok(format!("{base}[{index} as usize]"))
 }
 
 fn emit_postfix_decrement_while_loop(
@@ -1776,7 +1864,7 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
     for stmt in body {
         match stmt {
             IrStmt::Assign { target, .. } => {
-                if let IrExpr::Var { name, .. } = target {
+                if let Some(name) = assigned_var_name_from_target(target) {
                     assigned_vars.insert(name.clone());
                 }
             }
@@ -1806,6 +1894,17 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
             }
             _ => {}
         }
+    }
+}
+
+fn assigned_var_name_from_target(target: &IrExpr) -> Option<&String> {
+    match target {
+        IrExpr::Var { name, .. } => Some(name),
+        IrExpr::Index { base, .. } => match base.as_ref() {
+            IrExpr::Var { name, .. } => Some(name),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
