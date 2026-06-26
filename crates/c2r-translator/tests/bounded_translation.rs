@@ -8,7 +8,8 @@ use std::{
 use c2r_translator::clang_frontend::ClangParseSpec;
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 use c2r_translator::clang_frontend::{
-    lower_function_from_clang_ast_dump, lower_function_skeleton, ClangBinaryOperator,
+    lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
+    lower_function_skeleton, lower_function_skeleton_report, ClangBinaryOperator,
     ClangExprSkeleton, ClangFunctionSkeleton, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind,
     ClangTypeSkeleton,
 };
@@ -805,6 +806,69 @@ fn clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_report_records_unavailable_without_clang_path() {
+    let environment = std::collections::BTreeMap::new();
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &PathBuf::from("add_one.c"),
+        "add_one",
+    );
+
+    assert_eq!(report.status, "unavailable");
+    assert_eq!(report.frontend, "clang");
+    assert_eq!(report.function_name, "add_one");
+    assert_eq!(report.source_file.as_deref(), Some("add_one.c"));
+    assert_eq!(report.clang_path.as_deref(), None);
+    assert!(report.function_ir.is_none());
+    assert!(report
+        .errors
+        .iter()
+        .any(|error| error.kind == "missing_clang_path"));
+    assert!(report
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.contains("CLANG_PATH is not set")));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_report_maps_unsupported_skeleton_without_ir() {
+    let unsupported_type = ClangTypeSkeleton {
+        spelled: "long double".to_string(),
+        canonical: "long double".to_string(),
+        kind: ClangTypeKind::Unsupported {
+            reason: "long double is outside the current type skeleton".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "unsupported_value".to_string(),
+        return_type: unsupported_type.clone(),
+        params: vec![],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: unsupported_type,
+            }),
+        }],
+    };
+    let environment = std::collections::BTreeMap::new();
+
+    let report = lower_function_skeleton_report(&skeleton, &environment);
+
+    assert_eq!(report.status, "unsupported");
+    assert_eq!(report.frontend, "clang");
+    assert_eq!(report.function_name, "unsupported_value");
+    assert!(report.function_ir.is_none());
+    assert!(report
+        .errors
+        .iter()
+        .any(|error| error.kind == "unsupported_clang_type"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -829,6 +893,17 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
 
     let ir = lower_function_from_clang_ast_dump(&clang_path, &source_file, "add_one")
         .expect("lower real clang AST add_one");
+    let environment = std::collections::BTreeMap::from([
+        (
+            "CLANG_PATH".to_string(),
+            clang_path.to_string_lossy().into_owned(),
+        ),
+        (
+            "LIBCLANG_PATH".to_string(),
+            "C:/Program Files/LLVM/bin/libclang.dll".to_string(),
+        ),
+    ]);
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_one");
 
     assert_eq!(ir.name, "add_one");
     assert_eq!(ir.params.len(), 1);
@@ -843,6 +918,16 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
             ..
         }]
     ));
+    assert_eq!(report.status, "lowered");
+    assert_eq!(report.frontend, "clang");
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(
+        report
+            .function_ir
+            .as_ref()
+            .map(|function| function.name.as_str()),
+        Some("add_one")
+    );
 }
 
 #[test]

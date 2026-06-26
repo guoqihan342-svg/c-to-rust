@@ -22,7 +22,7 @@ pub struct ClangParseSpec {
     pub function_source_span: Option<SourceSpanRef>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClangFrontendError {
     pub kind: String,
     pub message: String,
@@ -159,6 +159,21 @@ pub enum ClangBinaryOperator {
     Add,
 }
 
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangLoweringReport {
+    pub status: String,
+    pub frontend: String,
+    pub source_file: Option<String>,
+    pub function_name: String,
+    pub clang_path: Option<String>,
+    pub arguments: Vec<String>,
+    pub environment: ClangEnvironment,
+    pub diagnostics: Vec<String>,
+    pub errors: Vec<ClangFrontendError>,
+    pub function_ir: Option<IrFunction>,
+}
+
 impl ClangParseSpec {
     pub fn from_slice_spec(spec: &SliceSpec) -> Result<Self, ClangFrontendError> {
         let source_root = required_path(spec.source_root.as_deref(), "source_root")?;
@@ -271,12 +286,12 @@ pub fn lower_function_from_clang_ast_dump(
     source_file: &Path,
     function_name: &str,
 ) -> Result<IrFunction, ClangFrontendError> {
+    let arguments = clang_ast_dump_arguments(source_file);
     let output = Command::new(clang_path)
-        .args(["-Xclang", "-ast-dump=json", "-fsyntax-only"])
-        .arg(source_file)
+        .args(&arguments)
         .output()
         .map_err(|error| ClangFrontendError {
-            kind: "clang_ast_dump_failed".to_string(),
+            kind: "clang_ast_dump_unavailable".to_string(),
             message: format!("failed to execute clang ast dump: {error}"),
         })?;
     if !output.status.success() {
@@ -298,6 +313,62 @@ pub fn lower_function_from_clang_ast_dump(
     let skeleton = function_skeleton_from_ast(function)?;
 
     lower_function_skeleton(&skeleton)
+}
+
+#[cfg(feature = "typed-ir")]
+pub fn lower_function_from_clang_ast_dump_report(
+    environment: &BTreeMap<String, String>,
+    source_file: &Path,
+    function_name: &str,
+) -> ClangLoweringReport {
+    let arguments = clang_ast_dump_arguments(source_file);
+    let Some(clang_path) = environment
+        .get("CLANG_PATH")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return ClangLoweringReport {
+            status: "unavailable".to_string(),
+            frontend: "clang".to_string(),
+            source_file: Some(source_file.to_string_lossy().into_owned()),
+            function_name: function_name.to_string(),
+            clang_path: None,
+            arguments,
+            environment: ClangEnvironment::detect_from_env(environment),
+            diagnostics: vec![
+                "CLANG_PATH is not set; clang AST lowering is unavailable".to_string()
+            ],
+            errors: vec![ClangFrontendError {
+                kind: "missing_clang_path".to_string(),
+                message: "clang AST lowering requires CLANG_PATH".to_string(),
+            }],
+            function_ir: None,
+        };
+    };
+
+    report_from_lowering_result(
+        Some(source_file.to_string_lossy().into_owned()),
+        function_name.to_string(),
+        Some(clang_path.to_string()),
+        arguments,
+        environment,
+        lower_function_from_clang_ast_dump(&PathBuf::from(clang_path), source_file, function_name),
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+pub fn lower_function_skeleton_report(
+    function: &ClangFunctionSkeleton,
+    environment: &BTreeMap<String, String>,
+) -> ClangLoweringReport {
+    report_from_lowering_result(
+        None,
+        function.name.clone(),
+        None,
+        Vec::new(),
+        environment,
+        lower_function_skeleton(function),
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -325,6 +396,64 @@ pub fn lower_function_skeleton(
             .collect::<Result<Vec<_>, ClangFrontendError>>()?,
         source_span: None,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_ast_dump_arguments(source_file: &Path) -> Vec<String> {
+    vec![
+        "-Xclang".to_string(),
+        "-ast-dump=json".to_string(),
+        "-fsyntax-only".to_string(),
+        source_file.to_string_lossy().into_owned(),
+    ]
+}
+
+#[cfg(feature = "typed-ir")]
+fn report_from_lowering_result(
+    source_file: Option<String>,
+    function_name: String,
+    clang_path: Option<String>,
+    arguments: Vec<String>,
+    environment: &BTreeMap<String, String>,
+    result: Result<IrFunction, ClangFrontendError>,
+) -> ClangLoweringReport {
+    match result {
+        Ok(function_ir) => ClangLoweringReport {
+            status: "lowered".to_string(),
+            frontend: "clang".to_string(),
+            source_file,
+            function_name,
+            clang_path,
+            arguments,
+            environment: ClangEnvironment::detect_from_env(environment),
+            diagnostics: Vec::new(),
+            errors: Vec::new(),
+            function_ir: Some(function_ir),
+        },
+        Err(error) => ClangLoweringReport {
+            status: lowering_status_for_error(&error).to_string(),
+            frontend: "clang".to_string(),
+            source_file,
+            function_name,
+            clang_path,
+            arguments,
+            environment: ClangEnvironment::detect_from_env(environment),
+            diagnostics: vec![error.message.clone()],
+            errors: vec![error],
+            function_ir: None,
+        },
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn lowering_status_for_error(error: &ClangFrontendError) -> &'static str {
+    if error.kind == "missing_clang_path" || error.kind == "clang_ast_dump_unavailable" {
+        "unavailable"
+    } else if error.kind.starts_with("unsupported_") {
+        "unsupported"
+    } else {
+        "blocked"
+    }
 }
 
 #[cfg(feature = "typed-ir")]
