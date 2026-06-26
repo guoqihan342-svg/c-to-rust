@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::PathBuf,
+    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -45,6 +46,33 @@ fn unique_out_dir(name: &str) -> PathBuf {
 
 fn json_file(path: PathBuf) -> Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[cfg(feature = "typed-ir")]
+fn assert_rust_snippet_compiles(name: &str, rust_code: &str) {
+    let out_dir = unique_out_dir(name);
+    fs::create_dir_all(&out_dir).unwrap();
+    let source = out_dir.join("lib.rs");
+    let output = out_dir.join("lib.rlib");
+    fs::write(&source, rust_code).unwrap();
+
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let result = Command::new(rustc)
+        .arg("--crate-type")
+        .arg("lib")
+        .arg(&source)
+        .arg("-o")
+        .arg(&output)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run rustc: {error}"));
+
+    assert!(
+        result.status.success(),
+        "rustc failed for {name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    fs::remove_dir_all(out_dir).unwrap();
 }
 
 #[cfg(feature = "typed-ir")]
@@ -306,6 +334,7 @@ fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
     assert!(rust.contains("return crc ^ !0u32;"));
     assert!(!rust.contains("*p++"));
     assert!(!rust.contains("crc32_table"));
+    assert_rust_snippet_compiles("typed-ir-crc32", &rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -331,6 +360,470 @@ fn typed_ir_rejects_crc32_loop_with_extra_top_level_term() {
     assert!(error
         .reason
         .contains("outside the current typed IR emitter subset"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_scalar_assignment_to_mut_param() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "invert_crc".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "crc".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("crc", u32_ty.clone()),
+                value: ir_binary(
+                    IrBinOp::BitXor,
+                    ir_var("crc", u32_ty.clone()),
+                    ir_bitnot(ir_lit(0, "0U", u32_ty.clone()), u32_ty.clone()),
+                    u32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("crc", u32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar param assignment");
+
+    assert!(rust.contains("pub fn invert_crc(mut crc: u32) -> u32"));
+    assert!(rust.contains("crc = (crc ^ !0u32);"));
+    assert!(rust.contains("return crc;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-assignment", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_scalar_decl_init_and_integer_cast() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "widen".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "tmp".to_string(),
+                ty: u32_ty.clone(),
+                init: Some(IrExpr::Cast {
+                    target: u32_ty.clone(),
+                    expr: Box::new(ir_var("value", i32_ty.clone())),
+                    implicit: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("tmp", u32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar decl and cast");
+
+    assert!(rust.contains("pub fn widen(value: i32) -> u32"));
+    assert!(rust.contains("let mut tmp: u32 = (value as u32);"));
+    assert!(rust.contains("return tmp;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-decl-cast", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_pointer_param_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let const_void_ptr = ir_pointer(
+        "const void *",
+        "const void *",
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        true,
+    );
+    let ir = IrFunction {
+        name: "read_byte".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "buf".to_string(),
+            ty: const_void_ptr,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(0, "0U", u32_ty.clone())),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer param must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("param buf has pointer type const void * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mismatched_binary_operand_types_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "mask".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "x".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::BitAnd,
+                ir_var("x", u32_ty.clone()),
+                ir_lit(0xFF, "0xFF", i32_ty),
+                u32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("mismatched binary types must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("binary operand types must match"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_return_type_mismatch_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_return".to_string(),
+        return_type: u32_ty,
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(1, "1", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("return type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr type i32"));
+    assert!(error.reason.contains("expected type u32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_assign_type_mismatch_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_assign".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "x".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("x", u32_ty.clone()),
+                value: ir_lit(1, "1", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("x", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("assign type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("assign value type i32"));
+    assert!(error.reason.contains("expected type u32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_decl_init_type_mismatch_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_decl".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "tmp".to_string(),
+                ty: u32_ty.clone(),
+                init: Some(ir_lit(1, "1", i32_ty)),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("tmp", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("decl init type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("decl tmp initializer type i32"));
+    assert!(error.reason.contains("expected type u32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_bitnot_operand_type_mismatch_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let ir = IrFunction {
+        name: "bad_bitnot".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "x".to_string(),
+            ty: u8_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_bitnot(ir_var("x", u8_ty), u32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("bitnot operand type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("bitnot operand type u8"));
+    assert!(error.reason.contains("expected type u32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_non_void_function_without_return_value_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "missing_return".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Expr {
+            expr: ir_lit(1, "1", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("non-void function must return");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("non-void function must end with a return value"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_uninitialized_decl_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_uninit_decl".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "tmp".to_string(),
+                ty: u32_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("tmp", u32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("uninitialized decl must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("decl tmp without initializer is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_rust_keyword_identifier_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "type".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(1, "1", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("rust keyword function name must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("function identifier \"type\" is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_underscore_identifier_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "_".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(1, "1", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("underscore function name must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("function identifier \"_\" is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_undeclared_var_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_var".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("x", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("undeclared var must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("var x is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_assign_to_undeclared_var_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_assign_target".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("x", i32_ty.clone()),
+                value: ir_lit(1, "1", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(1, "1", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("undeclared assign target must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("assign target x is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_out_of_range_integer_literal_in_generic_emitter() {
+    let u8_ty = ir_u8();
+    let ir = IrFunction {
+        name: "bad_literal".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(256, "256", u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("out-of-range literal must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("literal value 256 does not fit type u8"));
 }
 
 #[test]
@@ -803,6 +1296,50 @@ fn clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture() {
         rhs.as_ref(),
         IrExpr::LitInt { value: 1, spelling, .. } if spelling == "1"
     ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_add_one_from_clang_lowered_ir() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "add_one".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Add,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower add_one skeleton");
+
+    let rust = emit_rust_from_ir(&ir).expect("emit add_one from lowered typed IR");
+
+    assert!(rust.contains("pub fn add_one(value: i32) -> i32"));
+    assert!(rust.contains("return (value + 1i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-add-one", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

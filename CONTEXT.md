@@ -4775,3 +4775,65 @@ python -B validation/tools/validate_auto_translation_evidence.py --target-id fla
 - real-fdb `fdb_calc_crc32` 已具备“真实 clang-lowered typed IR -> 可编译 Rust draft -> generated replay fixture passed -> C harness output matched -> candidate diff diagnostic recorded”的非语义闭环。
 - `generated_draft_semantic_pass=false` 仍是正确状态。
 - 下一步不要直接把 candidate diff 改成 semantic pass；应继续做 accepted oracle/diff/negative-diff 的正式绑定，或把 validation profile 的 candidate gate 单独建模为 diagnostic gate。
+
+## 66. 2026-06-26 scalar typed IR recursive emitter
+
+本轮承接第 65 节和 phase1b emitter 方案讨论：先不动 CLI、Python validation、oracle/diff 证据和 CRC32 特例删除，只打通一个保守的“clang-lowered typed IR -> 标量递归 emitter -> 可编译 Rust”切片。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_rust_from_ir()` 仍优先命中严格的 `is_crc32_byte_cursor_ir()`，保持现有 CRC32 安全模板输出。
+  - 未命中 CRC32 时进入新的私有 `emit_scalar_rust_from_ir()`。
+  - 标量 emitter 当前只支持整数和 void return；pointer、array、record、function、unsupported type 全部 fail-closed。
+  - 支持 `Return`、`Decl`、`Assign`、`Expr` 的最小递归输出；`If`、`While` 仍 fail-closed。
+  - 支持 `Var`、整数 literal、`Add`、`BitAnd`、`BitXor`、`Shr`、`BitNot`、整数到整数 `Cast`。
+  - `Return`、`Assign`、`Decl init` 和二元表达式会做保守类型一致性校验；不确定时 fail-closed，而不是输出可能不可编译的 Rust。
+  - `BitNot` 也校验 operand/result 类型一致；非 void 函数必须以 `Return(Some(_))` 结束；无初始化 scalar `Decl` 先 fail-closed；Rust 关键字、单独 `_` 或非法标识符先 fail-closed。
+  - 表达式读取和赋值目标必须来自参数或已初始化 local decl；integer literal 会按目标整数类型做范围检查。
+  - `Deref`、`Index`、`IncDec`、`Call`、`AddrOf` 和未列入的 binop/unop 均 fail-closed。
+  - 会扫描赋值目标；如果参数被赋值，函数签名输出 `mut param`，避免生成不可编译 Rust。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_add_one_from_clang_lowered_ir`：从 `ClangFunctionSkeleton` lower 出 `add_one` 的 `IrFunction`，再经 public `emit_rust_from_ir()` 输出 `pub fn add_one(value: i32) -> i32` 和 `return (value + 1i32);`。
+  - 新增直接 typed IR 覆盖：参数赋值变 `mut`、声明初始化加整数 cast、指针参数必须 fail-closed、二元表达式操作数类型不匹配必须 fail-closed、return/assign/decl-init 类型不匹配必须 fail-closed、bitnot operand 类型不匹配必须 fail-closed、非 void 缺 return 必须 fail-closed、无初始化 decl 必须 fail-closed、Rust 关键字和 `_` 标识符必须 fail-closed、未声明变量读写必须 fail-closed、integer literal 越界必须 fail-closed。
+  - 对 add_one、CRC32 模板、参数赋值、声明/cast 正向输出增加 `rustc --crate-type lib` smoke，证明这些 snippets 至少可被 Rust 编译器接受。
+
+已验证命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_add_one_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_flashdb_crc32_without_string_recognizer -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_crc32_loop_with_extra_top_level_term -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_assignment_to_mut_param -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_decl_init_and_integer_cast -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_pointer_param_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_mismatched_binary_operand_types_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_return_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_assign_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_decl_init_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_bitnot_operand_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_non_void_function_without_return_value_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_uninitialized_decl_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_rust_keyword_identifier_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_underscore_identifier_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_undeclared_var_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_assign_to_undeclared_var_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_out_of_range_integer_literal_in_generic_emitter -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+验证结果：
+- focused add_one 红绿：最初失败于 `add_one is outside the current typed IR emitter subset`；实现后 `1 passed`。
+- CRC32 旧模板回归：`typed_ir_emits_flashdb_crc32_without_string_recognizer` 通过，仍包含 `crc32_update_byte`，不回退到 `crc32_table`。
+- CRC32 fail-closed 回归：`typed_ir_rejects_crc32_loop_with_extra_top_level_term` 通过。
+- 新增标量边界测试均通过；其中二元类型不匹配负例先红于 `return (x & 255i32);`，return 类型不匹配负例先红于 `return 1i32;`，收紧后通过。
+- `BitNot` operand/result 类型不匹配负例先红于 `return !x;`，非 void 缺 return 负例先红于 `pub fn missing_return() -> i32 { 1i32; }`，收紧后通过。
+- 未声明变量和 integer literal 越界负例分别先红于 `return x;` 和 `return 256u8;`，收紧后通过。
+- `bounded_translation`：`103 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `103 passed`，doc tests `0`。
+
+当前核心翻译功能状态：
+- 现在已经有一条非 CRC32 特例的最小通路：`clang skeleton lowering -> typed IR -> scalar recursive emitter -> Rust`。
+- real-fdb CRC32 路径仍由严格 matcher 和安全模板保护；本轮没有把 pointer/loop/call/index 语义交给通用 emitter。
+- 下一步可以继续把 phase1b emitter 扩到小型结构化 IR：先加真实红灯测试，再逐步引入 `If`/`While`、更完整的整数算术语义、以及与 clang-lowered report 的可审计接线；不要一次性放开 pointer/deref/index/call。

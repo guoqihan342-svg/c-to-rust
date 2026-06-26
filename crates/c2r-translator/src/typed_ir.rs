@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceSpan {
@@ -211,10 +212,10 @@ pub fn emit_rust_from_ir(function: &IrFunction) -> Result<String, IrEmitError> {
         return Ok(emit_crc32_byte_cursor_rust(&function.name));
     }
 
-    Err(IrEmitError {
+    emit_scalar_rust_from_ir(function).map_err(|detail| IrEmitError {
         reason: format!(
-            "{} is outside the current typed IR emitter subset",
-            function.name
+            "{} is outside the current typed IR emitter subset: {}",
+            function.name, detail
         ),
     })
 }
@@ -375,6 +376,501 @@ pub fn emit_crc32_byte_cursor_rust(function_name: &str) -> String {
              }}\n\
              return crc ^ !0u32;\n\
          }}\n"
+    )
+}
+
+fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
+    let return_type = emit_return_type(&function.return_type)?;
+    if return_type.is_some() && !ends_with_return_value(&function.body) {
+        return Err("non-void function must end with a return value".to_string());
+    }
+    let assigned_vars = collect_assigned_vars(&function.body);
+    let function_name = emit_identifier(&function.name, "function")?;
+    let params = function
+        .params
+        .iter()
+        .map(|param| emit_param(param, &assigned_vars))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    let mut symbols = collect_param_symbols(&function.params)?;
+
+    let mut rust = String::new();
+    rust.push_str(&format!("pub fn {function_name}({params})"));
+    if let Some(return_type) = return_type {
+        rust.push_str(&format!(" -> {}", return_type));
+    }
+    rust.push_str(" {\n");
+    for (index, stmt) in function.body.iter().enumerate() {
+        let line = emit_stmt(stmt, &function.return_type, 1, &mut symbols)
+            .map_err(|detail| format!("stmt[{index}].{detail}"))?;
+        rust.push_str(&line);
+    }
+    rust.push_str("}\n");
+    Ok(rust)
+}
+
+fn emit_param(param: &IrParam, assigned_vars: &HashSet<String>) -> Result<String, String> {
+    let ty = emit_scalar_type(&param.ty)
+        .map_err(|detail| format!("param {} has {}", param.name, detail))?;
+    let name = emit_identifier(&param.name, "param")?;
+    let mut_prefix = if assigned_vars.contains(&param.name) {
+        "mut "
+    } else {
+        ""
+    };
+    Ok(format!("{mut_prefix}{name}: {ty}"))
+}
+
+fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
+    if is_void_type(ty) {
+        Ok(None)
+    } else {
+        emit_scalar_type(ty).map(Some)
+    }
+}
+
+fn emit_scalar_type(ty: &IrType) -> Result<String, String> {
+    match &ty.kind {
+        IrTypeKind::Integer { signed, width } => {
+            if is_size_t_type(ty) {
+                return Ok("usize".to_string());
+            }
+            match (*signed, *width) {
+                (true, 8) => Ok("i8".to_string()),
+                (true, 16) => Ok("i16".to_string()),
+                (true, 32) => Ok("i32".to_string()),
+                (true, 64) => Ok("i64".to_string()),
+                (false, 8) => Ok("u8".to_string()),
+                (false, 16) => Ok("u16".to_string()),
+                (false, 32) => Ok("u32".to_string()),
+                (false, 64) => Ok("u64".to_string()),
+                _ => Err(format!("integer type {} is unsupported", type_label(ty))),
+            }
+        }
+        IrTypeKind::Void => Err("void type is only supported as a return type".to_string()),
+        IrTypeKind::Pointer { .. } => {
+            Err(format!("pointer type {} is unsupported", type_label(ty)))
+        }
+        IrTypeKind::Array { .. } => Err(format!("array type {} is unsupported", type_label(ty))),
+        IrTypeKind::Record { name } => Err(format!("record type {name} is unsupported")),
+        IrTypeKind::Function => Err(format!("function type {} is unsupported", type_label(ty))),
+        IrTypeKind::Unsupported { reason } => {
+            Err(format!("unsupported type {}: {reason}", type_label(ty)))
+        }
+    }
+}
+
+fn emit_stmt(
+    stmt: &IrStmt,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &mut HashSet<String>,
+) -> Result<String, String> {
+    let indent = "    ".repeat(indent_level);
+    match stmt {
+        IrStmt::Decl { name, ty, init, .. } => {
+            let decl_name = emit_identifier(name, "decl")?;
+            if symbols.contains(name) {
+                return Err(format!("decl {name} duplicates an existing symbol"));
+            }
+            let decl_ty =
+                emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
+            if let Some(init) = init {
+                validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
+                let init = emit_expr(init, symbols)
+                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+                symbols.insert(name.clone());
+                Ok(format!(
+                    "{indent}let mut {decl_name}: {decl_ty} = {init};\n"
+                ))
+            } else {
+                Err(format!("decl {name} without initializer is unsupported"))
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            let (name, target_ty) = match target {
+                IrExpr::Var { name, ty, .. } => (name, ty),
+                _ => return Err("assign target must be Var".to_string()),
+            };
+            if !symbols.contains(name) {
+                return Err(format!("assign target {name} is not declared"));
+            }
+            let target_name = emit_identifier(name, "assign target")?;
+            validate_expr_matches_type(value, target_ty, "assign value")?;
+            let value =
+                emit_expr(value, symbols).map_err(|detail| format!("assign value {detail}"))?;
+            Ok(format!("{indent}{target_name} = {value};\n"))
+        }
+        IrStmt::Return { value, .. } => match value {
+            Some(value) => {
+                if is_void_type(return_type) {
+                    return Err("return value in void function".to_string());
+                }
+                validate_expr_matches_type(value, return_type, "return expr")?;
+                let value =
+                    emit_expr(value, symbols).map_err(|detail| format!("return expr {detail}"))?;
+                Ok(format!("{indent}return {value};\n"))
+            }
+            None if is_void_type(return_type) => Ok(format!("{indent}return;\n")),
+            None => Err("return without value in non-void function".to_string()),
+        },
+        IrStmt::Expr { expr, .. } => {
+            let expr = emit_expr(expr, symbols).map_err(|detail| format!("expr {detail}"))?;
+            Ok(format!("{indent}{expr};\n"))
+        }
+        IrStmt::If { .. } => Err("if statement is unsupported".to_string()),
+        IrStmt::While { .. } => Err("while statement is unsupported".to_string()),
+        IrStmt::Unsupported { node, reason, .. } => {
+            Err(format!("unsupported statement {node}: {reason}"))
+        }
+    }
+}
+
+fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
+    match expr {
+        IrExpr::LitInt { value, ty, .. } => emit_integer_literal(*value, ty),
+        IrExpr::Var { name, ty, .. } => {
+            if !symbols.contains(name) {
+                return Err(format!("var {name} is not declared"));
+            }
+            emit_scalar_type(ty).map_err(|detail| format!("var {name} has {detail}"))?;
+            emit_identifier(name, "var")
+        }
+        IrExpr::Binary {
+            op, lhs, rhs, ty, ..
+        } => {
+            let op = emit_binary_op(op)?;
+            validate_binary_operand_types(op, lhs, rhs, ty)?;
+            let lhs = emit_expr(lhs, symbols).map_err(|detail| format!("binary lhs {detail}"))?;
+            let rhs = emit_expr(rhs, symbols).map_err(|detail| format!("binary rhs {detail}"))?;
+            Ok(format!("({lhs} {op} {rhs})"))
+        }
+        IrExpr::Unary {
+            op, operand, ty, ..
+        } => match op {
+            IrUnOp::BitNot => {
+                validate_expr_matches_type(operand, ty, "bitnot operand")?;
+                let operand = emit_expr(operand, symbols)
+                    .map_err(|detail| format!("bitnot operand {detail}"))?;
+                Ok(format!("!{operand}"))
+            }
+            _ => Err(format!("unary op {op:?} is unsupported")),
+        },
+        IrExpr::Cast { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!("cast target {} is unsupported", type_label(target)));
+            }
+            let source_type =
+                expr_type(expr).ok_or_else(|| "cast source type is unsupported".to_string())?;
+            if !is_integer_type(source_type) {
+                return Err(format!(
+                    "cast source {} is unsupported",
+                    type_label(source_type)
+                ));
+            }
+            let target =
+                emit_scalar_type(target).map_err(|detail| format!("cast target has {detail}"))?;
+            let expr = emit_expr(expr, symbols).map_err(|detail| format!("cast expr {detail}"))?;
+            Ok(format!("({expr} as {target})"))
+        }
+        IrExpr::Index { .. } => Err("index expression is unsupported".to_string()),
+        IrExpr::Call { callee, .. } => Err(format!("call expression {callee} is unsupported")),
+        IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
+        IrExpr::Deref { .. } => Err("deref expression is unsupported".to_string()),
+        IrExpr::AddrOf { .. } => Err("address-of expression is unsupported".to_string()),
+        IrExpr::Unsupported { node, reason, .. } => {
+            Err(format!("unsupported expression {node}: {reason}"))
+        }
+    }
+}
+
+fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
+    match op {
+        IrBinOp::Add => Ok("+"),
+        IrBinOp::BitAnd => Ok("&"),
+        IrBinOp::BitXor => Ok("^"),
+        IrBinOp::Shr => Ok(">>"),
+        _ => Err(format!("binary op {op:?} is unsupported")),
+    }
+}
+
+fn validate_binary_operand_types(
+    op: &str,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+) -> Result<(), String> {
+    let result_ty =
+        emit_scalar_type(result_ty).map_err(|detail| format!("binary result has {detail}"))?;
+    let lhs_ty = expr_type(lhs).ok_or_else(|| "binary lhs type is unsupported".to_string())?;
+    let rhs_ty = expr_type(rhs).ok_or_else(|| "binary rhs type is unsupported".to_string())?;
+    let lhs_ty = emit_scalar_type(lhs_ty).map_err(|detail| format!("binary lhs has {detail}"))?;
+    let rhs_ty = emit_scalar_type(rhs_ty).map_err(|detail| format!("binary rhs has {detail}"))?;
+
+    match op {
+        "+" | "&" | "^" => {
+            if lhs_ty == result_ty && rhs_ty == result_ty {
+                Ok(())
+            } else {
+                Err(format!(
+                    "binary operand types must match result type for {op}: lhs={lhs_ty}, rhs={rhs_ty}, result={result_ty}"
+                ))
+            }
+        }
+        ">>" => {
+            if lhs_ty == result_ty {
+                Ok(())
+            } else {
+                Err(format!(
+                    "shift lhs type must match result type: lhs={lhs_ty}, result={result_ty}"
+                ))
+            }
+        }
+        _ => Err(format!("binary op {op} is unsupported")),
+    }
+}
+
+fn validate_expr_matches_type(
+    expr: &IrExpr,
+    expected_ty: &IrType,
+    context: &str,
+) -> Result<(), String> {
+    let expected_ty = emit_scalar_type(expected_ty)
+        .map_err(|detail| format!("{context} expected type has {detail}"))?;
+    let actual_ty = expr_type(expr).ok_or_else(|| format!("{context} type is unsupported"))?;
+    let actual_ty =
+        emit_scalar_type(actual_ty).map_err(|detail| format!("{context} has {detail}"))?;
+    if actual_ty == expected_ty {
+        Ok(())
+    } else {
+        Err(format!(
+            "{context} type {actual_ty} does not match expected type {expected_ty}"
+        ))
+    }
+}
+
+fn ends_with_return_value(body: &[IrStmt]) -> bool {
+    matches!(body.last(), Some(IrStmt::Return { value: Some(_), .. }))
+}
+
+fn emit_integer_literal_suffix(ty: &IrType) -> Result<String, String> {
+    if is_size_t_type(ty) {
+        return Ok("usize".to_string());
+    }
+    match &ty.kind {
+        IrTypeKind::Integer { signed, width } => match (*signed, *width) {
+            (true, 8) => Ok("i8".to_string()),
+            (true, 16) => Ok("i16".to_string()),
+            (true, 32) => Ok("i32".to_string()),
+            (true, 64) => Ok("i64".to_string()),
+            (false, 8) => Ok("u8".to_string()),
+            (false, 16) => Ok("u16".to_string()),
+            (false, 32) => Ok("u32".to_string()),
+            (false, 64) => Ok("u64".to_string()),
+            _ => Err(format!(
+                "literal integer type {} is unsupported",
+                type_label(ty)
+            )),
+        },
+        _ => Err(format!("literal type {} is not an integer", type_label(ty))),
+    }
+}
+
+fn emit_integer_literal(value: u64, ty: &IrType) -> Result<String, String> {
+    validate_integer_literal_range(value, ty)?;
+    let suffix = emit_integer_literal_suffix(ty)?;
+    Ok(format!("{value}{suffix}"))
+}
+
+fn validate_integer_literal_range(value: u64, ty: &IrType) -> Result<(), String> {
+    let label = emit_scalar_type(ty)?;
+    let max = match &ty.kind {
+        IrTypeKind::Integer { signed, width } => {
+            if is_size_t_type(ty) {
+                usize::MAX as u64
+            } else if *signed {
+                match width {
+                    8 => i8::MAX as u64,
+                    16 => i16::MAX as u64,
+                    32 => i32::MAX as u64,
+                    64 => i64::MAX as u64,
+                    _ => return Err(format!("literal integer type {label} is unsupported")),
+                }
+            } else {
+                match width {
+                    8 => u8::MAX as u64,
+                    16 => u16::MAX as u64,
+                    32 => u32::MAX as u64,
+                    64 => u64::MAX,
+                    _ => return Err(format!("literal integer type {label} is unsupported")),
+                }
+            }
+        }
+        _ => return Err(format!("literal type {label} is not an integer")),
+    };
+
+    if value <= max {
+        Ok(())
+    } else {
+        Err(format!("literal value {value} does not fit type {label}"))
+    }
+}
+
+fn collect_assigned_vars(body: &[IrStmt]) -> HashSet<String> {
+    let mut assigned_vars = HashSet::new();
+    collect_assigned_vars_from_body(body, &mut assigned_vars);
+    assigned_vars
+}
+
+fn collect_param_symbols(params: &[IrParam]) -> Result<HashSet<String>, String> {
+    let mut symbols = HashSet::new();
+    for param in params {
+        if !symbols.insert(param.name.clone()) {
+            return Err(format!(
+                "param {} duplicates an existing symbol",
+                param.name
+            ));
+        }
+    }
+    Ok(symbols)
+}
+
+fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<String>) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, .. } => {
+                if let IrExpr::Var { name, .. } = target {
+                    assigned_vars.insert(name.clone());
+                }
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_assigned_vars_from_body(then_body, assigned_vars);
+                collect_assigned_vars_from_body(else_body, assigned_vars);
+            }
+            IrStmt::While { body, .. } => {
+                collect_assigned_vars_from_body(body, assigned_vars);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn expr_type(expr: &IrExpr) -> Option<&IrType> {
+    match expr {
+        IrExpr::LitInt { ty, .. }
+        | IrExpr::Var { ty, .. }
+        | IrExpr::Binary { ty, .. }
+        | IrExpr::Unary { ty, .. }
+        | IrExpr::Index { ty, .. }
+        | IrExpr::Call { ty, .. }
+        | IrExpr::IncDec { ty, .. }
+        | IrExpr::Deref { ty, .. }
+        | IrExpr::AddrOf { ty, .. } => Some(ty),
+        IrExpr::Cast { target, .. } => Some(target),
+        IrExpr::Unsupported { .. } => None,
+    }
+}
+
+fn is_integer_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Integer { .. })
+}
+
+fn is_void_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Void)
+}
+
+fn is_size_t_type(ty: &IrType) -> bool {
+    ty.spelled == "size_t" || ty.canonical == "size_t"
+}
+
+fn type_label(ty: &IrType) -> String {
+    if !ty.spelled.trim().is_empty() {
+        ty.spelled.clone()
+    } else if !ty.canonical.trim().is_empty() {
+        ty.canonical.clone()
+    } else {
+        format!("{:?}", ty.kind)
+    }
+}
+
+fn emit_identifier(name: &str, context: &str) -> Result<String, String> {
+    if is_rust_identifier(name) && !is_rust_keyword(name) {
+        Ok(name.to_string())
+    } else {
+        Err(format!("{context} identifier {name:?} is unsupported"))
+    }
+}
+
+fn is_rust_identifier(name: &str) -> bool {
+    if name == "_" {
+        return false;
+    }
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+fn is_rust_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "union"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
     )
 }
 
