@@ -7,6 +7,11 @@ edition = "2021"
 name = "c2r_translator"
 path = "src/lib.rs"
 
+[features]
+default = []
+clang-frontend = []
+typed-ir = []
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -2658,3 +2658,318 @@ python -B validation/tools/validate_auto_translation_evidence.py --target-id fla
    `generated_draft_semantic_pass=true`。
 3. 提交时只 stage `validation/tools/auto_migrate.py`、`validation/tools/test_auto_migrate.py`
    和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 42. 2026-06-26 typed IR crc32 emitter bridge
+
+本轮承接第 41 节之后的 translator 架构下一步，但按收窄版执行：只给 Rust translator
+增加 feature-gated typed IR emitter 地基，不接 libclang、不改 Python pipeline、不刷新仓库 evidence，
+也不改变 generated draft 的 semantic-pass 边界。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - 新增 `[features]`：`default = []`、`typed-ir = []`。
+  - 默认构建不启用 typed IR，保持现有字符串 recognizer 路径。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 typed IR 数据结构：`IrType`、`IrTypeKind`、`IrExpr`、`IrStmt`、`IrFunction`、
+    `IrParam`、`SourceSpan`。
+  - 表达式层保留显式节点：`Binary`、`Unary(BitNot)`、`Cast { implicit }`、`Index`、
+    `IncDec`、`Deref` 等，为后续 libclang lowering 承接 `Cast(implicit)`、`*p++`、
+    `size--`、`crc32_table[...]`。
+  - 新增 `emit_rust_from_ir()`，当前只 fail-closed 支持 `fdb_calc_crc32` byte-cursor CRC
+    expression tree；非匹配函数返回 `IrEmitError`，不猜测。
+  - 新增 `crc32_byte_cursor_function()` 作为当前字符串 recognizer 到 typed IR emitter 的
+    临时 bridge；后续 libclang 前端应直接 lower 出等价 `IrFunction`。
+- `crates/c2r-translator/src/lib.rs`
+  - `typed_ir` 模块只在 `--features typed-ir` 下导出。
+  - `emit_crc32_byte_cursor_rust()` 在 feature 开启时先构造 typed IR 并调用
+    `typed_ir::emit_rust_from_ir()`；bridge 必须成功，不再静默回落后继续记录 typed IR rule。
+  - `record_crc32_byte_cursor_rules()` 在 feature 开启时额外记录
+    `typed-ir-crc32-emitter`，用于证明 crc32 candidate 的 Rust draft 开始经过 typed IR
+    emitter bridge。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_flashdb_crc32_without_string_recognizer`，直接构造 typed expression tree，
+    断言 emitter 产出安全 Rust：`buf: &[u8]`、`let byte = buf[p]`、
+    `crc32_update_byte(crc, byte)`，且不泄漏 `*p++` 或 `crc32_table`。
+  - 新增 `typed_ir_rejects_crc32_loop_with_extra_top_level_term`，证明在合法 crc32 RHS 外层
+    额外 XOR 字面量时必须 fail-closed，不能被当成标准 crc32 模板接受。
+  - 现有 `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules` 在
+    `--features typed-ir` 下断言 rule ids 包含 `typed-ir-crc32-emitter`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml typed_ir_emits_flashdb_crc32_without_string_recognizer`
+  初始失败：`E0432 could not find typed_ir in c2r_translator`。
+- 绿灯 1：
+  增加 `typed_ir.rs` 和 `pub mod typed_ir` 后，direct typed IR emitter focused test 通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules`
+  初始失败：`E0425 cannot find function crc32_byte_cursor_function in module typed_ir`。
+- 绿灯 2：
+  增加 `crc32_byte_cursor_function()` bridge 后，`--features typed-ir` 的 crc32 focused tests 通过。
+- 红灯 3：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_crc32_loop_with_extra_top_level_term`
+  初始失败：偏宽 matcher 把额外 top-level XOR 项也接受并发出标准 crc32 Rust。
+- 绿灯 3：
+  将 typed IR crc32 matcher 收紧为顶层 `table_lookup ^ (crc >> 8)`，并让 table index 精确匹配
+  `(crc ^ *p++) & 0xFF`；负例通过，合法 crc32 focused tests 仍通过。
+
+本轮并行只读审查结论：
+- Feynman：建议第一刀加 `typed-ir` feature gate，默认不破坏旧 recognizer；typed IR emitter
+  与旧 `emit_crc32_byte_cursor_rust` 使用同一输出契约，证据 schema 暂不扩展。
+- Archimedes：建议本轮不改 Python。`write_translator_spec()` 目前只传 `c_source`/build profile；
+  真实 TU 的 `source_root/source_file/compile_commands` contract 应单独定义并测试，且 generated
+  path 必须继续保持 `semantic_pass=false`。
+- Parfit：代码审查指出两个 Important：`typed-ir-crc32-emitter` rule 不能和实际 bridge 成功脱节，
+  typed IR matcher 不能用宽松 contains 逻辑接受额外表达式项。本轮已按负例修正。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir crc32
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+```
+
+完整结果：
+- 默认 translator crate：`33 passed`。
+- `--features typed-ir` translator crate：`35 passed`。
+- Python generated replay 正负例：`Ran 2 tests ... OK`。
+- `cargo fmt --check` 通过。
+
+当前核心翻译功能状态：
+- 默认路径行为不变：现有 strict crc32 string recognizer 仍可生成 L1 candidate，semantic pass
+  仍不来自 generated draft。
+- `--features typed-ir` 路径下，crc32 candidate 的 Rust draft 已开始经过 typed IR emitter bridge；
+  这只是 emitter 地基，不是 libclang lowering，也不是 generated semantic pass。
+- Python evidence pipeline、accepted evidence authoritative 路径、`semantic_pass=false` 边界均未改变。
+
+下一步建议：
+1. 定义真实 TU/libclang 输入 contract：`source_root`、`source_file`、`compile_commands` 或完整
+   compiler args、source/global dependency hash；保持 `c_source` fallback。
+2. 为 translator spec 元数据透传写 Python 临时 out-root 测试，再扩 `SliceSpec` 可选字段。
+3. 新增 `clang-frontend` feature 和 libclang lowering skeleton，让真实 `fdb_calc_crc32` lower 出
+   与当前 bridge 等价的 `IrFunction`。
+4. generated semantic pass 仍按第 41 节继续：先 schema diff gate，再 negative diff/final verification，
+   不直接删除 accepted `validation/l2_slices/src/fdb_calc_crc32.rs`。
+
+## 43. 2026-06-26 real TU translator-input metadata contract
+
+本轮承接第 42 节第一条下一步：定义并透传真实 TU/libclang 后续所需的输入元数据，但仍不接
+libclang、不改变 translator 当前 `c_source` fallback、不刷新仓库 evidence，也不改变 generated draft
+的 semantic-pass 边界。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `write_translator_spec()` 保留原有 `function_name/c_source` fallback：
+    顶层 `c_source` → `c_boundary.signatures[0].c_source` → `c_boundary.c_source`。
+  - 新增真实源输入 metadata 透传：
+    - `source_root` 来自 `source.source_root`
+    - `source_files` 来自 `c_boundary.files[]`，保留 `path/role/sha256`
+    - `source_file` 取 `role=source` 的主文件，否则取第一个 `c_boundary.files[]`
+    - `source_file_hashes` 来自 `source.source_file_hashes`
+    - `function_source_span` 来自匹配函数签名的 `source_span`
+  - `source_file_hashes` 复用 cache identity 的合并逻辑：如果 `source.source_file_hashes` 缺失，
+    也会从 `c_boundary.files[].sha256` 或可解析的真实文件补齐，避免 translator input 与 cache
+    provenance 不一致。
+  - 只在 slice 明确提供 `build_profile.compile_commands` 或 `compile_commands_path` 时写
+    `compile_commands`；当前 real-fdb 的 `compiler_command_source=CMakeLists.txt` 只保留在
+    `build_profile.compiler_command_source`，不伪装成 compile database。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata`，用临时
+    `--out-root <temp>` 运行 real-fdb candidate，读取临时
+    `l3-real-fdb-calc-crc32-translator-input.json`，断言上面的 metadata 都被写出，并断言
+    `compile_commands` 不存在。
+  - 新增 `test_translator_input_source_file_hashes_fall_back_to_c_boundary_files`，证明只有
+    `c_boundary.files[].sha256` 时 translator input 仍会写出 `source_file_hashes`。
+- `crates/c2r-translator/src/lib.rs`
+  - `SliceSpec` 显式接收可选 metadata：
+    `source_root`、`source_file`、`source_files`、`source_file_hashes`、
+    `function_source_span`、`compile_commands`。
+  - 新增 `SourceFileRef` 和 `SourceSpanRef`。
+  - 这些字段目前只被反序列化和保留，`translate_slice()` 不消费它们，默认翻译行为不变。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `slice_spec_deserializes_real_tu_metadata_without_changing_translation`，证明带真实 TU
+    metadata 的 JSON 可反序列化到 `SliceSpec`，且同一个 `c_source` 仍按旧路径正常翻译。
+  - 现有 `SliceSpec` struct literal 统一补 `..SliceSpec::default()`，适配新增可选字段。
+
+TDD 红绿过程：
+- 红灯 1：
+  `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata`
+  初始失败：`KeyError: 'source_root'`，translator input 还没有真实源 metadata。
+- 绿灯 1：
+  增加 `c_boundary_source_files()`、`function_source_span()` 并在 `write_translator_spec()` 写入
+  metadata 后，该 Python 测试通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml slice_spec_deserializes_real_tu_metadata_without_changing_translation`
+  初始失败：`SliceSpec` 没有 `source_root/source_file/source_files/source_file_hashes/
+  function_source_span/compile_commands` 字段。
+- 绿灯 2：
+  给 `SliceSpec` 增加 serde-default 的可选 metadata 字段和对应结构后，该 Rust 测试通过。
+- 红灯 3：
+  `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_hashes_fall_back_to_c_boundary_files`
+  初始失败：`KeyError: 'source_file_hashes'`，translator input 未复用 cache identity 的 hash fallback。
+- 绿灯 3：
+  `write_translator_spec()` 改为调用既有 `source_file_hashes(spec)` 后，该测试通过。
+
+本轮并行只读审查结论：
+- Banach：确认 `write_translator_spec()` 当前只写 `c_source`/build profile；real-fdb slice 的真实源
+  信息来自 `source.source_root`、`source.source_file_hashes`、`c_boundary.files[]` 和签名
+  `source_span`；当前 `compiler_command_source` 是 CMakeLists provenance，不应伪装为
+  `compile_commands`。
+- Socrates：确认 `c2r_translate` 通过 serde 直接读取 `SliceSpec`，新增 Option/default 字段无需改
+  CLI；`translate_slice()` 当前只消费 `c_source/function_name/build_profile`，所以 metadata 保留不应
+  改变翻译行为。
+- Lagrange：代码审查指出 `translator-input.source_file_hashes` 应和 cache identity 的
+  `source_file_hashes(spec)` fallback 对齐；本轮已用负例修正。另指出新增 public `SliceSpec`
+  字段会影响外部 Rust struct literal 源码兼容；当前 crate 作为仓库内部 CLI/测试消费，仓库内构造点
+  已统一补 `..SliceSpec::default()`，JSON 兼容由 serde default 保证。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata
+cargo test --manifest-path crates/c2r-translator/Cargo.toml slice_spec_deserializes_real_tu_metadata_without_changing_translation
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_hashes_fall_back_to_c_boundary_files
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+git diff --check -- CONTEXT.md crates/c2r-translator/Cargo.toml crates/c2r-translator/src/lib.rs crates/c2r-translator/src/typed_ir.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py
+```
+
+完整结果：
+- 默认 translator crate：`34 passed`。
+- `--features typed-ir` translator crate：`36 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 43 tests ... OK`。
+- 相关 Python 回归：`Ran 96 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- translator input 已具备真实 TU/libclang 后续需要的 source metadata contract，但还没有
+  `clang-frontend` 或 libclang lowering。
+- Rust `SliceSpec` 已显式保留这些 metadata，后续 libclang 前端可直接消费。
+- 默认 generated candidate 行为不变：`semantic_pass=false`，accepted evidence authoritative 路径不变。
+
+下一步建议：
+1. 新增 `clang-frontend` feature 和可选 libclang 依赖 skeleton，先做环境探测和 fail-closed fallback，
+   不改变默认构建。
+2. 在 Rust 侧定义从真实 TU metadata 到 `ClangParseSpec` 的转换，但先只做 dry-run/diagnostic artifact。
+3. 再让真实 `fdb_calc_crc32` lower 出与当前 `crc32_byte_cursor_function()` bridge 等价的
+   `IrFunction`，通过 typed IR emitter 生成同一 Rust draft。
+
+## 44. 2026-06-26 clang-frontend dry-run parse spec skeleton
+
+本轮承接第 43 节第 1/2 条下一步，但继续保持收窄边界：只在 Rust translator crate
+增加 feature-gated 的 `clang-frontend` dry-run 输入面，不接真实 libclang、不改 Python pipeline、
+不刷新仓库 evidence，也不改变 generated draft 的 semantic-pass 边界。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - `[features]` 新增 `clang-frontend = []`，默认仍为 `default = []`。
+  - `typed-ir` 和 `clang-frontend` 相互独立；后续可以组合启用，但当前 dry-run 不依赖 typed IR。
+- `crates/c2r-translator/src/lib.rs`
+  - 仅在 `--features clang-frontend` 下导出 `pub mod clang_frontend;`。
+  - 默认构建路径不引入 clang frontend 模块或测试 import。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangParseSpec`，从 `SliceSpec` 消费真实 TU metadata：
+    `source_root`、`source_file`、`function_name`、`include_paths`、`defines`、
+    `compile_commands`、`source_file_hashes`、`function_source_span`。
+  - 新增 `ClangDryRun`，`dry_run()` 是纯函数，不访问文件系统、不调用 libclang，只返回：
+    `status=ready_without_libclang`、source/function 信息、clang 参数或 compile database 引用、
+    以及明确的 dry-run diagnostic。
+  - 无 `compile_commands` 时从 `source_root + include_paths` 合成 `-I...`，并从 defines 合成 `-D...`。
+    有 `compile_commands` 时不再合成手工参数，避免把 compile database 和 fallback args 混在一起。
+  - `ClangParseSpec::from_slice_spec()` 对 `source_root`、`source_file`、非空 `function_name`、
+    `source_file_hashes[source_file]`、`function_source_span`、`function_source_span.file == source_file`
+    以及非空 `function_source_span.sha256` fail closed；错误类型 `ClangFrontendError` 实现 `Display`
+    和 `Error`，便于后续 CLI/diagnostic artifact 直接复用。
+- `validation/tools/auto_migrate.py`
+  - `write_translator_spec()` 选择 `source_file` 时优先使用匹配函数的 `source_span.file`，只有找不到匹配文件时
+    才回落到旧的第一个 `role=source` 文件，避免多源 slice 把 clang TU 指到错误文件。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_translator_input_source_file_prefers_matching_function_span_file`，覆盖多源文件场景。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 feature-gated 测试：
+    - `clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang`
+    - `clang_parse_spec_dry_run_prefers_compile_commands_over_synthesized_args`
+    - `clang_parse_spec_rejects_missing_real_tu_metadata`
+    - `clang_parse_spec_rejects_missing_source_hash_and_function_span`
+    - `clang_parse_spec_rejects_function_span_for_a_different_source_file`
+  - 测试覆盖真实 TU metadata 保留、dry-run 参数生成、compile database 优先级、缺 metadata 的诊断失败、
+    source hash 覆盖和 function span 绑定。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang`
+  初始失败：`the package 'c2r-translator' does not contain this feature: clang-frontend`。
+- 绿灯 1：
+  增加 feature gate、模块导出和 `ClangParseSpec` dry-run skeleton 后，目标测试通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec`
+  初始失败：`ClangFrontendError` 没有实现 `Display`，不能用于 `to_string()` 断言。
+- 绿灯 2：
+  为 `ClangFrontendError` 增加 `Display`/`Error` 后，三条 `clang_parse_spec*` focused tests 全部通过。
+- 红灯 3：
+  Hooke review 后新增 `clang_parse_spec_rejects_missing_source_hash_and_function_span` 和
+  `clang_parse_spec_rejects_function_span_for_a_different_source_file`；初始失败，因为 dry-run 仍会对缺
+  hash/span 或 span 文件不一致的输入返回 `ClangParseSpec`。
+- 绿灯 3：
+  收紧 `from_slice_spec()` 的 source hash/span 校验后，两条负例通过。
+- 红灯 4：
+  新增 `test_translator_input_source_file_prefers_matching_function_span_file`；初始失败，translator input
+  把 `source_file` 写成多源文件列表里的第一个 `role=source` 文件。
+- 绿灯 4：
+  `write_translator_spec()` 改为优先匹配 `function_source_span.file` 后，该 Python 负例通过。
+
+本轮并行只读审查结论：
+- Zeno：确认最小 feature gate、`ClangParseSpec` 字段边界和 dry-run 纯函数语义；建议不要把
+  `clang-frontend` 绑定到 `typed-ir`，也不要在骨架里消费 snippet `c_source`。
+- Planck：确认本轮不应先改 Python pipeline；上一轮 translator input metadata 已足够构造 dry-run
+  `ClangParseSpec`，但真实 libclang lowering 还需要后续单独做。建议下一步先做 Rust CLI dry-run artifact，
+  再考虑 Python temp out-root opt-in，不要刷新 repo evidence。
+- Hooke：代码审查无 Critical；两个 Important 已处理：
+  - Rust dry-run 不再接受缺失/不一致的 `source_file_hashes` 和 `function_source_span`。
+  - Python translator input 不再在多源文件 slice 中盲取第一个 source 文件，而是优先使用函数 span 文件。
+  Minor 中的 compile database diagnostic 也已补充；public `SliceSpec` 字段兼容风险沿用第 43 节判断：
+  仓库内构造点已补 `..SliceSpec::default()`，JSON 兼容由 serde default 保证。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_rejects
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_prefers_matching_function_span_file
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+git diff --check -- crates/c2r-translator/Cargo.toml crates/c2r-translator/src/lib.rs crates/c2r-translator/src/typed_ir.rs crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py CONTEXT.md
+```
+
+完整结果：
+- 默认 translator crate：`34 passed`。
+- `--features typed-ir` translator crate：`36 passed`。
+- `--features clang-frontend` translator crate：`39 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`41 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 44 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- 默认生成路径不变，`clang-frontend` 默认关闭。
+- Rust 侧已有真实 TU metadata 到 `ClangParseSpec` 的 fail-closed dry-run 输入面。
+- 仍未接真实 libclang，仍未把 dry-run artifact 写入 CLI/Python pipeline，generated draft semantic pass
+  边界仍保持不变。
+
+下一步建议：
+1. 若继续按 libclang 方向推进，先给 `c2r_translate` 增加 feature-gated dry-run diagnostic artifact，
+   默认构建不产物，`--features clang-frontend` 才输出可观测 JSON。
+2. 再用 Python temp `--out-root` 做显式 opt-in 接入测试，不写 `validation/evidence`。
+3. 之后才接真实 libclang lowering：先小 C fixture，再 real-fdb `fdb_calc_crc32`，目标是 lower 出与
+   `crc32_byte_cursor_function()` 等价的 `IrFunction`。

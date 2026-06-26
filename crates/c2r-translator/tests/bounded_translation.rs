@@ -4,6 +4,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(feature = "clang-frontend")]
+use c2r_translator::clang_frontend::ClangParseSpec;
+#[cfg(feature = "typed-ir")]
+use c2r_translator::typed_ir::{
+    emit_rust_from_ir, IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType,
+    IrTypeKind, IrUnOp,
+};
 use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;
 
@@ -32,6 +39,582 @@ fn json_file(path: PathBuf) -> Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
+#[cfg(feature = "typed-ir")]
+fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
+    IrType {
+        spelled: spelled.to_string(),
+        canonical: canonical.to_string(),
+        kind: IrTypeKind::Integer { signed, width },
+        is_const: false,
+        width_bits: Some(width),
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_pointer(spelled: &str, canonical: &str, pointee: IrType, is_const: bool) -> IrType {
+    IrType {
+        spelled: spelled.to_string(),
+        canonical: canonical.to_string(),
+        kind: IrTypeKind::Pointer {
+            pointee: Box::new(pointee),
+        },
+        is_const,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_u32() -> IrType {
+    ir_integer("uint32_t", "unsigned int", false, 32)
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_u8() -> IrType {
+    ir_integer("uint8_t", "unsigned char", false, 8)
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_usize() -> IrType {
+    ir_integer("size_t", "unsigned long", false, 64)
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_i32() -> IrType {
+    ir_integer("int", "int", true, 32)
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_var(name: &str, ty: IrType) -> IrExpr {
+    IrExpr::Var {
+        name: name.to_string(),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_lit(value: u64, spelling: &str, ty: IrType) -> IrExpr {
+    IrExpr::LitInt {
+        value,
+        spelling: spelling.to_string(),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_binary(op: IrBinOp, lhs: IrExpr, rhs: IrExpr, ty: IrType) -> IrExpr {
+    IrExpr::Binary {
+        op,
+        lhs: Box::new(lhs),
+        rhs: Box::new(rhs),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_bitnot(expr: IrExpr, ty: IrType) -> IrExpr {
+    IrExpr::Unary {
+        op: IrUnOp::BitNot,
+        operand: Box::new(expr),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn flashdb_crc32_typed_ir() -> IrFunction {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let int_ty = ir_i32();
+    let const_void_ptr = ir_pointer(
+        "const void *",
+        "const void *",
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        true,
+    );
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        u8_ty.clone(),
+        true,
+    );
+
+    let crc = || ir_var("crc", u32_ty.clone());
+    let p = || ir_var("p", const_u8_ptr.clone());
+    let size = || ir_var("size", usize_ty.clone());
+    let crc32_table = || IrExpr::Var {
+        name: "crc32_table".to_string(),
+        ty: IrType {
+            spelled: "const uint32_t[256]".to_string(),
+            canonical: "const unsigned int[256]".to_string(),
+            kind: IrTypeKind::Array {
+                element: Box::new(u32_ty.clone()),
+                len: Some(256),
+            },
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        source_span: None,
+    };
+
+    let post_inc_p = IrExpr::IncDec {
+        target: Box::new(p()),
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ty: const_u8_ptr.clone(),
+        source_span: None,
+    };
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(post_inc_p),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let promoted_byte = IrExpr::Cast {
+        target: u32_ty.clone(),
+        expr: Box::new(byte_read),
+        implicit: true,
+        source_span: None,
+    };
+    let table_index = ir_binary(
+        IrBinOp::BitAnd,
+        ir_binary(IrBinOp::BitXor, crc(), promoted_byte, u32_ty.clone()),
+        ir_lit(0xFF, "0xFF", int_ty.clone()),
+        u32_ty.clone(),
+    );
+    let table_lookup = IrExpr::Index {
+        base: Box::new(crc32_table()),
+        index: Box::new(table_index),
+        ty: u32_ty.clone(),
+        source_span: None,
+    };
+    let shift = ir_binary(
+        IrBinOp::Shr,
+        crc(),
+        ir_lit(8, "8", int_ty.clone()),
+        u32_ty.clone(),
+    );
+
+    IrFunction {
+        name: "fdb_calc_crc32".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "buf".to_string(),
+                ty: const_void_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "size".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "p".to_string(),
+                ty: const_u8_ptr.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: p(),
+                value: IrExpr::Cast {
+                    target: const_u8_ptr.clone(),
+                    expr: Box::new(ir_var("buf", const_void_ptr)),
+                    implicit: false,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: crc(),
+                value: ir_binary(
+                    IrBinOp::BitXor,
+                    crc(),
+                    ir_bitnot(ir_lit(0, "0U", u32_ty.clone()), u32_ty.clone()),
+                    u32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::While {
+                condition: IrExpr::IncDec {
+                    target: Box::new(size()),
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ty: usize_ty,
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: crc(),
+                    value: ir_binary(IrBinOp::BitXor, table_lookup, shift, u32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::BitXor,
+                    crc(),
+                    ir_bitnot(ir_lit(0, "0U", u32_ty.clone()), u32_ty.clone()),
+                    u32_ty,
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
+    let rust = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
+
+    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
+    assert!(rust.contains("let mut p: usize = 0;"));
+    assert!(rust.contains("let mut remaining = size;"));
+    assert!(rust.contains("while remaining != 0 {"));
+    assert!(rust.contains("let byte = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(rust.contains("return crc ^ !0u32;"));
+    assert!(!rust.contains("*p++"));
+    assert!(!rust.contains("crc32_table"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_crc32_loop_with_extra_top_level_term() {
+    let mut ir = flashdb_crc32_typed_ir();
+    let IrStmt::While { body, .. } = &mut ir.body[3] else {
+        panic!("expected crc32 while loop");
+    };
+    let IrStmt::Assign { value, .. } = &mut body[0] else {
+        panic!("expected crc32 assignment");
+    };
+    let original = value.clone();
+    *value = ir_binary(
+        IrBinOp::BitXor,
+        original,
+        ir_lit(1, "1U", ir_u32()),
+        ir_u32(),
+    );
+
+    let error = emit_rust_from_ir(&ir).expect_err("extra top-level term must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+}
+
+#[test]
+fn slice_spec_deserializes_real_tu_metadata_without_changing_translation() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "add-one",
+        "source_commit": "1234567",
+        "function_name": "add_one",
+        "c_source": "int add_one(int value) { return value + 1; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/project",
+        "source_file": "src/add_one.c",
+        "source_files": [
+            {
+                "path": "src/add_one.c",
+                "role": "source",
+                "sha256": "source-file-sha"
+            }
+        ],
+        "source_file_hashes": {
+            "src/add_one.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/add_one.c",
+            "line_start": 10,
+            "line_end": 12,
+            "byte_start": 100,
+            "byte_end": 160,
+            "sha256": "function-span-sha"
+        },
+        "compile_commands": "build/compile_commands.json",
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "compile_commands.json",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+
+    assert_eq!(spec.source_root.as_deref(), Some("C:/src/project"));
+    assert_eq!(spec.source_file.as_deref(), Some("src/add_one.c"));
+    assert_eq!(spec.source_files[0].path, "src/add_one.c");
+    assert_eq!(
+        spec.source_file_hashes
+            .get("src/add_one.c")
+            .map(String::as_str),
+        Some("source-file-sha")
+    );
+    assert_eq!(
+        spec.function_source_span
+            .as_ref()
+            .map(|span| span.sha256.as_str()),
+        Some("function-span-sha")
+    );
+    assert_eq!(
+        spec.compile_commands.as_deref(),
+        Some("build/compile_commands.json")
+    );
+
+    let result = translate_slice(&spec);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert!(result
+        .rust_code
+        .contains("pub fn add_one(value: i32) -> i32"));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_files": [
+            {
+                "path": "src/fdb_utils.c",
+                "role": "source",
+                "sha256": "source-file-sha"
+            }
+        ],
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc", "tests"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let dry_run = parse_spec.dry_run();
+
+    assert_eq!(parse_spec.source_root, PathBuf::from("C:/src/FlashDB"));
+    assert_eq!(parse_spec.source_file, PathBuf::from("src/fdb_utils.c"));
+    assert_eq!(parse_spec.function_name, "fdb_calc_crc32");
+    assert_eq!(
+        parse_spec.source_file_hashes["src/fdb_utils.c"],
+        "source-file-sha"
+    );
+    assert_eq!(
+        parse_spec
+            .function_source_span
+            .as_ref()
+            .map(|span| span.sha256.as_str()),
+        Some("function-span-sha")
+    );
+    assert!(parse_spec.compile_commands.is_none());
+    assert_eq!(dry_run.status, "ready_without_libclang");
+    assert_eq!(
+        dry_run.arguments,
+        vec![
+            "-IC:/src/FlashDB/inc".to_string(),
+            "-IC:/src/FlashDB/tests".to_string(),
+            "-DFDB_USING_FILE_POSIX_MODE".to_string(),
+        ]
+    );
+    assert!(dry_run
+        .diagnostics
+        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_dry_run_prefers_compile_commands_over_synthesized_args() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "compile_commands": "build/compile_commands.json",
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "compile_commands.json",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+
+    let dry_run = ClangParseSpec::from_slice_spec(&spec)
+        .expect("clang parse spec")
+        .dry_run();
+
+    assert_eq!(dry_run.arguments, Vec::<String>::new());
+    assert_eq!(
+        dry_run.compile_commands.as_deref(),
+        Some("build/compile_commands.json")
+    );
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_rejects_missing_source_hash_and_function_span() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": [],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+
+    let error = ClangParseSpec::from_slice_spec(&spec)
+        .expect_err("clang frontend must require source file hash coverage");
+
+    assert_eq!(error.kind, "missing_source_file_hash");
+    assert_eq!(
+        error.to_string(),
+        "clang frontend dry-run requires source_file_hashes entry for source_file"
+    );
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_rejects_function_span_for_a_different_source_file() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/other.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": [],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+
+    let error = ClangParseSpec::from_slice_spec(&spec)
+        .expect_err("clang frontend must bind the span to source_file");
+
+    assert_eq!(error.kind, "function_span_source_file_mismatch");
+    assert!(error
+        .to_string()
+        .contains("function_source_span.file must match source_file"));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_rejects_missing_real_tu_metadata() {
+    let spec = SliceSpec {
+        target_id: "flashdb".to_string(),
+        slice_id: "real-fdb-calc-crc32".to_string(),
+        source_commit: "93d1755".to_string(),
+        function_name: "fdb_calc_crc32".to_string(),
+        c_source:
+            "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }"
+                .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let error = ClangParseSpec::from_slice_spec(&spec)
+        .expect_err("clang frontend must require real TU metadata");
+
+    assert_eq!(error.kind, "missing_source_root");
+    assert_eq!(
+        error.to_string(),
+        "clang frontend dry-run requires source_root"
+    );
+}
+
 #[test]
 fn translates_structured_integer_function_and_emits_type_map_and_cfg() {
     let spec = SliceSpec {
@@ -42,6 +625,7 @@ fn translates_structured_integer_function_and_emits_type_map_and_cfg() {
         c_source: "int add_one(int value) { return value + 1; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -69,6 +653,7 @@ fn pointer_out_param_generates_safe_public_boundary_and_pointer_graph() {
         c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -112,6 +697,7 @@ fn pointer_field_writes_record_lvalue_and_boundary_decisions() {
         c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; addr->sin_port = port; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
     let out_dir = unique_out_dir("ip4-addr-fields");
 
@@ -164,6 +750,7 @@ fn bounded_pointer_index_write_generates_safe_boundary_and_decision() {
         c_source: "int fill_first(int* out, int value) { out[0] = value; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -195,6 +782,7 @@ fn bounded_pointer_index_compound_assignment_records_decision() {
         c_source: "int add_first(int* out, int value) { out[0] += value; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -223,6 +811,7 @@ fn bounded_input_buffer_read_generates_safe_slice_boundary_and_decisions() {
         c_source: "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -275,6 +864,7 @@ fn bounded_pointer_arithmetic_read_generates_safe_slice_boundary_and_decisions()
         c_source: "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -337,6 +927,7 @@ fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
         .to_string(),
         fixture_hash: "real-fdb-calc-crc32-fixture".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -368,6 +959,8 @@ fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
         "const-void-byte-slice",
         "byte-cursor-post-increment-read",
         "crc32-byte-cursor-loop",
+        #[cfg(feature = "typed-ir")]
+        "typed-ir-crc32-emitter",
     ] {
         assert!(
             result.plan.translation_rule_ids.contains(&rule.to_string()),
@@ -387,6 +980,7 @@ fn bounded_pointer_arithmetic_output_write_generates_safe_mut_slice_boundary_and
         c_source: "int fill_i32_ptr_arith_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -437,6 +1031,7 @@ fn unproven_input_buffer_read_blocks_without_false_success() {
         c_source: "int bad_buffer_read(const int* values, int i, int* out) { out[0] = values[i]; return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -462,6 +1057,7 @@ fn unproven_pointer_arithmetic_read_blocks_without_false_success() {
         c_source: "int bad_ptr_arith_read(const int* values, int i, int* out) { out[0] = *(values + i); return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -489,6 +1085,7 @@ fn unproven_pointer_arithmetic_output_write_blocks_without_false_success() {
                 .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -514,6 +1111,7 @@ fn complex_pointer_arithmetic_output_write_blocks_without_false_success() {
         c_source: "int bad_ptr_arith_complex_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i + 1) = value; } return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -539,6 +1137,7 @@ fn bounded_pointer_arithmetic_writes_do_not_count_as_input_buffer_reads() {
         c_source: "int ptr_arith_write(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -587,6 +1186,7 @@ fn unsupported_complex_lvalues_block_without_false_success() {
             c_source: c_source.to_string(),
             fixture_hash: "fixture-sha".to_string(),
             build_profile: profile(true),
+            ..SliceSpec::default()
         };
 
         let result = translate_slice(&spec);
@@ -615,6 +1215,7 @@ fn blocks_pointer_out_param_without_observable_write() {
                 .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -638,6 +1239,7 @@ fn translates_primitive_declaration_assignment_and_return() {
                 .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -668,6 +1270,7 @@ fn blocks_unsupported_local_declaration_type_without_false_success() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(false),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -690,6 +1293,7 @@ fn translates_if_else_with_cfg_branch_edges() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -721,6 +1325,7 @@ fn translates_while_loop_with_cfg_back_edge() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -751,6 +1356,7 @@ fn translates_for_loop_by_lowering_to_bounded_while() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -779,6 +1385,7 @@ fn translates_for_loop_with_compound_assignment_step() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -798,6 +1405,7 @@ fn translates_simple_call_expression_and_records_call_rule() {
         c_source: "int call_hook(int value) { observe(value); return value; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -823,6 +1431,7 @@ fn translates_direct_call_expressions_and_records_callee_evidence() {
         c_source: "int call_expression(int value) { int first = helper(value); value = helper(first); return helper(value); }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -874,6 +1483,7 @@ fn blocks_unsupported_call_expressions_without_rust_draft() {
             c_source: c_source.to_string(),
             fixture_hash: "fixture-sha".to_string(),
             build_profile: profile(true),
+            ..SliceSpec::default()
         };
 
         let result = translate_slice(&spec);
@@ -906,6 +1516,7 @@ fn translates_compound_assignment_statement_and_records_rule() {
                 .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -937,6 +1548,7 @@ fn translates_increment_and_decrement_statements_and_records_rule() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -966,6 +1578,7 @@ fn blocks_increment_expression_value_without_rust_draft() {
         c_source: "int inc_expression(int value) { return value++; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -988,6 +1601,7 @@ fn blocks_unknown_or_unsupported_statement_without_rust_draft() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -1009,6 +1623,7 @@ fn unsupported_goto_blocks_translation_without_false_success() {
         c_source: "int again(int x) { again: x++; if (x < 10) goto again; return x; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -1035,6 +1650,7 @@ fn unsupported_switch_blocks_translation_until_cfg_relooper_exists() {
             .to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -1060,6 +1676,7 @@ fn missing_clang_profile_records_type_uncertainty() {
         c_source: "alias_t uses_alias(alias_t value) { return value; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(false),
+        ..SliceSpec::default()
     };
 
     let result = translate_slice(&spec);
@@ -1086,6 +1703,7 @@ fn writes_translation_artifacts_for_l3_manifest_binding() {
         c_source: "int add_one(int value) { return value + 1; }".to_string(),
         fixture_hash: "fixture-sha".to_string(),
         build_profile: profile(true),
+        ..SliceSpec::default()
     };
     let out_dir = unique_out_dir("add-one");
 

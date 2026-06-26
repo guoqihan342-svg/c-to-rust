@@ -2922,6 +2922,178 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertNotIn("crc32_table", draft)
             self.assertEqual(rust_check["status"], "passed")
 
+    def test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            translator_input = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-translator-input.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(
+                translator_input["source_root"],
+                "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB",
+            )
+            self.assertEqual(translator_input["source_file"], "src/fdb_utils.c")
+            self.assertEqual(
+                translator_input["source_file_hashes"],
+                {
+                    "src/fdb_utils.c": (
+                        "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+                    )
+                },
+            )
+            self.assertEqual(
+                translator_input["source_files"],
+                [
+                    {
+                        "path": "src/fdb_utils.c",
+                        "role": "source",
+                        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+                    }
+                ],
+            )
+            self.assertEqual(
+                translator_input["function_source_span"],
+                {
+                    "file": "src/fdb_utils.c",
+                    "line_start": 77,
+                    "line_end": 89,
+                    "byte_start": 3818,
+                    "byte_end": 4075,
+                    "sha256": "523e88f41d20405f6aed4fbd62e1ddc2c7127473864d9ca80d2aca4874549007",
+                },
+            )
+            self.assertNotIn("compile_commands", translator_input)
+            self.assertEqual(
+                translator_input["build_profile"]["compiler_command_source"],
+                "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+            )
+
+    def test_translator_input_source_file_hashes_fall_back_to_c_boundary_files(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            spec = {
+                "target_id": "demo",
+                "slice_id": "hash-from-boundary",
+                "source": {"source_root": "C:/missing/source/root"},
+                "source_commit": "1234567",
+                "function_name": "add_one",
+                "c_source": "int add_one(int value) { return value + 1; }",
+                "fixture_hash": "fixture-sha",
+                "c_boundary": {
+                    "files": [
+                        {
+                            "path": "src/add_one.c",
+                            "role": "source",
+                            "sha256": "declared-source-sha",
+                        }
+                    ],
+                    "signatures": [
+                        {
+                            "function": "add_one",
+                            "source_span": {
+                                "file": "src/add_one.c",
+                                "line_start": 1,
+                                "line_end": 1,
+                                "byte_start": 0,
+                                "byte_end": 42,
+                                "sha256": "span-sha",
+                            },
+                        }
+                    ],
+                },
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                translator_input["source_file_hashes"],
+                {"src/add_one.c": "declared-source-sha"},
+            )
+
+    def test_translator_input_source_file_prefers_matching_function_span_file(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            spec = {
+                "target_id": "demo",
+                "slice_id": "multi-source-function-span",
+                "source": {"source_root": "C:/src/project"},
+                "source_commit": "1234567",
+                "function_name": "target_fn",
+                "c_source": "int target_fn(int value) { return value + 1; }",
+                "fixture_hash": "fixture-sha",
+                "c_boundary": {
+                    "files": [
+                        {
+                            "path": "src/first_source.c",
+                            "role": "source",
+                            "sha256": "first-source-sha",
+                        },
+                        {
+                            "path": "src/target_fn.c",
+                            "role": "source",
+                            "sha256": "target-source-sha",
+                        },
+                    ],
+                    "signatures": [
+                        {
+                            "function": "target_fn",
+                            "source_span": {
+                                "file": "src/target_fn.c",
+                                "line_start": 10,
+                                "line_end": 12,
+                                "byte_start": 100,
+                                "byte_end": 160,
+                                "sha256": "span-sha",
+                            },
+                        }
+                    ],
+                },
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(translator_input["source_file"], "src/target_fn.c")
+
     def test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"

@@ -156,9 +156,68 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
             "clang_available": bool(build_profile.get("clang_available", clang.get("available", False))),
         },
     }
+    source_root = spec.get("source", {}).get("source_root")
+    if source_root:
+        translator_spec["source_root"] = source_root
+    source_files = c_boundary_source_files(spec)
+    source_span = function_source_span(signatures, function_name)
+    if source_files:
+        translator_spec["source_files"] = source_files
+        primary_source = primary_source_file(source_files, source_span)
+        if primary_source.get("path"):
+            translator_spec["source_file"] = primary_source["path"]
+    resolved_source_file_hashes = source_file_hashes(spec)
+    if resolved_source_file_hashes:
+        translator_spec["source_file_hashes"] = resolved_source_file_hashes
+    if source_span:
+        translator_spec["function_source_span"] = source_span
+    compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
+    if compile_commands:
+        translator_spec["compile_commands"] = compile_commands
     path = evidence_dir / f"l3-{spec['slice_id']}-translator-input.json"
     write_json(path, translator_spec)
     return path
+
+
+def c_boundary_source_files(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    files = spec.get("c_boundary", {}).get("files", [])
+    source_files: list[dict[str, Any]] = []
+    for item in files:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        source_file = {
+            "path": item.get("path"),
+            "role": item.get("role", "source"),
+        }
+        if item.get("sha256"):
+            source_file["sha256"] = item["sha256"]
+        source_files.append(source_file)
+    return source_files
+
+
+def primary_source_file(
+    source_files: list[dict[str, Any]], source_span: dict[str, Any] | None
+) -> dict[str, Any]:
+    if source_span and source_span.get("file"):
+        span_file = normalized_metadata_path(source_span["file"])
+        for item in source_files:
+            if normalized_metadata_path(item.get("path")) == span_file:
+                return item
+    return next((item for item in source_files if item.get("role") == "source"), source_files[0])
+
+
+def normalized_metadata_path(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/")
+
+
+def function_source_span(signatures: list[dict[str, Any]], function_name: str) -> dict[str, Any] | None:
+    for signature in signatures:
+        if signature.get("function") != function_name:
+            continue
+        source_span = signature.get("source_span")
+        if isinstance(source_span, dict):
+            return source_span
+    return None
 
 
 def entry_function_name(spec: dict[str, Any]) -> str:
