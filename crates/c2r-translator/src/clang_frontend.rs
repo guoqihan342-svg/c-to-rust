@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, error::Error, fmt, path::PathBuf};
+use std::{collections::BTreeMap, env, error::Error, fmt, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,49 @@ impl fmt::Display for ClangFrontendError {
 impl Error for ClangFrontendError {}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangEnvironment {
+    pub status: String,
+    pub source: Option<String>,
+    pub libclang_path: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+impl ClangEnvironment {
+    pub fn detect() -> Self {
+        let environment = env::vars().collect();
+        Self::detect_from_env(&environment)
+    }
+
+    pub fn detect_from_env(environment: &BTreeMap<String, String>) -> Self {
+        if let Some(libclang_path) = environment
+            .get("LIBCLANG_PATH")
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+        {
+            return Self {
+                status: "configured".to_string(),
+                source: Some("LIBCLANG_PATH".to_string()),
+                libclang_path: Some(libclang_path.to_string()),
+                diagnostics: vec![
+                    "LIBCLANG_PATH is configured but real libclang parsing remains disabled in this dry-run skeleton"
+                        .to_string(),
+                ],
+            };
+        }
+
+        Self {
+            status: "not_configured".to_string(),
+            source: None,
+            libclang_path: None,
+            diagnostics: vec![
+                "LIBCLANG_PATH is not set; real libclang parsing remains disabled in this dry-run skeleton"
+                    .to_string(),
+            ],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClangDryRun {
     pub status: String,
     pub source_root: String,
@@ -38,6 +81,7 @@ pub struct ClangDryRun {
     pub function_name: String,
     pub arguments: Vec<String>,
     pub compile_commands: Option<String>,
+    pub environment: ClangEnvironment,
     pub diagnostics: Vec<String>,
 }
 
@@ -98,6 +142,10 @@ impl ClangParseSpec {
     }
 
     pub fn dry_run(&self) -> ClangDryRun {
+        self.dry_run_with_environment(&env::vars().collect())
+    }
+
+    pub fn dry_run_with_environment(&self, environment: &BTreeMap<String, String>) -> ClangDryRun {
         let mut diagnostics =
             vec!["libclang execution is not enabled in this dry-run skeleton".to_string()];
         if self.compile_commands.is_some() {
@@ -117,6 +165,7 @@ impl ClangParseSpec {
                 .compile_commands
                 .as_ref()
                 .map(|path| path.to_string_lossy().into_owned()),
+            environment: ClangEnvironment::detect_from_env(environment),
             diagnostics,
         }
     }

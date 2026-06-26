@@ -469,6 +469,116 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
 
 #[cfg(feature = "clang-frontend")]
 #[test]
+fn clang_dry_run_records_missing_libclang_environment_without_parsing() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+    let environment = std::collections::BTreeMap::new();
+
+    let dry_run = ClangParseSpec::from_slice_spec(&spec)
+        .expect("clang parse spec")
+        .dry_run_with_environment(&environment);
+
+    assert_eq!(dry_run.status, "ready_without_libclang");
+    assert_eq!(dry_run.environment.status, "not_configured");
+    assert_eq!(dry_run.environment.source.as_deref(), None);
+    assert_eq!(dry_run.environment.libclang_path.as_deref(), None);
+    assert!(dry_run
+        .environment
+        .diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.contains("LIBCLANG_PATH is not set") }));
+    assert!(dry_run
+        .diagnostics
+        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_dry_run_records_configured_libclang_path_without_enabling_parse() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "LIBCLANG_PATH".to_string(),
+        "C:/LLVM/bin/libclang.dll".to_string(),
+    )]);
+
+    let dry_run = ClangParseSpec::from_slice_spec(&spec)
+        .expect("clang parse spec")
+        .dry_run_with_environment(&environment);
+
+    assert_eq!(dry_run.status, "ready_without_libclang");
+    assert_eq!(dry_run.environment.status, "configured");
+    assert_eq!(dry_run.environment.source.as_deref(), Some("LIBCLANG_PATH"));
+    assert_eq!(
+        dry_run.environment.libclang_path.as_deref(),
+        Some("C:/LLVM/bin/libclang.dll")
+    );
+    assert!(dry_run.environment.diagnostics.iter().any(|diagnostic| {
+        diagnostic.contains("configured but real libclang parsing remains disabled")
+    }));
+    assert!(dry_run
+        .diagnostics
+        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
 fn clang_parse_spec_dry_run_prefers_compile_commands_over_synthesized_args() {
     let spec: SliceSpec = serde_json::from_value(serde_json::json!({
         "target_id": "flashdb",

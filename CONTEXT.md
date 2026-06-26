@@ -3126,3 +3126,76 @@ git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_
 1. 先做最小 libclang 环境探测/feature plumbing：检测环境里是否可用 libclang，但默认仍 fail-closed。
 2. 用小 C fixture 做真实 TU parse/lowering skeleton，先 lower 一个简单函数到 `IrFunction`。
 3. 再将 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 47. 2026-06-26 clang dry-run environment detection
+
+本轮承接第 46 节第 1 条下一步：给 Rust `clang-frontend` dry-run 增加最小
+libclang 环境探测字段。边界保持不变：不新增 `clang-sys`/`libloading`/`build.rs`，
+不动态加载 DLL，不执行真实 libclang parse/lowering，默认构建仍不产出 clang dry-run artifact。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangEnvironment`，序列化到 `ClangDryRun.environment`：
+    - `status=not_configured`：未发现非空 `LIBCLANG_PATH`。
+    - `status=configured`：发现非空 `LIBCLANG_PATH`，记录 `source=LIBCLANG_PATH`
+      和 `libclang_path`。
+    - 两种状态都写 diagnostic，明确 real libclang parsing 仍禁用。
+  - 新增 `ClangEnvironment::detect_from_env()` 纯函数，测试可注入环境 map，避免本机环境
+    造成 flake。
+  - `ClangParseSpec::dry_run()` 保持 `status=ready_without_libclang`，只把当前进程环境探测结果
+    附加到 dry-run JSON；新增 `dry_run_with_environment()` 用于稳定测试。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_dry_run_records_missing_libclang_environment_without_parsing`，验证空环境时
+    `environment.status=not_configured`，总 dry-run 状态仍是 `ready_without_libclang`。
+  - 新增 `clang_dry_run_records_configured_libclang_path_without_enabling_parse`，验证设置
+    `LIBCLANG_PATH` 时只记录配置状态，不开启真实 parse。
+
+本轮未改 Python：
+- `validation/tools/auto_migrate.py` 已通过 `--emit-clang-dry-run` 显式 opt-in 启用
+  `--features clang-frontend`，不会解析 dry-run JSON 内部字段。
+- 当前 cache identity 只区分 `--emit-clang-dry-run` opt-in，不绑定 `LIBCLANG_PATH`。只要 dry-run
+  仍是临时诊断产物，这个边界可接受；若后续把 dry-run artifact 纳入可复用证据或漂移检测，需要补
+  `clang_dry_run_environment_identity` 并加入 Python cache 测试。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_records`
+  初始失败在 `dry_run_with_environment` 方法不存在。
+- 绿灯：
+  增加 `ClangEnvironment`、`detect_from_env()`、`dry_run_with_environment()` 后，两条聚焦测试通过。
+
+本轮并行只读审查结论：
+- Hilbert：建议环境字段嵌在 `dry_run.environment`，只检查 `LIBCLANG_PATH`，不加载 DLL，不新增
+  clang 依赖，不使用 `available/loaded/version/ast` 等暗示真实解析已成功的字段。本轮实现一致。
+- Herschel：确认 Python 主流程不用改；新增 JSON 字段不会破坏现有 `--emit-clang-dry-run`
+  测试。另提醒 cache identity 当前未绑定 `LIBCLANG_PATH`，本节已记录为后续边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_records
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features clang-frontend` translator crate：`43 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`45 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径不变。
+- `clang-frontend` 仍是 opt-in dry-run diagnostic surface，现在可记录 libclang 环境配置状态。
+- 仍未接真实 libclang parse/lowering，也未把 real-fdb `fdb_calc_crc32` 改为由 libclang AST 驱动。
+
+下一步建议：
+1. 用小 C fixture 做真实 TU parse/lowering skeleton，先证明能从真实前端构造一个最小 `IrFunction`。
+2. 明确 real parse 的启用开关和 fail-closed 错误模型，避免 `LIBCLANG_PATH` 一存在就改变默认行为。
+3. 再把 real-fdb `fdb_calc_crc32` lowering 接到与 `crc32_byte_cursor_function()` 等价的 typed IR。
