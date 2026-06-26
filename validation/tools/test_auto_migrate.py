@@ -1171,6 +1171,103 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(negative["blocked_by"], ["schema_diff"])
             self.assertEqual(negative["required_inputs"]["schema_diff_required_status"], "passed")
 
+    def test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-calc-crc32",
+            "source_commit": "93d1755",
+            "function_name": "fdb_calc_crc32",
+            "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-real-fdb-calc-crc32"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps(
+                    {
+                        "status": "recorded",
+                        "pointer_nodes": [
+                            {
+                                "id": "buf",
+                                "ownership_role": "borrowed_input",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [
+                                {
+                                    "name": "crc32_table",
+                                    "array_len": 256,
+                                    "init_kind": "integer_array",
+                                    "value_count": 256,
+                                }
+                            ],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            c2rust_baseline = {"status": "generated", "correctness_role": "candidate_context_only"}
+            route = module.emit_route_decision(spec, evidence_dir, {"status": "generated"}, c2rust_baseline)
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            typed_ir = route["candidate_generation"]["typed_ir"]
+            self.assertEqual(typed_ir["status"], "generated")
+            self.assertEqual(
+                Path(route["source_artifacts"]["clang_lowering_report"]["path"]).name,
+                f"{prefix}-clang-lowering-report.json",
+            )
+            self.assertEqual(Path(typed_ir["source_artifact"]["path"]).name, f"{prefix}-clang-lowering-report.json")
+            self.assertEqual(typed_ir["source_artifact"]["status"], "lowered")
+            self.assertIn("sha256", typed_ir["source_artifact"])
+            self.assertEqual(typed_ir["candidate_route"]["route"], "GenericTypedIr")
+            self.assertEqual(typed_ir["readonly_globals_identity"]["count"], 1)
+            self.assertEqual(typed_ir["readonly_globals_identity"]["names"], ["crc32_table"])
+            self.assertEqual(typed_ir["readonly_globals"][0]["name"], "crc32_table")
+            self.assertEqual(typed_ir["readonly_globals"][0]["array_len"], 256)
+            self.assertTrue(typed_ir["rust_draft_generated"])
+            self.assertFalse(typed_ir["semantic_pass"])
+            self.assertEqual(profile["candidate_generation"]["typed_ir"]["candidate_route"]["route"], "GenericTypedIr")
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
     def test_semantic_pass_requires_validation_profile_passed(self) -> None:
         auto_migrate = load_auto_migrate_module()
 

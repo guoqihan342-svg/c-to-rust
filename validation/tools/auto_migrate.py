@@ -2891,12 +2891,23 @@ def emit_route_decision(
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan)
     translator = route_translator(level)
     profile = validation_profile_name(level, "dev")
+    candidate_generation = candidate_generation_evidence(spec, evidence_dir)
+    source_artifacts = {
+        "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
+        "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
+        "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+    }
+    typed_ir_source_artifact = candidate_generation.get("typed_ir", {}).get("source_artifact")
+    if isinstance(typed_ir_source_artifact, dict) and typed_ir_source_artifact.get("status") != "missing":
+        source_artifacts["clang_lowering_report"] = typed_ir_source_artifact
     translation_plan_ref = evidence_ref(
         evidence_dir / f"{prefix}-auto-translation-plan.json",
         plan.get("status", "recorded"),
     )
     # The plan is later bound back to this route decision, so its content hash is not stable here.
     translation_plan_ref.pop("sha256", None)
+    source_artifacts["translation_plan"] = translation_plan_ref
     decision = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -2906,13 +2917,8 @@ def emit_route_decision(
         "translator": translator,
         "rationale": rationale,
         "verification_profile": profile,
-        "source_artifacts": {
-            "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
-            "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
-            "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
-            "translation_plan": translation_plan_ref,
-            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
-        },
+        "source_artifacts": source_artifacts,
+        "candidate_generation": candidate_generation,
         "policy": {
             "goal": "dev",
             "fixed_loop_count_required": False,
@@ -2922,6 +2928,69 @@ def emit_route_decision(
     }
     write_json(evidence_dir / f"{prefix}-route-decision.json", decision)
     return decision
+
+
+def candidate_generation_evidence(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    return {
+        "typed_ir": typed_ir_candidate_binding(report_path),
+    }
+
+
+def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
+    source_artifact = evidence_ref(report_path, "missing")
+    if not report_path.exists():
+        return {
+            "status": "missing",
+            "source_artifact": source_artifact,
+            "candidate_route": None,
+            "readonly_globals": [],
+            "readonly_globals_identity": readonly_globals_identity([]),
+            "rust_draft_generated": False,
+            "semantic_pass": False,
+        }
+
+    report = read_json(report_path)
+    candidate = report.get("typed_ir_candidate")
+    if not isinstance(candidate, dict):
+        return {
+            "status": "missing",
+            "source_artifact": evidence_ref(report_path, str(report.get("status", "recorded"))),
+            "candidate_route": None,
+            "readonly_globals": [],
+            "readonly_globals_identity": readonly_globals_identity([]),
+            "rust_draft_generated": False,
+            "semantic_pass": False,
+            "reason": "typed_ir_candidate_missing",
+        }
+
+    readonly_globals = candidate.get("readonly_globals", [])
+    if not isinstance(readonly_globals, list):
+        readonly_globals = []
+    return {
+        "status": str(candidate.get("status", "unknown")),
+        "source_artifact": evidence_ref(report_path, str(report.get("status", "recorded"))),
+        "candidate_route": candidate.get("candidate_route"),
+        "readonly_globals": readonly_globals,
+        "readonly_globals_identity": readonly_globals_identity(readonly_globals),
+        "rust_draft_generated": bool(candidate.get("rust_draft_generated", False)),
+        "semantic_pass": False,
+    }
+
+
+def readonly_globals_identity(readonly_globals: list[Any]) -> dict[str, Any]:
+    names = [
+        str(item.get("name", ""))
+        for item in readonly_globals
+        if isinstance(item, dict) and item.get("name")
+    ]
+    return {
+        "count": len(readonly_globals),
+        "names": names,
+        "sha256": sha256_json(readonly_globals),
+    }
 
 
 def route_level(
@@ -3024,6 +3093,7 @@ def emit_validation_profile(
             "compile": rust_check.get("status"),
             "c_oracle_diff": oracle.get("status"),
         },
+        "candidate_generation": route_decision.get("candidate_generation", {}),
         "accepted_evidence_authoritative": accepted_authoritative,
         "generated_draft_semantic_pass": False,
         "loop_policy": {

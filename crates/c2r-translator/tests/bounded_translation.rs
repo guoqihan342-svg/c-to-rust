@@ -50,6 +50,32 @@ fn json_file(path: PathBuf) -> Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
+#[cfg(feature = "clang-lowering-report")]
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(feature = "clang-lowering-report")]
+impl EnvVarGuard {
+    fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+        let original = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, original }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        if let Some(value) = &self.original {
+            std::env::set_var(self.key, value);
+        } else {
+            std::env::remove_var(self.key);
+        }
+    }
+}
+
 #[cfg(feature = "typed-ir")]
 fn assert_rust_snippet_compiles(name: &str, rust_code: &str) {
     let out_dir = unique_out_dir(name);
@@ -8315,6 +8341,21 @@ fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifes
         report["lowering_report"]["source_file"],
         report["source_file"]
     );
+    assert!(report["typed_ir_candidate"].is_object());
+    assert_eq!(report["typed_ir_candidate"]["semantic_pass"], false);
+    assert!(report["typed_ir_candidate"]["readonly_globals"]
+        .as_array()
+        .is_some());
+    if report["typed_ir_candidate"]["status"] == "generated" {
+        assert_eq!(
+            report["typed_ir_candidate"]["candidate_route"]["route"],
+            "GenericTypedIr"
+        );
+        assert_eq!(
+            report["typed_ir_candidate"]["candidate_route"]["candidate_generator"],
+            "GenericTypedIrEmitter"
+        );
+    }
     assert_eq!(
         report["metadata"]["logical_source_file"],
         serde_json::json!("add_one.c")
@@ -8339,6 +8380,7 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
         "clang path does not exist: {}",
         clang_path.display()
     );
+    let _clang_path_guard = EnvVarGuard::set_path("CLANG_PATH", &clang_path);
     let source_root = unique_out_dir("clang-lowered-rust-draft-source");
     fs::create_dir_all(source_root.join("src")).unwrap();
     fs::create_dir_all(source_root.join("inc")).unwrap();
@@ -8388,9 +8430,36 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
     let type_map = json_file(out_dir.join("l3-real-fdb-calc-crc32-type-map.json"));
     let cfg = json_file(out_dir.join("l3-real-fdb-calc-crc32-cfg.json"));
     let pointer_graph = json_file(out_dir.join("l3-real-fdb-calc-crc32-pointer-graph.json"));
+    let report = json_file(out_dir.join("l3-real-fdb-calc-crc32-clang-lowering-report.json"));
     let rust = fs::read_to_string(out_dir.join("l3-real-fdb-calc-crc32-rust-draft.rs")).unwrap();
 
     assert_eq!(manifest.status, "generated");
+    assert_eq!(report["typed_ir_candidate"]["status"], "generated");
+    assert_eq!(
+        report["typed_ir_candidate"]["candidate_route"]["route"],
+        "GenericTypedIr"
+    );
+    assert_eq!(
+        report["typed_ir_candidate"]["candidate_route"]["candidate_generator"],
+        "GenericTypedIrEmitter"
+    );
+    assert_eq!(report["typed_ir_candidate"]["semantic_pass"], false);
+    assert_eq!(
+        report["typed_ir_candidate"]["readonly_globals"][0]["name"],
+        "crc32_table"
+    );
+    assert_eq!(
+        report["typed_ir_candidate"]["readonly_globals"][0]["array_len"],
+        256
+    );
+    assert_eq!(
+        report["typed_ir_candidate"]["readonly_globals"][0]["init_kind"],
+        "integer_array"
+    );
+    assert_eq!(
+        report["typed_ir_candidate"]["readonly_globals"][0]["value_count"],
+        256
+    );
     assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32, 0u32"));
     assert!(
         rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")

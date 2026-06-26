@@ -939,6 +939,8 @@ fn write_clang_lowering_report_artifact(
                 &environment,
                 &parse_spec,
             );
+            let typed_ir_candidate =
+                typed_ir_candidate_evidence(report.function_ir.as_ref(), &report.globals);
             json!({
                 "schema_version": 1,
                 "artifact_kind": "clang-lowering-report",
@@ -958,6 +960,7 @@ fn write_clang_lowering_report_artifact(
                 },
                 "diagnostics": report.diagnostics,
                 "errors": report.errors,
+                "typed_ir_candidate": typed_ir_candidate,
                 "lowering_report": report,
                 "metadata": {
                     "source_root": parse_spec.source_root,
@@ -988,6 +991,14 @@ fn write_clang_lowering_report_artifact(
             "diagnostics": [
                 error.message,
             ],
+            "typed_ir_candidate": {
+                "status": "not_available",
+                "candidate_route": null,
+                "readonly_globals": [],
+                "rust_draft_generated": false,
+                "semantic_pass": false,
+                "reason": "clang_parse_spec_error",
+            },
             "lowering_report": null,
             "metadata": {
                 "source_root": spec.source_root,
@@ -1009,6 +1020,65 @@ fn write_clang_lowering_report_artifact(
         &format!("{prefix}-clang-lowering-report.json"),
         &value,
     )
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn typed_ir_candidate_evidence(
+    function_ir: Option<&typed_ir::IrFunction>,
+    globals: &[typed_ir::IrGlobal],
+) -> serde_json::Value {
+    let readonly_globals = globals
+        .iter()
+        .map(readonly_global_summary)
+        .collect::<Vec<_>>();
+    let Some(function_ir) = function_ir else {
+        return json!({
+            "status": "not_available",
+            "candidate_route": null,
+            "readonly_globals": readonly_globals,
+            "rust_draft_generated": false,
+            "semantic_pass": false,
+            "reason": "function_ir_missing",
+        });
+    };
+
+    match typed_ir::emit_rust_from_ir_with_globals(function_ir, globals) {
+        Ok(emitted) => json!({
+            "status": "generated",
+            "candidate_route": emitted.route,
+            "readonly_globals": readonly_globals,
+            "rust_draft_generated": true,
+            "semantic_pass": false,
+        }),
+        Err(error) => json!({
+            "status": "unsupported",
+            "candidate_route": error.route,
+            "readonly_globals": readonly_globals,
+            "rust_draft_generated": false,
+            "semantic_pass": false,
+            "unsupported_reason": error.reason,
+        }),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn readonly_global_summary(global: &typed_ir::IrGlobal) -> serde_json::Value {
+    let array_len = match &global.ty.kind {
+        typed_ir::IrTypeKind::Array { len, .. } => *len,
+        _ => None,
+    };
+    let (init_kind, value_count) = match &global.init {
+        typed_ir::IrGlobalInit::Zeroed => ("zeroed", array_len.unwrap_or(0)),
+        typed_ir::IrGlobalInit::IntegerArray(values) => ("integer_array", values.len()),
+    };
+    json!({
+        "name": global.name,
+        "spelled_type": global.ty.spelled,
+        "canonical_type": global.ty.canonical,
+        "array_len": array_len,
+        "init_kind": init_kind,
+        "value_count": value_count,
+    })
 }
 
 #[cfg(feature = "clang-frontend")]

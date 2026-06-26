@@ -5418,3 +5418,110 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-low
 - typed IR 核心翻译链路已经不再包含 crc32 canned fallback。
 - 旧字符串 translator 仍有 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它是 legacy parser 路径，后续应单独清理或明确标为 compatibility。
 - 真实 FlashDB crc32 仍只是 candidate generation + rustc smoke 通过；完整 semantic acceptance 还需要 validation profile、C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 78. 2026-06-27 typed IR candidate evidence binding
+
+本轮承接第 77 节：typed IR 的 crc32 legacy fallback 已删除，下一步把 `GenericTypedIr` candidate route 和 `ClangLoweringReport.globals` 绑定进 validation evidence，而不是只停留在 Rust draft 可编译。
+
+代码改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - `clang-lowering-report` artifact 新增 `typed_ir_candidate`。
+  - 成功时记录 `candidate_route`，即 `CandidateRouteDecision` 的完整序列化结果。
+  - 记录 `readonly_globals` 摘要：`name`、`spelled_type`、`canonical_type`、`array_len`、`init_kind`、`value_count`。
+  - 失败或 unavailable 时也会写出稳定结构，并保持 `semantic_pass=false`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status` 断言 report artifact 总是包含 `typed_ir_candidate`，且不影响 manifest status / semantic pass。
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 在真实 clang smoke 路径下断言 candidate route 为 `GenericTypedIr`，并断言 readonly global `crc32_table` 长度和值数量为 256。
+
+- `validation/tools/auto_migrate.py`
+  - `route_decision.candidate_generation.typed_ir` 现在从 `l3-<slice>-clang-lowering-report.json` 绑定 typed IR candidate route、readonly globals、readonly globals identity 和 Rust draft provenance。
+  - `route_decision.source_artifacts.clang_lowering_report` 在 report 存在时记录 evidence ref。
+  - `validation_profile.candidate_generation` 复述同一绑定，但继续保持 `generated_draft_semantic_pass=false`。
+  - `readonly_globals_identity` 包含 `count`、`names` 和 `sha256`，用于后续 cache/profile 漂移检查。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 新增 `validate_typed_ir_candidate_binding()`。
+  - 当 route/profile 声明 `typed_ir.status=generated` 时，validator 会校验 clang-lowering-report ref、sha、candidate route、readonly globals、globals identity 和 `semantic_pass=false`。
+  - route/profile 的 `candidate_generation` 必须一致。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence`。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_validates_typed_ir_candidate_binding_against_clang_lowering_report`，覆盖正向绑定、route 漂移拒绝和 candidate semantic pass 拒绝。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 已同步当前结构：typed IR route/globals 已绑定为 validation provenance，但不代表 semantic acceptance。
+
+本轮已跑过的验证：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_validates_typed_ir_candidate_binding_against_clang_lowering_report
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_route_source_artifact_ref_sha_drift
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+```
+
+最新边界：
+
+- typed IR candidate route 和 readonly globals 已作为 provenance 进入 route/profile evidence。
+- 这仍不是 semantic acceptance；`typed_ir_candidate.semantic_pass`、`validation_profile.generated_draft_semantic_pass` 和 manifest/final 的 generated-draft semantic flag 都必须保持 false。
+- 下一步应对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 79. 2026-06-27 typed IR candidate evidence hardening
+
+本轮承接第 78 节：在把 `GenericTypedIr` candidate route 和 readonly globals 绑定进 route/profile evidence 后，补强 validator 边界，避免非 semantic evidence 被静默篡改。
+
+代码改动：
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - `validate_typed_ir_candidate_binding()` 现在会拒绝 profile 单边出现 `candidate_generation` 而 route 缺失的情况。
+  - `typed_ir.status=generated` 或 clang report ref 明确不是 `missing` 时，必须校验 `source_artifact` / `source_artifacts.clang_lowering_report` 的 path 和 `sha256`。
+  - `status=missing` 的旧证据兼容路径仍允许缺少 clang-lowering-report artifact，不会误伤 legacy/accepted evidence 回填测试。
+  - `require_ref()` 新增 `require_sha` 参数，只在 typed IR clang report 边界强制 sha，不扩大影响其它旧 ref。
+  - `semantic_pass` 仍必须为 `false`；本轮没有把 candidate generation 提升为 semantic acceptance。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_rejects_typed_ir_candidate_reference_boundary_gaps`。
+  - 红测先确认当前 validator 会漏过缺失 `sha256`、profile 单边 `candidate_generation`、以及非 generated clang report ref 漂移。
+  - 修复后该测试通过，并保持旧的 accepted/legacy evidence 流程通过。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 现在用测试发现的 `clang_path` 临时设置 `CLANG_PATH`。
+  - 这样 artifact writer 能读取同一个 clang 路径，避免真实 clang smoke 在 shell 未设置 `CLANG_PATH` 时误报 `typed_ir_candidate.status=not_available`。
+  - 该环境变量 guard 只用于 gated smoke；最终按 `--test-threads=1` 单线程验证，避免进程级 env 并发风险。
+
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+  - 补充双语入口，指向 `core-translation-architecture.md` / `.en.md`，说明 `GenericTypedIr` candidate generation 已绑定 evidence，但 semantic acceptance 仍由 validation gates 决定。
+
+本轮补充验证：
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_typed_ir_candidate_reference_boundary_gaps
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --test bounded_translation clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --exact --nocapture --test-threads=1
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+已确认结果：
+
+- Python evidence/validator suite：113 tests passed。
+- `clang-lowering-report` Rust matrix：13 lib tests + 164 bounded tests passed。
+- `typed-ir,clang-frontend` Rust matrix：12 lib tests + 163 bounded tests passed。
+- 单线程真实 clang smoke：1 bounded test passed。
+- FlashDB `real-fdb-calc-crc32` evidence validator：status `passed`，semantic 仍为 `false/not_required`。
+
+下一步建议：
+
+- 把 `typed_ir_candidate` 从 provenance 进一步接入 route signal：`generated` 进入 L1 typed IR route，`unsupported` 保留失败原因并进入后续 L2/L3 队列。
+- 保留当前原则：candidate route 只描述生成路径，不替代 C/Rust oracle、negative diff、unsafe ledger 和 final verification。

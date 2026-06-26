@@ -380,6 +380,156 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("route_decision.source_artifacts.translation_plan", result.stderr + result.stdout)
 
+    def test_validates_typed_ir_candidate_binding_against_clang_lowering_report(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-real-fdb-calc-crc32"
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            report_candidate = {
+                "status": "generated",
+                "candidate_route": {
+                    "route_id": "generic-typed-ir",
+                    "route": "GenericTypedIr",
+                    "candidate_generator": "GenericTypedIrEmitter",
+                },
+                "readonly_globals": [
+                    {
+                        "name": "crc32_table",
+                        "array_len": 256,
+                        "init_kind": "integer_array",
+                        "value_count": 256,
+                    }
+                ],
+                "rust_draft_generated": True,
+                "semantic_pass": False,
+            }
+            self._write_json(
+                report_path,
+                {
+                    "status": "lowered",
+                    "typed_ir_candidate": report_candidate,
+                },
+            )
+            typed_ir = dict(report_candidate)
+            typed_ir["source_artifact"] = self._ref(report_path, "lowered")
+            typed_ir["readonly_globals_identity"] = {
+                "count": 1,
+                "names": ["crc32_table"],
+                "sha256": hashlib.sha256(
+                    json.dumps(report_candidate["readonly_globals"], sort_keys=True).encode("utf-8")
+                ).hexdigest(),
+            }
+            route = {
+                "source_artifacts": {
+                    "clang_lowering_report": self._ref(report_path, "lowered"),
+                },
+                "candidate_generation": {"typed_ir": typed_ir},
+            }
+            profile = {"candidate_generation": route["candidate_generation"]}
+
+            module.validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+
+            drifted = json.loads(json.dumps(route))
+            drifted["candidate_generation"]["typed_ir"]["candidate_route"]["route"] = "Unsupported"
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    drifted,
+                    {"candidate_generation": drifted["candidate_generation"]},
+                )
+            self.assertIn("typed_ir", str(raised.exception))
+
+            semantic_claim = json.loads(json.dumps(route))
+            semantic_claim["candidate_generation"]["typed_ir"]["semantic_pass"] = True
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    semantic_claim,
+                    {"candidate_generation": semantic_claim["candidate_generation"]},
+                )
+            self.assertIn("semantic_pass", str(raised.exception))
+
+    def test_rejects_typed_ir_candidate_reference_boundary_gaps(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-real-fdb-calc-crc32"
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            report_candidate = {
+                "status": "generated",
+                "candidate_route": {
+                    "route_id": "generic-typed-ir",
+                    "route": "GenericTypedIr",
+                    "candidate_generator": "GenericTypedIrEmitter",
+                },
+                "readonly_globals": [{"name": "crc32_table"}],
+                "rust_draft_generated": True,
+                "semantic_pass": False,
+            }
+            self._write_json(report_path, {"status": "lowered", "typed_ir_candidate": report_candidate})
+            typed_ir = dict(report_candidate)
+            typed_ir["source_artifact"] = self._ref(report_path, "lowered")
+            typed_ir["readonly_globals_identity"] = {
+                "count": 1,
+                "names": ["crc32_table"],
+                "sha256": hashlib.sha256(
+                    json.dumps(report_candidate["readonly_globals"], sort_keys=True).encode("utf-8")
+                ).hexdigest(),
+            }
+            route = {
+                "source_artifacts": {"clang_lowering_report": self._ref(report_path, "lowered")},
+                "candidate_generation": {"typed_ir": typed_ir},
+            }
+
+            missing_source_sha = json.loads(json.dumps(route))
+            missing_source_sha["candidate_generation"]["typed_ir"]["source_artifact"].pop("sha256")
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    missing_source_sha,
+                    {"candidate_generation": missing_source_sha["candidate_generation"]},
+                )
+            self.assertIn("source_artifact", str(raised.exception))
+            self.assertIn("sha256", str(raised.exception))
+
+            profile_only = {"candidate_generation": route["candidate_generation"]}
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(evidence_dir, prefix, {}, profile_only)
+            self.assertIn("validation_profile.candidate_generation", str(raised.exception))
+
+            self._write_json(report_path, {"status": "lowered"})
+            non_generated = {
+                "source_artifacts": {"clang_lowering_report": self._ref(report_path, "lowered")},
+                "candidate_generation": {
+                    "typed_ir": {
+                        "status": "missing",
+                        "source_artifact": self._ref(report_path, "lowered"),
+                        "candidate_route": None,
+                        "readonly_globals": [],
+                        "readonly_globals_identity": {
+                            "count": 0,
+                            "names": [],
+                            "sha256": hashlib.sha256(json.dumps([], sort_keys=True).encode("utf-8")).hexdigest(),
+                        },
+                        "rust_draft_generated": False,
+                        "semantic_pass": False,
+                    }
+                },
+            }
+            non_generated["source_artifacts"]["clang_lowering_report"]["sha256"] = "stale-report-sha"
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    non_generated,
+                    {"candidate_generation": non_generated["candidate_generation"]},
+                )
+            self.assertIn("clang_lowering_report", str(raised.exception))
+
     def test_rejects_cache_missing_route_baseline_profile_identities(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

@@ -266,6 +266,8 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
     if "skipped_gates" not in final:
         raise SystemExit(f"validation profile skipped gates missing from {final_path}")
 
+    validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+
     cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
     cache = load_json(cache_path)
     required_identities = {
@@ -1265,6 +1267,88 @@ def validate_route_source_artifact_refs(evidence_dir: Path, prefix: str, route: 
         require_ref(source_artifacts.get(key), expected_path, f"route_decision.source_artifacts.{key}")
 
 
+def validate_typed_ir_candidate_binding(
+    evidence_dir: Path,
+    prefix: str,
+    route: dict[str, Any],
+    profile: dict[str, Any],
+) -> None:
+    route_candidate_generation = route.get("candidate_generation")
+    if not isinstance(route_candidate_generation, dict):
+        if profile.get("candidate_generation") is not None:
+            raise SystemExit("validation_profile.candidate_generation must match route_decision.candidate_generation")
+        return
+    profile_candidate_generation = profile.get("candidate_generation")
+    if profile_candidate_generation != route_candidate_generation:
+        raise SystemExit("validation_profile.candidate_generation must match route_decision.candidate_generation")
+
+    typed_ir = route_candidate_generation.get("typed_ir")
+    if not isinstance(typed_ir, dict):
+        return
+    if typed_ir.get("semantic_pass") is not False:
+        raise SystemExit("route_decision.candidate_generation.typed_ir cannot claim semantic_pass")
+
+    report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    source_artifact_ref = typed_ir.get("source_artifact")
+    if typed_ir.get("status") == "generated" or ref_expects_existing_artifact(source_artifact_ref):
+        require_ref(
+            source_artifact_ref,
+            report_path,
+            "route_decision.candidate_generation.typed_ir.source_artifact",
+            require_sha=True,
+        )
+    route_source_artifacts = route.get("source_artifacts", {})
+    if isinstance(route_source_artifacts, dict):
+        clang_report_ref = route_source_artifacts.get("clang_lowering_report")
+        if typed_ir.get("status") == "generated" or ref_expects_existing_artifact(clang_report_ref):
+            require_ref(
+                clang_report_ref,
+                report_path,
+                "route_decision.source_artifacts.clang_lowering_report",
+                require_sha=True,
+            )
+
+    if typed_ir.get("status") != "generated":
+        return
+
+    report = load_json(report_path)
+    report_candidate = report.get("typed_ir_candidate")
+    if not isinstance(report_candidate, dict):
+        raise SystemExit(f"typed IR candidate evidence missing from {report_path}")
+    if report_candidate.get("semantic_pass") is not False:
+        raise SystemExit(f"typed IR candidate report cannot claim semantic_pass in {report_path}")
+
+    readonly_globals = report_candidate.get("readonly_globals", [])
+    expected = {
+        "status": report_candidate.get("status"),
+        "candidate_route": report_candidate.get("candidate_route"),
+        "readonly_globals": readonly_globals,
+        "readonly_globals_identity": {
+            "count": len(readonly_globals) if isinstance(readonly_globals, list) else 0,
+            "names": [
+                str(item.get("name", ""))
+                for item in readonly_globals
+                if isinstance(item, dict) and item.get("name")
+            ]
+            if isinstance(readonly_globals, list)
+            else [],
+            "sha256": sha256_json(readonly_globals if isinstance(readonly_globals, list) else []),
+        },
+        "rust_draft_generated": bool(report_candidate.get("rust_draft_generated", False)),
+        "semantic_pass": False,
+    }
+    actual = {
+        "status": typed_ir.get("status"),
+        "candidate_route": typed_ir.get("candidate_route"),
+        "readonly_globals": typed_ir.get("readonly_globals", []),
+        "readonly_globals_identity": typed_ir.get("readonly_globals_identity"),
+        "rust_draft_generated": bool(typed_ir.get("rust_draft_generated", False)),
+        "semantic_pass": typed_ir.get("semantic_pass"),
+    }
+    if actual != expected:
+        raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
+
+
 def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
     slice_spec = load_json(slice_spec_path)
     expected = global_dependency_requirements(slice_spec)
@@ -1519,11 +1603,15 @@ def candidate_status_paths(value: Any, path: str = "$") -> list[str]:
     return hits
 
 
+def ref_expects_existing_artifact(ref: Any) -> bool:
+    return isinstance(ref, dict) and str(ref.get("status", "")) != "missing"
+
+
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
 
 
-def require_ref(ref: Any, expected_path: Path, label: str) -> None:
+def require_ref(ref: Any, expected_path: Path, label: str, *, require_sha: bool = False) -> None:
     if not isinstance(ref, dict) or not ref.get("path"):
         raise SystemExit(f"{label} missing path reference")
     resolved = resolve_ref_path(str(ref["path"]))
@@ -1531,8 +1619,11 @@ def require_ref(ref: Any, expected_path: Path, label: str) -> None:
         raise SystemExit(f"{label} points to missing evidence: {resolved}")
     if resolved.resolve() != expected_path.resolve():
         raise SystemExit(f"{label} path mismatch: {resolved} != {expected_path}")
-    if ref.get("sha256") and ref["sha256"] != sha256(expected_path):
-        raise SystemExit(f"{label} sha256 mismatch: {ref['sha256']} != {sha256(expected_path)}")
+    ref_sha = ref.get("sha256")
+    if require_sha and (not isinstance(ref_sha, str) or not ref_sha):
+        raise SystemExit(f"{label} missing sha256")
+    if ref_sha and ref_sha != sha256(expected_path):
+        raise SystemExit(f"{label} sha256 mismatch: {ref_sha} != {sha256(expected_path)}")
     payload = load_json(expected_path)
     if ref.get("status") and payload.get("status") and ref["status"] != payload["status"]:
         raise SystemExit(f"{label} status mismatch: {ref['status']} != {payload['status']}")

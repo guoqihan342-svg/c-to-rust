@@ -51,7 +51,13 @@ flowchart TD
 - `crates/c2r-translator/src/lib.rs`
   - `try_translate_slice_with_clang_lowered_ir()` 把 `ClangLoweringReport.function_ir` 和 `report.globals` 一起传入 `emit_rust_from_ir_with_globals()`。
   - `write_translation_artifacts()` 在 `clang-lowering-report` feature 下可以写出由 clang-lowered typed IR 驱动的 Rust draft。
+  - `clang-lowering-report` artifact 现在包含 `typed_ir_candidate`，记录 `CandidateRouteDecision`、readonly globals 摘要和 `semantic_pass=false` 边界。
   - 旧字符串 translator 仍保留一个 crc32 byte-cursor 模板路径，位置是 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它不再桥接 typed IR，也不再记录 `typed-ir-crc32-emitter` provenance。
+- `validation/tools/auto_migrate.py`
+  - `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
+  - `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 校验 typed IR candidate binding 必须与 clang-lowering-report 一致，并拒绝任何 `semantic_pass=true` 的 candidate 证据。
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - bounded translator 的主要行为契约。
   - 覆盖直接 typed IR 测试、真实 clang AST smoke、真实 FlashDB crc32 parse spec、fail-closed 边界和 rustc smoke 编译。
@@ -66,7 +72,7 @@ flowchart TD
 - `GenericTypedIr`：通用 typed IR emitter，当前真实 FlashDB `fdb_calc_crc32` 在 clang lowering + globals 路径下已经能走到这里并通过 rustc smoke。
 - `Unsupported`：没有 Rust candidate，错误中带 fail-closed reason 和 route metadata。
 
-注意：candidate route 只选择候选生成实现，不决定 `semantic_pass`，也不替代 `validation/tools/auto_migrate.py` 里的 evidence `route_decision`。真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。
+注意：typed IR `CandidateRouteDecision` 只选择候选生成实现，不决定 `semantic_pass`。它现在会被绑定进 `validation/tools/auto_migrate.py` 的 `route_decision.candidate_generation.typed_ir` 和 `validation_profile.candidate_generation`，作为 provenance；真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。
 
 generic typed IR emission 现在覆盖：
 
@@ -84,12 +90,11 @@ generic typed IR emission 现在覆盖：
 仍未完成：
 
 - 旧字符串 translator 里仍有 crc32 byte-cursor recognizer 和 canned Rust 模板；这是 legacy parser 路径，不是 typed IR fallback。
-- 当前只是候选生成链路能生成并编译 Rust；真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
+- 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 扩展 validation evidence，把 `ClangLoweringReport.globals` 和 `GenericTypedIr` route 绑定到 route decision/profile 证据。
-2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
-3. 单独清理旧字符串 translator 的 crc32 recognizer 和 canned 模板，或把它降级为明确的 legacy compatibility path。
-4. 继续扩展 generic typed IR，而不是为 FlashDB 写专用逻辑。
+1. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+2. 单独清理旧字符串 translator 的 crc32 recognizer 和 canned 模板，或把它降级为明确的 legacy compatibility path。
+3. 继续扩展 generic typed IR，而不是为 FlashDB 写专用逻辑。

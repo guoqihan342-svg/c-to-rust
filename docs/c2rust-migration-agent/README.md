@@ -11,6 +11,7 @@
 - Rust 输出项目名：`flashDB_rust`
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
+- 核心翻译架构和证据状态：见 `core-translation-architecture.md` / `core-translation-architecture.en.md`；GenericTypedIr candidate generation 现在已绑定 evidence，但语义 acceptance 仍取决于 validation gates。
 
 ## 双语文档约定
 
