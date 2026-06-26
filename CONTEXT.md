@@ -5131,3 +5131,56 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - typed IR generic emitter 已经不再只是 scalar：只读整数 pointer-to-slice、slice index read、direct byte cursor `*p++`、`const void *` proven byte cursor、nested byte read prelude 都已能输出可编译 Rust。
 - 这仍不是“全程零 crc32 专用代码”：`is_crc32_byte_cursor_ir()`、旧 `is_crc32_byte_cursor_loop()`、`emit_crc32_byte_cursor_rust()` 和相关 crc32 rule 记录路径仍在。下一轮如果要回应“翻译能力不是 0”的质疑，必须继续把 crc32 主体从 generic emitter 跑出来，再删除 canned matcher。
 - 下一步建议：把 crc32 table/global const array 与 loop 内 `crc = crc32_table[(crc ^ *p++) & 0xff] ^ (crc >> 8)` 拆成 generic `Index + Deref(PostInc) + Assign` emitter 能力；在 full generic 路径通过前，不要提前删除旧 canned path。
+
+## 73. 2026-06-26 generic crc update assignment and postfix decrement while
+
+本轮继续推进核心翻译泛化，目标是把 FlashDB crc32 主体拆成更小的 generic emitter 能力，而不是继续依赖 canned crc32 路径。并行只读代理结论一致：真实 clang lowering 已能表达 `Index(table, (crc ^ *p++) & mask) ^ (crc >> 8)`，但 real FlashDB 的 `static const crc32_table[256]` 仍缺显式 global table IR/context，不能声称 full generic crc32 已完成。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `Assign` RHS 改为走 `emit_expr_with_prelude()`，因此 assignment 内部也能生成 nested byte-read prelude。
+  - `Assign` value 中多个 `*p++` 继续 fail-closed，错误文案包含 `assign value multiple post-increment byte reads are unsupported`。
+  - 新增窄 `while(size--)` 支持：只接受 postfix `Dec` 的 `size_t`/`usize` 变量，生成 Rust `loop`，先保存旧值，再 `wrapping_sub(1usize)`，再按旧值为 0 决定 break，保留 C postfix decrement 副作用。
+  - `collect_assigned_vars_from_body()` 只把 `while(size--)` 的 decrement target 纳入 `mut` 参数收集；没有把 byte cursor `*p++` 的 slice 参数错误标成 `mut`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_crc_update_assignment_with_nested_byte_read`，证明 `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U)` 能走 generic emitter，且不包含 `crc32_update_byte`。
+  - 新增 `typed_ir_rejects_multiple_post_increment_reads_in_assign_value`。
+  - 新增 `typed_ir_emits_postfix_decrement_while_condition_for_size_counter`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled`，使用参数表 `const uint32_t *table` 绕开 global table blocker，验证 clang AST -> typed IR -> generic emitter -> rustc smoke。
+  - 原 `clang_ast_dump_rejects_postfix_decrement_while_condition_in_scalar_emitter_when_enabled` 改为正例 `clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled`；prefix decrement 负例仍保留。
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - 新增架构图和核心代码地图。
+  - 明确当前通路：C source / compile_commands -> clang AST dump -> skeleton -> typed IR -> generic emitter / legacy crc32 route -> Rust -> rustc/tests/evidence。
+  - 明确核心文件：`clang_frontend.rs`、`typed_ir.rs`、`bounded_translation.rs`、`CONTEXT.md`。
+  - 明确 blocker：real FlashDB 的 global const `crc32_table[256]` 还没有 typed IR global data model。
+- `docs/c2rust-migration-agent/README.md`
+  - Document Map 增加 `core-translation-architecture.md`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_crc_update_assignment_with_nested_byte_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_post_increment_reads_in_assign_value -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_postfix_decrement_while_condition_for_size_counter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前验证结果：
+- `bounded_translation`: `155 passed`
+- translator crate with `typed-ir,clang-frontend`: lib `11 passed`, bounded `155 passed`, doc tests `0`
+- real clang AST opt-in focused suite: `38 passed`
+
+当前核心翻译状态：
+- `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U)` 已能在 table 作为 readonly pointer parameter 时走 generic typed IR emitter。
+- `while(size--)` 已有窄 generic lowering，保留 postfix decrement 语义；`while(--size)`、`if(value++)`、signed int decrement condition 仍 fail-closed。
+- real FlashDB crc32 仍没有完全泛化：`crc32_table` global const array 还只是表达式里的 array-typed Var，没有全局常量数据模型或 Rust table emitter。下一刀应设计 typed IR global readonly array/context，再替换并删除 legacy crc32 matcher。

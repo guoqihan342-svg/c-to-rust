@@ -561,10 +561,18 @@ fn emit_stmt(
                 return Err(format!("assign target {name} is not declared"));
             }
             let target_name = emit_identifier(name, "assign target")?;
+            if count_post_increment_byte_reads(value) > 1 {
+                return Err(
+                    "assign value multiple post-increment byte reads are unsupported".to_string(),
+                );
+            }
             validate_expr_matches_type(value, target_ty, "assign value")?;
-            let value =
-                emit_expr(value, symbols).map_err(|detail| format!("assign value {detail}"))?;
-            Ok(format!("{indent}{target_name} = {value};\n"))
+            let emitted =
+                emit_expr_with_prelude(value, symbols, context, indent_level, "assign value")?;
+            Ok(format!(
+                "{}{indent}{target_name} = {};\n",
+                emitted.prelude, emitted.expr
+            ))
         }
         IrStmt::Return { value, .. } => match value {
             Some(value) => {
@@ -643,6 +651,16 @@ fn emit_stmt(
         IrStmt::While {
             condition, body, ..
         } => {
+            if let Some(block) = emit_postfix_decrement_while_loop(
+                condition,
+                body,
+                return_type,
+                indent_level,
+                symbols,
+                context,
+            )? {
+                return Ok(block);
+            }
             let condition = emit_condition_expr(condition, symbols)
                 .map_err(|detail| format!("while condition {detail}"))?;
             let mut loop_symbols = symbols.clone();
@@ -666,6 +684,84 @@ fn emit_stmt(
             Err(format!("unsupported statement {node}: {reason}"))
         }
     }
+}
+
+fn emit_postfix_decrement_while_loop(
+    condition: &IrExpr,
+    body: &[IrStmt],
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Dec,
+        prefix: false,
+        ty,
+        ..
+    } = condition
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(name) {
+        return Err(format!(
+            "while condition decrement target {name} is not declared"
+        ));
+    }
+    if !is_usize(target_ty) || !is_usize(ty) {
+        return Ok(None);
+    }
+
+    let name = emit_identifier(name, "while condition decrement target")?;
+    let counter_ty = emit_scalar_type(target_ty)
+        .map_err(|detail| format!("while condition decrement target has {detail}"))?;
+    let zero = zero_literal_for_type(target_ty)
+        .map_err(|detail| format!("while condition decrement zero {detail}"))?;
+    let one = emit_integer_literal(1, target_ty)
+        .map_err(|detail| format!("while condition decrement step {detail}"))?;
+    let snapshot = emit_identifier(
+        &first_available_temp_name(&format!("{name}_before_dec"), symbols),
+        "while condition decrement snapshot",
+    )?;
+
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    let break_indent = "    ".repeat(indent_level + 2);
+    let mut block = String::new();
+    block.push_str(&format!("{indent}loop {{\n"));
+    block.push_str(&format!(
+        "{inner_indent}let {snapshot}: {counter_ty} = {name};\n"
+    ));
+    block.push_str(&format!(
+        "{inner_indent}{name} = {name}.wrapping_sub({one});\n"
+    ));
+    block.push_str(&format!("{inner_indent}if {snapshot} == {zero} {{\n"));
+    block.push_str(&format!("{break_indent}break;\n"));
+    block.push_str(&format!("{inner_indent}}}\n"));
+
+    let mut loop_symbols = symbols.clone();
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+        )
+        .map_err(|detail| format!("while body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+    block.push_str(&format!("{indent}}}\n"));
+    Ok(Some(block))
 }
 
 fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
@@ -1510,7 +1606,20 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 collect_assigned_vars_from_body(then_body, assigned_vars);
                 collect_assigned_vars_from_body(else_body, assigned_vars);
             }
-            IrStmt::While { body, .. } => {
+            IrStmt::While {
+                condition, body, ..
+            } => {
+                if let IrExpr::IncDec {
+                    target,
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ..
+                } = condition
+                {
+                    if let IrExpr::Var { name, .. } = target.as_ref() {
+                        assigned_vars.insert(name.clone());
+                    }
+                }
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
             _ => {}

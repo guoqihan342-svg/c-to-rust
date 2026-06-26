@@ -389,6 +389,184 @@ fn typed_ir_emits_index_over_const_u32_pointer_param() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_crc_update_assignment_with_nested_byte_read() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let const_u32_ptr = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        ir_const(u32_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let table_index = ir_binary(
+        IrBinOp::BitAnd,
+        ir_binary(
+            IrBinOp::BitXor,
+            ir_var("crc", u32_ty.clone()),
+            IrExpr::Cast {
+                target: u32_ty.clone(),
+                expr: Box::new(byte_read),
+                implicit: true,
+                source_span: None,
+            },
+            u32_ty.clone(),
+        ),
+        ir_lit(0xFF, "0xFFU", u32_ty.clone()),
+        u32_ty.clone(),
+    );
+    let table_lookup = IrExpr::Index {
+        base: Box::new(ir_var("table", const_u32_ptr.clone())),
+        index: Box::new(table_index),
+        ty: u32_ty.clone(),
+        source_span: None,
+    };
+    let shift = ir_binary(
+        IrBinOp::Shr,
+        ir_var("crc", u32_ty.clone()),
+        ir_lit(8, "8U", u32_ty.clone()),
+        u32_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "update_crc_step".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr,
+                source_span: None,
+            },
+            IrParam {
+                name: "table".to_string(),
+                ty: const_u32_ptr,
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("crc", u32_ty.clone()),
+                value: ir_binary(IrBinOp::BitXor, table_lookup, shift, u32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("crc", u32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit crc update assignment");
+
+    assert!(rust.contains("pub fn update_crc_step(mut crc: u32, p: &[u8], table: &[u32]) -> u32"));
+    assert!(rust.contains("let mut p_index: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = p[p_index];"));
+    assert!(rust.contains("p_index += 1;"));
+    assert!(
+        rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));")
+    );
+    assert!(rust.contains("return crc;"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-crc-update-assignment", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_multiple_post_increment_reads_in_assign_value() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = || IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_assign_double_byte_read".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "crc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("crc", u32_ty.clone()),
+                value: ir_binary(
+                    IrBinOp::BitXor,
+                    IrExpr::Cast {
+                        target: u32_ty.clone(),
+                        expr: Box::new(byte_read()),
+                        implicit: true,
+                        source_span: None,
+                    },
+                    IrExpr::Cast {
+                        target: u32_ty.clone(),
+                        expr: Box::new(byte_read()),
+                        implicit: true,
+                        source_span: None,
+                    },
+                    u32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("crc", u32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("assign with multiple byte reads must fail closed");
+
+    assert!(error
+        .reason
+        .contains("assign value multiple post-increment byte reads are unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_const_u8_pointer_param_post_increment_read() {
     let u8_ty = ir_u8();
     let const_u8_ptr = ir_pointer(
@@ -842,6 +1020,67 @@ fn typed_ir_rejects_multiple_nested_post_increment_reads_in_one_expr() {
     assert!(error
         .reason
         .contains("multiple post-increment byte reads are unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_postfix_decrement_while_condition_for_size_counter() {
+    let usize_ty = ir_usize();
+    let ir = IrFunction {
+        name: "countdown_sum".to_string(),
+        return_type: usize_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "size".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "acc".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::IncDec {
+                    target: Box::new(ir_var("size", usize_ty.clone())),
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ty: usize_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("acc", usize_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("acc", usize_ty.clone()),
+                        ir_var("size", usize_ty.clone()),
+                        usize_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("acc", usize_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit postfix decrement while condition");
+
+    assert!(rust.contains("pub fn countdown_sum(mut size: usize, mut acc: usize) -> usize"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("let size_before_dec0: usize = size;"));
+    assert!(rust.contains("size = size.wrapping_sub(1usize);"));
+    assert!(rust.contains("if size_before_dec0 == 0usize {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("acc = (acc + size);"));
+    assert!(rust.contains("return acc;"));
+    assert_rust_snippet_compiles("typed-ir-postfix-decrement-while", &rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5142,6 +5381,61 @@ fn clang_ast_dump_emits_nested_const_u8_byte_cursor_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-crc-update-assignment-pointer-table-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("update_crc_step_from_clang.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t update_crc_step_from_clang(uint32_t crc, const uint8_t *p, const uint32_t *table) { crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U); return crc; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "update_crc_step_from_clang",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust =
+        emit_rust_from_ir(function).expect("emit clang crc update assignment with pointer table");
+    assert!(rust.contains(
+        "pub fn update_crc_step_from_clang(mut crc: u32, p: &[u8], table: &[u32]) -> u32"
+    ));
+    assert!(rust.contains("let mut p_index: usize = 0;"));
+    assert!(rust.contains("let byte0: u8 = p[p_index];"));
+    assert!(rust.contains("p_index += 1;"));
+    assert!(
+        rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));")
+    );
+    assert!(rust.contains("return crc;"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-crc-update-assignment-pointer-table",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -5980,7 +6274,7 @@ fn clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_postfix_decrement_while_condition_in_scalar_emitter_when_enabled() {
+fn clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -5993,7 +6287,7 @@ fn clang_ast_dump_rejects_postfix_decrement_while_condition_in_scalar_emitter_wh
         "clang path does not exist: {}",
         clang_path.display()
     );
-    let out_dir = unique_out_dir("clang-real-postfix-decrement-while-reject");
+    let out_dir = unique_out_dir("clang-real-postfix-decrement-while-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_while_size.c");
     fs::write(
@@ -6011,10 +6305,16 @@ fn clang_ast_dump_rejects_postfix_decrement_while_condition_in_scalar_emitter_wh
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let error = emit_rust_from_ir(function)
-        .expect_err("postfix decrement while condition must fail closed");
-    assert!(error.reason.contains("stmt[0].while condition"));
-    assert!(error.reason.contains("inc/dec expression is unsupported"));
+    let rust = emit_rust_from_ir(function).expect("emit postfix decrement while condition");
+    assert!(rust.contains("pub fn bad_while_size(mut value: i32, mut size: usize) -> i32"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("let size_before_dec0: usize = size;"));
+    assert!(rust.contains("size = size.wrapping_sub(1usize);"));
+    assert!(rust.contains("if size_before_dec0 == 0usize {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("value = value;"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-postfix-decrement-while", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
