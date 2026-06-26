@@ -463,6 +463,12 @@ pub fn write_translation_artifacts(
             &result.rust_code,
         )?,
     ];
+    #[cfg(feature = "clang-frontend")]
+    let artifacts = {
+        let mut artifacts = artifacts;
+        artifacts.push(write_clang_dry_run_artifact(spec, out_dir, &prefix)?);
+        artifacts
+    };
 
     Ok(ArtifactManifest {
         target_id: spec.target_id.clone(),
@@ -473,6 +479,50 @@ pub fn write_translation_artifacts(
             .map(|path| path.to_string_lossy().replace('\\', "/"))
             .collect(),
     })
+}
+
+#[cfg(feature = "clang-frontend")]
+fn write_clang_dry_run_artifact(
+    spec: &SliceSpec,
+    out_dir: &Path,
+    prefix: &str,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
+        Ok(parse_spec) => json!({
+            "schema_version": 1,
+            "target_id": spec.target_id,
+            "slice_id": spec.slice_id,
+            "source_commit": spec.source_commit,
+            "frontend": "clang",
+            "status": "ready_without_libclang",
+            "dry_run": parse_spec.dry_run(),
+            "metadata": {
+                "source_file_hashes": parse_spec.source_file_hashes,
+                "function_source_span": parse_spec.function_source_span,
+            },
+            "errors": [],
+        }),
+        Err(error) => json!({
+            "schema_version": 1,
+            "target_id": spec.target_id,
+            "slice_id": spec.slice_id,
+            "source_commit": spec.source_commit,
+            "frontend": "clang",
+            "status": "blocked",
+            "dry_run": null,
+            "metadata": {
+                "source_file_hashes": spec.source_file_hashes,
+                "function_source_span": spec.function_source_span,
+            },
+            "errors": [
+                {
+                    "kind": error.kind,
+                    "message": error.message,
+                }
+            ],
+        }),
+    };
+    write_json_file(out_dir, &format!("{prefix}-clang-dry-run.json"), &value)
 }
 
 fn write_json_file(

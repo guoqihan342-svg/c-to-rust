@@ -1726,3 +1726,138 @@ fn writes_translation_artifacts_for_l3_manifest_binding() {
     let plan = fs::read_to_string(out_dir.join("l3-add-one-auto-translation-plan.json")).unwrap();
     assert!(plan.contains("\"status\": \"generated\""));
 }
+
+#[cfg(not(feature = "clang-frontend"))]
+#[test]
+fn default_translation_artifacts_do_not_emit_clang_dry_run() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("no-clang-dry-run");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert!(!out_dir
+        .join("l3-real-fdb-calc-crc32-clang-dry-run.json")
+        .exists());
+    assert!(!manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/FlashDB",
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 77,
+            "line_end": 89,
+            "byte_start": 3818,
+            "byte_end": 4075,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc", "tests"],
+            "defines": ["FDB_USING_FILE_POSIX_MODE"],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
+            "clang_available": false
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("clang-dry-run");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let dry_run = json_file(out_dir.join("l3-real-fdb-calc-crc32-clang-dry-run.json"));
+
+    assert!(manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
+    assert_eq!(dry_run["schema_version"], 1);
+    assert_eq!(dry_run["status"], "ready_without_libclang");
+    assert_eq!(dry_run["frontend"], "clang");
+    assert_eq!(dry_run["dry_run"]["source_file"], "src/fdb_utils.c");
+    assert_eq!(
+        dry_run["dry_run"]["arguments"],
+        serde_json::json!([
+            "-IC:/src/FlashDB/inc",
+            "-IC:/src/FlashDB/tests",
+            "-DFDB_USING_FILE_POSIX_MODE"
+        ])
+    );
+    assert_eq!(
+        dry_run["metadata"]["source_file_hashes"]["src/fdb_utils.c"],
+        "source-file-sha"
+    );
+    assert!(dry_run["errors"].as_array().unwrap().is_empty());
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "add-one".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "add_one".to_string(),
+        c_source: "int add_one(int value) { return value + 1; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("clang-dry-run-blocked");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let dry_run = json_file(out_dir.join("l3-add-one-clang-dry-run.json"));
+
+    assert_eq!(manifest.status, "generated");
+    assert_eq!(dry_run["status"], "blocked");
+    assert_eq!(dry_run["errors"][0]["kind"], "missing_source_root");
+    assert_eq!(
+        dry_run["errors"][0]["message"],
+        "clang frontend dry-run requires source_root"
+    );
+    assert!(out_dir.join("l3-add-one-rust-draft.rs").exists());
+}

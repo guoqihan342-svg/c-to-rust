@@ -2973,3 +2973,81 @@ git diff --check -- crates/c2r-translator/Cargo.toml crates/c2r-translator/src/l
 2. 再用 Python temp `--out-root` 做显式 opt-in 接入测试，不写 `validation/evidence`。
 3. 之后才接真实 libclang lowering：先小 C fixture，再 real-fdb `fdb_calc_crc32`，目标是 lower 出与
    `crc32_byte_cursor_function()` 等价的 `IrFunction`。
+
+## 45. 2026-06-26 clang dry-run artifact under feature gate
+
+本轮承接第 44 节第 1 条下一步，但仍保持边界：只让 Rust translator crate 在
+`--features clang-frontend` 下写出可观测 dry-run diagnostic artifact；默认构建不产物，不改
+Python pipeline，不刷新仓库 evidence，也不接真实 libclang。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在已有 8 个 artifact 后，且仅在 `#[cfg(feature = "clang-frontend")]`
+    下追加 `l3-{slice_id}-clang-dry-run.json` 到 manifest。
+  - artifact 内容来自 `ClangParseSpec::from_slice_spec(spec).dry_run()`：
+    - metadata 完整时：`status=ready_without_libclang`，包含 `dry_run`、`metadata.source_file_hashes`、
+      `metadata.function_source_span`，`errors=[]`。
+    - metadata 不完整时：`status=blocked`，记录 `errors[0].kind/message`，但不阻断普通翻译 artifact
+      和 Rust draft 产出。
+  - 默认构建使用不可变 `artifacts` vector，避免 `unused_mut` warning；feature 开启时才 shadow 成
+    mutable vector 并 push dry-run artifact。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `default_translation_artifacts_do_not_emit_clang_dry_run`，验证默认构建不写
+    `l3-*-clang-dry-run.json`，manifest 也不引用它。
+  - 新增 `clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata`，验证 feature 开启时
+    完整真实 TU metadata 会生成 ready dry-run JSON。
+  - 新增 `clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation`，验证缺
+    metadata 时 dry-run artifact fail closed，但普通翻译 manifest 仍保持 generated。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend`
+  初始失败在 `l3-*-clang-dry-run.json` 文件不存在。
+- 绿灯：
+  将 dry-run artifact 追加到 `write_translation_artifacts()` 后，两个 feature-gated artifact 测试通过。
+- 默认路径回归：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run`
+  首次通过但有 `unused_mut` warning；随后调整 vector 构造，默认全量测试无 warning 通过。
+
+本轮并行只读审查结论：
+- Chandrasekhar：建议 dry-run artifact 落在 `write_translation_artifacts()` 而不是 CLI；文件名使用
+  `l3-{slice_id}-clang-dry-run.json`；默认构建不编译 `clang_frontend`、不产物、manifest 保持现有文件集。
+  本轮实现与该建议一致。
+- Jason：建议本轮不改 Python；等 Rust artifact 可用后，再单独做默认关闭的 Python opt-in，例如
+  `--emit-clang-dry-run`，并用 mock 测命令构造，避免真实 cargo 或 repo `validation/evidence` 写入。
+  本轮遵守该边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+git diff --check -- crates/c2r-translator/src/lib.rs crates/c2r-translator/tests/bounded_translation.rs CONTEXT.md
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features clang-frontend` translator crate：`41 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`43 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 44 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变，`clang-frontend` 默认关闭且不写 dry-run artifact。
+- Rust feature 路径已有可观测 clang dry-run diagnostic artifact，可用于下一步 Python opt-in。
+- 仍未接真实 libclang，也未把 Python pipeline 默认改为启用 clang dry-run；generated semantic pass
+  边界仍保持不变。
+
+下一步建议：
+1. 做 Python 显式 opt-in：新增默认关闭的 `--emit-clang-dry-run` 或等价配置，只在 temp `--out-root`
+   测试中通过 `cargo run --features clang-frontend` 产出 dry-run artifact。
+2. 再做真实 libclang lowering 的最小 fixture：先不碰 real-fdb，先用小 C 文件证明能 lower 出
+   一个 `IrFunction` skeleton。
+3. 最后把 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。
