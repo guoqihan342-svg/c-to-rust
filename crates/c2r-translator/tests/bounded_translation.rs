@@ -6,6 +6,12 @@ use std::{
 
 #[cfg(feature = "clang-frontend")]
 use c2r_translator::clang_frontend::ClangParseSpec;
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+use c2r_translator::clang_frontend::{
+    lower_function_from_clang_ast_dump, lower_function_skeleton, ClangBinaryOperator,
+    ClangExprSkeleton, ClangFunctionSkeleton, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind,
+    ClangTypeSkeleton,
+};
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
     emit_rust_from_ir, IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType,
@@ -723,6 +729,120 @@ fn clang_parse_spec_rejects_missing_real_tu_metadata() {
         error.to_string(),
         "clang frontend dry-run requires source_root"
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "add_one".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Add,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower add_one skeleton");
+
+    assert_eq!(ir.name, "add_one");
+    assert!(matches!(
+        ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert_eq!(ir.params.len(), 1);
+    assert_eq!(ir.params[0].name, "value");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Add,
+                lhs,
+                rhs,
+                ty,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected single return-add statement");
+    };
+    assert!(matches!(ty.kind, IrTypeKind::Integer { width: 32, .. }));
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Var { name, .. } if name == "value"
+    ));
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { value: 1, spelling, .. } if spelling == "1"
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-add-one");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("add_one.c");
+    fs::write(
+        &source_file,
+        "int add_one(int value) { return value + 1; }\n",
+    )
+    .unwrap();
+
+    let ir = lower_function_from_clang_ast_dump(&clang_path, &source_file, "add_one")
+        .expect("lower real clang AST add_one");
+
+    assert_eq!(ir.name, "add_one");
+    assert_eq!(ir.params.len(), 1);
+    assert_eq!(ir.params[0].name, "value");
+    assert!(matches!(
+        ir.body.as_slice(),
+        [IrStmt::Return {
+            value: Some(IrExpr::Binary {
+                op: IrBinOp::Add,
+                ..
+            }),
+            ..
+        }]
+    ));
 }
 
 #[test]

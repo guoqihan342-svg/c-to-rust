@@ -3199,3 +3199,86 @@ python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_v
 1. 用小 C fixture 做真实 TU parse/lowering skeleton，先证明能从真实前端构造一个最小 `IrFunction`。
 2. 明确 real parse 的启用开关和 fail-closed 错误模型，避免 `LIBCLANG_PATH` 一存在就改变默认行为。
 3. 再把 real-fdb `fdb_calc_crc32` lowering 接到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 48. 2026-06-26 real clang add-one AST smoke and typed IR lowering skeleton
+
+本轮承接第 47 节第 1 条下一步，并按用户要求先安装 clang：
+- 通过 `winget install --id LLVM.LLVM --exact --source winget --accept-package-agreements --accept-source-agreements`
+  安装 LLVM 22.1.8。
+- 本机路径：
+  - `C:\Program Files\LLVM\bin\clang.exe`
+  - `C:\Program Files\LLVM\bin\libclang.dll`
+- 验证：
+  `clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)`
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangFunctionSkeleton` / `ClangParamSkeleton` / `ClangTypeSkeleton` /
+    `ClangStmtSkeleton` / `ClangExprSkeleton` / `ClangBinaryOperator`。
+  - 新增 `lower_function_skeleton()`，在 `clang-frontend + typed-ir` 双 feature 下把前端函数模型
+    lower 成 `IrFunction`。
+  - 新增 `lower_function_from_clang_ast_dump()`，显式调用 `clang -Xclang -ast-dump=json -fsyntax-only`
+    解析真实小 C translation unit，再把目标 `FunctionDecl` 转成 skeleton 并 lower 到 typed IR。
+  - 当前 AST subset 只覆盖最小 add-one 形态：
+    `FunctionDecl -> ParmVarDecl + CompoundStmt -> ReturnStmt -> BinaryOperator(+) ->
+    DeclRefExpr/IntegerLiteral`，类型只覆盖 `int`。
+  - 未新增 Cargo 依赖，未引入 `clang-sys` 或 `libloading`；这一步是可执行 clang 的 AST dump smoke，
+    不是完整 libclang binding。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture`，验证手写 skeleton 能 lower 出
+    `IrFunction { name=add_one, return int, param value:int, Return(Binary(Add(value, 1))) }`。
+  - 新增 `clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled`，只有设置
+    `C2R_RUN_CLANG_AST_TESTS=1` 时才调用真实 `clang.exe` 解析临时 `add_one.c`；默认测试不依赖本机
+    LLVM 安装。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_skeleton`
+  初始失败在 `lower_function_skeleton` 和 skeleton 类型未定义。
+- 绿灯：
+  增加 skeleton 类型和 `lower_function_skeleton()` 后，聚焦测试通过。
+- 真实 clang smoke：
+  安装 LLVM 后，设置 `CLANG_PATH` / `LIBCLANG_PATH` / `C2R_RUN_CLANG_AST_TESTS=1`，用真实
+  `clang.exe` AST dump 解析临时 `add_one.c`，并成功 lower 到 typed IR。
+
+本轮并行只读审查结论：
+- Noether：建议真实 clang/libclang 路径不要污染默认回归；普通测试只验证 API 和 unavailable/report
+  路径，真实 TU parse 用 opt-in 测试。本轮用 `C2R_RUN_CLANG_AST_TESTS=1` 实现该边界。
+- Dewey：确认 add-one 的最小 `IrFunction` 形状应为 i32 return、一个 i32 param、单条
+  `Return(Binary(Add(Var(value), LitInt(1))))`；不要顺手扩 typed IR emitter 到非 CRC32。本轮只做
+  lowering，不改 `emit_rust_from_ir()`。
+
+已通过命令：
+```powershell
+winget install --id LLVM.LLVM --exact --source winget --accept-package-agreements --accept-source-agreements
+& 'C:\Program Files\LLVM\bin\clang.exe' --version
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_skeleton
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features clang-frontend` translator crate：`43 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`47 passed`，其中真实 clang AST smoke 已执行。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变。
+- `clang-frontend + typed-ir` 现在能从真实 clang AST dump 的最小 add-one TU lower 出 typed IR。
+- 仍未把该路径接入 `auto_migrate.py` 默认流程，也未把 real-fdb `fdb_calc_crc32` 改为真实 AST 驱动。
+- 真实测试目前是 opt-in，避免没有 LLVM 的机器默认失败。
+
+下一步建议：
+1. 把 `lower_function_from_clang_ast_dump()` 包装成报告型入口，输出 `lowered/unavailable/blocked/unsupported`
+   和 errors，便于 Python pipeline opt-in 消费。
+2. 扩展 AST subset：先支持 `return value + literal` 的更多整数类型/操作，再支持局部声明和赋值。
+3. 再用真实 FlashDB `fdb_calc_crc32` AST 做结构审计，决定要先 lower 哪个最小子集，而不是直接跳到全函数。
