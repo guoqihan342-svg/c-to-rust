@@ -210,6 +210,7 @@ pub enum ClangExprSkeleton {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangBinaryOperator {
     Add,
+    BitAnd,
     BitXor,
 }
 
@@ -821,6 +822,7 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
         Some("BinaryOperator") => {
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("+") => ClangBinaryOperator::Add,
+                Some("&") => ClangBinaryOperator::BitAnd,
                 Some("^") => ClangBinaryOperator::BitXor,
                 Some(opcode) => {
                     return Ok(ClangExprSkeleton::Unsupported {
@@ -1233,6 +1235,7 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
 fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
     match op {
         ClangBinaryOperator::Add => IrBinOp::Add,
+        ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
     }
 }
