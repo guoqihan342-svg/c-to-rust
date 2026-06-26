@@ -6201,3 +6201,75 @@ English mirror summary:
 - This is candidate generation only. It does not support division by zero, all C arithmetic, floating-point arithmetic, full usual arithmetic conversions, overflow/UB parity, pointer arithmetic, pointer difference, array-to-pointer decay, compound assignment, or inc/dec.
 - Division and modulo may only move toward semantic acceptance when a non-zero divisor is established by a literal, fixture input domain, or slice contract; otherwise the path must stay fail-closed.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 90. 2026-06-27 signed unary minus through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了测试组合、文档同步点和验证矩阵；主线按 TDD 把 signed unary minus `-value` 从 clang AST/skeleton lowering 接到 `GenericTypedIr` emitter。结论：这是 generic typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrUnOp::Neg` 现在由 generic typed IR emitter 发射为 `(-operand)`。
+  - 新增 signed-only 校验：operand/result 必须是同一个 signed integer scalar type；unsigned result、unsigned operand、非 scalar 或 signed width mismatch 必须 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangUnaryOperator` 新增 `Neg`。
+  - clang AST `UnaryOperator` opcode `"-"` 现在 lowering 到 `ClangUnaryOperator::Neg`，再 lowering 到 `IrUnOp::Neg`。
+  - 新增默认单测覆盖 `UnaryOperator("-") -> IrUnOp::Neg`，不依赖真实 clang 环境。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_signed_unary_minus`。
+  - 新增 clang skeleton 正向测试 `typed_ir_emits_signed_unary_minus_from_clang_lowered_ir`。
+  - 新增负例 `typed_ir_rejects_unsigned_unary_minus_in_generic_emitter` 和 `typed_ir_rejects_mismatched_signed_unary_minus_type_in_generic_emitter`。
+  - 新增 `typed_ir_rejects_logical_not_in_generic_emitter`，明确 `IrUnOp::Not` 仍不被 generic emitter 支持，避免误发射成 Rust `!`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_signed_unary_minus_when_enabled`，覆盖真实 C `int neg_value(int value) { return -value; }`。
+- `crates/c2r-translator/src/lib.rs`
+  - 为通过当前 clippy gate，等价合并了 `emit_ir_pointer_graph()` 中 `rust_boundary` 的重复 `&[u8]` 分支：`param.name == "buf" || is_const_input`。这不改变 pointer graph 语义。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_signed_unary_minus -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_signed_unary_minus_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr unary op Neg is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Neg found for enum ClangUnaryOperator`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_signed_unary_minus -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_unsigned_unary_minus_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_logical_not_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_signed_unary_minus_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_signed_unary_minus_when_enabled -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，26 lib tests + 191 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_real_signed_unary_minus_when_enabled -- --nocapture`: PASS，1 test passed，真实 clang AST smoke 实际运行。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 signed scalar unary minus 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：typed IR emitter 会拒绝 unsigned unary minus 和 signed operand/result width mismatch。
+- 可以说：`IrUnOp::Not` 仍有 fail-closed 回归覆盖，本轮没有把 logical not 接成 Rust `!`。
+- 不应说：已经支持完整 C unary minus。unsigned/wrapping 取负、浮点取负、指针算术、复合 `-=`, literal/min-value 边界如 `-2147483648`、以及完整 usual arithmetic conversions 仍未建模，必须继续 fail closed。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+English mirror summary:
+
+- Signed scalar unary minus now flows through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `ClangUnaryOperator::Neg`, AST opcode `"-"`, and `IrUnOp::Neg` emission are wired.
+- The emitter is signed-only and requires operand/result to be the same signed integer scalar type; unsigned unary minus and signed width mismatch fail closed.
+- `IrUnOp::Not` remains fail-closed and is covered by a regression test; this slice does not emit Rust `!`.
+- This is candidate generation only. It does not support unsigned/wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, literal/min-value edge cases such as `-2147483648`, full usual arithmetic conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

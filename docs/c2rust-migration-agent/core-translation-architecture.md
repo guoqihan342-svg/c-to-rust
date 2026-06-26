@@ -21,7 +21,7 @@ flowchart TD
 
     Generic --> Supported["当前 generic 覆盖:
     scalar decl/assign/if/while,
-    narrow scalar-integer binary ops: + - * / % & ^ >>
+    narrow scalar-integer ops: binary + - * / % & ^ >>, signed unary -
     (candidate generation only),
     comparison conditions,
     const pointer slices,
@@ -92,6 +92,7 @@ generic typed IR emission 现在覆盖：
 
 - scalar declaration、assignment、return、`if`、`while`；
 - 标量整数二元表达式 `+`、`-`、`*`、`/`、`%`、`&`、`^`、`>>`；
+- signed 标量整数 unary minus `-value`；
 - 只允许出现在条件中的 comparison expression；
 - 来自 clang AST 的 initialized scalar local；
 - 来自 clang AST 的无大括号 `if` / `while` body；
@@ -108,10 +109,11 @@ generic typed IR emission 现在覆盖：
 
 - 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；raw string crc32 byte-cursor 输入现在保持 fail-closed。真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
+- signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 继续扩展 generic typed IR 的标量表达式覆盖，下一小步优先 signed unary minus `-value`，unsigned/wrapping 语义继续 fail closed。
+1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；下一小步候选是仅用于条件位置的 logical not `!expr`，value-position `!`、unsigned/wrapping 算术、pointer/deref/call 副作用和完整 C unary 语义在 typed rules 明确前继续 fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

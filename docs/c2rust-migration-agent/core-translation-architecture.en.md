@@ -21,7 +21,7 @@ flowchart TD
 
     Generic --> Supported["current generic coverage:
     scalar decl/assign/if/while,
-    narrow scalar-integer binary ops: + - * / % & ^ >>
+    narrow scalar-integer ops: binary + - * / % & ^ >>, signed unary -
     (candidate generation only),
     comparison conditions,
     const pointer slices,
@@ -92,6 +92,7 @@ Generic typed IR emission now covers:
 
 - scalar declarations, assignment, return, `if`, and `while`;
 - scalar integer binary expressions `+`, `-`, `*`, `/`, `%`, `&`, `^`, and `>>`;
+- signed scalar integer unary minus `-value`;
 - comparison expressions only in conditions;
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;
@@ -108,10 +109,11 @@ Still incomplete:
 
 - The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
 - `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
+- Signed unary minus is also narrow candidate generation only. It requires the operand and result to be the same signed integer scalar type; unsigned or wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, and literal edge cases such as `-2147483648` remain outside this subset until modeled explicitly.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR scalar expression coverage; the next narrow step is signed unary minus `-value`, while unsigned/wrapping semantics remain fail-closed.
+1. Keep extending generic typed IR scalar expression coverage with red tests first; the next narrow candidate is condition-only logical not `!expr`, while value-position `!`, unsigned/wrapping arithmetic, pointer/deref/call side effects, and full C unary semantics remain fail-closed until typed rules exist.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

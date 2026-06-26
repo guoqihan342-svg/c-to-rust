@@ -250,6 +250,7 @@ pub enum ClangBinaryOperator {
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangUnaryOperator {
+    Neg,
     BitNot,
 }
 
@@ -1157,6 +1158,7 @@ fn expr_skeleton_from_ast_with_options(
             }
 
             let op = match opcode.as_str() {
+                "-" => ClangUnaryOperator::Neg,
                 "~" => ClangUnaryOperator::BitNot,
                 opcode => {
                     return Ok(ClangExprSkeleton::Unsupported {
@@ -1790,6 +1792,7 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
 #[cfg(feature = "typed-ir")]
 fn lower_unary_operator(op: &ClangUnaryOperator) -> IrUnOp {
     match op {
+        ClangUnaryOperator::Neg => IrUnOp::Neg,
         ClangUnaryOperator::BitNot => IrUnOp::BitNot,
     }
 }
@@ -2002,6 +2005,51 @@ mod tests {
                         width: 32
                     }
                 )
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_signed_unary_minus() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "-",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("unary minus skeleton");
+        let ir = lower_expr(&skeleton).expect("lower unary minus skeleton");
+
+        let IrExpr::Unary {
+            op, operand, ty, ..
+        } = ir
+        else {
+            panic!("expected IR unary minus, got {ir:?}");
+        };
+        assert_eq!(op, IrUnOp::Neg);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
         ));
     }
 

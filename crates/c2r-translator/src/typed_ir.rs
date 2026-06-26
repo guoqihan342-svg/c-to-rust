@@ -934,6 +934,12 @@ fn emit_expr(
         IrExpr::Unary {
             op, operand, ty, ..
         } => match op {
+            IrUnOp::Neg => {
+                validate_signed_unary_minus_operand(operand, ty)?;
+                let operand = emit_expr(operand, symbols, context)
+                    .map_err(|detail| format!("unary minus operand {detail}"))?;
+                Ok(format!("(-{operand})"))
+            }
             IrUnOp::BitNot => {
                 validate_expr_matches_type(operand, ty, "bitnot operand")?;
                 let operand = emit_expr(operand, symbols, context)
@@ -1561,6 +1567,42 @@ fn validate_expr_matches_type(
     } else {
         Err(format!(
             "{context} type {actual_ty} does not match expected type {expected_ty}"
+        ))
+    }
+}
+
+fn validate_signed_unary_minus_operand(expr: &IrExpr, result_ty: &IrType) -> Result<(), String> {
+    let IrTypeKind::Integer {
+        signed: true,
+        width: result_width,
+    } = result_ty.kind
+    else {
+        return Err(format!(
+            "unary minus result type {} is not a signed integer",
+            type_label(result_ty)
+        ));
+    };
+    let operand_ty =
+        expr_type(expr).ok_or_else(|| "unary minus operand type is unsupported".to_string())?;
+    let IrTypeKind::Integer {
+        signed: true,
+        width: operand_width,
+    } = operand_ty.kind
+    else {
+        return Err(format!(
+            "unary minus operand type {} is not a signed integer",
+            type_label(operand_ty)
+        ));
+    };
+    let result_ty =
+        emit_scalar_type(result_ty).map_err(|detail| format!("unary minus result has {detail}"))?;
+    let operand_ty = emit_scalar_type(operand_ty)
+        .map_err(|detail| format!("unary minus operand has {detail}"))?;
+    if operand_width == result_width && operand_ty == result_ty {
+        Ok(())
+    } else {
+        Err(format!(
+            "unary minus operand type {operand_ty} does not match result type {result_ty}"
         ))
     }
 }

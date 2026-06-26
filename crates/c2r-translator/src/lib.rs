@@ -932,9 +932,7 @@ fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut Translati
             } else {
                 "out_param".to_string()
             },
-            rust_boundary: if param.name == "buf" {
-                "&[u8]".to_string()
-            } else if is_const_input {
+            rust_boundary: if param.name == "buf" || is_const_input {
                 "&[u8]".to_string()
             } else {
                 "owned safe report".to_string()

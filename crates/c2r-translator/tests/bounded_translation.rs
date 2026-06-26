@@ -237,6 +237,16 @@ fn ir_bitnot(expr: IrExpr, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_neg(expr: IrExpr, ty: IrType) -> IrExpr {
+    IrExpr::Unary {
+        op: IrUnOp::Neg,
+        operand: Box::new(expr),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn flashdb_crc32_typed_ir() -> IrFunction {
     let u32_ty = ir_u32();
     let u8_ty = ir_u8();
@@ -1040,6 +1050,35 @@ fn typed_ir_emits_scalar_mul_div_mod() {
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
     assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
     assert_rust_snippet_compiles("typed-ir-scalar-mul-div-mod", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_signed_unary_minus() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "neg_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_neg(ir_var("value", i32_ty.clone()), i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed unary minus");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn neg_value(value: i32) -> i32"));
+    assert!(rust.contains("return (-value);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-signed-unary-minus", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3404,6 +3443,106 @@ fn typed_ir_rejects_bitnot_operand_type_mismatch_in_generic_emitter() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_unsigned_unary_minus_in_generic_emitter() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_unsigned_neg".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_neg(ir_var("value", u32_ty.clone()), u32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("unsigned unary minus must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(
+        error.reason.contains("signed integer"),
+        "unexpected error for unsigned unary minus: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mismatched_signed_unary_minus_type_in_generic_emitter() {
+    let i16_ty = ir_integer("short", "short", true, 16);
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_signed_neg_width".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i16_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_neg(ir_var("value", i16_ty), i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("signed unary minus type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(
+        error
+            .reason
+            .contains("unary minus operand type i16 does not match result type i32"),
+        "unexpected error for signed unary minus mismatch: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_logical_not_in_generic_emitter() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_logical_not".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Unary {
+                op: IrUnOp::Not,
+                operand: Box::new(ir_var("value", i32_ty.clone())),
+                ty: i32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("logical not must remain fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert_eq!(error.route.candidate_generator, CandidateGenerator::None);
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("unary op Not is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_non_void_function_without_return_value_in_generic_emitter() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -4257,6 +4396,62 @@ fn typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir() {
     assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-clang-scalar-mul-div-mod", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_signed_unary_minus_from_clang_lowered_ir() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "neg_value".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Unary {
+                op: ClangUnaryOperator::Neg,
+                operand: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower neg_value skeleton");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Unary {
+                op: IrUnOp::Neg,
+                operand,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected single return-neg statement");
+    };
+    assert!(matches!(
+        operand.as_ref(),
+        IrExpr::Var { name, .. } if name == "value"
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit neg_value from lowered typed IR");
+
+    assert!(rust.contains("pub fn neg_value(value: i32) -> i32"));
+    assert!(rust.contains("return (-value);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-clang-signed-unary-minus", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5760,6 +5955,57 @@ fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
     assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-clang-scalar-mul-div-mod", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_real_signed_unary_minus_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-neg-value");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("neg_value.c");
+    fs::write(
+        &source_file,
+        "int neg_value(int value) { return -value; }\n",
+    )
+    .unwrap();
+
+    let ir = lower_function_from_clang_ast_dump(&clang_path, &source_file, "neg_value")
+        .expect("lower real clang AST neg_value");
+
+    assert_eq!(ir.name, "neg_value");
+    assert_eq!(ir.params.len(), 1);
+    assert_eq!(ir.params[0].name, "value");
+    assert!(matches!(
+        ir.body.as_slice(),
+        [IrStmt::Return {
+            value: Some(IrExpr::Unary {
+                op: IrUnOp::Neg,
+                ..
+            }),
+            ..
+        }]
+    ));
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit real clang neg_value from typed IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn neg_value(value: i32) -> i32"));
+    assert!(rust.contains("return (-value);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-signed-unary-minus", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
