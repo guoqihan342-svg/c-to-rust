@@ -6121,3 +6121,83 @@ English mirror summary:
 - The route levels are recorded by the current router instead of forcing every legacy fixture to L0.
 - C2Rust baseline remains `candidate_context_only`; semantic acceptance still belongs to validation profile gates.
 - The next core translation cut should keep extending generic typed IR scalar expressions, with `*`, `/`, and `%` as the next narrow target.
+
+## 89. 2026-06-27 scalar multiplication/division/modulo through typed IR and clang lowering
+
+本轮继续按多智能体并行推进。只读线程分别复核了代码切口、文档边界和提交白名单；主线程按 TDD 把标量整数 `*`、`/`、`%` 从 clang skeleton/真实 clang AST 接到 `GenericTypedIr` emitter。结论是：这是一条 generic typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_binary_op()` 新增 `IrBinOp::Mul -> "*"`、`IrBinOp::Div -> "/"`、`IrBinOp::Mod -> "%"`.
+  - `validate_binary_operand_types()` 把 `*`、`/`、`%` 纳入与 `+`、`-`、`&`、`^` 相同的窄标量规则：lhs、rhs、result 必须发射为同一个 Rust 标量类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Mul`、`Div`、`Mod`.
+  - clang AST `BinaryOperator` opcode `"*"`, `"/"`, `"%"` 现在 lowering 到对应 skeleton operator，再 lowering 到 `IrBinOp`.
+  - `preserves_integral_operand_casts()` 纳入 `Mul`、`Div`、`Mod`，避免 unsigned/integral cast operand 被过早剥掉后导致 typed IR 类型校验误拒。
+  - 新增内部单测覆盖 multiplicative operands 的 `IntegralCast` 保留与 lowering。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_mul_div_mod`.
+  - 新增 clang skeleton 正向测试 `typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir`.
+  - 新增负例 `typed_ir_rejects_mismatched_mul_div_mod_operand_types_in_generic_emitter`，分别覆盖 `Mul`、`Div`、`Mod` 类型不一致必须 fail closed。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled`，覆盖真实 C `int mul_div_mod(int value) { return ((value * 3) / 2) % 5; }` 从 clang AST 到 typed IR 再到可编译 Rust candidate。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_mul_div_mod -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr binary op Mod is unsupported`.
+- clang skeleton 失败于 `no variant or associated item named Mul/Div/Mod found for enum ClangBinaryOperator`.
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_mul_div_mod -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mismatched_mul_div_mod_operand_types_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend expr_skeleton_from_ast_preserves_multiplicative_integral_cast_operands -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled -- --nocapture
+```
+
+提交前需要保留的完整验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings
+openspec validate --all --strict
+git diff --ignore-cr-at-eol --check
+```
+
+最终验证结果：
+- `cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check`: PASS。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend`: PASS，21 lib tests + 184 bounded translation tests passed，真实 clang AST `mul_div_mod` smoke 实际运行通过。
+- `cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --ignore-cr-at-eol --check`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的标量整数乘法、除法、取模表达式，现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`Mul`、`Div`、`Mod` 保留 clang integral casts，避免 covered unsigned/integral operand 被错误剥离。
+- 不应说：已经支持除零、完整 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity、指针算术、pointer difference、array-to-pointer decay、复合赋值或 inc/dec。
+- 除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才能继续进入后续 semantic gate；否则不得提升 semantic acceptance，必要时 fail closed。
+- FlashDB 仍只是用例；这轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须用白名单。
+
+English mirror summary:
+
+- Scalar integer multiplication, division, and modulo now flow through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `ClangBinaryOperator::{Mul, Div, Mod}`, AST opcodes `"*"`, `"/"`, `"%"`, cast-preserving operand lowering, and `IrBinOp::{Mul, Div, Mod}` emission are wired.
+- This is candidate generation only. It does not support division by zero, all C arithmetic, floating-point arithmetic, full usual arithmetic conversions, overflow/UB parity, pointer arithmetic, pointer difference, array-to-pointer decay, compound assignment, or inc/dec.
+- Division and modulo may only move toward semantic acceptance when a non-zero divisor is established by a literal, fixture input domain, or slice contract; otherwise the path must stay fail-closed.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

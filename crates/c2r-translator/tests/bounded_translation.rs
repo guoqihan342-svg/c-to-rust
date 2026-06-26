@@ -420,8 +420,7 @@ fn ir_u32_global_array(name: &str, len: usize, values: Vec<u64>) -> IrGlobal {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 fn repeated_c_u32_initializer(len: usize, value: &str) -> String {
-    std::iter::repeat(value)
-        .take(len)
+    std::iter::repeat_n(value, len)
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -999,6 +998,52 @@ fn typed_ir_emits_scalar_subtraction() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_mul_div_mod() {
+    let i32_ty = ir_i32();
+    let mul = ir_binary(
+        IrBinOp::Mul,
+        ir_var("value", i32_ty.clone()),
+        ir_lit(3, "3", i32_ty.clone()),
+        i32_ty.clone(),
+    );
+    let div = ir_binary(
+        IrBinOp::Div,
+        mul,
+        ir_lit(2, "2", i32_ty.clone()),
+        i32_ty.clone(),
+    );
+    let rem = ir_binary(
+        IrBinOp::Mod,
+        div,
+        ir_lit(5, "5", i32_ty.clone()),
+        i32_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "mul_div_mod".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(rem),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit scalar mul/div/mod");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
+    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert_rust_snippet_compiles("typed-ir-scalar-mul-div-mod", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_direct_identifier_call_expressions() {
     let i32_ty = ir_i32();
     let helper_call = |arg: IrExpr| IrExpr::Call {
@@ -1307,7 +1352,7 @@ fn typed_ir_emits_crc_update_assignment_with_nested_byte_read() {
     );
     assert!(rust.contains("return crc;"));
     assert!(!rust.contains("crc32_update_byte"));
-    assert_rust_snippet_compiles("typed-ir-crc-update-assignment", &rust);
+    assert_rust_snippet_compiles("typed-ir-crc-update-assignment", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3187,6 +3232,55 @@ fn typed_ir_rejects_mismatched_binary_operand_types_in_generic_emitter() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_mismatched_mul_div_mod_operand_types_in_generic_emitter() {
+    for (op, symbol, name) in [
+        (IrBinOp::Mul, "*", "bad_multiplicative_mul"),
+        (IrBinOp::Div, "/", "bad_multiplicative_div"),
+        (IrBinOp::Mod, "%", "bad_multiplicative_mod"),
+    ] {
+        let u32_ty = ir_u32();
+        let i32_ty = ir_i32();
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: u32_ty.clone(),
+            params: vec![IrParam {
+                name: "x".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            }],
+            body: vec![IrStmt::Return {
+                value: Some(ir_binary(
+                    op,
+                    ir_var("x", u32_ty.clone()),
+                    ir_lit(2, "2", i32_ty),
+                    u32_ty.clone(),
+                )),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).expect_err("mismatched binary types must fail closed");
+
+        assert!(
+            error
+                .reason
+                .contains("outside the current typed IR emitter subset"),
+            "{symbol} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains(&format!(
+                "binary operand types must match result type for {symbol}"
+            )),
+            "{symbol} produced unexpected error: {}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_return_type_mismatch_in_generic_emitter() {
     let u32_ty = ir_u32();
     let i32_ty = ir_i32();
@@ -4074,6 +4168,95 @@ fn typed_ir_emits_scalar_subtraction_from_clang_lowered_ir() {
     assert!(rust.contains("return (value - 1i32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-sub-one", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let mul = ClangExprSkeleton::Binary {
+        op: ClangBinaryOperator::Mul,
+        lhs: Box::new(ClangExprSkeleton::DeclRef {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }),
+        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+            value: 3,
+            spelling: "3".to_string(),
+            ty: int_ty.clone(),
+        }),
+        ty: int_ty.clone(),
+    };
+    let div = ClangExprSkeleton::Binary {
+        op: ClangBinaryOperator::Div,
+        lhs: Box::new(mul),
+        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+            value: 2,
+            spelling: "2".to_string(),
+            ty: int_ty.clone(),
+        }),
+        ty: int_ty.clone(),
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "mul_div_mod".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Mod,
+                lhs: Box::new(div),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 5,
+                    spelling: "5".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower mul_div_mod skeleton");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Mod,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected single return-mod statement");
+    };
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Div,
+            ..
+        }
+    ));
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { value: 5, spelling, .. } if spelling == "5"
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit mul_div_mod from lowered typed IR");
+
+    assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
+    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-clang-scalar-mul-div-mod", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5530,6 +5713,57 @@ fn clang_ast_dump_emits_real_scalar_subtraction_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mul-div-mod");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mul_div_mod.c");
+    fs::write(
+        &source_file,
+        "int mul_div_mod(int value) { return ((value * 3) / 2) % 5; }\n",
+    )
+    .unwrap();
+
+    let ir = lower_function_from_clang_ast_dump(&clang_path, &source_file, "mul_div_mod")
+        .expect("lower real clang AST mul_div_mod");
+
+    assert_eq!(ir.name, "mul_div_mod");
+    assert_eq!(ir.params.len(), 1);
+    assert_eq!(ir.params[0].name, "value");
+    assert!(matches!(
+        ir.body.as_slice(),
+        [IrStmt::Return {
+            value: Some(IrExpr::Binary {
+                op: IrBinOp::Mod,
+                ..
+            }),
+            ..
+        }]
+    ));
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit real clang mul_div_mod from typed IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
+    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-scalar-mul-div-mod", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -6441,7 +6675,7 @@ fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() 
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-crc-update-assignment-pointer-table",
-        &rust,
+        rust,
     );
 }
 

@@ -21,6 +21,8 @@ flowchart TD
 
     Generic --> Supported["current generic coverage:
     scalar decl/assign/if/while,
+    narrow scalar-integer binary ops: + - * / % & ^ >>
+    (candidate generation only),
     comparison conditions,
     const pointer slices,
     readonly global const integer arrays,
@@ -89,7 +91,7 @@ The typed IR `CandidateRouteDecision` selects the candidate generation implement
 Generic typed IR emission now covers:
 
 - scalar declarations, assignment, return, `if`, and `while`;
-- scalar integer binary expressions `+`, `-`, `&`, `^`, and `>>`;
+- scalar integer binary expressions `+`, `-`, `*`, `/`, `%`, `&`, `^`, and `>>`;
 - comparison expressions only in conditions;
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;
@@ -105,10 +107,11 @@ Generic typed IR emission now covers:
 Still incomplete:
 
 - The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
+- `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR scalar expression coverage; the next narrow step is `*`, `/`, and `%`, while pointer arithmetic remains fail-closed.
+1. Keep extending generic typed IR scalar expression coverage; the next narrow step is signed unary minus `-value`, while unsigned/wrapping semantics remain fail-closed.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

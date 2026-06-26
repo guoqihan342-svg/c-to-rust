@@ -233,6 +233,9 @@ pub enum ClangExprSkeleton {
 pub enum ClangBinaryOperator {
     Add,
     Sub,
+    Mul,
+    Div,
+    Mod,
     BitAnd,
     BitXor,
     Shr,
@@ -1035,6 +1038,9 @@ fn expr_skeleton_from_ast_with_options(
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("+") => ClangBinaryOperator::Add,
                 Some("-") => ClangBinaryOperator::Sub,
+                Some("*") => ClangBinaryOperator::Mul,
+                Some("/") => ClangBinaryOperator::Div,
+                Some("%") => ClangBinaryOperator::Mod,
                 Some("&") => ClangBinaryOperator::BitAnd,
                 Some("^") => ClangBinaryOperator::BitXor,
                 Some(">>") => ClangBinaryOperator::Shr,
@@ -1422,6 +1428,9 @@ fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
         op,
         ClangBinaryOperator::Add
             | ClangBinaryOperator::Sub
+            | ClangBinaryOperator::Mul
+            | ClangBinaryOperator::Div
+            | ClangBinaryOperator::Mod
             | ClangBinaryOperator::BitAnd
             | ClangBinaryOperator::BitXor
             | ClangBinaryOperator::Shr
@@ -1763,6 +1772,9 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
     match op {
         ClangBinaryOperator::Add => IrBinOp::Add,
         ClangBinaryOperator::Sub => IrBinOp::Sub,
+        ClangBinaryOperator::Mul => IrBinOp::Mul,
+        ClangBinaryOperator::Div => IrBinOp::Div,
+        ClangBinaryOperator::Mod => IrBinOp::Mod,
         ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
         ClangBinaryOperator::Shr => IrBinOp::Shr,
@@ -1865,7 +1877,7 @@ fn normalized_report_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-fn normalized_path(path: &PathBuf) -> String {
+fn normalized_path(path: &Path) -> String {
     normalized_metadata_path(&path.to_string_lossy())
 }
 
@@ -1991,6 +2003,82 @@ mod tests {
                     }
                 )
         ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_multiplicative_integral_cast_operands() {
+        for (opcode, expected_op) in [
+            ("*", IrBinOp::Mul),
+            ("/", IrBinOp::Div),
+            ("%", IrBinOp::Mod),
+        ] {
+            let expr = serde_json::json!({
+                "kind": "BinaryOperator",
+                "opcode": opcode,
+                "type": { "qualType": "unsigned int" },
+                "inner": [
+                    {
+                        "kind": "ImplicitCastExpr",
+                        "castKind": "LValueToRValue",
+                        "type": { "qualType": "unsigned int" },
+                        "inner": [
+                            {
+                                "kind": "DeclRefExpr",
+                                "type": { "qualType": "unsigned int" },
+                                "referencedDecl": { "name": "value" }
+                            }
+                        ]
+                    },
+                    {
+                        "kind": "ImplicitCastExpr",
+                        "castKind": "IntegralCast",
+                        "type": { "qualType": "unsigned int" },
+                        "inner": [
+                            {
+                                "kind": "IntegerLiteral",
+                                "type": { "qualType": "int" },
+                                "value": "3"
+                            }
+                        ]
+                    }
+                ]
+            });
+
+            let skeleton = expr_skeleton_from_ast(&expr)
+                .unwrap_or_else(|_| panic!("multiplicative skeleton for {opcode}"));
+            let ir = lower_expr(&skeleton)
+                .unwrap_or_else(|_| panic!("lower multiplicative skeleton for {opcode}"));
+
+            let IrExpr::Binary {
+                op, lhs, rhs, ty, ..
+            } = ir
+            else {
+                panic!("expected IR multiplicative op for {opcode}, got {ir:?}");
+            };
+            assert_eq!(op, expected_op);
+            assert!(matches!(
+                ty.kind,
+                IrTypeKind::Integer {
+                    signed: false,
+                    width: 32
+                }
+            ));
+            assert!(matches!(
+                lhs.as_ref(),
+                IrExpr::Var { name, .. } if name == "value"
+            ));
+            assert!(matches!(
+                rhs.as_ref(),
+                IrExpr::Cast { target, .. }
+                    if matches!(
+                        target.kind,
+                        IrTypeKind::Integer {
+                            signed: false,
+                            width: 32
+                        }
+                    )
+            ));
+        }
     }
 
     #[test]

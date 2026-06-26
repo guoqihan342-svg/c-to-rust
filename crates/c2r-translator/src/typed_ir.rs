@@ -300,6 +300,7 @@ impl EmitContext {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitError> {
     emit_scalar_rust_from_ir(function)
         .map(|rust| EmittedRust {
@@ -318,6 +319,7 @@ pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitErr
         })
 }
 
+#[allow(clippy::result_large_err)]
 pub fn emit_rust_from_ir_with_globals(
     function: &IrFunction,
     globals: &[IrGlobal],
@@ -1486,6 +1488,9 @@ fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
     match op {
         IrBinOp::Add => Ok("+"),
         IrBinOp::Sub => Ok("-"),
+        IrBinOp::Mul => Ok("*"),
+        IrBinOp::Div => Ok("/"),
+        IrBinOp::Mod => Ok("%"),
         IrBinOp::BitAnd => Ok("&"),
         IrBinOp::BitXor => Ok("^"),
         IrBinOp::Shr => Ok(">>"),
@@ -1519,7 +1524,7 @@ fn validate_binary_operand_types(
     let rhs_ty = emit_scalar_type(rhs_ty).map_err(|detail| format!("binary rhs has {detail}"))?;
 
     match op {
-        "+" | "-" | "&" | "^" => {
+        "+" | "-" | "*" | "/" | "%" | "&" | "^" => {
             if lhs_ty == result_ty && rhs_ty == result_ty {
                 Ok(())
             } else {

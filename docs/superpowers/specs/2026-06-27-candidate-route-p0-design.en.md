@@ -167,6 +167,7 @@ Minimum verification:
 7. `GenericTypedIr` direct-call candidates from clang lowering must emit `call_expressions` evidence matching the bounded direct calls while keeping `semantic_pass=false`.
 8. If the slice spec declares an external direct callee, both the default validator and `--require-semantic-pass` must check every call site across plan `translation_summary.call_expressions`, context-pack `direct_call_edges`, `callee_sources`, `signature_bindings`, and `call_edge_to_callee_binding` for source/signature/stub/semantics-boundary consistency; this is evidence-integrity/provenance hardening only, not proof that the external callee semantics passed.
 9. Local fixed-length integer array element writes from clang lowering may reach `GenericTypedIr`, but writes to readonly global arrays, writes to const pointer slices, VLAs, and array-to-pointer decay must continue to fail closed; this still represents candidate generation only, not semantic acceptance.
+10. Scalar integer `*`, `/`, and `%` `GenericTypedIr` candidates must keep `semantic_pass=false` and must not override alias floors, division-by-zero risk, or pointer-arithmetic boundaries; division/modulo can only enter later semantic gates when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 
 Suggested verification commands:
 

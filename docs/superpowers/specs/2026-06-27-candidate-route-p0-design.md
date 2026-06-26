@@ -167,6 +167,7 @@ typed IR `CandidateRouteDecision` 只回答：
 7. clang lowering 产生的 `GenericTypedIr` direct-call candidate 必须写出与 bounded direct call 匹配的 `call_expressions` 证据，同时保持 `semantic_pass=false`。
 8. 如果 slice spec 声明 external direct callee，默认 validator 和 `--require-semantic-pass` 都必须逐 call-site 校验 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings` 和 `call_edge_to_callee_binding` 的 source/signature/stub/semantics 边界一致；这只是 evidence integrity/provenance hardening，不代表 external callee 语义已通过。
 9. clang lowering 产生的局部固定长度整数数组元素写入可以进入 `GenericTypedIr`，但 readonly global array 写入、const pointer slice 写入、VLA 和 array-to-pointer decay 必须继续 fail closed，且仍只代表 candidate generation，不代表 semantic acceptance。
+10. `GenericTypedIr` 的标量整数 `*`、`/`、`%` candidate 必须保持 `semantic_pass=false`，且不能覆盖 alias floors、除零风险或指针算术边界；除法/取模只有在非零 divisor 由 literal、fixture 输入域或 slice contract 明确约束时，才可进入后续 semantic gate。
 
 建议验证命令：
 
