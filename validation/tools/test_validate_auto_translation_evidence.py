@@ -1807,6 +1807,76 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertTrue(payload["semantic_pass"])
 
+    def test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            prefix = "l3-real-fdb-calc-crc32"
+            temp_root_oracle = out_root / "flashdb" / f"{prefix}-c-oracle.json"
+            shutil.copy2(REPO_ROOT / "validation" / "evidence" / "flashdb" / f"{prefix}-c-oracle.json", temp_root_oracle)
+            stale_sha = self._sha256(temp_root_oracle)
+
+            c_oracle_status_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+            c_oracle_status = json.loads(c_oracle_status_path.read_text(encoding="utf-8"))
+            c_oracle_status["accepted_oracle"] = {
+                "path": temp_root_oracle.as_posix(),
+                "sha256": stale_sha,
+                "status": "passed",
+            }
+            self._write_json(c_oracle_status_path, c_oracle_status)
+            self._bind_manifest_ref(evidence_dir, prefix, "c_oracle", c_oracle_status_path, "C_ORACLE_GENERATED")
+
+            auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+            auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+            auto_manifest["accepted_evidence_binding"]["paths"]["c_oracle"] = temp_root_oracle.as_posix()
+            auto_manifest["accepted_evidence_binding"]["path_sha256"]["c_oracle"] = stale_sha
+            self._write_json(auto_manifest_path, auto_manifest)
+
+            root_oracle = json.loads(temp_root_oracle.read_text(encoding="utf-8"))
+            root_oracle["cases"][0]["return_code"] = 1
+            self._write_json(temp_root_oracle, root_oracle)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-calc-crc32",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("accepted c_oracle", result.stderr + result.stdout)
+            self.assertIn("sha256", result.stderr + result.stdout)
+
     def test_semantic_pass_rejects_l4_authoritative_artifacts_without_spec_authorization(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             tmp_path = Path(tmp)

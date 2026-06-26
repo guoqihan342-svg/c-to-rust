@@ -1473,6 +1473,8 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
     require_status(reports["c_oracle"], "c_oracle", {"C_ORACLE_GENERATED", "passed"})
     if reports["c_oracle"].get("toolchain_status") != "C_ORACLE_GENERATED":
         raise SystemExit("semantic pass requires c_oracle.toolchain_status=C_ORACLE_GENERATED")
+    if is_promoted_accepted_oracle_wrapper(reports["c_oracle"]):
+        validate_accepted_c_oracle_file_binding(evidence_dir, prefix, reports["c_oracle"])
     require_status(reports["rust_report"], "rust_report", {"passed"})
     require_status(reports["schema_diff"], "schema_diff", {"passed"})
     schema_compared_fields = validate_passed_schema_diff_report(reports["schema_diff"], slice_spec)
@@ -1509,6 +1511,60 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "fixture_sha256": fixture.get("sha256"),
         "checked": sorted(reports),
     }
+
+
+def validate_accepted_c_oracle_file_binding(evidence_dir: Path, prefix: str, c_oracle: dict[str, Any]) -> None:
+    accepted = c_oracle.get("accepted_oracle")
+    if not isinstance(accepted, dict):
+        raise SystemExit("semantic pass accepted c_oracle reference missing")
+
+    accepted_path = accepted.get("path")
+    if not isinstance(accepted_path, str) or not accepted_path:
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.path missing")
+    accepted_sha = accepted.get("sha256")
+    if not isinstance(accepted_sha, str) or not accepted_sha:
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.sha256 missing")
+    if accepted.get("status") != "passed":
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.status must be passed")
+
+    auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    auto_manifest = load_json(auto_manifest_path)
+    binding = auto_manifest.get("accepted_evidence_binding")
+    if not isinstance(binding, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding missing")
+    paths = binding.get("paths")
+    if not isinstance(paths, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.paths missing")
+    path_sha256 = binding.get("path_sha256")
+    if not isinstance(path_sha256, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.path_sha256 missing")
+
+    binding_path = paths.get("c_oracle")
+    if not isinstance(binding_path, str) or not binding_path:
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.paths.c_oracle missing")
+    binding_sha = path_sha256.get("c_oracle")
+    if not isinstance(binding_sha, str) or not binding_sha:
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.path_sha256.c_oracle missing")
+
+    accepted_resolved = resolve_ref_path(accepted_path)
+    binding_resolved = resolve_ref_path(binding_path)
+    if not accepted_resolved.exists():
+        raise SystemExit(f"semantic pass accepted c_oracle points to missing evidence: {accepted_resolved}")
+    if not binding_resolved.exists():
+        raise SystemExit(f"semantic pass accepted c_oracle binding points to missing evidence: {binding_resolved}")
+    if accepted_resolved.resolve() != binding_resolved.resolve():
+        raise SystemExit(
+            f"semantic pass accepted c_oracle path mismatch: {accepted_resolved} != {binding_resolved}"
+        )
+
+    actual_sha = sha256(accepted_resolved)
+    if accepted_sha != actual_sha:
+        raise SystemExit(f"semantic pass accepted c_oracle accepted_oracle.sha256 mismatch: {accepted_sha} != {actual_sha}")
+    if binding_sha != actual_sha:
+        raise SystemExit(
+            "semantic pass accepted c_oracle accepted_evidence_binding.path_sha256.c_oracle mismatch: "
+            f"{binding_sha} != {actual_sha}"
+        )
 
 
 def validate_external_direct_callee_context(

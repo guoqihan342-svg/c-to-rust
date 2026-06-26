@@ -2435,3 +2435,68 @@ python -B validation/tools/validate_auto_translation_evidence.py --target-id fla
 2. 如果转向 translator，仍单独做受限 byte-cursor CRC loop capability change。
 3. 提交时仍只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
    `CONTEXT.md`。
+
+## 39. 2026-06-26 accepted C oracle root hash fail-closed
+
+本轮承接第 38 节第一条下一步，把 `--require-semantic-pass` 路径下的 accepted C oracle
+绑定从“校验 c-oracle-status wrapper”收紧为“继续 rehash root accepted C oracle 文件”。这防止
+`c-oracle-status.accepted_oracle.sha256` 或
+`auto_manifest.accepted_evidence_binding.path_sha256.c_oracle` 指向的 root oracle 内容漂移后，
+semantic-pass 仍误报通过。
+
+核心改动：
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 在 `validate_semantic_pass()` 校验 promoted accepted oracle wrapper 后调用
+    `validate_accepted_c_oracle_file_binding()`。
+  - 新 helper 会读取 `l3-*-auto-translation-manifest.json`，要求：
+    - `c-oracle-status.accepted_oracle.path/sha256/status` 存在且 `status=passed`
+    - `accepted_evidence_binding.paths.c_oracle` 存在
+    - `accepted_evidence_binding.path_sha256.c_oracle` 存在
+    - 两个 path 解析后指向同一文件
+    - 实际 root C oracle 文件 sha256 同时匹配 `accepted_oracle.sha256` 和
+      `path_sha256.c_oracle`
+  - 普通 schema-only validator 不受影响；该检查只随 `--require-semantic-pass` 运行。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift`。
+  - 测试用 `auto_migrate.py --accept-existing-evidence --out-root <temp>` 生成临时 real-fdb
+    accepted evidence，再复制 root C oracle 到临时目录，记录旧 sha 后篡改
+    `cases[0].return_code`，断言 validator 拒绝并报告 `accepted c_oracle` / `sha256`。
+
+TDD 红绿过程：
+- 红灯：
+  `test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift` 初始失败，validator 返回 0。
+- 绿灯：
+  增加 root C oracle rehash 后，该负例通过；相邻 L4 authoritative 正例仍通过。
+
+本轮并行只读审查结论：
+- Mill：确认 hook 应放在 `validate_semantic_pass()` 的 c_oracle 校验后，不应塞入通用
+  `load_ref()`；root C oracle 是 semantic-pass 证据链的一环，只应在
+  `--require-semantic-pass` 下展开校验。
+- Anscombe：确认最小负例就是临时复制 root accepted C oracle，篡改 `cases[0].return_code`
+  且不刷新 stale hash；预期错误可宽断言 `accepted c_oracle` 和 `sha256`。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence validation.tools.test_auto_migrate validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+```
+
+完整相关 Python 回归结果：`Ran 91 tests ... OK`。
+
+当前核心翻译功能状态：
+- 真实 FlashDB `fdb_calc_crc32` 切片已经有 accepted evidence 语义通过，验证器能 fail-closed
+  检查 root C oracle / Rust report / diff / negative diff / unsafe / final verification 证据链。
+- 这仍不代表 generated Rust draft 本身已通过；route 仍是 `L4/refused`，semantic pass 绑定到
+  显式 accepted evidence。
+- translator 本体下一步仍应单独做受限 byte-cursor CRC loop capability change，重点是
+  `const uint8_t *p`、`const void *` cast、`size--`、`*p++` 和 `crc32_table[...]`。
+
+下一步建议：
+1. 若继续 accepted evidence hardening，可补 cache identity 或 final verification 对 root accepted
+   oracle path 的更多交叉校验。
+2. 若转向核心 translator，先写 byte-cursor CRC loop capability 的红测和最小实现，不要直接泛化到完整
+   C pointer side-effect 表达式。
