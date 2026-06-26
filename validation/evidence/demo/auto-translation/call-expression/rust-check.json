@@ -1,12 +1,36 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-vn_agmdb C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\call-expression\\l3-call-expression-rust-draft.rs",
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+    "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-gqnokv2b F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\demo\\auto-translation\\call-expression\\l3-call-expression-rust-draft.rs",
   "error_count": 0,
   "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
+    "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "self_healing": {
     "blocked_repairs": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-self-healing-blocked-repairs.json",
     "patch_events": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-patch-events.jsonl",
     "status": "none"
   },
-  "status": "passed"
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+    "status": "passed"
+  }
 }

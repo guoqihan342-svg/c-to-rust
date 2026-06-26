@@ -1,11 +1,272 @@
 {
   "boundary": "Draft generation is not oracle success.",
-  "fixture": null,
+  "compile_command_draft": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc",
+      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests",
+      "l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c",
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c",
+      "-o",
+      "l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+    ],
+    "defines": [],
+    "link_source_files": [
+      {
+        "path": "src/fdb_utils.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c",
+        "role": "source",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      },
+      {
+        "path": "src/fdb_file.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c",
+        "role": "link_dependency",
+        "sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d"
+      }
+    ],
+    "link_strategy": "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+    "resolved_include_paths": [
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc",
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests"
+    ],
+    "source_root": "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB",
+    "status": "draft_not_executed",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+  },
+  "compile_execution": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc",
+      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests",
+      "l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c",
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c",
+      "-o",
+      "l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+    ],
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
+    ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /usr/bin/cc -std=c99 -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests l3-real-fdb-calc-crc32-c-oracle-harness-draft.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c -o l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "output_gate": {
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+        "compared_fields": [
+          "return_code"
+        ],
+        "diagnostics": [
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+        ],
+        "expected_stdout_fragments": [
+          "fixture case empty-crc-zero return_code matched",
+          "fixture case ascii-123456789-crc-zero return_code matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "matched_stdout_fragments": [
+          "fixture case empty-crc-zero return_code matched",
+          "fixture case ascii-123456789-crc-zero return_code matched"
+        ],
+        "missing_stdout_fragments": [],
+        "schema_version": 1,
+        "semantic_pass": false,
+        "status": "matched_not_oracle"
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nfixture case empty-crc-zero return_code matched\nfixture case ascii-123456789-crc-zero return_code matched\n",
+      "timeout_seconds": 30,
+      "toolchain_adapter": "wsl",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
+    "semantic_pass": false,
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+  },
+  "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+  "fixture_binding": {
+    "behavior_fields": [
+      "return_code"
+    ],
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 0
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+        "id": "empty-crc-zero",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 3421780262
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+        "id": "ascii-123456789-crc-zero",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      }
+    ],
+    "case_count": 2,
+    "expected_output_status": "declared_not_executed",
+    "observable_outputs": [
+      "return_code"
+    ],
+    "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
+  },
+  "global_linkage_requirements": [
+    {
+      "definition_status": "same_file_top_level_declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "crc32_table",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+      "source": "extracted_function_body_reference",
+      "source_span": {
+        "byte_end": 3575,
+        "byte_start": 290,
+        "file": "src/fdb_utils.c",
+        "line_end": 66,
+        "line_start": 21,
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+      }
+    }
+  ],
+  "harness_contract": {
+    "fixture": {
+      "behavior_fields": [
+        "return_code"
+      ],
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 0
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+          "id": "empty-crc-zero",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 3421780262
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+          "id": "ascii-123456789-crc-zero",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        }
+      ],
+      "case_count": 2,
+      "expected_output_status": "declared_not_executed",
+      "observable_outputs": [
+        "return_code"
+      ],
+      "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
+    },
+    "function_prototype": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size);",
+    "global_dependencies": [
+      {
+        "definition_status": "same_file_top_level_declared",
+        "kind": "global",
+        "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+        "name": "crc32_table",
+        "semantic_status": "required_before_acceptance",
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+        "source": "extracted_function_body_reference",
+        "source_span": {
+          "byte_end": 3575,
+          "byte_start": 290,
+          "file": "src/fdb_utils.c",
+          "line_end": 66,
+          "line_start": 21,
+          "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+        }
+      }
+    ],
+    "source_files": [
+      {
+        "path": "src/fdb_utils.c",
+        "role": "source",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      }
+    ],
+    "status": "draft_requires_review"
+  },
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+    "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+    "status": "draft"
+  },
   "required_final_status": "C_ORACLE_GENERATED",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-calc-crc32",
-  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-  "target_id": "flashdb"
+  "status": "DRAFT_GENERATED",
+  "target_id": "flashdb",
+  "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE"
 }

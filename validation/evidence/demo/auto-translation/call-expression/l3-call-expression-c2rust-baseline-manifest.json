@@ -1,5 +1,5 @@
 {
-  "build_profile_hash": "4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
+  "build_profile_hash": "7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
   "commands": [
     {
       "available": false,
@@ -34,13 +34,13 @@
   },
   "schema_version": 1,
   "selected_command": null,
-  "slice_id": "real-fdb-calc-crc32",
+  "slice_id": "call-expression",
   "slice_spec": {
-    "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "f0e9ea328a7338071a0a560050ddd2994c51858af9f2fe2fef702d0dc28397a5"
+    "path": "validation/slice-specs/demo-call-expression.json",
+    "sha256": "a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277"
   },
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "demo-call-expression-20260625",
   "status": "skipped",
-  "target_id": "flashdb",
+  "target_id": "demo",
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

@@ -121,6 +121,212 @@ class ExtractSourceSliceTests(unittest.TestCase):
             self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_end"], 1)
             self.assertEqual(spec["source"]["source_file_hashes"]["math.c"], hashlib.sha256(src.read_bytes()).hexdigest())
 
+    def test_records_same_file_global_object_dependency_from_function_body(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-global-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "crc.c"
+            src.parent.mkdir()
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stdint.h>
+
+                    static const uint32_t table[2] = { 0U, 1U };
+                    static const uint32_t comment_only[1] = { 9U };
+                    static const uint32_t string_only[1] = { 7U };
+
+                    uint32_t calc(uint32_t value) {
+                        /* comment_only[value & 0x1U] must not be a dependency */
+                        const char *debug = "string_only[value & 0x1U]";
+                        return table[value & 0x1U] ^ (uint32_t)debug[0];
+                    }
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/crc.c"),
+                function_name="calc",
+                target_id="unit",
+                slice_id="real-calc",
+                source_commit="unit-commit",
+            )
+
+            dependencies = spec["c_boundary"]["direct_dependencies"]
+            globals_by_name = {
+                dependency["name"]: dependency
+                for dependency in dependencies
+                if dependency["kind"] == "global"
+            }
+            self.assertIn("table", globals_by_name)
+            self.assertNotIn("comment_only", globals_by_name)
+            self.assertNotIn("string_only", globals_by_name)
+            table = globals_by_name["table"]
+            self.assertEqual(table["source"], "extracted_function_body_reference")
+            self.assertEqual(table["definition_status"], "same_file_top_level_declared")
+            self.assertEqual(table["source_span"]["file"], "src/crc.c")
+            self.assertEqual(table["source_span"]["line_start"], 3)
+            self.assertEqual(table["source_span"]["line_end"], 3)
+            self.assertIn("sha256", table)
+
+    def test_does_not_record_global_dependency_when_parameter_shadows_name(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-shadow-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "shadow.c"
+            src.parent.mkdir()
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stdint.h>
+
+                    static const uint32_t table[2] = { 0U, 1U };
+
+                    uint32_t calc(uint32_t table) {
+                        return table + 1U;
+                    }
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/shadow.c"),
+                function_name="calc",
+                target_id="unit",
+                slice_id="real-shadow",
+                source_commit="unit-commit",
+            )
+
+            self.assertFalse(
+                any(
+                    dependency["kind"] == "global" and dependency["name"] == "table"
+                    for dependency in spec["c_boundary"]["direct_dependencies"]
+                )
+            )
+
+    def test_does_not_record_global_dependency_when_local_variable_shadows_name(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-local-shadow-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "local_shadow.c"
+            src.parent.mkdir()
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stdint.h>
+
+                    static const uint32_t table[2] = { 0U, 1U };
+
+                    uint32_t calc(uint32_t value) {
+                        uint32_t table = value + 1U;
+                        return table;
+                    }
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/local_shadow.c"),
+                function_name="calc",
+                target_id="unit",
+                slice_id="real-local-shadow",
+                source_commit="unit-commit",
+            )
+
+            self.assertFalse(
+                any(
+                    dependency["kind"] == "global" and dependency["name"] == "table"
+                    for dependency in spec["c_boundary"]["direct_dependencies"]
+                )
+            )
+
+    def test_does_not_treat_ternary_colon_as_label_for_local_shadow(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-ternary-shadow-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "ternary_shadow.c"
+            src.parent.mkdir()
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stdint.h>
+
+                    static const uint32_t table[2] = { 0U, 1U };
+
+                    uint32_t calc(uint32_t value) {
+                        uint32_t table = value ? 1U : 2U;
+                        return table;
+                    }
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/ternary_shadow.c"),
+                function_name="calc",
+                target_id="unit",
+                slice_id="real-ternary-shadow",
+                source_commit="unit-commit",
+            )
+
+            self.assertFalse(
+                any(
+                    dependency["kind"] == "global" and dependency["name"] == "table"
+                    for dependency in spec["c_boundary"]["direct_dependencies"]
+                )
+            )
+
+    def test_records_global_dependency_when_reference_precedes_nested_local_shadow(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-scoped-shadow-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "scoped_shadow.c"
+            src.parent.mkdir()
+            src.write_text(
+                textwrap.dedent(
+                    """
+                    #include <stdint.h>
+
+                    static const uint32_t table[2] = { 0U, 1U };
+
+                    uint32_t calc(uint32_t value) {
+                        uint32_t out = table[value & 0x1U];
+                        if (value != 0U) {
+                            uint32_t table = value + 1U;
+                            out ^= table;
+                        }
+                        return out;
+                    }
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/scoped_shadow.c"),
+                function_name="calc",
+                target_id="unit",
+                slice_id="real-scoped-shadow",
+                source_commit="unit-commit",
+            )
+
+            self.assertTrue(
+                any(
+                    dependency["kind"] == "global" and dependency["name"] == "table"
+                    for dependency in spec["c_boundary"]["direct_dependencies"]
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,11 +4,28 @@
     "sha256": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+    "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+    "status": "skipped"
+  },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
+    "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "call-expression",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+    "status": "passed"
+  }
 }

@@ -5,7 +5,8 @@
     "compiler_command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
     "defines": [],
     "include_paths": [
-      "inc"
+      "inc",
+      "tests"
     ],
     "target_triple": "unknown"
   },

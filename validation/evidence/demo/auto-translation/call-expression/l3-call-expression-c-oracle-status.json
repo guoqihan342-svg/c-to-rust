@@ -9,6 +9,11 @@
   "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
   "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
   "harness_draft": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+    "sha256": "98d45a95d54ce6b6cef5f23f528f6f212c000b70527abd495b43515d30633d00",
+    "status": "draft"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "call-expression",

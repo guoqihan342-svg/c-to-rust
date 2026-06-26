@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,13 @@ import jsonschema
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES = {
+    "accepted_after_gates",
+    "accepted_evidence_bound",
+    "candidate",
+    "candidate_generated",
+    "draft_generated",
+}
 
 
 def main() -> int:
@@ -53,6 +61,9 @@ def main() -> int:
 
     validate_alias_gate(evidence_dir, prefix)
     validate_route_baseline_profile_refs(evidence_dir, prefix)
+    validate_oracle_harness_contract(evidence_dir, prefix, slice_spec)
+    validate_global_dependency_requirements(evidence_dir, prefix, slice_spec)
+    validate_schema_diff_contract(evidence_dir, prefix, slice_spec)
 
     patch_schema = load_json(REPO_ROOT / "validation/auto-translation-template/patch-event.schema.json")
     patch_path = evidence_dir / f"{prefix}-patch-events.jsonl"
@@ -217,6 +228,18 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str) -> Non
 
     auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
     auto_manifest = load_json(auto_manifest_path)
+    if l4_refuses_candidate_generation(route):
+        if auto_manifest.get("status") == "candidate_generated":
+            raise SystemExit(
+                f"L4/refused route cannot have generated candidate evidence in {auto_manifest_path}"
+            )
+        validate_l4_refused_has_no_candidate_artifact_status(
+            evidence_dir,
+            prefix,
+            auto_manifest,
+            auto_manifest_path,
+        )
+    validate_route_source_artifact_refs(evidence_dir, prefix, route, baseline_path)
     require_ref(auto_manifest.get("c2rust_baseline"), baseline_path, "auto_manifest.c2rust_baseline")
     require_ref(auto_manifest.get("route_decision"), route_path, "auto_manifest.route_decision")
     require_ref(auto_manifest.get("validation_profile"), profile_path, "auto_manifest.validation_profile")
@@ -238,20 +261,1069 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str) -> Non
 
     cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
     cache = load_json(cache_path)
-    required_identity_keys = [
-        "c2rust_baseline_identity",
-        "route_decision_identity",
-        "validation_profile_identity",
-    ]
-    for key in required_identity_keys:
+    required_identities = {
+        "c2rust_baseline_identity": artifact_cache_identity(baseline),
+        "route_decision_identity": artifact_cache_identity(route),
+        "validation_profile_identity": artifact_cache_identity(profile),
+    }
+    for key, expected_identity in required_identities.items():
         if key not in cache:
             raise SystemExit(f"cache metadata missing {key} in {cache_path}")
         if key not in cache.get("cache_input_fields", []):
             raise SystemExit(f"cache metadata cache_input_fields missing {key} in {cache_path}")
+        if cache.get(key) != expected_identity:
+            raise SystemExit(f"cache metadata {key} drift in {cache_path}")
     dependent = cache.get("dependent_artifacts", {})
     require_ref(dependent.get("c2rust_baseline"), baseline_path, "cache.dependent_artifacts.c2rust_baseline")
     require_ref(dependent.get("route_decision"), route_path, "cache.dependent_artifacts.route_decision")
     require_ref(dependent.get("validation_profile"), profile_path, "cache.dependent_artifacts.validation_profile")
+
+
+def validate_oracle_harness_contract(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    slice_spec = load_json(slice_spec_path)
+    oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+    oracle = load_json(oracle_path)
+    harness_path = resolve_ref_path(str(oracle.get("harness_draft", "")))
+    if not harness_path.exists():
+        raise SystemExit(f"oracle harness draft missing: {harness_path}")
+
+    expected_globals = global_dependency_requirements(slice_spec)
+    contract = oracle.get("harness_contract")
+    harness_ref = oracle.get("harness_draft_ref")
+    if not isinstance(contract, dict):
+        if expected_globals:
+            raise SystemExit(f"oracle harness contract missing from {oracle_path}")
+        if harness_ref is not None:
+            expected_identity = validate_harness_draft_ref(harness_ref, harness_path, oracle_path)
+            validate_cache_oracle_harness_identity(evidence_dir, prefix, expected_identity)
+        validate_draft_oracle_fail_closed(evidence_dir, prefix, oracle, oracle_path)
+        return
+
+    expected_harness_identity = validate_harness_draft_ref(harness_ref, harness_path, oracle_path)
+    validate_cache_oracle_harness_identity(evidence_dir, prefix, expected_harness_identity)
+
+    expected_prototype = c_function_prototype(slice_spec)
+    if contract.get("function_prototype") != expected_prototype:
+        raise SystemExit(f"oracle harness contract function prototype drift in {oracle_path}")
+
+    expected_fixture = oracle_fixture_binding(slice_spec)
+    fixture = contract.get("fixture")
+    if fixture != expected_fixture:
+        raise SystemExit(f"oracle harness contract fixture drift in {oracle_path}")
+    if oracle.get("fixture_binding") != expected_fixture:
+        raise SystemExit(f"oracle fixture binding drift in {oracle_path}")
+
+    expected_source_files = slice_spec.get("c_boundary", {}).get("files", [])
+    if contract.get("source_files") != expected_source_files:
+        raise SystemExit(f"oracle harness contract source_files drift in {oracle_path}")
+
+    contract_globals = contract.get("global_dependencies", [])
+    if contract_globals != expected_globals:
+        raise SystemExit(f"oracle harness contract global_dependencies drift in {oracle_path}")
+
+    compile_command = oracle.get("compile_command_draft")
+    validate_compile_command_draft(compile_command, slice_spec, harness_path, oracle_path)
+    validate_compile_execution(oracle.get("compile_execution"), compile_command, oracle, oracle_path)
+
+    harness_text = harness_path.read_text(encoding="utf-8")
+    if expected_prototype not in harness_text:
+        raise SystemExit(f"oracle harness function prototype missing from {harness_path}")
+    if f"fixture input: {fixture_path_from_spec(slice_spec)}" not in harness_text:
+        raise SystemExit(f"oracle harness fixture binding missing from {harness_path}")
+    for fixture_comment in oracle_fixture_comment_fragments(expected_fixture):
+        if fixture_comment not in harness_text:
+            raise SystemExit(f"oracle harness fixture binding missing from {harness_path}")
+    for item in expected_source_files:
+        if not isinstance(item, dict):
+            continue
+        source_comment = f"source file: {item.get('path', 'unknown')} (sha256: {item.get('sha256', 'unknown')})"
+        if source_comment not in harness_text:
+            raise SystemExit(f"oracle harness source file binding missing from {harness_path}")
+    validate_draft_oracle_fail_closed(evidence_dir, prefix, oracle, oracle_path)
+
+
+def validate_harness_draft_ref(ref: Any, harness_path: Path, oracle_path: Path) -> dict[str, Any]:
+    if not isinstance(ref, dict) or not ref.get("path"):
+        raise SystemExit(f"oracle harness draft ref missing from {oracle_path}")
+    resolved = resolve_ref_path(str(ref["path"]))
+    if resolved.resolve() != harness_path.resolve():
+        raise SystemExit(f"oracle harness draft ref path mismatch in {oracle_path}: {resolved} != {harness_path}")
+    expected_sha = sha256(harness_path)
+    if ref.get("sha256") != expected_sha:
+        raise SystemExit(f"oracle harness draft ref sha256 mismatch in {oracle_path}")
+    if ref.get("status") != "draft":
+        raise SystemExit(f"oracle harness draft ref status mismatch in {oracle_path}")
+    return {
+        "path": ref["path"],
+        "status": ref["status"],
+        "sha256": ref["sha256"],
+    }
+
+
+def validate_compile_command_draft(
+    compile_command: Any,
+    slice_spec: dict[str, Any],
+    harness_path: Path,
+    oracle_path: Path,
+) -> None:
+    if not isinstance(compile_command, dict):
+        raise SystemExit(f"oracle harness compile command draft missing from {oracle_path}")
+    source_root = compile_source_root(slice_spec)
+    expected_includes = [
+        resolve_source_root_path(source_root, path)
+        for path in slice_spec.get("build_profile", {}).get("include_paths", [])
+    ]
+    expected_defines = [str(item) for item in slice_spec.get("build_profile", {}).get("defines", [])]
+    expected_sources = compile_link_source_files(slice_spec, source_root)
+    output_name = harness_path.with_suffix(".exe").name
+    expected_argv = [
+        "cc",
+        "-std=c99",
+        *[f"-D{item}" for item in expected_defines],
+        *[f"-I{path}" for path in expected_includes],
+        harness_path.name,
+        *[item["resolved_path"] for item in expected_sources],
+        "-o",
+        output_name,
+    ]
+    if compile_command.get("working_directory") != rel(oracle_path.parent):
+        raise SystemExit(f"oracle harness compile command working_directory drift in {oracle_path}")
+    if compile_command.get("source_root") != source_root:
+        raise SystemExit(f"oracle harness compile command source_root drift in {oracle_path}")
+    if compile_command.get("defines") != expected_defines:
+        raise SystemExit(f"oracle harness compile command defines drift in {oracle_path}")
+    if compile_command.get("resolved_include_paths") != expected_includes:
+        raise SystemExit(f"oracle harness compile command include path drift in {oracle_path}")
+    if compile_command.get("link_source_files") != expected_sources:
+        raise SystemExit(f"oracle harness compile command source linkage drift in {oracle_path}")
+    if compile_command.get("link_strategy") != c_oracle_link_strategy(slice_spec):
+        raise SystemExit(f"oracle harness compile command link strategy drift in {oracle_path}")
+    if compile_command.get("argv") != expected_argv:
+        raise SystemExit(f"oracle harness compile command argv drift in {oracle_path}")
+    if compile_command.get("status") != "draft_not_executed":
+        raise SystemExit(f"oracle harness compile command status drift in {oracle_path}")
+
+
+def validate_compile_execution(
+    compile_execution: Any,
+    compile_command: dict[str, Any],
+    oracle: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(compile_execution, dict):
+        raise SystemExit(f"oracle harness compile execution missing from {oracle_path}")
+    if compile_execution.get("argv") != compile_command.get("argv"):
+        raise SystemExit(f"oracle harness compile execution argv drift in {oracle_path}")
+    if compile_execution.get("working_directory") != compile_command.get("working_directory"):
+        raise SystemExit(f"oracle harness compile execution working_directory drift in {oracle_path}")
+    if compile_execution.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness compile execution cannot claim semantic_pass in {oracle_path}")
+
+    status = compile_execution.get("status")
+    expected_toolchain_by_status = {
+        "skipped_by_flag": "DRAFT_NOT_EXECUTED",
+        "missing_argv": "COMPILE_NOT_EXECUTED",
+        "compiler_not_found": "COMPILE_NOT_EXECUTED",
+        "compile_failed": "COMPILE_FAILED",
+        "compile_timeout": "COMPILE_FAILED",
+        "compile_succeeded_not_oracle": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    }
+    if status not in expected_toolchain_by_status:
+        raise SystemExit(f"oracle harness compile execution status drift in {oracle_path}")
+    expected_toolchain_status = expected_toolchain_by_status[status]
+    if compile_execution.get("toolchain_status_after_attempt") != expected_toolchain_status:
+        raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
+    if compile_execution.get("toolchain_status_after_attempt") != oracle.get("toolchain_status"):
+        raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
+
+    attempted = compile_execution.get("attempted")
+    if status == "skipped_by_flag":
+        if attempted is not False:
+            raise SystemExit(f"oracle harness compile execution skipped status drift in {oracle_path}")
+        if compile_execution.get("diagnostics") != ["C oracle compile execution skipped by --skip-c-oracle."]:
+            raise SystemExit(f"oracle harness compile execution diagnostics drift in {oracle_path}")
+        return
+
+    if status in {"missing_argv", "compiler_not_found"}:
+        if attempted is not False:
+            raise SystemExit(f"oracle harness compile execution non-attempted status drift in {oracle_path}")
+        if not compile_execution.get("diagnostics"):
+            raise SystemExit(f"oracle harness compile execution diagnostics missing in {oracle_path}")
+        return
+
+    if status in {"compile_failed", "compile_timeout", "compile_succeeded_not_oracle"}:
+        if attempted is not True:
+            raise SystemExit(f"oracle harness compile execution attempted status drift in {oracle_path}")
+        if "compiler_path" not in compile_execution:
+            raise SystemExit(f"oracle harness compile execution compiler path missing in {oracle_path}")
+        validate_compile_toolchain_provenance(compile_execution, oracle_path)
+        if not compile_execution.get("diagnostics"):
+            raise SystemExit(f"oracle harness compile execution diagnostics missing in {oracle_path}")
+        if status == "compile_succeeded_not_oracle" and oracle.get("semantic_pass") is True:
+            raise SystemExit(f"compiled oracle draft cannot claim semantic_pass=true in {oracle_path}")
+        harness_execution = compile_execution.get("harness_execution")
+        if status == "compile_succeeded_not_oracle" and not isinstance(harness_execution, dict):
+            raise SystemExit(f"oracle harness execution missing in {oracle_path}")
+        if harness_execution is not None:
+            if status != "compile_succeeded_not_oracle":
+                raise SystemExit(f"oracle harness execution status drift in {oracle_path}")
+            validate_harness_execution(harness_execution, compile_execution, oracle_path)
+        return
+
+
+def validate_harness_execution(
+    harness_execution: Any,
+    compile_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(harness_execution, dict):
+        raise SystemExit(f"oracle harness execution missing from {oracle_path}")
+    if harness_execution.get("working_directory") != compile_execution.get("working_directory"):
+        raise SystemExit(f"oracle harness execution working_directory drift in {oracle_path}")
+    if harness_execution.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness execution cannot claim semantic_pass in {oracle_path}")
+    if not isinstance(harness_execution.get("timeout_seconds"), int) or harness_execution["timeout_seconds"] <= 0:
+        raise SystemExit(f"oracle harness execution timeout drift in {oracle_path}")
+    if not isinstance(harness_execution.get("stdout"), str) or not isinstance(harness_execution.get("stderr"), str):
+        raise SystemExit(f"oracle harness execution stdio drift in {oracle_path}")
+    if not harness_execution.get("diagnostics"):
+        raise SystemExit(f"oracle harness execution diagnostics missing in {oracle_path}")
+    validate_harness_toolchain_provenance(harness_execution, compile_execution, oracle_path)
+
+    status = harness_execution.get("status")
+    if status not in {
+        "exited_zero_not_oracle",
+        "exited_nonzero_not_oracle",
+        "execution_timeout_not_oracle",
+        "executable_missing_not_oracle",
+        "execution_error_not_oracle",
+    }:
+        raise SystemExit(f"oracle harness execution status drift in {oracle_path}")
+
+    attempted = harness_execution.get("attempted")
+    if status == "exited_zero_not_oracle":
+        if attempted is not True or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness execution exit status drift in {oracle_path}")
+    elif status == "exited_nonzero_not_oracle":
+        returncode = harness_execution.get("returncode")
+        if attempted is not True or not isinstance(returncode, int) or returncode == 0:
+            raise SystemExit(f"oracle harness execution exit status drift in {oracle_path}")
+    elif status == "execution_timeout_not_oracle":
+        if attempted is not True or harness_execution.get("returncode") is not None:
+            raise SystemExit(f"oracle harness execution timeout status drift in {oracle_path}")
+    else:
+        if attempted is not False or harness_execution.get("returncode") is not None:
+            raise SystemExit(f"oracle harness execution non-attempted status drift in {oracle_path}")
+
+    executable_path = harness_execution.get("executable_path")
+    if not isinstance(executable_path, str) or not executable_path:
+        raise SystemExit(f"oracle harness execution executable path drift in {oracle_path}")
+    argv = harness_execution.get("argv")
+    if executable_path != "missing" and argv != [executable_path]:
+        raise SystemExit(f"oracle harness execution argv drift in {oracle_path}")
+    if executable_path == "missing" and argv != []:
+        raise SystemExit(f"oracle harness execution argv drift in {oracle_path}")
+    if "output_gate" not in harness_execution:
+        raise SystemExit(f"oracle harness output gate missing in {oracle_path}")
+    validate_harness_output_gate(harness_execution.get("output_gate"), harness_execution, oracle_path)
+
+
+def validate_compile_toolchain_provenance(compile_execution: dict[str, Any], oracle_path: Path) -> None:
+    adapter = compile_execution.get("toolchain_adapter")
+    execution_argv = compile_execution.get("execution_argv")
+    if adapter is None and execution_argv is None:
+        return
+    if adapter not in {"local", "wsl"}:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    execution = require_string_list(
+        execution_argv,
+        f"oracle harness compile execution toolchain provenance drift in {oracle_path}",
+    )
+    if not execution:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    compiler_path = compile_execution.get("compiler_path")
+    if not isinstance(compiler_path, str) or not compiler_path:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    if adapter == "local":
+        if execution[0] != compiler_path:
+            raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+        return
+    validate_wsl_execution_argv(execution, compiler_path, oracle_path, "compile execution")
+
+
+def validate_harness_toolchain_provenance(
+    harness_execution: dict[str, Any],
+    compile_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    compile_adapter = compile_execution.get("toolchain_adapter")
+    adapter = harness_execution.get("toolchain_adapter")
+    execution_argv = harness_execution.get("execution_argv")
+    if compile_adapter != "wsl" and adapter is None and execution_argv is None:
+        return
+    if compile_adapter == "wsl" and adapter != "wsl":
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    if adapter not in {"wsl"}:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    execution = require_string_list(
+        execution_argv,
+        f"oracle harness execution toolchain provenance drift in {oracle_path}",
+    )
+    if not execution:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    executable_path = harness_execution.get("executable_path")
+    if not isinstance(executable_path, str) or not executable_path:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    validate_wsl_execution_argv(execution, executable_path, oracle_path, "harness execution")
+
+
+def validate_wsl_execution_argv(
+    execution: list[str],
+    required_fragment: str,
+    oracle_path: Path,
+    label: str,
+) -> None:
+    launcher = execution[0].replace("\\", "/").lower()
+    launcher_name = launcher.rsplit("/", 1)[-1]
+    if launcher_name not in {"wsl", "wsl.exe"} or "-e" not in execution:
+        raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
+    if not any(required_fragment in item for item in execution):
+        raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
+
+
+def validate_harness_output_gate(
+    output_gate: Any,
+    harness_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(output_gate, dict):
+        raise SystemExit(f"oracle harness output gate missing from {oracle_path}")
+    if output_gate.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness output gate cannot claim semantic_pass in {oracle_path}")
+    if output_gate.get("gate") != "c_oracle_harness_output":
+        raise SystemExit(f"oracle harness output gate identity drift in {oracle_path}")
+    require_string_list(
+        output_gate.get("compared_fields"),
+        f"oracle harness output gate compared fields drift in {oracle_path}",
+    )
+    if not isinstance(output_gate.get("fixture_expected_output_status"), str):
+        raise SystemExit(f"oracle harness output gate fixture status drift in {oracle_path}")
+    status = output_gate.get("status")
+    if status not in {
+        "matched_not_oracle",
+        "mismatch_not_oracle",
+        "unsupported_not_oracle",
+        "not_run_not_oracle",
+    }:
+        raise SystemExit(f"oracle harness output gate status drift in {oracle_path}")
+    expected = require_string_list(
+        output_gate.get("expected_stdout_fragments"),
+        f"oracle harness output gate expected stdout fragments drift in {oracle_path}",
+    )
+    matched = require_string_list(
+        output_gate.get("matched_stdout_fragments"),
+        f"oracle harness output gate matched stdout fragments drift in {oracle_path}",
+    )
+    missing = require_string_list(
+        output_gate.get("missing_stdout_fragments"),
+        f"oracle harness output gate missing stdout fragments drift in {oracle_path}",
+    )
+    diagnostics = require_string_list(
+        output_gate.get("diagnostics"),
+        f"oracle harness output gate diagnostics drift in {oracle_path}",
+    )
+    if not diagnostics:
+        raise SystemExit(f"oracle harness output gate diagnostics missing in {oracle_path}")
+    if status == "matched_not_oracle":
+        if harness_execution.get("status") != "exited_zero_not_oracle" or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness output gate matched status drift in {oracle_path}")
+        if not expected or matched != expected or missing:
+            raise SystemExit(f"oracle harness output gate matched fragments drift in {oracle_path}")
+    elif status == "mismatch_not_oracle":
+        if harness_execution.get("status") != "exited_zero_not_oracle" or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness output gate mismatch status drift in {oracle_path}")
+        if not expected or not missing:
+            raise SystemExit(f"oracle harness output gate mismatch fragments drift in {oracle_path}")
+        if sorted(matched + missing) != sorted(expected):
+            raise SystemExit(f"oracle harness output gate fragment partition drift in {oracle_path}")
+    elif status == "unsupported_not_oracle":
+        if expected or matched or missing:
+            raise SystemExit(f"oracle harness output gate unsupported fragments drift in {oracle_path}")
+    else:
+        if harness_execution.get("status") == "exited_zero_not_oracle" and harness_execution.get("returncode") == 0:
+            raise SystemExit(f"oracle harness output gate not_run status drift in {oracle_path}")
+        if matched:
+            raise SystemExit(f"oracle harness output gate not_run matched fragments drift in {oracle_path}")
+
+
+def require_string_list(value: Any, message: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise SystemExit(message)
+    return value
+
+
+def oracle_fixture_binding(spec: dict[str, Any]) -> dict[str, Any]:
+    fixture = spec.get("fixture_contract", {})
+    cases = fixture.get("cases") or []
+    case_bindings = oracle_fixture_case_bindings(spec)
+    if not cases:
+        binding_status = "missing_or_empty"
+    else:
+        binding_status = "declared_not_executed"
+    return {
+        "path": fixture_path_from_spec(spec),
+        "case_count": len(cases),
+        "binding_status": binding_status,
+        "behavior_fields": behavior_fields_from_spec(spec),
+        "observable_outputs": behavior_fields_from_spec(spec),
+        "case_bindings": case_bindings,
+        "expected_output_status": fixture_expected_output_status(case_bindings),
+    }
+
+
+def oracle_fixture_case_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    fixture = spec.get("fixture_contract", {})
+    fields = behavior_fields_from_spec(spec)
+    bindings: list[dict[str, Any]] = []
+    for index, raw_case in enumerate(fixture.get("cases") or []):
+        case = raw_case if isinstance(raw_case, dict) else {}
+        expected_outputs = case.get("expected_outputs")
+        if expected_outputs is None:
+            expected_outputs = case.get("expected", {})
+        if not isinstance(expected_outputs, dict):
+            expected_outputs = {}
+        if not expected_outputs:
+            expected_outputs = expected_outputs_from_fixture_refs(spec, case)
+        normalized_expected = {str(key): expected_outputs[key] for key in sorted(expected_outputs)}
+        missing_outputs = [field for field in fields if field not in normalized_expected]
+        if normalized_expected and not missing_outputs:
+            binding_status = "declared_not_executed"
+        elif normalized_expected:
+            binding_status = "partial_expected_outputs"
+        elif case.get("expected_ref"):
+            binding_status = "expected_ref_only"
+        else:
+            binding_status = "missing_expected_outputs"
+        bindings.append(
+            {
+                "id": str(case.get("id") or f"case-{index}"),
+                "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
+                "expected_ref": str(case.get("expected_ref") or "missing"),
+                "expected_outputs": normalized_expected,
+                "observable_outputs": fields,
+                "missing_observable_outputs": missing_outputs,
+                "binding_status": binding_status,
+            }
+        )
+    return bindings
+
+
+def expected_outputs_from_fixture_refs(spec: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
+    fields = behavior_fields_from_spec(spec)
+    if not fields:
+        return {}
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case.get("input_ref") or "")
+    candidate_refs = [case.get("expected_ref"), fixture.get("path") or fixture.get("input")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if not isinstance(case_payload, dict):
+            continue
+        return {field: case_payload[field] for field in fields if field in case_payload}
+    return {}
+
+
+def load_fixture_ref_payload(ref: Any) -> Any | None:
+    if not ref:
+        return None
+    ref_text = str(ref)
+    if ref_text == "inline" or ref_text.startswith("cases["):
+        return None
+    path_text = ref_text.split("#", 1)[0]
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = REPO_ROOT / path_text
+    if not path.exists() or not path.is_file():
+        return None
+    return load_json(path)
+
+
+def fixture_case_payload(payload: Any, case_ref: str) -> Any | None:
+    index = case_ref_index(case_ref)
+    if index is None:
+        return None
+    cases = payload.get("cases") if isinstance(payload, dict) else payload
+    if not isinstance(cases, list) or index < 0 or index >= len(cases):
+        return None
+    return cases[index]
+
+
+def case_ref_index(case_ref: str) -> int | None:
+    match = re.fullmatch(r"cases\[(\d+)\]", str(case_ref))
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def fixture_expected_output_status(case_bindings: list[dict[str, Any]]) -> str:
+    if not case_bindings:
+        return "missing_or_empty"
+    statuses = {str(item.get("binding_status")) for item in case_bindings}
+    if statuses == {"declared_not_executed"}:
+        return "declared_not_executed"
+    if "missing_expected_outputs" in statuses:
+        return "missing_expected_outputs"
+    if "partial_expected_outputs" in statuses:
+        return "partial_expected_outputs"
+    return "expected_ref_only"
+
+
+def oracle_fixture_comment_fragments(fixture_binding: dict[str, Any]) -> list[str]:
+    outputs = ", ".join(str(item) for item in fixture_binding.get("observable_outputs", [])) or "none"
+    fragments = [
+        f"fixture cases: {fixture_binding.get('case_count', 0)}",
+        f"observable outputs: {outputs}",
+    ]
+    for case in fixture_binding.get("case_bindings", []):
+        expected_outputs = json.dumps(case.get("expected_outputs", {}), sort_keys=True)
+        fragments.append(
+            "fixture case: "
+            f"{case.get('id')} input_ref={case.get('input_ref')} "
+            f"expected_ref={case.get('expected_ref')} expected_outputs={expected_outputs}"
+        )
+    return fragments
+
+
+def compile_source_root(spec: dict[str, Any]) -> str:
+    source_root = spec.get("source", {}).get("source_root")
+    if not source_root:
+        return "."
+    return normalize_path_text(source_root)
+
+
+def compile_link_source_files(spec: dict[str, Any], source_root: str) -> list[dict[str, Any]]:
+    files = []
+    for item in spec.get("c_boundary", {}).get("files", []):
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        path = normalize_path_text(item["path"])
+        files.append(
+            {
+                "path": path,
+                "resolved_path": resolve_source_root_path(source_root, path),
+                "role": str(item.get("role") or "source"),
+                "sha256": str(item.get("sha256") or "unknown"),
+                "resolution": "source_root_relative" if source_root != "." else "declared_path",
+            }
+        )
+    for item in spec.get("build_profile", {}).get("link_source_files", []):
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        path = normalize_path_text(item["path"])
+        files.append(
+            {
+                "path": path,
+                "resolved_path": resolve_source_root_path(source_root, path),
+                "role": str(item.get("role") or "link_dependency"),
+                "sha256": str(item.get("sha256") or "unknown"),
+                "resolution": "source_root_relative" if source_root != "." else "declared_path",
+            }
+        )
+    return files
+
+
+def c_oracle_link_strategy(spec: dict[str, Any]) -> str:
+    if spec.get("build_profile", {}).get("link_source_files"):
+        return "compile_harness_with_declared_c_boundary_and_build_profile_sources"
+    return "compile_harness_with_declared_c_boundary_sources"
+
+
+def resolve_source_root_path(source_root: str, path: Any) -> str:
+    path_text = normalize_path_text(path)
+    if not path_text or path_is_absolute(path_text) or source_root == ".":
+        return path_text
+    if not path_is_absolute(source_root) and (
+        path_text == source_root or path_text.startswith(f"{source_root}/")
+    ):
+        return path_text
+    return normalize_path_text(f"{source_root}/{path_text}")
+
+
+def path_is_absolute(path: str) -> bool:
+    return (
+        path.startswith("/")
+        or path.startswith("//")
+        or path.startswith("\\\\")
+        or (len(path) >= 3 and path[1] == ":" and path[2] in {"/", "\\"})
+    )
+
+
+def normalize_path_text(path: Any) -> str:
+    return str(path).strip().replace("\\", "/").rstrip("/")
+
+
+def validate_cache_oracle_harness_identity(
+    evidence_dir: Path, prefix: str, expected_identity: dict[str, Any]
+) -> None:
+    cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+    cache = load_json(cache_path)
+    if "c_oracle_harness_identity" not in cache.get("cache_input_fields", []):
+        raise SystemExit(f"cache metadata cache_input_fields missing c_oracle_harness_identity in {cache_path}")
+    if cache.get("c_oracle_harness_identity") != expected_identity:
+        raise SystemExit(f"oracle harness identity drift in {cache_path}")
+
+
+def validate_draft_oracle_fail_closed(
+    evidence_dir: Path, prefix: str, oracle: dict[str, Any], oracle_path: Path
+) -> None:
+    if (
+        oracle.get("status") == "C_ORACLE_GENERATED"
+        and oracle.get("toolchain_status") == "C_ORACLE_GENERATED"
+        and oracle.get("semantic_pass") is True
+    ):
+        return
+
+    if oracle.get("semantic_pass"):
+        raise SystemExit(f"draft oracle cannot claim semantic_pass=true in {oracle_path}")
+
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+    final = load_json(final_path)
+    manifest = load_json(manifest_path)
+    profile = load_json(profile_path)
+
+    if final.get("status") == "passed" or final.get("semantic_pass"):
+        raise SystemExit(f"draft oracle cannot coexist with passed final verification in {final_path}")
+    if manifest.get("status") == "passed" or manifest.get("semantic_pass"):
+        raise SystemExit(f"draft oracle cannot coexist with passed evidence manifest in {manifest_path}")
+    if profile.get("status") == "passed":
+        raise SystemExit(f"draft oracle cannot coexist with passed validation profile in {profile_path}")
+
+
+def validate_schema_diff_contract(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    slice_spec = load_json(slice_spec_path)
+    diff_path = evidence_dir / f"{prefix}-diff.json"
+    negative_path = evidence_dir / f"{prefix}-negative-diff.json"
+    schema_diff = load_json(diff_path)
+    negative_diff = load_json(negative_path)
+    validate_draft_schema_diff_report(schema_diff, slice_spec, diff_path)
+    validate_draft_negative_diff_report(negative_diff, schema_diff, negative_path)
+
+
+def validate_draft_schema_diff_report(report: dict[str, Any], slice_spec: dict[str, Any], path: Path) -> None:
+    status = report.get("status")
+    if status == "passed":
+        return
+    if status not in {"incomplete", "draft", "blocked"}:
+        raise SystemExit(f"schema diff status drift in {path}")
+    if report.get("semantic_pass") is not False:
+        raise SystemExit(f"schema diff draft cannot claim semantic_pass in {path}")
+    if report.get("diff_gate") != "schema_aware_c_rust_diff":
+        raise SystemExit(f"schema diff diff_gate drift in {path}")
+    if report.get("accepted_diff_required") is not True:
+        raise SystemExit(f"schema diff accepted_diff_required missing in {path}")
+    if "accepted_diff" in report:
+        raise SystemExit(f"schema diff draft cannot contain accepted_diff in {path}")
+    if report.get("blocked_by") != ["c_oracle", "rust_replay"]:
+        raise SystemExit(f"schema diff blocked_by drift in {path}")
+    required_inputs = report.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        raise SystemExit(f"schema diff required_inputs missing in {path}")
+    if required_inputs.get("c_oracle_required_status") != "C_ORACLE_GENERATED":
+        raise SystemExit(f"schema diff required_inputs.c_oracle_required_status drift in {path}")
+    if required_inputs.get("rust_report_required_status") != "passed":
+        raise SystemExit(f"schema diff required_inputs.rust_report_required_status drift in {path}")
+    if not required_inputs.get("c_oracle_actual_status"):
+        raise SystemExit(f"schema diff required_inputs.c_oracle_actual_status missing in {path}")
+    if not required_inputs.get("rust_report_actual_status"):
+        raise SystemExit(f"schema diff required_inputs.rust_report_actual_status missing in {path}")
+
+    compared_fields = require_string_list(
+        report.get("compared_fields"),
+        f"schema diff compared_fields drift in {path}",
+    )
+    expected_fields = behavior_fields_from_spec(slice_spec)
+    if expected_fields and not set(expected_fields).issubset(set(compared_fields)):
+        raise SystemExit(f"schema diff compared_fields missing behavior fields in {path}")
+    if report.get("first_mismatch") is not None:
+        raise SystemExit(f"schema diff draft cannot contain first_mismatch evidence in {path}")
+
+
+def validate_draft_negative_diff_report(
+    report: dict[str, Any],
+    schema_diff: dict[str, Any],
+    path: Path,
+) -> None:
+    status = report.get("status")
+    if status not in {"incomplete", "draft", "blocked"}:
+        return
+    if report.get("semantic_pass", False) is not False:
+        raise SystemExit(f"negative diff draft cannot claim semantic_pass in {path}")
+    if report.get("negative_diff_gate") != "schema_aware_negative_diff":
+        raise SystemExit(f"negative diff negative_diff_gate drift in {path}")
+    if report.get("expected_failure") is not True:
+        raise SystemExit(f"negative diff expected_failure drift in {path}")
+    if report.get("mutation_detected") is not False:
+        raise SystemExit(f"negative diff mutation_detected drift in {path}")
+    if report.get("accepted_negative_diff_required") is not True:
+        raise SystemExit(f"negative diff accepted_negative_diff_required missing in {path}")
+    if "accepted_negative_diff" in report:
+        raise SystemExit(f"negative diff draft cannot contain accepted_negative_diff in {path}")
+    if report.get("blocked_by") != ["schema_diff"]:
+        raise SystemExit(f"negative diff blocked_by drift in {path}")
+    required_inputs = report.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        raise SystemExit(f"negative diff required_inputs missing in {path}")
+    if required_inputs.get("schema_diff_required_status") != "passed":
+        raise SystemExit(f"negative diff required_inputs.schema_diff_required_status drift in {path}")
+    if required_inputs.get("schema_diff_actual_status") != schema_diff.get("status"):
+        raise SystemExit(f"negative diff required_inputs.schema_diff_actual_status drift in {path}")
+    if required_inputs.get("schema_diff_required_first_mismatch") is not None:
+        raise SystemExit(f"negative diff required_inputs.schema_diff_required_first_mismatch drift in {path}")
+    if report.get("first_mismatch") is not None:
+        raise SystemExit(f"negative diff draft cannot contain first_mismatch evidence in {path}")
+
+
+def validate_passed_schema_diff_report(report: dict[str, Any], slice_spec: dict[str, Any]) -> list[str]:
+    if report.get("semantic_pass") is not True:
+        raise SystemExit("semantic pass requires schema diff semantic_pass=true")
+    if report.get("first_mismatch") is not None:
+        raise SystemExit("semantic pass requires schema diff first_mismatch=null")
+    if report.get("diff_gate") != "schema_aware_c_rust_diff":
+        raise SystemExit("semantic pass schema diff diff_gate drift")
+    if report.get("accepted_diff_required") is not True:
+        raise SystemExit("semantic pass schema diff accepted_diff_required drift")
+    if report.get("blocked_by") != []:
+        raise SystemExit("semantic pass schema diff blocked_by must be empty")
+
+    compared_fields = require_string_list(
+        report.get("compared_fields"),
+        "semantic pass schema diff compared_fields drift",
+    )
+    if not compared_fields:
+        raise SystemExit("semantic pass schema diff compared_fields must be non-empty")
+    expected_fields = behavior_fields_from_spec(slice_spec)
+    if expected_fields and not set(expected_fields).issubset(set(compared_fields)):
+        raise SystemExit("semantic pass schema diff compared_fields missing behavior fields")
+
+    required_inputs = report.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        raise SystemExit("semantic pass schema diff required_inputs drift")
+    if required_inputs.get("c_oracle_required_status") != "C_ORACLE_GENERATED":
+        raise SystemExit("semantic pass schema diff required_inputs.c_oracle_required_status drift")
+    if required_inputs.get("rust_report_required_status") != "passed":
+        raise SystemExit("semantic pass schema diff required_inputs.rust_report_required_status drift")
+    if required_inputs.get("schema_diff_actual_status") not in {None, "passed"}:
+        raise SystemExit("semantic pass schema diff required_inputs.schema_diff_actual_status drift")
+
+    require_embedded_evidence_ref(
+        report.get("accepted_diff"),
+        "schema diff accepted_diff",
+        {"passed"},
+        {"passed"},
+    )
+    return compared_fields
+
+
+def validate_passed_negative_diff_report(report: dict[str, Any], compared_fields: list[str]) -> None:
+    require_status(report, "negative_diff", {"passed", "expected_failed", "failed"})
+    if report.get("negative_diff_gate") != "schema_aware_negative_diff":
+        raise SystemExit("semantic pass negative diff negative_diff_gate drift")
+    if report.get("expected_failure") is not True:
+        raise SystemExit("semantic pass negative diff expected_failure=true required")
+    if not mutation_detected(report):
+        raise SystemExit("semantic pass requires negative_diff mutation_detected/detected=true")
+    if report.get("blocked_by") != []:
+        raise SystemExit("semantic pass negative diff blocked_by must be empty")
+    if report.get("root_blocked_by") != []:
+        raise SystemExit("semantic pass negative diff root_blocked_by must be empty")
+    if report.get("accepted_negative_diff_required") is not True:
+        raise SystemExit("semantic pass negative diff accepted_negative_diff_required drift")
+
+    first_mismatch = report.get("first_mismatch")
+    if not isinstance(first_mismatch, dict) or not first_mismatch:
+        raise SystemExit("semantic pass negative diff first_mismatch evidence required")
+    mismatch_field = first_mismatch.get("field") or first_mismatch.get("field_path")
+    if isinstance(mismatch_field, str) and compared_fields:
+        field_matches = any(mismatch_field == field or mismatch_field.endswith(f".{field}") for field in compared_fields)
+        if not field_matches:
+            raise SystemExit("semantic pass negative diff first_mismatch field outside compared_fields")
+
+    required_inputs = report.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        raise SystemExit("semantic pass negative diff required_inputs drift")
+    if required_inputs.get("schema_diff_required_status") != "passed":
+        raise SystemExit("semantic pass negative diff required_inputs.schema_diff_required_status drift")
+    if required_inputs.get("schema_diff_required_first_mismatch") is not None:
+        raise SystemExit("semantic pass negative diff required_inputs.schema_diff_required_first_mismatch drift")
+    if required_inputs.get("schema_diff_actual_status") not in {None, "passed"}:
+        raise SystemExit("semantic pass negative diff required_inputs.schema_diff_actual_status drift")
+
+    require_embedded_evidence_ref(
+        report.get("accepted_negative_diff"),
+        "negative diff accepted_negative_diff",
+        {"passed"},
+        {"passed", "expected_failed", "failed"},
+    )
+
+
+def require_embedded_evidence_ref(
+    ref: Any,
+    label: str,
+    allowed_ref_statuses: set[str],
+    allowed_payload_statuses: set[str],
+) -> dict[str, Any]:
+    if not isinstance(ref, dict) or not ref.get("path"):
+        raise SystemExit(f"semantic pass requires {label}")
+    status = str(ref.get("status", ""))
+    if status not in allowed_ref_statuses:
+        raise SystemExit(f"semantic pass requires {label}.status in {sorted(allowed_ref_statuses)}, got {status!r}")
+    ref_sha = ref.get("sha256")
+    if not isinstance(ref_sha, str) or not ref_sha:
+        raise SystemExit(f"semantic pass requires {label}.sha256")
+    resolved = resolve_ref_path(str(ref["path"]))
+    if not resolved.exists():
+        raise SystemExit(f"semantic pass requires existing {label}: {resolved}")
+    actual_sha = sha256(resolved)
+    if ref_sha != actual_sha:
+        raise SystemExit(f"semantic pass {label}.sha256 mismatch: {ref_sha} != {actual_sha}")
+    payload = load_json(resolved)
+    payload_status = str(payload.get("status", ""))
+    if payload_status not in allowed_payload_statuses:
+        raise SystemExit(
+            f"semantic pass requires {label} payload status in {sorted(allowed_payload_statuses)}, got {payload_status!r}"
+        )
+    return payload
+
+
+def validate_route_source_artifact_refs(evidence_dir: Path, prefix: str, route: dict[str, Any], baseline_path: Path) -> None:
+    source_artifacts = route.get("source_artifacts")
+    if not isinstance(source_artifacts, dict):
+        raise SystemExit("route_decision.source_artifacts missing")
+    expected_paths = {
+        "type_map": evidence_dir / f"{prefix}-type-map.json",
+        "cfg": evidence_dir / f"{prefix}-cfg.json",
+        "pointer_graph": evidence_dir / f"{prefix}-pointer-graph.json",
+        "translation_plan": evidence_dir / f"{prefix}-auto-translation-plan.json",
+        "c2rust_baseline": baseline_path,
+    }
+    for key, expected_path in expected_paths.items():
+        require_ref(source_artifacts.get(key), expected_path, f"route_decision.source_artifacts.{key}")
+
+
+def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    slice_spec = load_json(slice_spec_path)
+    expected = global_dependency_requirements(slice_spec)
+    expected_names = [item["name"] for item in expected]
+
+    type_map_path = evidence_dir / f"{prefix}-type-map.json"
+    context_path = evidence_dir / f"{prefix}-context-pack.json"
+    oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+    pointer_path = evidence_dir / f"{prefix}-pointer-graph.json"
+    cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+    slice_contract_path = evidence_dir / f"{prefix}-slice-contract.json"
+
+    type_map = load_json(type_map_path)
+    context = load_json(context_path)
+    oracle = load_json(oracle_path)
+    pointer = load_json(pointer_path)
+    cache = load_json(cache_path)
+    slice_contract = load_json(slice_contract_path)
+
+    if not expected:
+        reject_unexpected_global_requirements(
+            [
+                (type_map.get("global_dependencies"), type_map_path, "type_map.global_dependencies"),
+                (context.get("global_dependencies"), context_path, "context_pack.global_dependencies"),
+                (oracle.get("global_linkage_requirements"), oracle_path, "c_oracle.global_linkage_requirements"),
+                (
+                    global_dependency_requirements(slice_contract),
+                    slice_contract_path,
+                    "slice_contract.c_boundary.direct_dependencies",
+                ),
+                (context.get("source_boundary", {}).get("globals", []), context_path, "source_boundary.globals"),
+                (pointer.get("source_boundary", {}).get("globals", []), pointer_path, "source_boundary.globals"),
+            ]
+        )
+        require_empty_global_dependency_identity(cache, cache_path)
+        return
+
+    require_global_requirements(type_map.get("global_dependencies"), expected, type_map_path, "type_map.global_dependencies")
+    require_global_requirements(context.get("global_dependencies"), expected, context_path, "context_pack.global_dependencies")
+    require_global_requirements(
+        oracle.get("global_linkage_requirements"),
+        expected,
+        oracle_path,
+        "c_oracle.global_linkage_requirements",
+    )
+    require_global_requirements(
+        global_dependency_requirements(slice_contract),
+        expected,
+        slice_contract_path,
+        "slice_contract.c_boundary.direct_dependencies",
+    )
+
+    context_globals = context.get("source_boundary", {}).get("globals", [])
+    pointer_globals = pointer.get("source_boundary", {}).get("globals", [])
+    require_exact_names(context_globals, expected_names, context_path, "source_boundary.globals")
+    require_exact_names(pointer_globals, expected_names, pointer_path, "source_boundary.globals")
+
+    identity = cache.get("global_dependency_identity")
+    if not isinstance(identity, dict):
+        raise SystemExit(f"global dependency identity missing from {cache_path}")
+    identity_names = identity.get("names", [])
+    require_exact_names(identity_names, expected_names, cache_path, "global_dependency_identity.names")
+    if "global_dependency_identity" not in cache.get("cache_input_fields", []):
+        raise SystemExit(f"global dependency identity missing from cache_input_fields in {cache_path}")
+    expected_identity_sha = sha256_json(expected)
+    if identity.get("count") != len(expected):
+        raise SystemExit(f"global dependency identity count mismatch in {cache_path}")
+    if identity.get("sha256") != expected_identity_sha:
+        raise SystemExit(
+            f"global dependency identity sha256 mismatch in {cache_path}: {identity.get('sha256')} != {expected_identity_sha}"
+        )
+
+    harness_path = resolve_ref_path(str(oracle.get("harness_draft", "")))
+    if not harness_path.exists():
+        raise SystemExit(f"global dependency oracle harness draft missing: {harness_path}")
+    harness_text = harness_path.read_text(encoding="utf-8")
+    for name in expected_names:
+        if f"global dependency: {name}" not in harness_text:
+            raise SystemExit(f"global dependency {name!r} missing from oracle harness draft {harness_path}")
+
+
+def global_dependency_requirements(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    dependencies = payload.get("c_boundary", {}).get("direct_dependencies", [])
+    requirements: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for dependency in dependencies:
+        if dependency.get("kind") != "global":
+            continue
+        name = str(dependency.get("name") or "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        span = dependency.get("source_span") if isinstance(dependency.get("source_span"), dict) else {
+            "file": "slice-spec",
+            "line_start": 1,
+            "line_end": 1,
+        }
+        requirements.append(
+            {
+                "name": name,
+                "kind": "global",
+                "source": dependency.get("source", "slice_spec"),
+                "definition_status": dependency.get("definition_status", "declared"),
+                "source_span": span,
+                "sha256": dependency.get("sha256") or span.get("sha256") or "",
+                "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+                "semantic_status": "required_before_acceptance",
+            }
+        )
+    return requirements
+
+
+def require_global_requirements(value: Any, expected: list[dict[str, Any]], path: Path, label: str) -> None:
+    if not isinstance(value, list):
+        raise SystemExit(f"global dependency evidence missing {label} in {path}")
+    by_name = {str(item.get("name")): item for item in value if isinstance(item, dict) and item.get("name")}
+    expected_names = [item["name"] for item in expected]
+    actual_names = [str(item.get("name")) for item in value if isinstance(item, dict) and item.get("name")]
+    require_exact_names(actual_names, expected_names, path, label)
+    for expected_item in expected:
+        name = expected_item["name"]
+        actual = by_name.get(name)
+        if actual is None:
+            raise SystemExit(f"global dependency {name!r} missing from {path}:{label}")
+        if actual != expected_item:
+            raise SystemExit(f"global dependency {name!r} drift in {path}:{label}")
+
+
+def reject_unexpected_global_requirements(items: list[tuple[Any, Path, str]]) -> None:
+    for value, path, label in items:
+        if value is None:
+            continue
+        if isinstance(value, list):
+            if value:
+                raise SystemExit(f"unexpected global dependency evidence in {path}:{label}")
+            continue
+        raise SystemExit(f"unexpected global dependency evidence in {path}:{label}")
+
+
+def require_empty_global_dependency_identity(cache: dict[str, Any], path: Path) -> None:
+    identity = cache.get("global_dependency_identity")
+    if identity is None:
+        return
+    expected_identity = {"sha256": sha256_json([]), "count": 0, "names": []}
+    if identity != expected_identity:
+        raise SystemExit(f"unexpected global dependency identity in {path}")
+
+
+def require_exact_names(actual_names: Any, expected_names: list[str], path: Path, label: str) -> None:
+    if not isinstance(actual_names, list):
+        raise SystemExit(f"global dependency evidence missing {label} in {path}")
+    if sorted(str(name) for name in actual_names) != sorted(expected_names):
+        raise SystemExit(f"global dependency names drift in {path}:{label}")
+
+
+def l4_refuses_candidate_generation(route: dict[str, Any]) -> bool:
+    return (
+        route.get("level") == "L4"
+        and route.get("status") == "refused"
+        and route.get("translator", {}).get("candidate_generation_allowed") is False
+    )
+
+
+def validate_l4_refused_has_no_candidate_artifact_status(
+    evidence_dir: Path,
+    prefix: str,
+    auto_manifest: dict[str, Any],
+    auto_manifest_path: Path,
+) -> None:
+    documents = [
+        (auto_manifest_path, auto_manifest),
+        (evidence_dir / f"{prefix}-auto-translation-plan.json", load_json(evidence_dir / f"{prefix}-auto-translation-plan.json")),
+        (
+            evidence_dir / f"{prefix}-test-translation-generated.json",
+            load_json(evidence_dir / f"{prefix}-test-translation-generated.json"),
+        ),
+        (evidence_dir / f"{prefix}-rust-report.json", load_json(evidence_dir / f"{prefix}-rust-report.json")),
+    ]
+    for label, payload in documents:
+        for path in candidate_status_paths(payload):
+            raise SystemExit(f"L4/refused route cannot contain candidate artifact status in {label}:{path}")
+
+    events_path = evidence_dir / f"{prefix}-auto-translation-events.jsonl"
+    for line_number, event in enumerate(load_jsonl(events_path), start=1):
+        if event.get("event_kind") == "rust_draft_generated" and event.get("status") != "blocked":
+            raise SystemExit(
+                f"L4/refused route cannot contain candidate artifact status in {events_path}:line {line_number}"
+            )
+        for path in candidate_status_paths(event):
+            raise SystemExit(
+                f"L4/refused route cannot contain candidate artifact status in {events_path}:line {line_number}{path}"
+            )
+
+
+def candidate_status_paths(value: Any, path: str = "$") -> list[str]:
+    hits: list[str] = []
+    if isinstance(value, dict):
+        if value.get("status") in L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES:
+            hits.append(f"{path}.status")
+        for key, child in value.items():
+            hits.extend(candidate_status_paths(child, f"{path}.{key}"))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            hits.extend(candidate_status_paths(child, f"{path}[{index}]"))
+    return hits
+
+
+def load_jsonl(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line.strip()]
 
 
 def require_ref(ref: Any, expected_path: Path, label: str) -> None:
@@ -308,10 +1380,8 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         raise SystemExit("semantic pass requires c_oracle.toolchain_status=C_ORACLE_GENERATED")
     require_status(reports["rust_report"], "rust_report", {"passed"})
     require_status(reports["schema_diff"], "schema_diff", {"passed"})
-    if reports["schema_diff"].get("first_mismatch") is not None:
-        raise SystemExit("semantic pass requires schema_diff.first_mismatch=null")
-    if not mutation_detected(reports["negative_diff"]):
-        raise SystemExit("semantic pass requires negative_diff mutation_detected/detected=true")
+    schema_compared_fields = validate_passed_schema_diff_report(reports["schema_diff"], slice_spec)
+    validate_passed_negative_diff_report(reports["negative_diff"], schema_compared_fields)
     require_status(reports["unsafe_scan"], "unsafe_scan", {"passed"})
     require_status(reports["unsafe_ledger"], "unsafe_ledger", {"passed"})
     require_status(reports["final_verification"], "final_verification", {"passed"})
@@ -435,10 +1505,25 @@ def load_ref(evidence: dict[str, Any], key: str) -> dict[str, Any]:
     path = ref.get("path")
     if not path:
         raise SystemExit(f"semantic pass requires manifest evidence.{key}.path")
-    resolved = REPO_ROOT / path
+    status = ref.get("status")
+    if not isinstance(status, str) or not status:
+        raise SystemExit(f"semantic pass requires manifest evidence.{key}.status")
+    ref_sha = ref.get("sha256")
+    if not isinstance(ref_sha, str) or not ref_sha:
+        raise SystemExit(f"semantic pass requires manifest evidence.{key}.sha256")
+    resolved = resolve_ref_path(str(path))
     if not resolved.exists():
         raise SystemExit(f"semantic pass requires existing evidence.{key}: {resolved}")
-    return load_json(resolved)
+    actual_sha = sha256(resolved)
+    if ref_sha != actual_sha:
+        raise SystemExit(f"semantic pass manifest evidence.{key}.sha256 mismatch: {ref_sha} != {actual_sha}")
+    payload = load_json(resolved)
+    payload_status = payload.get("status")
+    if not isinstance(payload_status, str) or not payload_status:
+        raise SystemExit(f"semantic pass manifest evidence.{key} payload status missing")
+    if status != payload_status:
+        raise SystemExit(f"semantic pass manifest evidence.{key}.status mismatch: {status} != {payload_status}")
+    return payload
 
 
 def require_status(report: dict[str, Any], label: str, allowed: set[str]) -> None:
@@ -460,12 +1545,53 @@ def fixture_path_from_spec(slice_spec: dict[str, Any]) -> str:
     return fixture.get("path") or fixture.get("input") or "unknown-fixture"
 
 
+def behavior_fields_from_spec(slice_spec: dict[str, Any]) -> list[str]:
+    fixture = slice_spec.get("fixture_contract", {})
+    fields = fixture.get("observable_outputs") or fixture.get("behavior_fields") or []
+    return [str(item) for item in fields]
+
+
+def c_function_prototype(slice_spec: dict[str, Any]) -> str:
+    function_name = slice_spec.get("function_name") or ""
+    signatures = slice_spec.get("c_boundary", {}).get("signatures", [])
+    signature = next(
+        (item for item in signatures if isinstance(item, dict) and item.get("function") == function_name),
+        {},
+    )
+    return_type = signature.get("return_type") or "int"
+    parameters = signature.get("parameters") or []
+    if not parameters:
+        parameter_text = "void"
+    else:
+        parameter_text = ", ".join(c_parameter_declaration(item) for item in parameters if isinstance(item, dict))
+    return f"{return_type} {function_name}({parameter_text});"
+
+
+def c_parameter_declaration(parameter: dict[str, Any]) -> str:
+    name = str(parameter.get("name") or "arg")
+    c_type = str(parameter.get("c_type") or "int").strip()
+    if c_type.endswith("*"):
+        return f"{c_type[:-1].rstrip()} *{name}"
+    return f"{c_type} {name}"
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def sha256_json(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def artifact_cache_identity(artifact: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": artifact.get("status", "unknown"),
+        "sha256": sha256_json(artifact),
+    }
 
 
 def resolve_slice_spec(target_id: str, slice_id: str) -> Path:

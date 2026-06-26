@@ -1,0 +1,50 @@
+{
+  "level": "L0",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "scalar_only",
+      "weight": "low"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+      "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
+      "sha256": "64068809069cefcbd7d0f9e72d0ca3f9cdc352ceafcaa8c61f14f02c1900e904",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
+      "sha256": "fda47cef7500657c9a110d3f5d046711093a0136584bc5b30255967507ee3e7e",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
+      "sha256": "92697a933a0caf6a8b0ad41b19f217be8ec2d0d0c5008fc29d13079058ae906a",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L0-dev"
+}

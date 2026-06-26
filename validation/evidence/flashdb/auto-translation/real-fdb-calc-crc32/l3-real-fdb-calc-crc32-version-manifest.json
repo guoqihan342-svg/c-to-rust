@@ -9,10 +9,15 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "2bd8a664a416f008a66d8206a1075ff3cafea4d6b7502ced86d977d55f7e5d5b",
+    "build_profile_hash": "4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
     "c2rust_baseline_identity": {
-      "sha256": "d43699d0fc806f9042338d2b8214003e430e48bfced591281a9b9fb6589c2748",
+      "sha256": "847f7c1195d2614bcbae584f7c82d5ff98b78f0e915bd7e9fef1f434458530f5",
       "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+      "status": "draft"
     },
     "cache_input_fields": [
       "source_commit",
@@ -29,9 +34,11 @@
       "alias_gate_identity",
       "c2rust_baseline_identity",
       "route_decision_identity",
-      "validation_profile_identity"
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity"
     ],
-    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
@@ -40,23 +47,30 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "4047a1fab627022a213baedd70ba9e2863543468364b7651522ffa5a98042e28",
+        "sha256": "99fefd2d17010b2dddb2f3ac8cf891e6c741aa14b1098cccf114fd98d8f7f754",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "2c3c81d2008faa7ffb4ab0e273bc5721a2c36fbc0549046220be1c127c94b7b2",
+        "sha256": "4465a3d4e26d01b32769d7959affcacb315e5fa1ea8adc19ea30a051213813ba",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "76dd956588a6c358b5fe6db1a4cf09b85c5b770a54510431d7861a16f4e70f32",
+        "sha256": "37c70fbb4edef7b0c1332bb924922adbda8ddb652533e742eab68ee4b6bb6a20",
         "status": "blocked"
       }
     },
     "fixture_hash": "real-fdb-calc-crc32-fixture",
+    "global_dependency_identity": {
+      "count": 1,
+      "names": [
+        "crc32_table"
+      ],
+      "sha256": "0dfaf26b01a726259136893391e1dabfb6cfbb2c3ef5625d3b90f7925e256a1f"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
@@ -78,7 +92,7 @@
       "summary"
     ],
     "route_decision_identity": {
-      "sha256": "54844b8f922d4e92ac8f7fcbecf42375be7a97046b5784a3cf6b72a48749d0b7",
+      "sha256": "1b141bec98a8f6a26f1486d4d041024bacd630774082964ba673db0ca7d98717",
       "status": "refused"
     },
     "schema_version": 1,
@@ -91,7 +105,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-calc-crc32",
-    "slice_spec_sha256": "3fbbfb1a1831ecf5c21c13558ed0213ff11a2bea96a4cc0fb80e048130a01182",
+    "slice_spec_sha256": "f0e9ea328a7338071a0a560050ddd2994c51858af9f2fe2fef702d0dc28397a5",
     "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -103,14 +117,14 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_manifest_sha256": "61381f092cf486ac4d8ca152e2102287224b57e7575c1cb0db559aa1f129e595",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "53eb309749d6b0449ce73a61fd0addefbb9edb95e47a5e95ee5ba7d3cfd34a3c",
+      "sha256": "ff448372f9b57e492a30fea105be8fd9a3baa9a6a4579d1e55ed452778f43d85",
       "status": "blocked"
     }
   },
-  "repo_commit": "075611719613bb0c54b0082de791f42c5a94b77f",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-calc-crc32",

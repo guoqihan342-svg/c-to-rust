@@ -40,23 +40,49 @@
     "risk_count": 0,
     "risk_level": "none"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+    "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+    "status": "skipped"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 0,
+    "semantics_verified": false,
+    "status": "not_applicable",
+    "stub_kind": "none"
+  },
   "fixture": {
     "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
     "sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
+    "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+    "status": "recorded"
+  },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
   "schema_diff_status": "passed",
   "schema_version": 1,
   "semantic_pass": true,
+  "skipped_gates": [],
   "slice_id": "call-expression",
   "source_commit": "demo-call-expression-20260625",
   "status": "passed",
   "target_id": "demo",
   "toolchain_status": "C_ORACLE_GENERATED",
   "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
   "version_config_status": "recorded"
 }

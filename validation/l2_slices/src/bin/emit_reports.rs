@@ -6,8 +6,8 @@ use std::{
 
 use c_to_rust_l2_slices::{
     add_i32_pair_ptr_arith, call_expression_chain, copy_i32_ptr_arith, external_direct_callee,
-    libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer, sum_i32_ptr_arith, zlib_adler32,
-    zstd_xxh32,
+    fdb_calc_crc32, libuv_ip4_addr, sqlite_varint, store_add_one, sum_i32_buffer,
+    sum_i32_ptr_arith, zlib_adler32, zstd_xxh32,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -182,6 +182,29 @@ struct AddI32PairPtrArithOracleCase {
     alias_matrix: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FdbCalcCrc32OracleReport {
+    level: String,
+    target_id: String,
+    slice_id: String,
+    source_commit: String,
+    source_boundary: Value,
+    compared_fields: Vec<String>,
+    case_count: usize,
+    cases: Vec<FdbCalcCrc32OracleCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FdbCalcCrc32OracleCase {
+    id: String,
+    coverage_kind: String,
+    crc: u32,
+    buf: Vec<u8>,
+    size: usize,
+    return_code: u32,
+    status: String,
+}
+
 #[derive(Debug)]
 struct SliceResult {
     slice_id: &'static str,
@@ -253,6 +276,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         emit_copy_i32_ptr_arith(&fixtures_dir, repo_root)?,
         emit_add_i32_pair_ptr_arith(&fixtures_dir, repo_root)?,
     ];
+    emit_real_fdb_calc_crc32(&fixtures_dir, repo_root)?;
     let safety = emit_safety_evidence(&crate_dir, &evidence_dir)?;
     emit_libuv_safety_evidence(repo_root, &safety)?;
     emit_store_add_one_safety_evidence(repo_root, &safety)?;
@@ -358,6 +382,132 @@ fn main() -> Result<(), Box<dyn Error>> {
     emit_summary(&evidence_dir, &slices, &safety, &negative_diffs)?;
 
     Ok(())
+}
+
+fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(), Box<dyn Error>> {
+    let fixture_path = fixtures_dir.join("real-fdb-calc-crc32.json");
+    let report: FdbCalcCrc32OracleReport = read_json(&fixture_path)?;
+    if report.case_count != report.cases.len() {
+        return Err(format!(
+            "real-fdb-calc-crc32 case_count {} does not match {} fixture cases",
+            report.case_count,
+            report.cases.len()
+        )
+        .into());
+    }
+
+    let evidence_dir = repo_root
+        .join("validation")
+        .join("evidence")
+        .join("flashdb");
+    fs::create_dir_all(&evidence_dir)?;
+
+    let mut rust_cases = Vec::with_capacity(report.cases.len());
+    let mut first_mismatch = None;
+    for case in &report.cases {
+        if case.buf.len() != case.size {
+            return Err(format!(
+                "real-fdb-calc-crc32 case {} size {} does not match {} bytes",
+                case.id,
+                case.size,
+                case.buf.len()
+            )
+            .into());
+        }
+        let actual = fdb_calc_crc32::fdb_calc_crc32(case.crc, &case.buf);
+        compare_field(
+            &mut first_mismatch,
+            &case.id,
+            "return_code",
+            json!(case.return_code),
+            json!(actual),
+        );
+        rust_cases.push(json!({
+            "id": case.id,
+            "coverage_kind": case.coverage_kind,
+            "crc": case.crc,
+            "buf": case.buf,
+            "size": case.size,
+            "return_code": actual,
+            "status": case.status
+        }));
+    }
+
+    let status = status_from_mismatch(&first_mismatch);
+    let prefix = "l3-real-fdb-calc-crc32";
+    write_json(
+        &evidence_dir.join(format!("{prefix}-rust-report.json")),
+        &json!({
+            "schema_version": 1,
+            "level": report.level,
+            "target_id": report.target_id,
+            "slice_id": report.slice_id,
+            "source_commit": report.source_commit,
+            "source_boundary": report.source_boundary,
+            "rust_module_path": "validation/l2_slices/src/fdb_calc_crc32.rs",
+            "fixture": relative_path(&fixture_path),
+            "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+            "status": status,
+            "case_count": report.case_count,
+            "cases": rust_cases
+        }),
+    )?;
+    write_json(
+        &evidence_dir.join(format!("{prefix}-diff.json")),
+        &json!({
+            "schema_version": 1,
+            "level": report.level,
+            "target_id": report.target_id,
+            "slice_id": report.slice_id,
+            "source_commit": report.source_commit,
+            "status": status,
+            "case_count": report.case_count,
+            "compared_fields": report.compared_fields,
+            "first_mismatch": first_mismatch
+        }),
+    )?;
+    write_real_fdb_calc_crc32_negative_diff(&report, &evidence_dir)?;
+
+    Ok(())
+}
+
+fn write_real_fdb_calc_crc32_negative_diff(
+    report: &FdbCalcCrc32OracleReport,
+    evidence_dir: &Path,
+) -> Result<bool, Box<dyn Error>> {
+    let case = report
+        .cases
+        .first()
+        .ok_or("real-fdb-calc-crc32 fixture must include at least one case")?;
+    let actual = fdb_calc_crc32::fdb_calc_crc32(case.crc, &case.buf);
+    let mutated_return_code = case.return_code.wrapping_add(1);
+    let detected = mutated_return_code != actual;
+    write_json(
+        &evidence_dir.join("l3-real-fdb-calc-crc32-negative-diff.json"),
+        &json!({
+            "schema_version": 1,
+            "level": report.level,
+            "target_id": report.target_id,
+            "slice_id": report.slice_id,
+            "source_commit": report.source_commit,
+            "status": "expected_failed",
+            "expected_failure": true,
+            "mutation_detected": detected,
+            "mutation": "first oracle case return_code is changed by wrapping +1",
+            "case_id": case.id,
+            "first_mismatch": if detected {
+                json!({
+                    "case_id": case.id,
+                    "field": "return_code",
+                    "mutated_c_value": mutated_return_code,
+                    "rust_value": actual
+                })
+            } else {
+                Value::Null
+            }
+        }),
+    )?;
+    Ok(detected)
 }
 
 fn emit_store_add_one(

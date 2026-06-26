@@ -4,12 +4,29 @@
     "sha256": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+    "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+    "status": "skipped"
+  },
   "first_party_non_test_unsafe_count": 0,
   "first_party_non_test_unsafe_ratio": 0.0,
   "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
+    "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "call-expression",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+    "status": "passed"
+  }
 }

@@ -43,6 +43,15 @@
       "risk_level": "none"
     },
     "build_profile_hash": "7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "c2rust_baseline_identity": {
+      "sha256": "f9781ae1b6cc5585d414e0afb99900f6c2dd16a5ce97109c99b53d0f640e5e15",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-harness-draft.c",
+      "sha256": "98d45a95d54ce6b6cef5f23f528f6f212c000b70527abd495b43515d30633d00",
+      "status": "draft"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
@@ -55,21 +64,53 @@
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity"
     ],
-    "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/demo-call-expression.json",
       "--accept-existing-evidence"
     ],
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+        "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L0",
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
+        "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
+        "profile": "L0-dev",
+        "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+        "status": "passed"
+      }
+    },
     "fixture_hash": "call-expression-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
       "cfg",
       "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
       "rust_draft",
       "patch_plan",
       "ai_candidate",
@@ -79,8 +120,13 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
+      "auto_translation_manifest",
       "summary"
     ],
+    "route_decision_identity": {
+      "sha256": "0420e3adca6cc13339a4a39702c51a9b765f2030bb45b6f57b43c506d4de44a5",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
@@ -91,11 +137,11 @@
       "type_map": 1
     },
     "slice_id": "call-expression",
-    "slice_spec_sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "slice_spec_sha256": "a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
     "source_commit": "demo-call-expression-20260625",
     "source_file_hashes": {
       "validation/l2_slices/fixtures/call-expression-c-oracle.json": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
-      "validation/l2_slices/tools/generate_call_expression_oracle.py": "34cce4a9f955180b729fea7b5ac1fe06a8bab71761f895cd0bdc2307da08d15e"
+      "validation/l2_slices/tools/generate_call_expression_oracle.py": "b74490353fc87ae38a98c2dfe6dadbc30bfb650391d6fd1316db94c7141ef28d"
     },
     "target_id": "demo",
     "tool_versions": {
@@ -104,10 +150,14 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_manifest_sha256": "61381f092cf486ac4d8ca152e2102287224b57e7575c1cb0db559aa1f129e595",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "c7363c575867d3fc3cacf72c7e8bec9064f01e866720d1cce3613ae8fa605ace",
+      "status": "passed"
+    }
   },
-  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

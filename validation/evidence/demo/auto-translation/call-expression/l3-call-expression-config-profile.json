@@ -73,7 +73,7 @@
     "No signed overflow equivalence beyond the committed safe fixture domain."
   ],
   "profile_id": "demo-call-expression-wsl-gcc",
-  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

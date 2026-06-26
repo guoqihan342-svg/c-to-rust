@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -33,6 +34,8 @@ CACHE_INPUT_FIELDS = [
     "c2rust_baseline_identity",
     "route_decision_identity",
     "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
 ]
 CACHE_INVALIDATED_ARTIFACTS = [
     "context_pack",
@@ -80,13 +83,14 @@ def main() -> int:
     normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
+    mark_route_refused_candidate_artifacts(spec, evidence_dir, route_decision)
     oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
-    replay = generate_rust_replay_test_draft(spec, evidence_dir)
+    replay = generate_rust_replay_test_draft(spec, evidence_dir, route_decision)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
     accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
     if accepted is not None:
         oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
-        replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted)
+        replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted, route_decision)
     validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
@@ -97,6 +101,7 @@ def main() -> int:
         c2rust_baseline=c2rust_baseline,
         route_decision=route_decision,
         validation_profile=validation_profile,
+        oracle=oracle,
         accept_existing_evidence=args.accept_existing_evidence,
     )
     manifest = emit_manifest(
@@ -569,6 +574,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
             "mappings": mappings,
             "uncertainties": uncertainties,
             "unsupported_nodes": [],
+            "global_dependencies": global_dependency_requirements(spec),
             "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
         },
     )
@@ -812,6 +818,43 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     write_context_pack(spec, slice_spec_path, evidence_dir, call_expressions, external_callee_context)
 
 
+def mark_route_refused_candidate_artifacts(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+) -> None:
+    if not route_refuses_candidate_generation(route_decision):
+        return
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    if plan_path.exists():
+        plan = read_json(plan_path)
+        for artifact in plan.get("generated_artifacts", []):
+            artifact["status"] = "blocked"
+        write_json(plan_path, plan)
+
+    events_path = evidence_dir / f"{prefix}-auto-translation-events.jsonl"
+    if not events_path.exists():
+        return
+    events = [
+        json.loads(line)
+        for line in events_path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ]
+    for event in events:
+        if event.get("event_kind") not in {"rust_draft_generated", "run_completed"}:
+            continue
+        event["status"] = "blocked"
+        if event.get("event_kind") == "rust_draft_generated":
+            event["message"] = "Route refused candidate generation; Rust draft is blocked diagnostic output."
+        else:
+            event["message"] = "Route refused candidate generation; semantic acceptance gates remain blocked."
+        for ref in event.get("artifact_refs", []):
+            ref["status"] = "blocked"
+    write_text(events_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
+
+
 def pointer_node_kind(node: dict[str, Any]) -> str:
     if "bounded_pointer_arithmetic_output_write" in node.get("boundary_decisions", []):
         return "buffer"
@@ -969,28 +1012,75 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
     fixture = spec.get("fixture_contract", {})
     c_path = evidence_dir / f"l3-{slice_id}-c-oracle-harness-draft.c"
     report_path = evidence_dir / f"l3-{slice_id}-c-oracle-status.json"
+    global_requirements = global_dependency_requirements(spec)
+    global_comments = "".join(
+        f"/* global dependency: {item['name']} ({item['definition_status']}) from {item.get('source_span', {}).get('file', 'unknown')} */\n"
+        for item in global_requirements
+    )
+    source_files = spec.get("c_boundary", {}).get("files", [])
+    source_comments = "".join(
+        f"/* source file: {item.get('path', 'unknown')} (sha256: {item.get('sha256', 'unknown')}) */\n"
+        for item in source_files
+        if isinstance(item, dict)
+    )
+    prototype = c_function_prototype(spec)
+    fixture_path_text = fixture_path(spec)
+    fixture_binding = oracle_fixture_binding(spec)
+    fixture_comments = oracle_fixture_comments(fixture_binding)
+    fixture_execution = oracle_fixture_execution_source(spec, fixture_binding)
+    compile_command = c_oracle_compile_command(spec, c_path, evidence_dir)
+    fixture_execution_statements = fixture_execution["statements"]
+    if not fixture_execution_statements:
+        fixture_execution_statements = (
+            "  /* TODO: load fixture values, call the target function, and compare observable outputs. */\n"
+        )
     source = (
         "/* Auto-generated C oracle harness draft. */\n"
         "/* Review and compile against the pinned L1 source tree before using as oracle evidence. */\n"
+        "/* Draft only: fixture values and oracle assertions must be reviewed before acceptance. */\n"
         "#include <stdint.h>\n"
+        "#include <stddef.h>\n"
         "#include <stdio.h>\n\n"
         f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
         f"/* function: {function_name} */\n"
+        f"/* fixture input: {fixture_path_text} */\n"
+        f"{fixture_comments}"
+        f"{source_comments}"
+        f"{global_comments}"
+        f"{prototype}\n\n"
+        f"{fixture_execution['declarations']}"
         "int main(void) {\n"
         f"  puts(\"oracle harness draft for {function_name}\");\n"
+        f"  puts(\"fixture input: {fixture_path_text}\");\n"
+        f"{fixture_execution_statements}"
         "  return 0;\n"
         "}\n"
     )
     write_text(c_path, source)
+    harness_draft_ref = evidence_ref(c_path, "draft")
+    compile_execution = c_oracle_compile_execution(compile_command, evidence_dir, skip, spec, fixture_binding)
     status = "SKIPPED_LOCAL_NO_C_TOOLCHAIN" if skip else "DRAFT_GENERATED"
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
         "status": status,
+        "toolchain_status": compile_execution["toolchain_status_after_attempt"],
         "semantic_pass": False,
         "harness_draft": rel(c_path),
-        "fixture": fixture.get("input"),
+        "harness_draft_ref": harness_draft_ref,
+        "fixture": fixture_path_text,
+        "fixture_binding": fixture_binding,
+        "harness_contract": {
+            "function_prototype": prototype,
+            "fixture": fixture_binding,
+            "source_files": source_files,
+            "global_dependencies": global_requirements,
+            "status": "draft_requires_review",
+        },
+        "compile_command_draft": compile_command,
+        "compile_execution": compile_execution,
+        "global_linkage_requirements": global_requirements,
         "required_final_status": "C_ORACLE_GENERATED",
         "boundary": "Draft generation is not oracle success.",
     }
@@ -998,23 +1088,918 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
     return payload
 
 
-def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+def oracle_fixture_binding(spec: dict[str, Any]) -> dict[str, Any]:
+    fixture = spec.get("fixture_contract", {})
+    cases = fixture.get("cases") or []
+    path = fixture_path(spec)
+    case_bindings = oracle_fixture_case_bindings(spec)
+    if not cases:
+        binding_status = "missing_or_empty"
+    else:
+        binding_status = "declared_not_executed"
+    return {
+        "path": path,
+        "case_count": len(cases),
+        "binding_status": binding_status,
+        "behavior_fields": behavior_fields(spec),
+        "observable_outputs": behavior_fields(spec),
+        "case_bindings": case_bindings,
+        "expected_output_status": fixture_expected_output_status(case_bindings),
+    }
+
+
+def oracle_fixture_case_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    fixture = spec.get("fixture_contract", {})
+    fields = behavior_fields(spec)
+    bindings: list[dict[str, Any]] = []
+    for index, raw_case in enumerate(fixture.get("cases") or []):
+        case = raw_case if isinstance(raw_case, dict) else {}
+        expected_outputs = case.get("expected_outputs")
+        if expected_outputs is None:
+            expected_outputs = case.get("expected", {})
+        if not isinstance(expected_outputs, dict):
+            expected_outputs = {}
+        if not expected_outputs:
+            expected_outputs = expected_outputs_from_fixture_refs(spec, case)
+        normalized_expected = {str(key): expected_outputs[key] for key in sorted(expected_outputs)}
+        missing_outputs = [field for field in fields if field not in normalized_expected]
+        if normalized_expected and not missing_outputs:
+            binding_status = "declared_not_executed"
+        elif normalized_expected:
+            binding_status = "partial_expected_outputs"
+        elif case.get("expected_ref"):
+            binding_status = "expected_ref_only"
+        else:
+            binding_status = "missing_expected_outputs"
+        bindings.append(
+            {
+                "id": str(case.get("id") or f"case-{index}"),
+                "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
+                "expected_ref": str(case.get("expected_ref") or "missing"),
+                "expected_outputs": normalized_expected,
+                "observable_outputs": fields,
+                "missing_observable_outputs": missing_outputs,
+                "binding_status": binding_status,
+            }
+        )
+    return bindings
+
+
+def expected_outputs_from_fixture_refs(spec: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
+    fields = behavior_fields(spec)
+    if not fields:
+        return {}
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case.get("input_ref") or "")
+    candidate_refs = [case.get("expected_ref"), fixture.get("path") or fixture.get("input")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if not isinstance(case_payload, dict):
+            continue
+        return {field: case_payload[field] for field in fields if field in case_payload}
+    return {}
+
+
+def load_fixture_ref_payload(ref: Any) -> Any | None:
+    if not ref:
+        return None
+    ref_text = str(ref)
+    if ref_text == "inline" or ref_text.startswith("cases["):
+        return None
+    path_text = ref_text.split("#", 1)[0]
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = REPO_ROOT / path_text
+    if not path.exists() or not path.is_file():
+        return None
+    return read_json(path)
+
+
+def fixture_case_payload(payload: Any, case_ref: str) -> Any | None:
+    index = case_ref_index(case_ref)
+    if index is None:
+        return None
+    cases = payload.get("cases") if isinstance(payload, dict) else payload
+    if not isinstance(cases, list) or index < 0 or index >= len(cases):
+        return None
+    return cases[index]
+
+
+def case_ref_index(case_ref: str) -> int | None:
+    match = re.fullmatch(r"cases\[(\d+)\]", str(case_ref))
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def fixture_expected_output_status(case_bindings: list[dict[str, Any]]) -> str:
+    if not case_bindings:
+        return "missing_or_empty"
+    statuses = {str(item.get("binding_status")) for item in case_bindings}
+    if statuses == {"declared_not_executed"}:
+        return "declared_not_executed"
+    if "missing_expected_outputs" in statuses:
+        return "missing_expected_outputs"
+    if "partial_expected_outputs" in statuses:
+        return "partial_expected_outputs"
+    return "expected_ref_only"
+
+
+def oracle_fixture_comments(fixture_binding: dict[str, Any]) -> str:
+    outputs = ", ".join(str(item) for item in fixture_binding.get("observable_outputs", [])) or "none"
+    lines = [
+        f"/* fixture cases: {fixture_binding.get('case_count', 0)} */\n",
+        f"/* observable outputs: {outputs} */\n",
+    ]
+    for case in fixture_binding.get("case_bindings", []):
+        expected_outputs = json.dumps(case.get("expected_outputs", {}), sort_keys=True)
+        lines.append(
+            "/* fixture case: "
+            f"{case.get('id')} input_ref={case.get('input_ref')} "
+            f"expected_ref={case.get('expected_ref')} expected_outputs={expected_outputs} */\n"
+        )
+    return "".join(lines)
+
+
+def oracle_fixture_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    signature = c_function_signature(spec)
+    if not c_oracle_signature_supports_return_code_call(spec, signature):
+        return {"declarations": "", "statements": ""}
+
+    declarations: list[str] = []
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_case_execution_source(spec, signature, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this draft call generator. */\n"
+            )
+            continue
+        declarations.append(case_source["declarations"])
+        statements.append(case_source["statements"])
+    return {"declarations": "".join(declarations), "statements": "".join(statements)}
+
+
+def c_oracle_signature_supports_return_code_call(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+) -> bool:
+    if signature.get("return_type") != "uint32_t":
+        return False
+    if behavior_fields(spec) != ["return_code"]:
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 3:
+        return False
+    expected = [
+        ("crc", "uint32_t"),
+        ("buf", "const void *"),
+        ("size", "size_t"),
+    ]
+    actual = [
+        (str(item.get("name") or ""), normalize_c_type(str(item.get("c_type") or "")))
+        for item in parameters
+    ]
+    return actual == expected
+
+
+def c_oracle_case_execution_source(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    if not is_uint32_value(expected_return):
+        return None
+
+    crc = case_payload.get("crc")
+    buf = case_payload.get("buf")
+    size = case_payload.get("size")
+    if not is_uint32_value(crc) or not is_size_value(size) or not is_byte_list(buf):
+        return None
+    if int(size) != len(buf):
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    buffer_name = f"{case_ident}_buf"
+    actual_name = f"actual_{case_ident}_return_code"
+    buffer_values = c_byte_array_initializer(buf)
+    expected_literal = c_integer_literal("uint32_t", int(expected_return))
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    argument_expressions = [
+        c_integer_literal(str(parameters[0].get("c_type") or "uint32_t"), int(crc)),
+        buffer_name,
+        c_integer_literal(str(parameters[2].get("c_type") or "size_t"), int(size)),
+    ]
+    declarations = f"static const uint8_t {buffer_name}[] = {{ {buffer_values} }};\n\n"
+    statements = (
+        f"  uint32_t {actual_name} = {function_name}({', '.join(argument_expressions)});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %llu\n')}, "
+        f"(unsigned long long){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": declarations, "statements": statements}
+
+
+def oracle_fixture_input_payload(spec: dict[str, Any], case_binding: dict[str, Any]) -> Any | None:
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case_binding.get("input_ref") or "")
+    candidate_refs = [fixture.get("path") or fixture.get("input"), case_binding.get("expected_ref")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if isinstance(case_payload, dict):
+            return case_payload
+    inline_case = fixture_case_payload({"cases": fixture.get("cases", [])}, input_ref)
+    if isinstance(inline_case, dict):
+        return inline_case
+    return None
+
+
+def c_function_signature(spec: dict[str, Any]) -> dict[str, Any]:
+    function_name = required_str(spec, "function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    return next(
+        (item for item in signatures if isinstance(item, dict) and item.get("function") == function_name),
+        {},
+    )
+
+
+def c_function_prototype(spec: dict[str, Any]) -> str:
+    function_name = required_str(spec, "function_name")
+    signature = c_function_signature(spec)
+    return_type = signature.get("return_type") or "int"
+    parameters = signature.get("parameters") or []
+    if not parameters:
+        parameter_text = "void"
+    else:
+        parameter_text = ", ".join(c_parameter_declaration(item) for item in parameters if isinstance(item, dict))
+    return f"{return_type} {function_name}({parameter_text});"
+
+
+def c_parameter_declaration(parameter: dict[str, Any]) -> str:
+    name = str(parameter.get("name") or "arg")
+    c_type = str(parameter.get("c_type") or "int").strip()
+    if c_type.endswith("*"):
+        return f"{c_type[:-1].rstrip()} *{name}"
+    return f"{c_type} {name}"
+
+
+def normalize_c_type(c_type: str) -> str:
+    text = str(c_type).strip()
+    text = text.replace("*", " * ")
+    return " ".join(text.split())
+
+
+def c_safe_ident(text: str) -> str:
+    identifier = "".join(ch if (ch.isascii() and (ch.isalnum() or ch == "_")) else "_" for ch in str(text))
+    if not identifier:
+        return "case"
+    if identifier[0].isdigit():
+        return f"case_{identifier}"
+    return identifier
+
+
+def is_uint32_value(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= 0xFFFFFFFF
+
+
+def is_size_value(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def is_byte_list(value: Any) -> bool:
+    return isinstance(value, list) and all(type(item) is int and 0 <= item <= 0xFF for item in value)
+
+
+def c_byte_array_initializer(values: list[int]) -> str:
+    if not values:
+        return "0"
+    return ", ".join(f"{item}u" for item in values)
+
+
+def c_integer_literal(c_type: str, value: int) -> str:
+    normalized = normalize_c_type(c_type)
+    suffix = "u" if value >= 0 else ""
+    return f"({normalized}){value}{suffix}"
+
+
+def c_string_literal(value: str) -> str:
+    return json.dumps(str(value))
+
+
+def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_dir: Path) -> dict[str, Any]:
+    source_root = compile_source_root(spec)
+    resolved_include_paths = [
+        resolve_source_root_path(source_root, path)
+        for path in spec.get("build_profile", {}).get("include_paths", [])
+    ]
+    defines = [str(item) for item in spec.get("build_profile", {}).get("defines", [])]
+    link_source_files = compile_link_source_files(spec, source_root)
+    define_args = [f"-D{item}" for item in defines]
+    include_args = [f"-I{path}" for path in resolved_include_paths]
+    link_args = [item["resolved_path"] for item in link_source_files]
+    output_name = harness_path.with_suffix(".exe").name
+    return {
+        "working_directory": rel(evidence_dir),
+        "source_root": source_root,
+        "defines": defines,
+        "resolved_include_paths": resolved_include_paths,
+        "link_source_files": link_source_files,
+        "link_strategy": c_oracle_link_strategy(spec),
+        "argv": [
+            "cc",
+            "-std=c99",
+            *define_args,
+            *include_args,
+            harness_path.name,
+            *link_args,
+            "-o",
+            output_name,
+        ],
+        "status": "draft_not_executed",
+    }
+
+
+def c_oracle_compile_execution(
+    compile_command: dict[str, Any],
+    evidence_dir: Path,
+    skip: bool,
+    spec: dict[str, Any] | None = None,
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = {
+        "argv": compile_command.get("argv", []),
+        "working_directory": rel(evidence_dir),
+        "semantic_pass": False,
+    }
+    if skip:
+        return {
+            **base,
+            "status": "skipped_by_flag",
+            "attempted": False,
+            "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
+        }
+
+    argv = [str(item) for item in compile_command.get("argv", [])]
+    if not argv:
+        return {
+            **base,
+            "status": "missing_argv",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile command argv is missing."],
+        }
+
+    compiler_resolution = resolve_c_compiler(argv[0])
+    compiler_path = compiler_resolution["path"]
+    if compiler_path is None:
+        return {
+            **base,
+            "status": "compiler_not_found",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "diagnostics": [
+                f"C compiler not found on PATH: {argv[0]}",
+                f"Fallback C compilers checked: {', '.join(compiler_resolution['candidates'])}",
+            ],
+        }
+
+    resolved_argv: list[str] = []
+    try:
+        resolved_argv = c_oracle_compile_execution_argv(argv, evidence_dir, compiler_resolution)
+        result = subprocess.run(
+            resolved_argv,
+            cwd=None if compiler_resolution.get("adapter") == "wsl" else evidence_dir,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            **base,
+            "status": "compile_timeout",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": truncate_text(exc.stdout or ""),
+            "stderr": truncate_text(exc.stderr or "compile timed out after 30 seconds"),
+            "diagnostics": ["C oracle compile command timed out; no oracle evidence accepted."],
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            **base,
+            "status": "compile_failed",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": "",
+            "stderr": truncate_text(str(exc)),
+            "diagnostics": ["C oracle compile command could not start; no oracle evidence accepted."],
+        }
+
+    succeeded = result.returncode == 0
+    payload = {
+        **base,
+        "status": "compile_succeeded_not_oracle" if succeeded else "compile_failed",
+        "attempted": True,
+        "compiler_path": compiler_path,
+        "compiler_name": compiler_resolution["name"],
+        "requested_compiler": argv[0],
+        "compiler_candidates": compiler_resolution["candidates"],
+        "toolchain_adapter": compiler_resolution["adapter"],
+        "execution_argv": resolved_argv,
+        "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE" if succeeded else "COMPILE_FAILED",
+        "returncode": result.returncode,
+        "stdout": truncate_text(result.stdout),
+        "stderr": truncate_text(result.stderr),
+        "diagnostics": [
+            "C oracle compile command succeeded, but execution/diff gates are still required."
+            if succeeded
+            else "C oracle compile command failed; no oracle evidence accepted."
+        ],
+    }
+    if succeeded:
+        payload["harness_execution"] = c_oracle_harness_execution(
+            argv, evidence_dir, spec, fixture_binding, compiler_resolution
+        )
+    return payload
+
+
+def resolve_c_compiler(requested: str) -> dict[str, Any]:
+    candidates = [requested]
+    requested_name = Path(requested).name.lower()
+    if requested_name in {"cc", "cc.exe"}:
+        candidates.extend(["gcc", "clang"])
+
+    seen: set[str] = set()
+    ordered_candidates = []
+    for candidate in candidates:
+        if candidate not in seen:
+            ordered_candidates.append(candidate)
+            seen.add(candidate)
+
+    for candidate in ordered_candidates:
+        path = shutil.which(candidate)
+        if path is not None:
+            return {
+                "path": path,
+                "name": candidate,
+                "candidates": ordered_candidates,
+                "adapter": "local",
+                "launcher": None,
+            }
+
+    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+    if wsl is not None:
+        for candidate in ordered_candidates:
+            path = wsl_command_output(wsl, f"command -v {shlex.quote(candidate)}")
+            if path:
+                return {
+                    "path": path,
+                    "name": candidate,
+                    "candidates": ordered_candidates,
+                    "adapter": "wsl",
+                    "launcher": wsl,
+                }
+    return {
+        "path": None,
+        "name": None,
+        "candidates": ordered_candidates,
+        "adapter": "local",
+        "launcher": None,
+    }
+
+
+def c_oracle_compile_execution_argv(
+    argv: list[str],
+    evidence_dir: Path,
+    compiler_resolution: dict[str, Any],
+) -> list[str]:
+    compiler_path = str(compiler_resolution["path"])
+    if compiler_resolution.get("adapter") != "wsl":
+        return [compiler_path, *argv[1:]]
+
+    launcher = str(compiler_resolution["launcher"])
+    wsl_cwd = wsl_path(evidence_dir, launcher)
+    converted_args = [compiler_path]
+    for arg in argv[1:]:
+        converted_args.append(wsl_compile_arg(arg, launcher))
+    shell_command = f"cd {shlex.quote(wsl_cwd)} && {' '.join(shlex.quote(item) for item in converted_args)}"
+    return [launcher, "-e", "sh", "-lc", shell_command]
+
+
+def wsl_compile_arg(arg: str, launcher: str) -> str:
+    if arg.startswith("-I") and len(arg) > 2:
+        return "-I" + wsl_maybe_path(arg[2:], launcher)
+    return wsl_maybe_path(arg, launcher)
+
+
+def wsl_maybe_path(value: str, launcher: str) -> str:
+    if path_is_absolute(value):
+        return wsl_path(Path(value), launcher)
+    return value
+
+
+def wsl_path(path: Path, launcher: str) -> str:
+    result = subprocess.run(
+        [launcher, "-e", "wslpath", "-a", str(path)],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(truncate_text(result.stderr or result.stdout or f"wslpath failed for {path}"))
+    converted = result.stdout.strip()
+    if not converted:
+        raise RuntimeError(f"wslpath returned no path for {path}")
+    return converted
+
+
+def wsl_command_output(launcher: str, command: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [launcher, "-e", "sh", "-lc", command],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    first_line = result.stdout.strip().splitlines()
+    return first_line[0] if first_line else None
+
+
+def c_oracle_harness_execution(
+    argv: list[str],
+    evidence_dir: Path,
+    spec: dict[str, Any] | None = None,
+    fixture_binding: dict[str, Any] | None = None,
+    compiler_resolution: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    timeout_seconds = 30
+    executable_path = c_oracle_output_executable(argv, evidence_dir)
+    base = {
+        "argv": [rel(executable_path)] if executable_path is not None else [],
+        "working_directory": rel(evidence_dir),
+        "executable_path": rel(executable_path) if executable_path is not None else "missing",
+        "timeout_seconds": timeout_seconds,
+        "semantic_pass": False,
+    }
+    if executable_path is None:
+        payload = {
+            **base,
+            "status": "executable_missing_not_oracle",
+            "attempted": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": "",
+            "diagnostics": ["C oracle harness output path is missing; no oracle evidence accepted."],
+        }
+        payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
+        return payload
+    if not executable_path.exists():
+        payload = {
+            **base,
+            "status": "executable_missing_not_oracle",
+            "attempted": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": "",
+            "diagnostics": [
+                "C oracle harness executable is missing after compile success; no oracle evidence accepted."
+            ],
+        }
+        payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
+        return payload
+
+    execution_argv = [str(executable_path)]
+    execution_cwd: Path | None = evidence_dir
+    adapter = None
+    if compiler_resolution and compiler_resolution.get("adapter") == "wsl":
+        adapter = "wsl"
+        launcher = str(compiler_resolution["launcher"])
+        try:
+            wsl_cwd = wsl_path(evidence_dir, launcher)
+            wsl_executable = wsl_path(executable_path, launcher)
+            execution_argv = [
+                launcher,
+                "-e",
+                "sh",
+                "-lc",
+                f"cd {shlex.quote(wsl_cwd)} && {shlex.quote(wsl_executable)}",
+            ]
+            execution_cwd = None
+        except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            payload = {
+                **base,
+                "status": "execution_error_not_oracle",
+                "attempted": False,
+                "returncode": None,
+                "stdout": "",
+                "stderr": truncate_text(str(exc)),
+                "diagnostics": ["C oracle harness execution could not start; no oracle evidence accepted."],
+                "toolchain_adapter": adapter,
+            }
+            payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
+            return payload
+
+    try:
+        result = subprocess.run(
+            execution_argv,
+            cwd=execution_cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        payload = {
+            **base,
+            "status": "execution_timeout_not_oracle",
+            "attempted": True,
+            "returncode": None,
+            "stdout": truncate_text(exc.stdout or ""),
+            "stderr": truncate_text(exc.stderr or f"harness execution timed out after {timeout_seconds} seconds"),
+            "diagnostics": ["C oracle harness execution timed out; no oracle evidence accepted."],
+        }
+        if adapter:
+            payload["toolchain_adapter"] = adapter
+            payload["execution_argv"] = execution_argv
+        payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
+        return payload
+    except OSError as exc:
+        payload = {
+            **base,
+            "status": "execution_error_not_oracle",
+            "attempted": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": truncate_text(str(exc)),
+            "diagnostics": ["C oracle harness execution could not start; no oracle evidence accepted."],
+        }
+        if adapter:
+            payload["toolchain_adapter"] = adapter
+            payload["execution_argv"] = execution_argv
+        payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, payload)
+        return payload
+
+    exited_zero = result.returncode == 0
+    raw_payload = {
+        **base,
+        "status": "exited_zero_not_oracle" if exited_zero else "exited_nonzero_not_oracle",
+        "attempted": True,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "diagnostics": [
+            "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+    }
+    if adapter:
+        raw_payload["toolchain_adapter"] = adapter
+        raw_payload["execution_argv"] = execution_argv
+    payload = {
+        **raw_payload,
+        "stdout": truncate_text(result.stdout),
+        "stderr": truncate_text(result.stderr),
+    }
+    payload["output_gate"] = c_oracle_harness_output_gate(spec, fixture_binding, raw_payload)
+    return payload
+
+
+def c_oracle_harness_output_gate(
+    spec: dict[str, Any] | None,
+    fixture_binding: dict[str, Any] | None,
+    harness_execution: dict[str, Any],
+) -> dict[str, Any]:
+    expected_fragments = c_oracle_expected_stdout_fragments(spec, fixture_binding)
+    base = {
+        "schema_version": 1,
+        "gate": "c_oracle_harness_output",
+        "semantic_pass": False,
+        "compared_fields": behavior_fields(spec) if spec is not None else [],
+        "fixture_expected_output_status": str(
+            fixture_binding.get("expected_output_status", "missing_or_empty")
+            if isinstance(fixture_binding, dict)
+            else "missing_or_empty"
+        ),
+        "expected_stdout_fragments": expected_fragments,
+        "matched_stdout_fragments": [],
+        "missing_stdout_fragments": expected_fragments,
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+    }
+    if harness_execution.get("status") != "exited_zero_not_oracle" or harness_execution.get("returncode") != 0:
+        return {
+            **base,
+            "status": "not_run_not_oracle",
+            "diagnostics": ["C oracle harness output gate did not run because harness execution did not exit zero."],
+        }
+    if not expected_fragments:
+        return {
+            **base,
+            "status": "unsupported_not_oracle",
+            "diagnostics": ["C oracle harness output gate has no supported fixture stdout markers to compare."],
+        }
+
+    stdout = str(harness_execution.get("stdout") or "")
+    matched = [fragment for fragment in expected_fragments if fragment in stdout]
+    missing = [fragment for fragment in expected_fragments if fragment not in stdout]
+    if not missing:
+        return {
+            **base,
+            "status": "matched_not_oracle",
+            "matched_stdout_fragments": matched,
+            "missing_stdout_fragments": [],
+            "diagnostics": [
+                "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+            ],
+        }
+    return {
+        **base,
+        "status": "mismatch_not_oracle",
+        "matched_stdout_fragments": matched,
+        "missing_stdout_fragments": missing,
+        "diagnostics": ["C oracle harness stdout did not match all draft fixture markers; no oracle evidence accepted."],
+    }
+
+
+def c_oracle_expected_stdout_fragments(
+    spec: dict[str, Any] | None,
+    fixture_binding: dict[str, Any] | None,
+) -> list[str]:
+    if spec is None or fixture_binding is None:
+        return []
+    fields = behavior_fields(spec)
+    fragments: list[str] = []
+    for case in fixture_binding.get("case_bindings", []):
+        if not isinstance(case, dict):
+            continue
+        expected_outputs = case.get("expected_outputs")
+        if not isinstance(expected_outputs, dict):
+            continue
+        case_id = str(case.get("id") or "case")
+        for field in fields:
+            if field in expected_outputs:
+                fragments.append(f"fixture case {case_id} {field} matched")
+    return fragments
+
+
+def c_oracle_output_executable(argv: list[str], evidence_dir: Path) -> Path | None:
+    try:
+        output_index = argv.index("-o") + 1
+    except ValueError:
+        return None
+    if output_index >= len(argv):
+        return None
+    output_path = Path(argv[output_index])
+    if not output_path.is_absolute():
+        output_path = evidence_dir / output_path
+    return output_path
+
+
+def truncate_text(text: str, limit: int = 4000) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n...[truncated]"
+
+
+def compile_source_root(spec: dict[str, Any]) -> str:
+    source_root = spec.get("source", {}).get("source_root")
+    if not source_root:
+        return "."
+    return normalize_path_text(source_root)
+
+
+def compile_link_source_files(spec: dict[str, Any], source_root: str) -> list[dict[str, Any]]:
+    files = []
+    for item in spec.get("c_boundary", {}).get("files", []):
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        path = normalize_path_text(item["path"])
+        files.append(
+            {
+                "path": path,
+                "resolved_path": resolve_source_root_path(source_root, path),
+                "role": str(item.get("role") or "source"),
+                "sha256": str(item.get("sha256") or "unknown"),
+                "resolution": "source_root_relative" if source_root != "." else "declared_path",
+            }
+        )
+    for item in spec.get("build_profile", {}).get("link_source_files", []):
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        path = normalize_path_text(item["path"])
+        files.append(
+            {
+                "path": path,
+                "resolved_path": resolve_source_root_path(source_root, path),
+                "role": str(item.get("role") or "link_dependency"),
+                "sha256": str(item.get("sha256") or "unknown"),
+                "resolution": "source_root_relative" if source_root != "." else "declared_path",
+            }
+        )
+    return files
+
+
+def c_oracle_link_strategy(spec: dict[str, Any]) -> str:
+    if spec.get("build_profile", {}).get("link_source_files"):
+        return "compile_harness_with_declared_c_boundary_and_build_profile_sources"
+    return "compile_harness_with_declared_c_boundary_sources"
+
+
+def resolve_source_root_path(source_root: str, path: Any) -> str:
+    path_text = normalize_path_text(path)
+    if not path_text or path_is_absolute(path_text) or source_root == ".":
+        return path_text
+    if not path_is_absolute(source_root) and (
+        path_text == source_root or path_text.startswith(f"{source_root}/")
+    ):
+        return path_text
+    return normalize_path_text(f"{source_root}/{path_text}")
+
+
+def path_is_absolute(path: str) -> bool:
+    return (
+        path.startswith("/")
+        or path.startswith("//")
+        or path.startswith("\\\\")
+        or (len(path) >= 3 and path[1] == ":" and path[2] in {"/", "\\"})
+    )
+
+
+def normalize_path_text(path: Any) -> str:
+    return str(path).strip().replace("\\", "/").rstrip("/")
+
+
+def generate_rust_replay_test_draft(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     function_name = required_str(spec, "function_name")
     path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
     fixture = spec.get("fixture_contract", {})
+    fixture_path_text = fixture_path(spec)
+    fixture_binding = oracle_fixture_binding(spec)
+    fixture_cases_source = rust_replay_fixture_cases_source(spec, fixture_binding)
     text = (
         "// Auto-generated Rust replay test draft.\n"
         "// Review before promoting into validation/l2_slices/tests.\n\n"
         "#[test]\n"
         f"fn replay_{safe_ident(slice_id)}_fixture_contract() {{\n"
-        f"    let _fixture = {fixture.get('input', '')!r};\n"
-        f"    let _api = {function_name!r};\n"
-        "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+        f"    let _fixture = {rust_string_literal(fixture_path_text)};\n"
+        f"    let _api = {rust_string_literal(function_name)};\n"
+        "    const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;\n"
+        f"{fixture_cases_source}"
+        '    panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");\n'
         "}\n"
     )
     write_text(path, text)
-    fixture_path = fixture.get("path") or fixture.get("input") or "unknown-fixture"
     behavior_fields = fixture.get("observable_outputs") or fixture.get("behavior_fields", [])
     test_name = f"replay_{safe_ident(slice_id)}_fixture_contract"
     payload = {
@@ -1023,8 +2008,9 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
         "slice_id": slice_id,
         "level": spec.get("level", "L3"),
         "status": "recorded",
+        "generated_draft_semantic_pass": False,
         "test_draft": rel(path),
-        "fixture": fixture_path,
+        "fixture": fixture_path_text,
         "behavior_fields": list(behavior_fields),
         "source_commit": source_commit(spec),
         "repo_commit": repo_commit(),
@@ -1032,7 +2018,7 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
             "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED.",
             "fixtures": [
                 {
-                    "path": fixture_path,
+                    "path": fixture_path_text,
                     "hash": fixture_hash(spec),
                     "operation_count": len(fixture.get("cases", [])),
                     "source_kind": "fixture",
@@ -1061,7 +2047,7 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
         },
         "translation_mappings": [
             {
-                "source": fixture_path,
+                "source": fixture_path_text,
                 "rust_test": f"{rel(path)}::{test_name}",
                 "behavior_fields": list(behavior_fields),
                 "coverage_kind": "oracle_replay",
@@ -1075,7 +2061,10 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
             }
         ],
         "evidence_links": {
-            "rust_draft": {"path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"), "status": "candidate"},
+            "rust_draft": {
+                "path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"),
+                "status": generated_rust_draft_status(route_decision),
+            },
             "c_oracle": {"path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"), "status": "draft_or_skipped"},
         },
         "known_gaps": [
@@ -1085,6 +2074,95 @@ def generate_rust_replay_test_draft(spec: dict[str, Any], evidence_dir: Path) ->
     }
     write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", payload)
     return payload
+
+
+def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if behavior_fields(spec) != ["return_code"]:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fixture_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        crc: u32,\n",
+        "        buf: &'static [u8],\n",
+        "        size: usize,\n",
+        "        return_code: u32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            '        assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);\n',
+            "        let _crc = case.crc;\n",
+            "        let _return_code = case.return_code;\n",
+            "        // TODO: call generated Rust API and compare actual return_code to return_code.\n",
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fixture_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    crc = case_payload.get("crc")
+    buf = case_payload.get("buf")
+    size = case_payload.get("size")
+    if not is_uint32_value(expected_return) or not is_uint32_value(crc):
+        return None
+    if not is_size_value(size) or not is_byte_list(buf):
+        return None
+    if int(size) != len(buf):
+        return None
+
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"crc: {int(crc)}u32, "
+        f"buf: {rust_byte_slice_literal(buf)}, "
+        f"size: {int(size)}usize, "
+        f"return_code: {int(expected_return)}u32 "
+        "},\n"
+    )
+
+
+def rust_byte_slice_literal(values: list[int]) -> str:
+    if not values:
+        return "&[]"
+    return "&[" + ", ".join(f"{item}u8" for item in values) + "]"
+
+
+def rust_string_literal(value: Any) -> str:
+    return json.dumps(str(value))
 
 
 def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1405,6 +2483,7 @@ def emit_cache_metadata(
     c2rust_baseline: dict[str, Any] | None = None,
     route_decision: dict[str, Any] | None = None,
     validation_profile: dict[str, Any] | None = None,
+    oracle: dict[str, Any] | None = None,
     accept_existing_evidence: bool = False,
 ) -> dict[str, Any]:
     identity = cache_identity(
@@ -1414,6 +2493,7 @@ def emit_cache_metadata(
         c2rust_baseline,
         route_decision,
         validation_profile,
+        oracle,
     )
     dependent_artifacts = {
         "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
@@ -1440,6 +2520,19 @@ def artifact_cache_identity(artifact: dict[str, Any] | None) -> dict[str, Any]:
         "status": artifact.get("status", "unknown"),
         "sha256": sha256_json(artifact),
     }
+
+
+def oracle_harness_identity(oracle: dict[str, Any] | None) -> dict[str, Any]:
+    if oracle is None:
+        return {"path": "missing", "status": "missing", "sha256": "missing"}
+    ref = oracle.get("harness_draft_ref")
+    if isinstance(ref, dict):
+        return {
+            "path": ref.get("path", "missing"),
+            "status": ref.get("status", "missing"),
+            "sha256": ref.get("sha256", "missing"),
+        }
+    return {"path": oracle.get("harness_draft", "missing"), "status": "missing", "sha256": "missing"}
 
 
 def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
@@ -1533,6 +2626,12 @@ def emit_route_decision(
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan)
     translator = route_translator(level)
     profile = validation_profile_name(level, "dev")
+    translation_plan_ref = evidence_ref(
+        evidence_dir / f"{prefix}-auto-translation-plan.json",
+        plan.get("status", "recorded"),
+    )
+    # The plan is later bound back to this route decision, so its content hash is not stable here.
+    translation_plan_ref.pop("sha256", None)
     decision = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -1546,10 +2645,7 @@ def emit_route_decision(
             "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
             "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
             "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
-            "translation_plan": evidence_ref(
-                evidence_dir / f"{prefix}-auto-translation-plan.json",
-                plan.get("status", "recorded"),
-            ),
+            "translation_plan": translation_plan_ref,
             "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
         },
         "policy": {
@@ -1786,11 +2882,11 @@ def emit_manifest(
         "level": "L3",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "status": "accepted_evidence_bound" if semantic_pass else "candidate_generated",
+        "status": auto_manifest_status(semantic_pass, route_decision),
         "source_commit": spec.get("source_commit"),
         "fixture": {
-            "hash": spec.get("fixture_hash"),
-            "path": spec.get("fixture_contract", {}).get("input"),
+            "hash": fixture_hash(spec),
+            "path": fixture_path(spec),
         },
         "translator": translator_summary,
         "oracle": oracle,
@@ -1808,9 +2904,7 @@ def emit_manifest(
         },
         "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
         "claim_boundary": {
-            "scope": "auto-translation candidate evidence only"
-            if not semantic_pass
-            else "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+            "scope": auto_manifest_claim_scope(semantic_pass, route_decision),
             "semantic_pass": semantic_pass,
             "generated_draft_semantic_pass": False,
             "must_still_pass": []
@@ -1831,6 +2925,37 @@ def emit_manifest(
     }
     write_json(evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json", payload)
     return payload
+
+
+def route_refuses_candidate_generation(route_decision: dict[str, Any]) -> bool:
+    translator = route_decision.get("translator", {})
+    return (
+        route_decision.get("level") == "L4"
+        or translator.get("kind") == "refuse"
+        or translator.get("candidate_generation_allowed") is False
+    )
+
+
+def generated_rust_draft_status(route_decision: dict[str, Any] | None) -> str:
+    if route_decision and route_refuses_candidate_generation(route_decision):
+        return "blocked"
+    return "candidate"
+
+
+def auto_manifest_status(semantic_pass: bool, route_decision: dict[str, Any]) -> str:
+    if semantic_pass:
+        return "accepted_evidence_bound"
+    if route_refuses_candidate_generation(route_decision):
+        return "candidate_refused"
+    return "candidate_generated"
+
+
+def auto_manifest_claim_scope(semantic_pass: bool, route_decision: dict[str, Any]) -> str:
+    if semantic_pass:
+        return "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true"
+    if route_refuses_candidate_generation(route_decision):
+        return "route-refused auto-translation run; generated draft artifacts, if present, are blocked diagnostics and not candidate evidence"
+    return "auto-translation candidate evidence only"
 
 
 def emit_l3_evidence_manifest(
@@ -2039,9 +3164,22 @@ def write_l3_candidate_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
+            "diff_gate": "schema_aware_c_rust_diff",
             "status": "incomplete",
             "semantic_pass": False,
             "first_mismatch": None,
+            "compared_fields": behavior_fields(spec),
+            "accepted_diff_required": True,
+            "blocked_by": ["c_oracle", "rust_replay"],
+            "required_inputs": {
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_report_required_status": "passed",
+                "c_oracle_actual_status": oracle.get("status", "unknown"),
+                "c_oracle_actual_toolchain_status": oracle.get("toolchain_status", "unknown"),
+                "rust_replay_actual_status": replay.get("status", "unknown"),
+                "rust_report_actual_status": "incomplete",
+            },
+            "reason_code": "missing_accepted_c_oracle_and_rust_replay",
             "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
         },
     )
@@ -2051,9 +3189,21 @@ def write_l3_candidate_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
+            "negative_diff_gate": "schema_aware_negative_diff",
             "status": "incomplete",
             "expected_failure": True,
             "mutation_detected": False,
+            "accepted_negative_diff_required": True,
+            "blocked_by": ["schema_diff"],
+            "root_blocked_by": ["c_oracle", "rust_replay"],
+            "required_inputs": {
+                "schema_diff_required_status": "passed",
+                "schema_diff_required_first_mismatch": None,
+                "schema_diff_actual_status": "incomplete",
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_report_required_status": "passed",
+            },
+            "reason_code": "missing_passed_schema_diff",
             "reason": "Negative diff is not run for draft-only auto-translation candidates.",
         },
     )
@@ -2233,6 +3383,7 @@ def promote_accepted_oracle(
         "source_slice_id": report.get("slice_id"),
         "accepted_oracle": evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
         "harness_draft": draft_oracle.get("harness_draft"),
+        "harness_draft_ref": draft_oracle.get("harness_draft_ref"),
         "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
     }
     write_json(path, payload)
@@ -2244,10 +3395,12 @@ def promote_accepted_test_translation(
     evidence_dir: Path,
     replay: dict[str, Any],
     accepted: dict[str, Any],
+    route_decision: dict[str, Any],
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     path = evidence_dir / f"l3-{slice_id}-test-translation-generated.json"
     payload = read_json(path)
+    draft_status = generated_rust_draft_status(route_decision)
     test_file = spec.get("rust_boundary", {}).get("test_file") or replay.get("test_draft")
     test_name = f"accepted_{safe_ident(slice_id)}_replay"
     payload.update(
@@ -2310,7 +3463,7 @@ def promote_accepted_test_translation(
                 }
             ],
             "evidence_links": {
-                "rust_draft": {"path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"), "status": "candidate"},
+                "rust_draft": {"path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"), "status": draft_status},
                 "c_oracle": evidence_ref(REPO_ROOT / accepted["paths"]["c_oracle"], "passed"),
                 "rust_report": evidence_ref(REPO_ROOT / accepted["paths"]["rust_report"], "passed"),
                 "schema_diff": evidence_ref(REPO_ROOT / accepted["paths"]["diff"], "passed"),
@@ -2346,6 +3499,7 @@ def write_accepted_supporting_evidence(
     semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
+    draft_status = generated_rust_draft_status(route_decision)
     mark_config_profile_recorded(spec, evidence_dir, accepted)
     write_json(
         evidence_dir / f"{prefix}-rust-report.json",
@@ -2360,7 +3514,7 @@ def write_accepted_supporting_evidence(
             "source_slice_id": reports["rust_report"].get("slice_id"),
             "case_count": reports["rust_report"].get("case_count"),
             "accepted_rust_report": evidence_ref(REPO_ROOT / accepted_paths["rust_report"], "passed"),
-            "generated_draft": evidence_ref(evidence_dir / f"{prefix}-rust-draft.rs", "candidate"),
+            "generated_draft": evidence_ref(evidence_dir / f"{prefix}-rust-draft.rs", draft_status),
             "generated_draft_semantic_pass": False,
             "replay": replay,
         },
@@ -2373,8 +3527,20 @@ def write_accepted_supporting_evidence(
             "slice_id": slice_id,
             "status": "passed",
             "semantic_pass": True,
+            "diff_gate": "schema_aware_c_rust_diff",
             "first_mismatch": reports["diff"].get("first_mismatch"),
             "compared_fields": reports["diff"].get("compared_fields") or behavior_fields(spec),
+            "accepted_diff_required": True,
+            "blocked_by": [],
+            "required_inputs": {
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_report_required_status": "passed",
+                "c_oracle_actual_status": oracle.get("status", "unknown"),
+                "c_oracle_actual_toolchain_status": oracle.get("toolchain_status", "unknown"),
+                "rust_replay_actual_status": replay.get("status", "unknown"),
+                "rust_report_actual_status": reports["rust_report"].get("status", "unknown"),
+                "schema_diff_actual_status": reports["diff"].get("status", "unknown"),
+            },
             "accepted_diff": evidence_ref(REPO_ROOT / accepted_paths["diff"], "passed"),
         },
     )
@@ -2385,8 +3551,21 @@ def write_accepted_supporting_evidence(
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
             "status": reports["negative_diff"].get("status", "passed"),
+            "negative_diff_gate": "schema_aware_negative_diff",
             "expected_failure": True,
             "mutation_detected": mutation_detected(reports["negative_diff"]),
+            "accepted_negative_diff_required": True,
+            "blocked_by": [],
+            "root_blocked_by": [],
+            "required_inputs": {
+                "schema_diff_required_status": "passed",
+                "schema_diff_required_first_mismatch": None,
+                "schema_diff_actual_status": reports["diff"].get("status", "unknown"),
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_replay_actual_status": replay.get("status", "unknown"),
+                "rust_report_required_status": "passed",
+                "negative_diff_actual_status": reports["negative_diff"].get("status", "unknown"),
+            },
             "first_mismatch": reports["negative_diff"].get("first_mismatch"),
             "accepted_negative_diff": evidence_ref(REPO_ROOT / accepted_paths["negative_diff"], "passed"),
         },
@@ -2675,6 +3854,8 @@ def write_context_pack(
         or spec.get("source_files", []),
         "direct_rust_files": [spec.get("rust_boundary", {}).get("module") or spec.get("rust_boundary", {}).get("module_path", "")],
         "call_edges": spec.get("c_boundary", {}).get("direct_dependencies", []),
+        "global_dependencies": global_dependency_requirements(spec),
+        "source_boundary": source_boundary(spec),
         "direct_call_edges": call_expressions or [],
         "external_direct_callees": context["declared"],
         "external_direct_callee_blocks": context["blocked"],
@@ -2958,6 +4139,32 @@ def source_span(file: str = "slice-spec") -> dict[str, Any]:
     return {"file": file, "line_start": 1, "line_end": 1}
 
 
+def global_dependency_requirements(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    requirements: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for dependency in spec.get("c_boundary", {}).get("direct_dependencies", []):
+        if dependency.get("kind") != "global":
+            continue
+        name = str(dependency.get("name") or "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        span = dependency.get("source_span") if isinstance(dependency.get("source_span"), dict) else source_span()
+        requirements.append(
+            {
+                "name": name,
+                "kind": "global",
+                "source": dependency.get("source", "slice_spec"),
+                "definition_status": dependency.get("definition_status", "declared"),
+                "source_span": span,
+                "sha256": dependency.get("sha256") or span.get("sha256") or "",
+                "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+                "semantic_status": "required_before_acceptance",
+            }
+        )
+    return requirements
+
+
 def source_commit(spec: dict[str, Any]) -> str:
     return spec.get("source_commit") or spec.get("source", {}).get("source_commit") or "UNKNOWN0"
 
@@ -2992,6 +4199,7 @@ def cache_identity(
     c2rust_baseline: dict[str, Any] | None = None,
     route_decision: dict[str, Any] | None = None,
     validation_profile: dict[str, Any] | None = None,
+    oracle: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:
@@ -3019,6 +4227,12 @@ def cache_identity(
         "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
         "route_decision_identity": artifact_cache_identity(route_decision),
         "validation_profile_identity": artifact_cache_identity(validation_profile),
+        "global_dependency_identity": {
+            "sha256": sha256_json(global_dependency_requirements(spec)),
+            "count": len(global_dependency_requirements(spec)),
+            "names": [item["name"] for item in global_dependency_requirements(spec)],
+        },
+        "c_oracle_harness_identity": oracle_harness_identity(oracle),
     }
 
 
@@ -3178,11 +4392,12 @@ def source_boundary(spec: dict[str, Any]) -> dict[str, Any]:
     c_boundary = spec.get("c_boundary", {})
     files = [item["path"] for item in c_boundary.get("files", [])] or spec.get("source_files", [])
     functions = c_boundary.get("functions") or [spec.get("function_name", "unknown")]
+    global_dependencies = global_dependency_requirements(spec)
     return {
         "files": files,
         "functions": functions,
         "structs": [dep.get("name") for dep in c_boundary.get("direct_dependencies", []) if dep.get("kind") == "type"],
-        "globals": [],
+        "globals": [item["name"] for item in global_dependencies],
         "direct_call_edges": [],
     }
 

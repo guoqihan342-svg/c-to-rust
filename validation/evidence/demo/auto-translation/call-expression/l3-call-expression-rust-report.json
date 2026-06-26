@@ -71,12 +71,13 @@
       }
     },
     "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+    "generated_draft_semantic_pass": false,
     "known_gaps": [
       "Generated replay draft is not itself the accepted replay implementation.",
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+    "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml call_expression",

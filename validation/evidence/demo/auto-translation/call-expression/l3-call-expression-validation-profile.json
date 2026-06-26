@@ -8,32 +8,25 @@
   "optional_gates": [
     "negative_diff",
     "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
     "kani"
   ],
-  "profile": "L4-dev",
+  "profile": "L0-dev",
   "required_gate_status": {
-    "c_oracle_diff": "DRAFT_GENERATED",
+    "c_oracle_diff": "C_ORACLE_GENERATED",
     "compile": "passed"
   },
   "required_gates": [
     "compile",
     "c_oracle_diff"
   ],
-  "route_level": "L4",
+  "route_level": "L0",
   "schema_version": 1,
-  "skipped_gates": [
-    {
-      "gate": "candidate_generation",
-      "reason": "route_refused"
-    },
-    {
-      "gate": "c_oracle_diff",
-      "reason": "DRAFT_GENERATED"
-    }
-  ],
-  "slice_id": "real-fdb-calc-crc32",
-  "status": "blocked",
-  "target_id": "flashdb",
+  "skipped_gates": [],
+  "slice_id": "call-expression",
+  "status": "passed",
+  "target_id": "demo",
   "tool_boundaries": {
     "c_ub": [
       "clang_diagnostics",

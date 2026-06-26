@@ -4,9 +4,9 @@
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=af5dc3cbfe201275556c3f0a544f9bced8d332893db0cf53f6d992799e7e7751",
+    "slice_spec_sha256=77332691ce9b557a4ec21d4b60222ff90b7a9229d9c9ad46e98b946b9c1b277e",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=2bd8a664a416f008a66d8206a1075ff3cafea4d6b7502ced86d977d55f7e5d5b",
+    "build_profile_hash=4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -17,20 +17,21 @@
     ],
     "config_header_included": true,
     "include_paths": [
-      "inc"
+      "inc",
+      "tests"
     ]
   },
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "af5dc3cbfe201275556c3f0a544f9bced8d332893db0cf53f6d992799e7e7751"
+    "sha256": "77332691ce9b557a4ec21d4b60222ff90b7a9229d9c9ad46e98b946b9c1b277e"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
   },
   "fixture": {
     "hash": "real-fdb-calc-crc32-fixture",
-    "operation_count": 0,
+    "operation_count": 2,
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
   },
   "level": "L3",
@@ -40,7 +41,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "075611719613bb0c54b0082de791f42c5a94b77f",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

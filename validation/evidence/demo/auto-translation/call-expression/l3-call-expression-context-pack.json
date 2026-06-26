@@ -1,12 +1,13 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb",
+    "slice_spec_sha256=a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
     "fixture_hash=call-expression-fixture",
     "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "call_edge_to_callee_binding": [],
   "call_edges": [
     {
       "kind": "type",
@@ -19,6 +20,7 @@
       "source": "self-recursive direct call"
     }
   ],
+  "callee_sources": [],
   "direct_c_files": [
     "validation/l2_slices/tools/generate_call_expression_oracle.py",
     "validation/l2_slices/fixtures/call-expression-c-oracle.json"
@@ -52,16 +54,35 @@
   "direct_rust_files": [
     "validation/l2_slices/src/call_expression_chain.rs"
   ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+  "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "1d246902ed3badfdbe9ba68c6d5c2bd48118cf11",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "schema_version": 1,
+  "signature_bindings": [],
   "slice_id": "call-expression",
   "slice_spec": {
     "path": "validation/slice-specs/demo-call-expression.json",
-    "sha256": "0921c4b9a4af7eab6316e2df019049a0d962a85179fc171f33493555a239d8eb"
+    "sha256": "a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/tools/generate_call_expression_oracle.py",
+      "validation/l2_slices/fixtures/call-expression-c-oracle.json"
+    ],
+    "functions": [
+      "call_expression_chain"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
   },
   "source_commit": "demo-call-expression-20260625",
   "status": "recorded",
+  "stub_boundaries": [],
   "target_id": "demo"
 }

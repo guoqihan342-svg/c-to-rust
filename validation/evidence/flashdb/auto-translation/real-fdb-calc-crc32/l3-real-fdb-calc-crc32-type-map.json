@@ -1,25 +1,44 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
-    "sha256": "af5dc3cbfe201275556c3f0a544f9bced8d332893db0cf53f6d992799e7e7751",
+    "sha256": "77332691ce9b557a4ec21d4b60222ff90b7a9229d9c9ad46e98b946b9c1b277e",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=3fbbfb1a1831ecf5c21c13558ed0213ff11a2bea96a4cc0fb80e048130a01182",
+    "slice_spec_sha256=f0e9ea328a7338071a0a560050ddd2994c51858af9f2fe2fef702d0dc28397a5",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=2bd8a664a416f008a66d8206a1075ff3cafea4d6b7502ced86d977d55f7e5d5b",
+    "build_profile_hash=4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "global_dependencies": [
+    {
+      "definition_status": "same_file_top_level_declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "crc32_table",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+      "source": "extracted_function_body_reference",
+      "source_span": {
+        "byte_end": 3575,
+        "byte_start": 290,
+        "file": "src/fdb_utils.c",
+        "line_end": 66,
+        "line_start": 21,
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+      }
+    }
+  ],
   "level": "L3",
   "mappings": [],
-  "repo_commit": "075611719613bb0c54b0082de791f42c5a94b77f",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "3fbbfb1a1831ecf5c21c13558ed0213ff11a2bea96a4cc0fb80e048130a01182",
+    "sha256": "f0e9ea328a7338071a0a560050ddd2994c51858af9f2fe2fef702d0dc28397a5",
     "status": "ready"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",

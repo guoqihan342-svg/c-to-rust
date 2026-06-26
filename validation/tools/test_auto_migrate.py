@@ -1,9 +1,14 @@
 import json
+import hashlib
 import importlib.util
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +25,901 @@ def load_auto_migrate_module():
 
 
 class AutoMigrateTests(unittest.TestCase):
+    def test_real_fdb_crc32_fixture_includes_non_empty_check_vector(self) -> None:
+        fixture_path = REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in fixture["cases"]}
+
+        self.assertEqual(fixture["case_count"], len(fixture["cases"]))
+        self.assertEqual(fixture["compared_fields"], ["return_code"])
+        self.assertIn("ascii-123456789-crc-zero", cases)
+        self.assertEqual(
+            cases["ascii-123456789-crc-zero"],
+            {
+                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                "coverage_kind": "standard_crc32_check_vector",
+                "crc": 0,
+                "id": "ascii-123456789-crc-zero",
+                "return_code": 3421780262,
+                "size": 9,
+                "status": "draft_expected_from_standard_crc32_check_vector",
+            },
+        )
+
+    def test_oracle_fixture_binding_resolves_expected_outputs_from_fixture_case_refs(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            fixture_path = Path(tmp) / "fixture.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {"id": "case-zero", "value": 7, "input_only": "zero"},
+                            {"id": "case-one", "value": 42, "input_only": "one"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "case-one",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        }
+                    ],
+                    "observable_outputs": ["value"],
+                    "behavior_fields": ["value"],
+                }
+            }
+
+            binding = module.oracle_fixture_binding(spec)
+
+            self.assertEqual(binding["case_count"], 1)
+            self.assertEqual(binding["case_bindings"][0]["expected_outputs"], {"value": 42})
+            self.assertEqual(binding["case_bindings"][0]["missing_observable_outputs"], [])
+            self.assertNotIn("input_only", binding["case_bindings"][0]["expected_outputs"])
+            self.assertEqual(binding["expected_output_status"], "declared_not_executed")
+
+    def test_oracle_harness_draft_calls_bound_empty_buffer_fixture(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture_path = tmp_path / "real-fdb-calc-crc32.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "empty-crc-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            },
+                            {
+                                "id": "ascii-123456789-crc-zero",
+                                "crc": 0,
+                                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                                "size": 9,
+                                "return_code": 3421780262,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "1234567",
+                "function_name": "fdb_calc_crc32",
+                "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+                "fixture_hash": "real-fdb-calc-crc32-fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        },
+                        {
+                            "id": "ascii-123456789-crc-zero",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        }
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["fdb_calc_crc32"],
+                    "signatures": [
+                        {
+                            "function": "fdb_calc_crc32",
+                            "return_type": "uint32_t",
+                            "parameters": [
+                                {"name": "crc", "c_type": "uint32_t", "direction": "input"},
+                                {"name": "buf", "c_type": "const void*", "direction": "input"},
+                                {"name": "size", "c_type": "size_t", "direction": "input"},
+                            ],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "real-fdb-calc-crc32-spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            harness = (
+                out_root
+                / "flashdb"
+                / "auto-translation"
+                / "real-fdb-calc-crc32"
+                / "l3-real-fdb-calc-crc32-c-oracle-harness-draft.c"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn("static const uint8_t empty_crc_zero_buf[] = { 0 };", harness)
+            self.assertIn("fixture cases: 2", harness)
+            self.assertIn(
+                'fixture case: ascii-123456789-crc-zero input_ref=cases[1] '
+                f'expected_ref={fixture_ref} expected_outputs={{"return_code": 3421780262}}',
+                harness,
+            )
+            self.assertIn(
+                "static const uint8_t ascii_123456789_crc_zero_buf[] = "
+                "{ 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u };",
+                harness,
+            )
+            self.assertIn(
+                "uint32_t actual_empty_crc_zero_return_code = "
+                "fdb_calc_crc32((uint32_t)0u, empty_crc_zero_buf, (size_t)0u);",
+                harness,
+            )
+            self.assertIn("if (actual_empty_crc_zero_return_code != (uint32_t)0u)", harness)
+            self.assertIn(
+                "uint32_t actual_ascii_123456789_crc_zero_return_code = "
+                "fdb_calc_crc32((uint32_t)0u, ascii_123456789_crc_zero_buf, (size_t)9u);",
+                harness,
+            )
+            self.assertIn(
+                "if (actual_ascii_123456789_crc_zero_return_code != (uint32_t)3421780262u)",
+                harness,
+            )
+
+    def test_rust_replay_draft_enumerates_bound_fixture_cases_without_semantic_claim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture_path = tmp_path / "real-fdb-calc-crc32.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "empty-crc-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            },
+                            {
+                                "id": "ascii-123456789-crc-zero",
+                                "crc": 0,
+                                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                                "size": 9,
+                                "return_code": 3421780262,
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "1234567",
+                "function_name": "fdb_calc_crc32",
+                "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+                "fixture_hash": "real-fdb-calc-crc32-fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        },
+                        {
+                            "id": "ascii-123456789-crc-zero",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        },
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["fdb_calc_crc32"],
+                    "signatures": [
+                        {
+                            "function": "fdb_calc_crc32",
+                            "return_type": "uint32_t",
+                            "parameters": [
+                                {"name": "crc", "c_type": "uint32_t", "direction": "input"},
+                                {"name": "buf", "c_type": "const void*", "direction": "input"},
+                                {"name": "size", "c_type": "size_t", "direction": "input"},
+                            ],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "real-fdb-calc-crc32-spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            replay_draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-replay-test-draft.rs").read_text(
+                encoding="utf-8"
+            )
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertIn('let _fixture = "' + fixture_ref + '";', replay_draft)
+            self.assertIn('let _api = "fdb_calc_crc32";', replay_draft)
+            self.assertIn("const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;", replay_draft)
+            self.assertIn("struct FixtureCase", replay_draft)
+            self.assertIn(
+                'FixtureCase { id: "empty-crc-zero", crc: 0u32, buf: &[], size: 0usize, '
+                "return_code: 0u32 }",
+                replay_draft,
+            )
+            self.assertIn(
+                'FixtureCase { id: "ascii-123456789-crc-zero", crc: 0u32, '
+                "buf: &[49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8], "
+                "size: 9usize, return_code: 3421780262u32 }",
+                replay_draft,
+            )
+            self.assertIn('assert_eq!(fixture_cases.len(), 2usize, "fixture case count drifted");', replay_draft)
+            self.assertIn(
+                'assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);',
+                replay_draft,
+            )
+            self.assertIn("TODO: call generated Rust API and compare actual return_code", replay_draft)
+            self.assertIn(
+                'panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");',
+                replay_draft,
+            )
+            self.assertNotIn("fdb_calc_crc32(", replay_draft)
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertFalse(test_translation["generated_draft_semantic_pass"])
+            self.assertEqual(
+                test_translation["source_test_inputs"]["fixtures"][0]["operation_count"],
+                2,
+            )
+            self.assertEqual(test_translation["translation_mappings"][0]["status"], "gap")
+
+    def test_compile_success_records_harness_execution_without_oracle_claim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "fake-bin"
+            fake_bin.mkdir()
+            fake_cc_helper = fake_bin / "fake_cc.py"
+            fake_cc_helper.write_text(
+                "\n".join(
+                    [
+                        "import os",
+                        "import shutil",
+                        "import stat",
+                        "import sys",
+                        "",
+                        "args = sys.argv[1:]",
+                        "try:",
+                        "    output = args[args.index('-o') + 1]",
+                        "except (ValueError, IndexError):",
+                        "    print('missing -o output', file=sys.stderr)",
+                        "    sys.exit(2)",
+                        "if os.name == 'nt':",
+                        "    shutil.copyfile(os.environ.get('COMSPEC', r'C:\\Windows\\System32\\cmd.exe'), output)",
+                        "else:",
+                        "    with open(output, 'w', encoding='utf-8') as fh:",
+                        "        fh.write('#!/bin/sh\\nexit 0\\n')",
+                        "    os.chmod(output, os.stat(output).st_mode | stat.S_IXUSR)",
+                        "print('fake cc compiled ' + output)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if os.name == "nt":
+                (fake_bin / "cc.cmd").write_text(
+                    f'@echo off\r\n"{sys.executable}" "%~dp0fake_cc.py" %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                fake_cc = fake_bin / "cc"
+                fake_cc.write_text(
+                    f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/fake_cc.py" "$@"\n',
+                    encoding="utf-8",
+                )
+                fake_cc.chmod(0o755)
+
+            spec = {
+                "target_id": "demo",
+                "slice_id": "compile-run",
+                "source_commit": "1234567",
+                "function_name": "compile_run",
+                "c_source": "int compile_run(void) { return 0; }",
+                "fixture_hash": "fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": "unit-test-fixture.json",
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["compile_run"],
+                    "signatures": [
+                        {
+                            "function": "compile_run",
+                            "return_type": "int",
+                            "parameters": [],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "compile-run.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+            env = os.environ.copy()
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            oracle_status = json.loads(
+                (
+                    out_root
+                    / "demo"
+                    / "auto-translation"
+                    / "compile-run"
+                    / "l3-compile-run-c-oracle-status.json"
+                ).read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(oracle_status["status"], "DRAFT_GENERATED")
+            self.assertEqual(oracle_status["toolchain_status"], "COMPILE_SUCCEEDED_NOT_ORACLE")
+            self.assertFalse(oracle_status["semantic_pass"])
+            self.assertEqual(oracle_status["compile_execution"]["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(
+                oracle_status["compile_execution"]["toolchain_status_after_attempt"],
+                "COMPILE_SUCCEEDED_NOT_ORACLE",
+            )
+            self.assertFalse(oracle_status["compile_execution"]["semantic_pass"])
+            harness_execution = oracle_status["compile_execution"]["harness_execution"]
+            executable_path = str(
+                out_root
+                / "demo"
+                / "auto-translation"
+                / "compile-run"
+                / "l3-compile-run-c-oracle-harness-draft.exe"
+            ).replace("\\", "/")
+            self.assertEqual(harness_execution["status"], "exited_zero_not_oracle")
+            self.assertTrue(harness_execution["attempted"])
+            self.assertEqual(harness_execution["argv"], [executable_path])
+            self.assertEqual(
+                harness_execution["working_directory"],
+                str(out_root / "demo" / "auto-translation" / "compile-run").replace("\\", "/"),
+            )
+            self.assertEqual(harness_execution["executable_path"], executable_path)
+            self.assertEqual(harness_execution["timeout_seconds"], 30)
+            self.assertFalse(harness_execution["semantic_pass"])
+            self.assertEqual(harness_execution["returncode"], 0)
+            self.assertIsInstance(harness_execution["stdout"], str)
+            self.assertIsInstance(harness_execution["stderr"], str)
+            self.assertEqual(
+                harness_execution["diagnostics"],
+                ["C oracle harness executed, but execution output has not passed oracle diff gates."],
+            )
+            self.assertEqual(harness_execution["output_gate"]["status"], "unsupported_not_oracle")
+            self.assertFalse(harness_execution["output_gate"]["semantic_pass"])
+            self.assertEqual(harness_execution["output_gate"]["expected_stdout_fragments"], [])
+
+    def test_cc_compile_command_falls_back_to_gcc_when_cc_is_missing(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "fake-bin"
+            fake_bin.mkdir()
+            fake_cc_helper = fake_bin / "fake_cc.py"
+            fake_cc_helper.write_text(
+                "\n".join(
+                    [
+                        "import os",
+                        "import shutil",
+                        "import stat",
+                        "import sys",
+                        "",
+                        "args = sys.argv[1:]",
+                        "try:",
+                        "    output = args[args.index('-o') + 1]",
+                        "except (ValueError, IndexError):",
+                        "    print('missing -o output', file=sys.stderr)",
+                        "    sys.exit(2)",
+                        "if os.name == 'nt':",
+                        "    shutil.copyfile(os.environ.get('COMSPEC', r'C:\\Windows\\System32\\cmd.exe'), output)",
+                        "else:",
+                        "    with open(output, 'w', encoding='utf-8') as fh:",
+                        "        fh.write('#!/bin/sh\\nexit 0\\n')",
+                        "    os.chmod(output, os.stat(output).st_mode | stat.S_IXUSR)",
+                        "print('fake gcc compiled ' + output)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if os.name == "nt":
+                fake_gcc = fake_bin / "gcc.cmd"
+                fake_gcc.write_text(
+                    f'@echo off\r\n"{sys.executable}" "%~dp0fake_cc.py" %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                fake_gcc = fake_bin / "gcc"
+                fake_gcc.write_text(
+                    f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/fake_cc.py" "$@"\n',
+                    encoding="utf-8",
+                )
+                fake_gcc.chmod(0o755)
+
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            harness_name = "l3-compile-run-gcc-c-oracle-harness-draft.c"
+            output_name = "l3-compile-run-gcc-c-oracle-harness-draft.exe"
+            (evidence_dir / harness_name).write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            compile_command = {
+                "argv": ["cc", harness_name, "-o", output_name],
+                "working_directory": evidence_dir.as_posix(),
+            }
+
+            def fake_which(name: str) -> str | None:
+                if name == "gcc":
+                    return str(fake_gcc)
+                return None
+
+            with mock.patch.object(module.shutil, "which", side_effect=fake_which):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(compile_execution["compiler_name"], "gcc")
+            self.assertIn("gcc", Path(compile_execution["compiler_path"]).name)
+            self.assertIn("harness_execution", compile_execution)
+            self.assertEqual(compile_execution["toolchain_adapter"], "local")
+            self.assertFalse(compile_execution["semantic_pass"])
+
+    def test_build_profile_link_source_files_extend_c_oracle_compile_command(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "l3-link-only-c-oracle-harness-draft.c"
+            spec = {
+                "source": {"source_root": "unit"},
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "link_source_files": [
+                        {
+                            "path": "link.c",
+                            "role": "link_dependency",
+                            "sha256": "link-sha",
+                        }
+                    ],
+                },
+                "c_boundary": {
+                    "files": [
+                        {
+                            "path": "entry.c",
+                            "role": "source",
+                            "sha256": "entry-sha",
+                        }
+                    ],
+                },
+            }
+
+            compile_command = module.c_oracle_compile_command(spec, harness_path, evidence_dir)
+
+            self.assertEqual(
+                compile_command["link_source_files"],
+                [
+                    {
+                        "path": "entry.c",
+                        "resolved_path": "unit/entry.c",
+                        "role": "source",
+                        "sha256": "entry-sha",
+                        "resolution": "source_root_relative",
+                    },
+                    {
+                        "path": "link.c",
+                        "resolved_path": "unit/link.c",
+                        "role": "link_dependency",
+                        "sha256": "link-sha",
+                        "resolution": "source_root_relative",
+                    },
+                ],
+            )
+            self.assertEqual(
+                compile_command["link_strategy"],
+                "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+            )
+            self.assertIn("unit/link.c", compile_command["argv"])
+
+    def test_cc_compile_command_uses_wsl_adapter_when_local_candidates_are_missing(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            output_name = "l3-wsl-c-oracle-harness-draft.exe"
+            compile_command = {
+                "argv": [
+                    "cc",
+                    "-std=c99",
+                    "-IC:/src/include",
+                    "l3-wsl-c-oracle-harness-draft.c",
+                    "C:/src/unit.c",
+                    "-o",
+                    output_name,
+                ],
+                "working_directory": evidence_dir.as_posix(),
+            }
+            wsl_launcher = "C:/Windows/System32/wsl.exe"
+            calls: list[list[str]] = []
+
+            def fake_which(name: str) -> str | None:
+                if name in {"wsl.exe", "wsl"}:
+                    return wsl_launcher
+                return None
+
+            def fake_wsl_path(path: Path, launcher: str) -> str:
+                self.assertEqual(launcher, wsl_launcher)
+                text = str(path).replace("\\", "/")
+                if text == "C:/src/include":
+                    return "/mnt/c/src/include"
+                if text == "C:/src/unit.c":
+                    return "/mnt/c/src/unit.c"
+                if text.endswith(output_name):
+                    return f"/mnt/fake/evidence/{output_name}"
+                return "/mnt/fake/evidence"
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                calls.append(args)
+                command = args[-1] if args[:3] == [wsl_launcher, "-e", "sh"] else ""
+                if "command -v cc" in command:
+                    return subprocess.CompletedProcess(args, 0, "/usr/bin/cc\n", "")
+                if "/usr/bin/cc" in command:
+                    (evidence_dir / output_name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(args, 0, "compiled\n", "")
+                if output_name in command:
+                    return subprocess.CompletedProcess(args, 0, "harness stdout\n", "")
+                return subprocess.CompletedProcess(args, 127, "", "unexpected command")
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module, "wsl_path", side_effect=fake_wsl_path),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(compile_execution["compiler_name"], "cc")
+            self.assertEqual(compile_execution["compiler_path"], "/usr/bin/cc")
+            self.assertEqual(compile_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(compile_execution["argv"], compile_command["argv"])
+            self.assertIn("-I/mnt/c/src/include", compile_execution["execution_argv"][-1])
+            self.assertIn("/mnt/c/src/unit.c", compile_execution["execution_argv"][-1])
+            harness_execution = compile_execution["harness_execution"]
+            self.assertEqual(harness_execution["status"], "exited_zero_not_oracle")
+            self.assertEqual(harness_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(harness_execution["execution_argv"][0], wsl_launcher)
+            self.assertEqual(harness_execution["output_gate"]["status"], "unsupported_not_oracle")
+            self.assertGreaterEqual(len(calls), 3)
+
+    def test_wsl_path_failure_records_structured_compile_failure(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            compile_command = {
+                "argv": ["cc", "-IC:/src/include", "harness.c", "-o", "harness.exe"],
+                "working_directory": evidence_dir.as_posix(),
+            }
+            wsl_launcher = "C:/Windows/System32/wsl.exe"
+
+            def fake_which(name: str) -> str | None:
+                if name in {"wsl.exe", "wsl"}:
+                    return wsl_launcher
+                return None
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                command = args[-1] if args[:3] == [wsl_launcher, "-e", "sh"] else ""
+                if "command -v cc" in command:
+                    return subprocess.CompletedProcess(args, 0, "/usr/bin/cc\n", "")
+                if args[:3] == [wsl_launcher, "-e", "wslpath"]:
+                    return subprocess.CompletedProcess(args, 1, "", "wslpath failed")
+                return subprocess.CompletedProcess(args, 127, "", "unexpected command")
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_failed")
+            self.assertTrue(compile_execution["attempted"])
+            self.assertFalse(compile_execution["semantic_pass"])
+            self.assertEqual(compile_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(compile_execution["execution_argv"], [])
+            self.assertEqual(compile_execution["toolchain_status_after_attempt"], "COMPILE_FAILED")
+            self.assertIn("wslpath failed", compile_execution["stderr"])
+
+    def test_wsl_path_timeout_records_structured_compile_timeout(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            compile_command = {
+                "argv": ["cc", "-IC:/src/include", "harness.c", "-o", "harness.exe"],
+                "working_directory": evidence_dir.as_posix(),
+            }
+            wsl_launcher = "C:/Windows/System32/wsl.exe"
+
+            def fake_which(name: str) -> str | None:
+                if name in {"wsl.exe", "wsl"}:
+                    return wsl_launcher
+                return None
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                command = args[-1] if args[:3] == [wsl_launcher, "-e", "sh"] else ""
+                if "command -v cc" in command:
+                    return subprocess.CompletedProcess(args, 0, "/usr/bin/cc\n", "")
+                if args[:3] == [wsl_launcher, "-e", "wslpath"]:
+                    raise subprocess.TimeoutExpired(args, 10, output="", stderr="wslpath timed out")
+                return subprocess.CompletedProcess(args, 127, "", "unexpected command")
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_timeout")
+            self.assertTrue(compile_execution["attempted"])
+            self.assertFalse(compile_execution["semantic_pass"])
+            self.assertEqual(compile_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(compile_execution["execution_argv"], [])
+            self.assertEqual(compile_execution["toolchain_status_after_attempt"], "COMPILE_FAILED")
+
+    def test_harness_output_gate_matches_fixture_stdout_without_oracle_claim(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            fixture_path = Path(tmp) / "real-fdb-calc-crc32.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "empty-crc-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            },
+                            {
+                                "id": "ascii-123456789-crc-zero",
+                                "crc": 0,
+                                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                                "size": 9,
+                                "return_code": 3421780262,
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "1234567",
+                "function_name": "fdb_calc_crc32",
+                "fixture_hash": "real-fdb-calc-crc32-fixture",
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        },
+                        {
+                            "id": "ascii-123456789-crc-zero",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        },
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+            }
+            fixture_binding = module.oracle_fixture_binding(spec)
+            harness_execution = {
+                "status": "exited_zero_not_oracle",
+                "returncode": 0,
+                "stdout": "\n".join(
+                    [
+                        "oracle harness draft for fdb_calc_crc32",
+                        f"fixture input: {fixture_ref}",
+                        "fixture case empty-crc-zero return_code matched",
+                        "fixture case ascii-123456789-crc-zero return_code matched",
+                    ]
+                )
+                + "\n",
+                "stderr": "",
+            }
+
+            output_gate = module.c_oracle_harness_output_gate(spec, fixture_binding, harness_execution)
+
+            self.assertEqual(output_gate["status"], "matched_not_oracle")
+            self.assertFalse(output_gate["semantic_pass"])
+            self.assertEqual(output_gate["gate"], "c_oracle_harness_output")
+            self.assertEqual(output_gate["compared_fields"], ["return_code"])
+            self.assertEqual(output_gate["fixture_expected_output_status"], "declared_not_executed")
+            self.assertEqual(
+                output_gate["expected_stdout_fragments"],
+                [
+                    "fixture case empty-crc-zero return_code matched",
+                    "fixture case ascii-123456789-crc-zero return_code matched",
+                ],
+            )
+            self.assertEqual(
+                output_gate["matched_stdout_fragments"],
+                output_gate["expected_stdout_fragments"],
+            )
+            self.assertEqual(output_gate["missing_stdout_fragments"], [])
+            self.assertEqual(
+                output_gate["diagnostics"],
+                [
+                    "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+                ],
+            )
+
+    def test_harness_output_gate_uses_raw_stdout_before_report_truncation(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            script_path = tmp_path / ("harness.cmd" if os.name == "nt" else "harness")
+            marker = "fixture case empty-crc-zero return_code matched"
+            if os.name == "nt":
+                script_path.write_text(
+                    "@echo off\r\n"
+                    f'"{sys.executable}" -c "print(\'x\' * 5000); print({marker!r})"\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                script_path.write_text(
+                    "#!/bin/sh\n"
+                    f"'{sys.executable}' -c \"print('x' * 5000); print({marker!r})\"\n",
+                    encoding="utf-8",
+                )
+                script_path.chmod(0o755)
+            spec = {
+                "fixture_contract": {
+                    "path": "unit-test-fixture.json",
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": "inline",
+                            "expected_outputs": {"return_code": 0},
+                        }
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                }
+            }
+            fixture_binding = module.oracle_fixture_binding(spec)
+
+            harness_execution = module.c_oracle_harness_execution(
+                ["cc", "-o", script_path.as_posix()],
+                tmp_path,
+                spec,
+                fixture_binding,
+            )
+
+            self.assertEqual(harness_execution["status"], "exited_zero_not_oracle")
+            self.assertIn("...[truncated]", harness_execution["stdout"])
+            self.assertNotIn(marker, harness_execution["stdout"])
+            self.assertEqual(harness_execution["output_gate"]["status"], "matched_not_oracle")
+            self.assertEqual(harness_execution["output_gate"]["matched_stdout_fragments"], [marker])
+
     def test_route_baseline_and_validation_profile_evidence_are_emitted(self) -> None:
         spec = {
             "target_id": "demo",
@@ -37,7 +937,7 @@ class AutoMigrateTests(unittest.TestCase):
                 "clang_available": True,
             },
             "fixture_contract": {
-                "input": "unit-test-fixture.json",
+                "path": "unit-test-fixture.json",
                 "behavior_fields": ["return_code"],
             },
             "non_goals": ["unit test only"],
@@ -77,6 +977,9 @@ class AutoMigrateTests(unittest.TestCase):
             final = json.loads((evidence_dir / "l3-route-profile-final-verification.json").read_text(encoding="utf-8"))
             plan = json.loads((evidence_dir / "l3-route-profile-auto-translation-plan.json").read_text(encoding="utf-8"))
             cache = json.loads((evidence_dir / "l3-route-profile-auto-cache-metadata.json").read_text(encoding="utf-8"))
+            diff = json.loads((evidence_dir / "l3-route-profile-diff.json").read_text(encoding="utf-8"))
+            negative = json.loads((evidence_dir / "l3-route-profile-negative-diff.json").read_text(encoding="utf-8"))
+            replay_draft = (evidence_dir / "l3-route-profile-rust-replay-test-draft.rs").read_text(encoding="utf-8")
 
             self.assertIn(baseline["status"], {"generated", "skipped", "blocked"})
             self.assertEqual(baseline["correctness_role"], "candidate_context_only")
@@ -89,6 +992,8 @@ class AutoMigrateTests(unittest.TestCase):
                 Path(manifest["c2rust_baseline"]["path"]).name,
                 "l3-route-profile-c2rust-baseline-manifest.json",
             )
+            self.assertEqual(manifest["fixture"]["path"], "unit-test-fixture.json")
+            self.assertIn('let _fixture = "unit-test-fixture.json";', replay_draft)
             self.assertTrue((evidence_dir / "l3-route-profile-c2rust-baseline-manifest.json").exists())
             self.assertEqual(manifest["route_decision"]["level"], "L0")
             self.assertEqual(manifest["validation_profile"]["profile"], "L0-dev")
@@ -106,6 +1011,20 @@ class AutoMigrateTests(unittest.TestCase):
                 "l3-route-profile-c2rust-baseline-manifest.json",
             )
             self.assertIn("route_decision_identity", cache["cache_input_fields"])
+            self.assertEqual(diff["diff_gate"], "schema_aware_c_rust_diff")
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertFalse(diff["semantic_pass"])
+            self.assertEqual(diff["compared_fields"], ["return_code"])
+            self.assertTrue(diff["accepted_diff_required"])
+            self.assertEqual(diff["blocked_by"], ["c_oracle", "rust_replay"])
+            self.assertEqual(diff["required_inputs"]["c_oracle_required_status"], "C_ORACLE_GENERATED")
+            self.assertEqual(diff["required_inputs"]["rust_report_required_status"], "passed")
+            self.assertEqual(negative["negative_diff_gate"], "schema_aware_negative_diff")
+            self.assertEqual(negative["status"], "incomplete")
+            self.assertTrue(negative["expected_failure"])
+            self.assertFalse(negative["mutation_detected"])
+            self.assertEqual(negative["blocked_by"], ["schema_diff"])
+            self.assertEqual(negative["required_inputs"]["schema_diff_required_status"], "passed")
 
     def test_semantic_pass_requires_validation_profile_passed(self) -> None:
         auto_migrate = load_auto_migrate_module()
@@ -284,6 +1203,216 @@ class AutoMigrateTests(unittest.TestCase):
                     "statement_context": "declaration_initializer",
                 },
             )
+
+    def test_global_dependency_flows_into_context_type_map_and_oracle_requirements(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "global-dependency",
+            "source_commit": "1234567",
+            "function_name": "global_dependency",
+            "c_source": "int global_dependency(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "source": {
+                "source_root": "unit",
+                "source_commit": "1234567",
+                "repo_commit": "1234567",
+                "source_file_hashes": {"unit/global.c": "global-sha"},
+            },
+            "build_profile": {
+                "include_paths": ["inc"],
+                "defines": ["UNIT_TEST=1"],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "cases": [
+                    {
+                        "id": "case-one",
+                        "input_ref": "cases[0]",
+                        "expected_ref": "inline",
+                        "expected_outputs": {"value": 42},
+                    }
+                ],
+                "observable_outputs": ["value"],
+                "behavior_fields": ["value"],
+            },
+            "c_boundary": {
+                "files": [{"path": "unit/global.c", "role": "source", "sha256": "global-sha"}],
+                "functions": ["global_dependency"],
+                "signatures": [
+                    {
+                        "function": "global_dependency",
+                        "return_type": "int",
+                        "parameters": [{"name": "value", "c_type": "int"}],
+                    }
+                ],
+                "direct_dependencies": [
+                    {"kind": "type", "name": "int", "source": "extracted_signature"},
+                    {
+                        "kind": "global",
+                        "name": "table",
+                        "source": "extracted_function_body_reference",
+                        "definition_status": "same_file_top_level_declared",
+                        "source_span": {
+                            "file": "unit/global.c",
+                            "line_start": 3,
+                            "line_end": 3,
+                            "sha256": "table-sha",
+                        },
+                        "sha256": "table-sha",
+                    },
+                ],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "global-dependency.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "demo" / "auto-translation" / "global-dependency"
+            context_pack = json.loads(
+                (evidence_dir / "l3-global-dependency-context-pack.json").read_text(encoding="utf-8")
+            )
+            type_map = json.loads((evidence_dir / "l3-global-dependency-type-map.json").read_text(encoding="utf-8"))
+            oracle_status = json.loads(
+                (evidence_dir / "l3-global-dependency-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            cache = json.loads(
+                (evidence_dir / "l3-global-dependency-auto-cache-metadata.json").read_text(encoding="utf-8")
+            )
+            harness_path = evidence_dir / "l3-global-dependency-c-oracle-harness-draft.c"
+            harness = harness_path.read_text(encoding="utf-8")
+            harness_sha256 = hashlib.sha256(harness_path.read_bytes()).hexdigest()
+
+            self.assertEqual(context_pack["global_dependencies"][0]["name"], "table")
+            self.assertEqual(context_pack["source_boundary"]["globals"], ["table"])
+            self.assertEqual(type_map["global_dependencies"][0]["name"], "table")
+            self.assertEqual(type_map["global_dependencies"][0]["source_span"]["file"], "unit/global.c")
+            self.assertEqual(oracle_status["global_linkage_requirements"][0]["name"], "table")
+            self.assertIn("global dependency: table", harness)
+            self.assertIn("int global_dependency(int value);", harness)
+            self.assertIn("fixture input: unit-test-fixture.json", harness)
+            self.assertIn("fixture cases: 1", harness)
+            self.assertIn("observable outputs: value", harness)
+            self.assertIn(
+                'fixture case: case-one input_ref=cases[0] expected_ref=inline expected_outputs={"value": 42}',
+                harness,
+            )
+            self.assertIn("source file: unit/global.c (sha256: global-sha)", harness)
+            self.assertEqual(
+                oracle_status["harness_contract"]["function_prototype"],
+                "int global_dependency(int value);",
+            )
+            self.assertEqual(
+                oracle_status["harness_contract"]["fixture"]["path"],
+                "unit-test-fixture.json",
+            )
+            self.assertEqual(oracle_status["toolchain_status"], "DRAFT_NOT_EXECUTED")
+            self.assertIn("compile_execution", oracle_status)
+            self.assertEqual(
+                oracle_status["compile_execution"],
+                {
+                    "status": "skipped_by_flag",
+                    "attempted": False,
+                    "argv": oracle_status["compile_command_draft"]["argv"],
+                    "working_directory": str(evidence_dir).replace("\\", "/"),
+                    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+                    "semantic_pass": False,
+                    "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
+                },
+            )
+            self.assertEqual(
+                oracle_status["fixture_binding"],
+                {
+                    "path": "unit-test-fixture.json",
+                    "case_count": 1,
+                    "binding_status": "declared_not_executed",
+                    "behavior_fields": ["value"],
+                    "observable_outputs": ["value"],
+                    "case_bindings": [
+                        {
+                            "id": "case-one",
+                            "input_ref": "cases[0]",
+                            "expected_ref": "inline",
+                            "expected_outputs": {"value": 42},
+                            "observable_outputs": ["value"],
+                            "missing_observable_outputs": [],
+                            "binding_status": "declared_not_executed",
+                        }
+                    ],
+                    "expected_output_status": "declared_not_executed",
+                },
+            )
+            self.assertEqual(
+                oracle_status["harness_contract"]["fixture"],
+                oracle_status["fixture_binding"],
+            )
+            self.assertEqual(
+                oracle_status["harness_contract"]["source_files"][0],
+                {"path": "unit/global.c", "role": "source", "sha256": "global-sha"},
+            )
+            self.assertIn("compile_command_draft", oracle_status)
+            self.assertEqual(
+                oracle_status["compile_command_draft"],
+                {
+                    "working_directory": str(evidence_dir).replace("\\", "/"),
+                    "source_root": "unit",
+                    "defines": ["UNIT_TEST=1"],
+                    "resolved_include_paths": ["unit/inc"],
+                    "link_source_files": [
+                        {
+                            "path": "unit/global.c",
+                            "resolved_path": "unit/global.c",
+                            "role": "source",
+                            "sha256": "global-sha",
+                            "resolution": "source_root_relative",
+                        }
+                    ],
+                    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+                    "argv": [
+                        "cc",
+                        "-std=c99",
+                        "-DUNIT_TEST=1",
+                        "-Iunit/inc",
+                        "l3-global-dependency-c-oracle-harness-draft.c",
+                        "unit/global.c",
+                        "-o",
+                        "l3-global-dependency-c-oracle-harness-draft.exe",
+                    ],
+                    "status": "draft_not_executed",
+                },
+            )
+            self.assertEqual(
+                oracle_status["harness_draft_ref"],
+                {
+                    "path": harness_path.as_posix(),
+                    "status": "draft",
+                    "sha256": harness_sha256,
+                },
+            )
+            self.assertEqual(cache["c_oracle_harness_identity"], oracle_status["harness_draft_ref"])
+            self.assertIn("c_oracle_harness_identity", cache["cache_input_fields"])
 
     def test_declared_external_callee_context_allows_helper_rust_check(self) -> None:
         spec = {
@@ -1142,15 +2271,108 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(profile["route_level"], "L4")
             self.assertEqual(profile["status"], "blocked")
             self.assertIn({"gate": "candidate_generation", "reason": "route_refused"}, profile["skipped_gates"])
-            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertEqual(manifest["status"], "candidate_refused")
             self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
             self.assertIsNone(manifest["accepted_evidence_binding"])
+            self.assertTrue(
+                all(artifact["status"] == "blocked" for artifact in plan["generated_artifacts"])
+            )
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / "l3-unbounded-index-auto-translation-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            rust_draft_events = [
+                event for event in events if event["event_kind"] == "rust_draft_generated"
+            ]
+            self.assertEqual(rust_draft_events[0]["status"], "blocked")
+            self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
+            replay_evidence = json.loads(
+                (evidence_dir / "l3-unbounded-index-test-translation-generated.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
             self.assertEqual(blocked["status"], "recorded")
             self.assertEqual(plan["translation_summary"]["unsupported_lvalue_count"], 1)
             self.assertIn("unsupported_lvalue", block["lvalue_kinds"])
             self.assertTrue(
                 any(decision["decision"] == "unsupported_lvalue" for decision in block["lvalue_decisions"])
             )
+
+    def test_l4_refused_accept_existing_evidence_keeps_generated_draft_blocked(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
+            spec.update(
+                {
+                    "target_id": "demo",
+                    "slice_id": "unbounded-accepted",
+                    "function_name": "unbounded_index",
+                    "c_source": "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+                    "build_profile": {
+                        "include_paths": [],
+                        "defines": [],
+                        "target_triple": "x86_64-unknown-linux-gnu",
+                        "abi": "linux-gnu",
+                        "compiler_command_source": "unit-test",
+                        "clang_available": True,
+                    },
+                    "non_goals": ["unit test only"],
+                }
+            )
+            spec_path = tmp_path / "unbounded-accepted.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "unbounded-accepted"
+            replay_evidence = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-test-translation-generated.json").read_text(encoding="utf-8")
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-rust-report.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-unbounded-accepted-diff.json").read_text(encoding="utf-8"))
+            negative = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-negative-diff.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["status"], "candidate_refused")
+            self.assertEqual(manifest["route_decision"]["status"], "refused")
+            self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertEqual(rust_report["generated_draft"]["status"], "blocked")
+            self.assertEqual(diff["diff_gate"], "schema_aware_c_rust_diff")
+            self.assertEqual(diff["blocked_by"], [])
+            self.assertTrue(diff["accepted_diff_required"])
+            self.assertEqual(diff["required_inputs"]["c_oracle_actual_status"], "C_ORACLE_GENERATED")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "passed")
+            self.assertEqual(diff["required_inputs"]["schema_diff_actual_status"], "passed")
+            self.assertIn("accepted_diff", diff)
+            self.assertEqual(negative["negative_diff_gate"], "schema_aware_negative_diff")
+            self.assertEqual(negative["blocked_by"], [])
+            self.assertEqual(negative["root_blocked_by"], [])
+            self.assertTrue(negative["accepted_negative_diff_required"])
+            self.assertEqual(negative["required_inputs"]["schema_diff_actual_status"], "passed")
+            self.assertIn("accepted_negative_diff", negative)
 
     def test_compile_failure_records_blocked_patch_evidence(self) -> None:
         spec = {

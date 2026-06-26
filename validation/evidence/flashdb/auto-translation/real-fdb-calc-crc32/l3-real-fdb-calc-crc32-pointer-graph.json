@@ -7,9 +7,9 @@
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=3fbbfb1a1831ecf5c21c13558ed0213ff11a2bea96a4cc0fb80e048130a01182",
+    "slice_spec_sha256=f0e9ea328a7338071a0a560050ddd2994c51858af9f2fe2fef702d0dc28397a5",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=2bd8a664a416f008a66d8206a1075ff3cafea4d6b7502ced86d977d55f7e5d5b",
+    "build_profile_hash=4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable"
@@ -17,7 +17,7 @@
   "context_pack_ref": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "075611719613bb0c54b0082de791f42c5a94b77f",
+  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "source_boundary": {
@@ -28,7 +28,9 @@
     "functions": [
       "fdb_calc_crc32"
     ],
-    "globals": [],
+    "globals": [
+      "crc32_table"
+    ],
     "structs": [
       "uint32_t",
       "void",

@@ -15,6 +15,21 @@
         "kind": "type",
         "name": "size_t",
         "source": "extracted_signature"
+      },
+      {
+        "definition_status": "same_file_top_level_declared",
+        "kind": "global",
+        "name": "crc32_table",
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41",
+        "source": "extracted_function_body_reference",
+        "source_span": {
+          "byte_end": 3575,
+          "byte_start": 290,
+          "file": "src/fdb_utils.c",
+          "line_end": 66,
+          "line_start": 21,
+          "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+        }
       }
     ],
     "extraction": {

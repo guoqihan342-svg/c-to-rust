@@ -80,6 +80,21 @@
         "kind": "type",
         "name": "size_t",
         "source": "extracted_signature"
+      },
+      {
+        "kind": "global",
+        "name": "crc32_table",
+        "source": "extracted_function_body_reference",
+        "definition_status": "same_file_top_level_declared",
+        "source_span": {
+          "file": "src/fdb_utils.c",
+          "line_start": 21,
+          "line_end": 66,
+          "byte_start": 290,
+          "byte_end": 3575,
+          "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
+        },
+        "sha256": "df869743cd92f9edf5d4f0f058ffd6b73e67af6dbcfc070baef8fc4a6919ca41"
       }
     ],
     "extraction": {
@@ -92,7 +107,15 @@
     "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
     "compiler_command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
     "include_paths": [
-      "inc"
+      "inc",
+      "tests"
+    ],
+    "link_source_files": [
+      {
+        "path": "src/fdb_file.c",
+        "role": "link_dependency",
+        "sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d"
+      }
     ],
     "defines": [],
     "target": {
@@ -117,7 +140,18 @@
     "fixture_id": "real-fdb-calc-crc32-fixture",
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
     "hash": "real-fdb-calc-crc32-fixture",
-    "cases": [],
+    "cases": [
+      {
+        "id": "empty-crc-zero",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
+      },
+      {
+        "id": "ascii-123456789-crc-zero",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
+      }
+    ],
     "observable_outputs": [
       "return_code"
     ],

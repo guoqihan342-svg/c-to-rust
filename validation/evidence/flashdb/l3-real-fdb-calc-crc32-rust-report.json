@@ -1,0 +1,51 @@
+{
+  "case_count": 2,
+  "cases": [
+    {
+      "buf": [],
+      "coverage_kind": "empty_buffer_identity",
+      "crc": 0,
+      "id": "empty-crc-zero",
+      "return_code": 0,
+      "size": 0,
+      "status": "draft_expected_from_empty_buffer_identity"
+    },
+    {
+      "buf": [
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57
+      ],
+      "coverage_kind": "standard_crc32_check_vector",
+      "crc": 0,
+      "id": "ascii-123456789-crc-zero",
+      "return_code": 3421780262,
+      "size": 9,
+      "status": "draft_expected_from_standard_crc32_check_vector"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/fdb_calc_crc32.rs",
+  "schema_version": 1,
+  "slice_id": "real-fdb-calc-crc32",
+  "source_boundary": {
+    "files": [
+      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c"
+    ],
+    "functions": [
+      "fdb_calc_crc32"
+    ],
+    "signature": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "passed",
+  "target_id": "flashdb"
+}

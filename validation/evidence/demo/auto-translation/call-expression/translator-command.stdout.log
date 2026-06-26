@@ -3,13 +3,13 @@
   "slice_id": "call-expression",
   "status": "generated",
   "artifact_paths": [
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-plan.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-events.jsonl",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-blocked-repairs.json",
-    "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs"
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-plan.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-translation-events.jsonl",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-ai-candidate-manifest.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-blocked-repairs.json",
+    "F:/agent/crustpaper/0625ctr/validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs"
   ]
 }

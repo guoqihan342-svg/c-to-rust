@@ -21,6 +21,27 @@ class FunctionSlice(NamedTuple):
     byte_end: int
 
 
+class TopLevelObject(NamedTuple):
+    name: str
+    declaration: str
+    line_start: int
+    line_end: int
+    byte_start: int
+    byte_end: int
+
+
+class LocalObjectBinding(NamedTuple):
+    name: str
+    start: int
+    end: int
+
+
+class StatementSlice(NamedTuple):
+    text: str
+    start: int
+    end: int
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", required=True, type=Path)
@@ -77,6 +98,9 @@ def generate_slice_spec(
     return_type = signature["return_type"]
     parameters = signature["parameters"]
 
+    dependencies = direct_type_dependencies(return_type, parameters)
+    dependencies.extend(same_file_global_dependencies(text, extracted, relative_source, parameters))
+
     return {
         "schema_version": 1,
         "target_id": target_id,
@@ -124,7 +148,7 @@ def generate_slice_spec(
                     "definition_status": "real_source_bound",
                 }
             ],
-            "direct_dependencies": direct_type_dependencies(return_type, parameters),
+            "direct_dependencies": dependencies,
             "extraction": {
                 "extractor": "validation/tools/extract_source_slice.py",
                 "frontend": "bounded-c-source-scanner",
@@ -337,7 +361,11 @@ def parse_parameters(params_text: str) -> list[dict[str, str]]:
 
 
 def split_top_level_commas(text: str) -> list[str]:
-    parts: list[str] = []
+    return [part for part, _start, _end in split_top_level_comma_ranges(text)]
+
+
+def split_top_level_comma_ranges(text: str) -> list[tuple[str, int, int]]:
+    parts: list[tuple[str, int, int]] = []
     start = 0
     depth = 0
     for index, char in enumerate(text):
@@ -346,9 +374,9 @@ def split_top_level_commas(text: str) -> list[str]:
         elif char in ")]}":
             depth -= 1
         elif char == "," and depth == 0:
-            parts.append(text[start:index])
+            parts.append((text[start:index], start, index))
             start = index + 1
-    parts.append(text[start:])
+    parts.append((text[start:], start, len(text)))
     return parts
 
 
@@ -373,6 +401,390 @@ def direct_type_dependencies(return_type: str, parameters: list[dict[str, str]])
             seen.add(clean)
             dependencies.append({"kind": "type", "name": clean, "source": "extracted_signature"})
     return dependencies
+
+
+def same_file_global_dependencies(
+    text: str,
+    extracted: FunctionSlice,
+    relative_source: str,
+    parameters: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    body = extracted_function_body_masked(text, extracted)
+    dependencies: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    shadowed_names = {extracted.function_name, *(param["name"] for param in parameters)}
+    local_bindings = local_object_bindings(body)
+    for obj in top_level_objects(text):
+        if obj.name in shadowed_names or obj.name in seen:
+            continue
+        if not has_unshadowed_reference(body, obj.name, local_bindings):
+            continue
+        seen.add(obj.name)
+        dependencies.append(
+            {
+                "kind": "global",
+                "name": obj.name,
+                "source": "extracted_function_body_reference",
+                "definition_status": "same_file_top_level_declared",
+                "source_span": {
+                    "file": relative_source,
+                    "line_start": obj.line_start,
+                    "line_end": obj.line_end,
+                    "byte_start": obj.byte_start,
+                    "byte_end": obj.byte_end,
+                    "sha256": sha256_text(obj.declaration.strip()),
+                },
+                "sha256": sha256_text(obj.declaration.strip()),
+            }
+        )
+    return dependencies
+
+
+def extracted_function_body_masked(text: str, extracted: FunctionSlice) -> str:
+    masked = mask_comments_and_strings(text)
+    function_text = masked[extracted.byte_start : extracted.byte_end]
+    body_start = function_text.find("{")
+    if body_start == -1:
+        return ""
+    return function_text[body_start:]
+
+
+def has_unshadowed_reference(masked_body: str, name: str, local_bindings: list[LocalObjectBinding]) -> bool:
+    local_spans = [(binding.start, binding.end) for binding in local_bindings if binding.name == name]
+    for match in re.finditer(rf"\b{re.escape(name)}\b", masked_body):
+        if not any(start <= match.start() < end for start, end in local_spans):
+            return True
+    return False
+
+
+def local_object_bindings(masked_body: str) -> list[LocalObjectBinding]:
+    bindings: list[LocalObjectBinding] = []
+    for statement in body_statement_slices(masked_body):
+        bindings.extend(parse_local_object_bindings_from_statement(statement, masked_body))
+    bindings.extend(for_loop_initializer_bindings(masked_body))
+    return bindings
+
+
+def body_statement_slices(masked_body: str) -> list[StatementSlice]:
+    statements: list[StatementSlice] = []
+    start = 0
+    paren_depth = 0
+    bracket_depth = 0
+    for index, char in enumerate(masked_body):
+        if char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth:
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0:
+            statements.append(StatementSlice(masked_body[start:index], start, index))
+            start = index + 1
+    return statements
+
+
+def for_loop_initializer_bindings(masked_body: str) -> list[LocalObjectBinding]:
+    bindings: list[LocalObjectBinding] = []
+    for match in re.finditer(r"\bfor\s*\(", masked_body):
+        open_paren = masked_body.find("(", match.start())
+        close_paren = find_matching(masked_body, open_paren, "(", ")")
+        if close_paren is None:
+            continue
+        header = masked_body[open_paren + 1 : close_paren]
+        semicolon = top_level_semicolon(header)
+        if semicolon is not None:
+            scope_end = for_loop_scope_end(masked_body, close_paren)
+            bindings.extend(
+                parse_local_object_bindings_from_declaration(
+                    header[:semicolon],
+                    open_paren + 1,
+                    scope_end,
+                )
+            )
+    return bindings
+
+
+def for_loop_scope_end(masked_body: str, close_paren: int) -> int:
+    body_start = skip_whitespace(masked_body, close_paren + 1)
+    if body_start < len(masked_body) and masked_body[body_start] == "{":
+        body_end = find_matching(masked_body, body_start, "{", "}")
+        if body_end is not None:
+            return body_end + 1
+    semicolon = next_statement_semicolon(masked_body, body_start)
+    return semicolon + 1 if semicolon is not None else len(masked_body)
+
+
+def next_statement_semicolon(masked_body: str, start: int) -> int | None:
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for index in range(start, len(masked_body)):
+        char = masked_body[index]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth:
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}" and brace_depth:
+            brace_depth -= 1
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            return index
+    return None
+
+
+def top_level_semicolon(text: str) -> int | None:
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth:
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}" and brace_depth:
+            brace_depth -= 1
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            return index
+    return None
+
+
+def parse_local_object_bindings_from_statement(
+    statement: StatementSlice,
+    masked_body: str,
+) -> list[LocalObjectBinding]:
+    segment_start = max(statement.text.rfind("{"), statement.text.rfind("}")) + 1
+    declaration_text = statement.text[segment_start:]
+    declaration_start = statement.start + segment_start
+    declaration, declaration_start = trim_with_offset(declaration_text, declaration_start)
+    declaration, declaration_start = strip_leading_statement_labels(declaration, declaration_start)
+    scope_end = enclosing_block_end(masked_body, declaration_start)
+    return parse_local_object_bindings_from_declaration(declaration, declaration_start, scope_end)
+
+
+def parse_local_object_bindings_from_declaration(
+    declaration: str,
+    declaration_start: int,
+    scope_end: int,
+) -> list[LocalObjectBinding]:
+    if not declaration or declaration.startswith("#"):
+        return []
+    first_token = declaration.split(None, 1)[0] if declaration.split(None, 1) else ""
+    if first_token in NON_DECLARATION_STATEMENT_STARTERS:
+        return []
+
+    declarators = split_top_level_comma_ranges(declaration)
+    if not declarators or not first_declarator_has_type_prefix(declarators[0][0]):
+        return []
+
+    bindings: list[LocalObjectBinding] = []
+    for declarator, declarator_start, _declarator_end in declarators:
+        candidate = strip_top_level_initializer(declarator).strip()
+        if "(" in candidate or ")" in candidate:
+            continue
+        unstripped_candidate = strip_top_level_initializer(declarator)
+        match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\]\s*)*$", unstripped_candidate)
+        if match:
+            bindings.append(
+                LocalObjectBinding(
+                    name=match.group(1),
+                    start=declaration_start + declarator_start + match.start(1),
+                    end=scope_end,
+                )
+            )
+    return bindings
+
+
+def trim_with_offset(text: str, start: int) -> tuple[str, int]:
+    stripped = text.lstrip()
+    return stripped, start + len(text) - len(stripped)
+
+
+def strip_leading_statement_labels(text: str, start: int) -> tuple[str, int]:
+    current, current_start = text, start
+    while True:
+        match = re.match(r"(?:[A-Za-z_][A-Za-z0-9_]*|default)\s*:\s*", current)
+        if match is None:
+            match = re.match(r"case\b[^?:]*:\s*", current)
+        if match is None:
+            return current, current_start
+        current = current[match.end() :]
+        current_start += match.end()
+        current, current_start = trim_with_offset(current, current_start)
+
+
+def enclosing_block_end(masked_body: str, index: int) -> int:
+    stack: list[int] = []
+    for pos, char in enumerate(masked_body[: min(index + 1, len(masked_body))]):
+        if char == "{":
+            stack.append(pos)
+        elif char == "}" and stack:
+            stack.pop()
+    if not stack:
+        return len(masked_body)
+    end = find_matching(masked_body, stack[-1], "{", "}")
+    return end if end is not None else len(masked_body)
+
+
+NON_DECLARATION_STATEMENT_STARTERS = {
+    "break",
+    "case",
+    "continue",
+    "default",
+    "do",
+    "else",
+    "for",
+    "goto",
+    "if",
+    "return",
+    "switch",
+    "while",
+}
+
+
+def first_declarator_has_type_prefix(declarator: str) -> bool:
+    candidate = strip_top_level_initializer(declarator).strip()
+    if "(" in candidate or ")" in candidate:
+        return False
+    match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\]\s*)*$", candidate)
+    if not match:
+        return False
+    prefix = candidate[: match.start(1)].strip()
+    if not prefix or re.search(r"[+\-/=%!<>|^?:]", prefix):
+        return False
+    first_token_match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", prefix)
+    return bool(first_token_match and first_token_match.group(0) not in NON_DECLARATION_STATEMENT_STARTERS)
+
+
+def top_level_objects(text: str) -> list[TopLevelObject]:
+    masked = mask_preprocessor_lines(mask_comments_and_strings(text))
+    objects: list[TopLevelObject] = []
+    statement_start = 0
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    index = 0
+    while index < len(masked):
+        char = masked[index]
+        if char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth:
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == "{" and paren_depth == 0 and bracket_depth == 0:
+            if brace_depth == 0 and "=" not in masked[statement_start:index]:
+                end = find_matching(masked, index, "{", "}")
+                if end is None:
+                    break
+                after = skip_whitespace(masked, end + 1)
+                if after < len(masked) and masked[after] == ";":
+                    statement_start = after + 1
+                    index = after + 1
+                else:
+                    statement_start = end + 1
+                    index = end + 1
+                continue
+            brace_depth += 1
+        elif char == "}" and brace_depth:
+            brace_depth -= 1
+        elif char == ";" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            objects.extend(parse_top_level_object_statement(text, masked, statement_start, index + 1))
+            statement_start = index + 1
+        index += 1
+    return objects
+
+
+def mask_preprocessor_lines(text: str) -> str:
+    chars = list(text)
+    line_start = 0
+    for line in text.splitlines(keepends=True):
+        if line.lstrip().startswith("#"):
+            blank_range(chars, line_start, line_start + len(line))
+        line_start += len(line)
+    return "".join(chars)
+
+
+def parse_top_level_object_statement(
+    original: str,
+    masked: str,
+    start: int,
+    end: int,
+) -> list[TopLevelObject]:
+    actual_start = first_nonspace(masked, start, end)
+    if actual_start is None:
+        return []
+    statement = masked[actual_start:end]
+    stripped = statement.strip()
+    if not stripped or stripped.startswith("#") or stripped.startswith("typedef "):
+        return []
+    if re.match(r"^(struct|union|enum)\b", stripped):
+        return []
+
+    objects: list[TopLevelObject] = []
+    declaration = original[actual_start:end]
+    for declarator in split_top_level_commas(stripped.rstrip(";")):
+        candidate = strip_top_level_initializer(declarator).strip()
+        if "(" in candidate or ")" in candidate:
+            continue
+        match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*(?:\[[^\]]*\]\s*)*$", candidate)
+        if not match:
+            continue
+        name = match.group(1)
+        objects.append(
+            TopLevelObject(
+                name=name,
+                declaration=declaration,
+                line_start=original.count("\n", 0, actual_start) + 1,
+                line_end=original.count("\n", 0, end) + 1,
+                byte_start=actual_start,
+                byte_end=end,
+            )
+        )
+    return objects
+
+
+def strip_top_level_initializer(text: str) -> str:
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            paren_depth += 1
+        elif char == ")" and paren_depth:
+            paren_depth -= 1
+        elif char == "[":
+            bracket_depth += 1
+        elif char == "]" and bracket_depth:
+            bracket_depth -= 1
+        elif char == "{":
+            brace_depth += 1
+        elif char == "}" and brace_depth:
+            brace_depth -= 1
+        elif char == "=" and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            return text[:index]
+    return text
+
+
+def first_nonspace(text: str, start: int, end: int) -> int | None:
+    for index in range(start, min(end, len(text))):
+        if not text[index].isspace():
+            return index
+    return None
 
 
 def normalize_relative_path(path: Path) -> str:
