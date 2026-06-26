@@ -6026,3 +6026,98 @@ English mirror summary:
 - The old Candidate Route P0 plan is now a superseded tombstone and must not be used to restore any crc32 canned or fallback route.
 - This does not mean all C minus forms are supported: unary minus, pointer subtraction/arithmetic, and compound `-=` remain outside the current subset.
 - This is still candidate generation only. Real FlashDB generated-draft semantic acceptance remains gated by C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
+
+## 88. 2026-06-27 legacy auto-translation evidence backfill
+
+本轮继续按多智能体并行推进。只读线程分别检查了 validator 强制检查点、文档同步点、下一核心翻译切口和提交边界。结论：
+
+- 既有 6 个 demo semantic gate failure 的根因不是新翻译逻辑，而是 legacy accepted auto-translation fixture 缺少当前 schema/validator 要求的落盘证据绑定。
+- 需要补的不只是 `evidence_manifest` 三个字段，还包括 auto manifest、final verification、cache metadata、translation plan、schema-aware diff、negative diff 和 Windows 工作树哈希绑定。
+- `candidate_generation` 对历史 route/profile payload 仍可选；但这不等于 semantic-pass fixture 可以缺 `c2rust_baseline`、`route_decision`、`validation_profile` refs。
+
+核心改动：
+
+- 对 8 个 legacy accepted auto-translation fixtures 持久化三件套：
+  - `l3-<slice>-c2rust-baseline-manifest.json`
+  - `l3-<slice>-route-decision.json`
+  - `l3-<slice>-validation-profile.json`
+- 覆盖目录：
+  - `validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith`
+  - `validation/evidence/demo/auto-translation/copy-i32-ptr-arith`
+  - `validation/evidence/demo/auto-translation/external-direct-callee`
+  - `validation/evidence/demo/auto-translation/store-add-one`
+  - `validation/evidence/demo/auto-translation/sum-i32-buffer`
+  - `validation/evidence/demo/auto-translation/sum-i32-ptr-arith`
+  - `validation/evidence/libuv/auto-translation/ip4-addr`
+  - `validation/evidence/zlib-ng/auto-translation/adler32-step`
+- 路由结果按当前 router 记录，而不是全部硬写 L0：
+  - L2: `add-i32-pair-ptr-arith`、`copy-i32-ptr-arith`、`sum-i32-buffer`、`sum-i32-ptr-arith`
+  - L1: `store-add-one`、`libuv/ip4-addr`
+  - L0: `external-direct-callee`、`zlib-ng/adler32-step`
+- 每个 fixture 同步更新：
+  - auto manifest 顶层 baseline/route/profile refs 和 cache dependent artifacts
+  - L3 evidence manifest refs
+  - final verification refs、`validation_profile_status=passed`、`skipped_gates=[]`
+  - cache metadata 的 canonical JSON identities
+  - schema-aware diff 的 `diff_gate`、accepted diff refs、required inputs
+  - negative diff 的 `negative_diff_gate`、accepted negative diff refs、required inputs、mutation evidence
+- `libuv` 和 `zlib-ng` 的 fixture/oracle 文件在 Windows 工作树为 CRLF，validator 按工作树字节计算 sha；本轮只刷新 auto-translation wrapper 中的工作树 sha refs，不提交顶层 fixture/oracle 文件。
+
+已跑过的聚焦验证：
+
+```powershell
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id add-i32-pair-ptr-arith --slice-spec validation/slice-specs/demo-add-i32-pair-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id copy-i32-ptr-arith --slice-spec validation/slice-specs/demo-copy-i32-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id external-direct-callee --slice-spec validation/slice-specs/demo-external-direct-callee.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id store-add-one --slice-spec validation/slice-specs/demo-store-add-one.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id sum-i32-buffer --slice-spec validation/slice-specs/demo-sum-i32-buffer.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id sum-i32-ptr-arith --slice-spec validation/slice-specs/demo-sum-i32-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id libuv --slice-id ip4-addr --slice-spec validation/slice-specs/libuv-ip4-addr.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id zlib-ng --slice-id adler32-step --slice-spec validation/slice-specs/zlib-adler32-step.json --require-semantic-pass
+```
+
+结果：8/8 semantic validators passed。
+
+完整验证：
+
+```powershell
+python -B -m unittest discover -s validation/tools -p "test_*.py"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `validation/tools`: 200 tests passed。
+- `c2r-translator`: 20 lib tests + 180 bounded translation tests passed。
+- `openspec`: 37 items passed。
+- `git diff --check`: exit 0；Windows 工作树打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+文档同步：
+
+- `validation/auto-translation-template/README.md`
+- `validation/auto-translation-template/checklist.md`
+- `validation/l3-template/README.md`
+- `validation/l3-template/checklist.md`
+- `validation/README.md`
+- `validation/gates.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `CONTEXT.md`
+
+当前边界：
+
+- 可以说：legacy accepted auto-translation fixtures 现在按当前 validator 持久化 baseline/route/profile refs、schema-aware diff metadata 和 negative-diff mutation evidence。
+- 可以说：这修复的是验证证据地基，能让 semantic gate tests 直接消费落盘 evidence，而不是靠 helper-only backfill。
+- 不应说：这是新的翻译能力。下一步核心翻译切口建议继续做 generic typed IR 的 `*`、`/`、`%` 标量表达式。
+- 不应说：C2Rust baseline 证明正确。baseline 仍是 `candidate_context_only`。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交时必须使用 auto-translation 目录和文档白名单。
+
+English mirror summary:
+
+- Legacy accepted auto-translation fixtures now persist baseline/route/profile refs, schema-aware diff metadata, and negative-diff mutation evidence required by the current semantic-pass validator.
+- This is validation evidence hardening, not a new translator capability.
+- The route levels are recorded by the current router instead of forcing every legacy fixture to L0.
+- C2Rust baseline remains `candidate_context_only`; semantic acceptance still belongs to validation profile gates.
+- The next core translation cut should keep extending generic typed IR scalar expressions, with `*`, `/`, and `%` as the next narrow target.

@@ -4,6 +4,13 @@
     "sha256": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
     "status": "passed"
   },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+    "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+    "status": "skipped"
+  },
   "compared_fields": [
     "return_code",
     "status",
@@ -12,10 +19,31 @@
     "port_bytes_hex",
     "addr_bytes_hex"
   ],
+  "diff_gate": "schema_aware_c_rust_diff",
   "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+    "sha256": "097a6aa2dc6b95ad22d0bbfce1c4e999ae64b48ae4c71b3b496b78db179d3e05",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "ip4-addr",
   "status": "passed",
-  "target_id": "libuv"
+  "target_id": "libuv",
+  "validation_profile": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "70ffee3dfed7b7427f5a704de72d1beab50d37d515e5adffcf15fb84af389625",
+    "status": "passed"
+  }
 }

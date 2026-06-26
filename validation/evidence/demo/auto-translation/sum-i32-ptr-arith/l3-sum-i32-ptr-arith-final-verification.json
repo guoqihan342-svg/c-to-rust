@@ -51,6 +51,11 @@
     "risk_count": 1,
     "risk_level": "unknown_alias"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "status": "skipped"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/sum-i32-ptr-arith-c-oracle.json",
@@ -58,16 +63,30 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "status": "recorded"
+  },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
   "schema_diff_status": "passed",
   "schema_version": 1,
   "semantic_pass": true,
+  "skipped_gates": [],
   "slice_id": "sum-i32-ptr-arith",
   "source_commit": "demo-sum-i32-ptr-arith-20260625",
   "status": "passed",
   "target_id": "demo",
   "toolchain_status": "C_ORACLE_GENERATED",
   "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
   "version_config_status": "recorded"
 }

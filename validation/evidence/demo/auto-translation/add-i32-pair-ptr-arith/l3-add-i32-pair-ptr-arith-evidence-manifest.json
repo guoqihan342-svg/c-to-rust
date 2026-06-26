@@ -69,6 +69,11 @@
     "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
   },
   "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
+      "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+      "status": "skipped"
+    },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c-oracle-status.json",
       "sha256": "ffa4b994b849437f70c70b3429b3c23b1c57781fce58fc7cb0e8638089e37018",
@@ -76,7 +81,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-auto-cache-metadata.json",
-      "sha256": "e5eec630e20eed0e96b64174585cc404aac64011e3165d7efb4486db1415dd51",
+      "sha256": "e3cd656c8fa25d6438810a7a371a6209d52b5876417e3adfa960688e2b3b4c33",
       "status": "recorded"
     },
     "config_profile": {
@@ -92,14 +97,14 @@
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-final-verification.json",
-      "sha256": "7cf0ffda3cbf97a30fb12dbb9635441f0bb28d8b4e3894437ef8cec061c3e49e",
+      "sha256": "6a621629116263db551aa7b86d8f9f1d18beb276e0c5ece2920fa4e1aa16001d",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-negative-diff.json",
-      "sha256": "147d127f7694fd58e24b77e6c1708ae810773496a1adf8c6f8337f6c0a741693",
+      "sha256": "ca3b82ccfe5ef24ed1ae908fb0667be9fc5d85a781cc17dc3a96ba3692117d78",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -111,6 +116,12 @@
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-pointer-graph.json",
       "sha256": "fbd06c879bd0bed769455d937226980f45616d1bca35dea3ac71e974aaa6dfcb",
+      "status": "recorded"
+    },
+    "route_decision": {
+      "level": "L2",
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
+      "sha256": "41a3fad2d8e24549ed4639913bdca2a9dacd4c9c7583bb7212bd5d598a2f6014",
       "status": "recorded"
     },
     "rust_check": {
@@ -125,7 +136,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-diff.json",
-      "sha256": "73164df6dcce35ac1f55b32e9e6fc5844829c6bae175c113e7e18ba4c696836e",
+      "sha256": "e72ed8fb4568b601922cd3b9c1d7a25d4f9f0d5be6f53d92cdc63e99d010668e",
       "status": "passed"
     },
     "slice_contract": {
@@ -151,6 +162,12 @@
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-unsafe-scan.json",
       "sha256": "5f73d546315f86425a0b1570c528c2052b943e0aa55aff12657f88789a1449af",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
+      "profile": "L2-dev",
+      "sha256": "e178e8b431c09b7ba446e468cea0e6332dbba714613e8dc1f81622240b66e579",
       "status": "passed"
     },
     "version_or_config_binding": {

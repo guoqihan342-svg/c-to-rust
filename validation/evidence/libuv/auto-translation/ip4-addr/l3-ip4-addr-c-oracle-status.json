@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
-    "sha256": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
+    "sha256": "d069624b41057515e9dd568a192247e040f56ecd7f692d35174b83ea0b2ac47e",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",

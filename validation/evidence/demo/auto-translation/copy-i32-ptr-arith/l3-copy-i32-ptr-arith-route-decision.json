@@ -1,0 +1,51 @@
+{
+  "level": "L2",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "alias_requires_noalias_contract",
+      "risk_count": 1,
+      "weight": "medium"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+      "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-cfg.json",
+      "sha256": "36aec66cdc945654b2881503d652fe23ccecb4aabe86bbbd4c6b9d26e7f7d60b",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
+      "sha256": "205ae1b77cefbb227ec616a9071838520dabd6891068732a0e0f0469d8ad1c41",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-type-map.json",
+      "sha256": "7a255b5eb0bed0330599496c61769c3009f1bf71171d138028ddc99aff6431b0",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L2-dev"
+}

@@ -19,14 +19,19 @@
     "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
   },
   "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+      "sha256": "4f70c186913a4053c9f936fffa55b221b9a14da5abb3a0248395b5bb1c32192d",
+      "status": "skipped"
+    },
     "c_oracle": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-status.json",
-      "sha256": "81f378e40661cbaf73efa2409b69d41174420660545272723ec448d05bd3f87d",
+      "sha256": "7db3f9158ae9409f39766d8d98f0363d30864014bed3fa4169c8d19820d3049f",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-cache-metadata.json",
-      "sha256": "9d34acc58c04affb793c0a0eba56a2ef9a2c4f41550b9313f3e6977e3fff5b8d",
+      "sha256": "4891b6d21ceb3ecaaa904a08c1f3eace8964a29813e61a2d337cbb3e261ef98f",
       "status": "recorded"
     },
     "config_profile": {
@@ -42,14 +47,14 @@
     },
     "final_verification": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-final-verification.json",
-      "sha256": "e15e94efc4109f46a35c57c97099d905e1ab8bbe4da5a3e7ea6358dc212d8703",
+      "sha256": "8916893c34663acf372a24a8a2b00d2a2bafc111038604ed721496e7e35146b3",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-negative-diff.json",
-      "sha256": "b4c916d8914c676da51d7ed94645855113f0d707d5afcf9726a7cb47077a029b",
+      "sha256": "5e567227a61585348581c525951369d30aad63b6b91d7dd80e53a80364aaeb0d",
       "status": "passed"
     },
     "performance_smoke": {
@@ -64,6 +69,12 @@
       "sha256": "8c3bf250bd54bf7c36f2e34647616e436b4b3e6d7c37a583f7f82b1acfe9f9f2",
       "status": "not_applicable"
     },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+      "sha256": "24a1d840e3870894697d93d906654009168badef2a2e1420f8ad9f7b21c00833",
+      "status": "recorded"
+    },
     "rust_check": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/rust-check.json",
       "sha256": "34a2f3ce02a36bc4a476ed37609e7a13addee05705e942dd342db35403969b4e",
@@ -76,7 +87,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-diff.json",
-      "sha256": "9b71001dabe2ff6023a75f22f41ab6946243435d918e4436ce8060fbb1219e70",
+      "sha256": "0fedf0a4c152669b72284fead96f5fb44ca8b1035676ca5451587ee2d4444790",
       "status": "passed"
     },
     "slice_contract": {
@@ -102,6 +113,12 @@
     "unsafe_scan": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-unsafe-scan.json",
       "sha256": "04d691bc9396e26f30c704d39cca8202f909372dea42807ac21c4102d7e614a4",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "4a9c73f163c8eebf0d428e89857f88e3e93b4fee9515b026209fb1fb07516dec",
       "status": "passed"
     },
     "version_or_config_binding": {

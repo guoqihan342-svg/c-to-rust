@@ -32,6 +32,11 @@
     "target_id": "demo",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+    "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+    "status": "skipped"
+  },
   "cache": {
     "alias_gate_identity": {
       "alias_set_count": 0,
@@ -43,6 +48,10 @@
       "risk_level": "none"
     },
     "build_profile_hash": "011f0aa789d06886a2559b46e88827476b8bca4dc8611fbda56fa7cbf6f50ec3",
+    "c2rust_baseline_identity": {
+      "sha256": "b97ed28fb0858d5efffa9407a523240c0ba72371b4ba3e28012320f2cf3da0b0",
+      "status": "skipped"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
@@ -55,7 +64,10 @@
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -64,6 +76,25 @@
       "validation/slice-specs/demo-external-direct-callee.json",
       "--accept-existing-evidence"
     ],
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+        "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L0",
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+        "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+        "profile": "L0-dev",
+        "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+        "status": "passed"
+      }
+    },
     "fixture_hash": "external-direct-callee-fixture",
     "invalidates": [
       "context_pack",
@@ -79,8 +110,15 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
-      "summary"
+      "summary",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile"
     ],
+    "route_decision_identity": {
+      "sha256": "1df2950cbd889366b97221e1193d65a8712c994e91db1cd783d5c2d45f4e22be",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
@@ -105,7 +143,11 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "84fb71ee120d1a8d2bff7a7b9b7822eb53f73cff529a3674efc2ed3cac7fc91f",
+      "status": "passed"
+    }
   },
   "claim_boundary": {
     "alias_gate": {
@@ -341,6 +383,12 @@
       }
     ]
   },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
+    "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+    "status": "recorded"
+  },
   "rust_check": {
     "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ux2itw__ C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\external-direct-callee\\l3-external-direct-callee-rust-draft.rs",
     "error_count": 0,
@@ -386,5 +434,11 @@
     "slice_id": "external-direct-callee",
     "status": "generated",
     "target_id": "demo"
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+    "status": "passed"
   }
 }

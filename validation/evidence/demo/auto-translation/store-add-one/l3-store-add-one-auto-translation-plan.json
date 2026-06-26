@@ -1,4 +1,9 @@
 {
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+    "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
     "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
@@ -100,6 +105,12 @@
   },
   "level": "L3",
   "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+    "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "store-add-one",
   "source_commit": "demo-store-add-one-20260625",
@@ -129,6 +140,12 @@
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
     "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
+    "status": "passed"
   },
   "verification_plan": [
     {

@@ -1,0 +1,50 @@
+{
+  "level": "L0",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "scalar_only",
+      "weight": "low"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "external-direct-callee",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
+      "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-cfg.json",
+      "sha256": "dd451025fe214eebb456d36cd70a3c9c63238f5f025903f67ba88f0673c21368",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
+      "sha256": "7f9fd18b0d448eb424e7e28ac2a62970044038dbe3d8285ba9d202a491a96a92",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-type-map.json",
+      "sha256": "454e7528472a9811ba40743dafd2c783a7ee00efb17985cb2a8b4c25cd2324c8",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L0-dev"
+}

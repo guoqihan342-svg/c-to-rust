@@ -82,6 +82,7 @@ Pass criteria:
 - Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
 - Code-test translation evidence maps the source fixtures, C tests, or oracle expectations to Rust tests, main/error path coverage, negative cases, evidence links, and cache invalidation keys.
 - Automatic migration evidence records C2Rust baseline availability, route decision, and validation profile as first-class evidence. C2Rust output is candidate context only and cannot replace the original C oracle, Rust replay, diff, unsafe, or final-verification gates.
+- Legacy accepted auto-translation fixtures that are validated by the current semantic-pass path also persist these baseline/route/profile refs and schema-aware diff / negative-diff gate metadata. Compatibility for older optional fields does not permit missing semantic-pass refs.
 - Rust output is compared against C/golden output by schema-aware diff.
 - Negative regression counterexample fails as expected.
 - Performance smoke records timing or operation counters without replacing correctness gates.

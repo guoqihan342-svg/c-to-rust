@@ -1,0 +1,51 @@
+{
+  "level": "L2",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "alias_requires_noalias_contract",
+      "risk_count": 1,
+      "weight": "medium"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-ptr-arith",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+      "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-cfg.json",
+      "sha256": "e0e8dfaf968a161bc4b68bcff72ea12771c8459ce58e89273e8ad57c7bc92a65",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
+      "sha256": "a21dab68337f49c4ed5e161a5828caf0bc16bae0899f88c0a3e0d1edbd4c7876",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-type-map.json",
+      "sha256": "f9d4fd1bd7373e2287b8c267c5cdda81691799221e8a4894bc47c853d0ac2eb9",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L2-dev"
+}

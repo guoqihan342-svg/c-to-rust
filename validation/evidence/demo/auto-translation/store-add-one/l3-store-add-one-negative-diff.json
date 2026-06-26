@@ -4,6 +4,13 @@
     "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
     "status": "passed"
   },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+    "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+    "status": "skipped"
+  },
   "expected_failure": true,
   "first_mismatch": {
     "case_id": "int-min",
@@ -12,8 +19,30 @@
     "rust_value": -2147483647
   },
   "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+    "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "store-add-one",
   "status": "expected_failed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
+    "status": "passed"
+  }
 }

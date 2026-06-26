@@ -1,4 +1,9 @@
 {
+  "c2rust_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+    "sha256": "4f70c186913a4053c9f936fffa55b221b9a14da5abb3a0248395b5bb1c32192d",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
     "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
@@ -99,6 +104,12 @@
   },
   "level": "L3",
   "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+    "sha256": "24a1d840e3870894697d93d906654009168badef2a2e1420f8ad9f7b21c00833",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "adler32-step",
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
@@ -111,6 +122,12 @@
     ],
     "unsafe_candidate_count": 0,
     "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "4a9c73f163c8eebf0d428e89857f88e3e93b4fee9515b026209fb1fb07516dec",
+    "status": "passed"
   },
   "verification_plan": [
     {

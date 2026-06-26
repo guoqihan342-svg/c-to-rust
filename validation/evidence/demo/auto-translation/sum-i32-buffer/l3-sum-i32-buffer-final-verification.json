@@ -51,6 +51,11 @@
     "risk_count": 1,
     "risk_level": "unknown_alias"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
+    "sha256": "45fd1fd317faf551a593c058bfeccd8b2c504d16fb04d363ed409f8ae3078009",
+    "status": "skipped"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/sum-i32-buffer-c-oracle.json",
@@ -58,16 +63,30 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
+    "sha256": "eafd512cdd7c0857c0b6b4067b9dc8dc824cc1e52563ff473a71a5b398bc29b3",
+    "status": "recorded"
+  },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
   "schema_diff_status": "passed",
   "schema_version": 1,
   "semantic_pass": true,
+  "skipped_gates": [],
   "slice_id": "sum-i32-buffer",
   "source_commit": "demo-sum-i32-buffer-20260625",
   "status": "passed",
   "target_id": "demo",
   "toolchain_status": "C_ORACLE_GENERATED",
   "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "00c9a56a63c46e6bb22e847fa6942ea9dcb267b5d49c3b41eba009aac1792c09",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
   "version_config_status": "recorded"
 }

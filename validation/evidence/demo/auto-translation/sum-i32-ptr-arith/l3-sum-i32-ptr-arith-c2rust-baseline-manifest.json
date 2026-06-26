@@ -1,0 +1,46 @@
+{
+  "build_profile_hash": "84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+  "commands": [
+    {
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
+      "name": "c2rust",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    }
+  ],
+  "correctness_role": "candidate_context_only",
+  "diagnostics": [
+    "no executable c2rust-transpile or c2rust command found on PATH"
+  ],
+  "fallback_oracle": "original_c_oracle_required",
+  "must_not_claim": [
+    "C2Rust output proves semantic equivalence",
+    "C2Rust baseline was generated"
+  ],
+  "output": null,
+  "reason": "blocked_by_missing_tools",
+  "reference_tree": {
+    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
+    "path": "F:\\agent\\c2rust-master",
+    "status": "present"
+  },
+  "schema_version": 1,
+  "selected_command": null,
+  "slice_id": "sum-i32-ptr-arith",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-sum-i32-ptr-arith.json",
+    "sha256": "6d860ff74911a29a5c47b0eef2c78673dec3062ce44bc174405c66266b72c409"
+  },
+  "source_commit": "demo-sum-i32-ptr-arith-20260625",
+  "status": "skipped",
+  "target_id": "demo",
+  "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
+}

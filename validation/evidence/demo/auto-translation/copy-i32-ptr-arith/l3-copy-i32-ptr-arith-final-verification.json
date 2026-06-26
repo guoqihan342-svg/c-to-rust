@@ -51,6 +51,11 @@
     "risk_count": 1,
     "risk_level": "unknown_alias"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+    "status": "skipped"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
@@ -58,16 +63,30 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
+    "sha256": "9fc022231ddebca3356fa86709a4a1d2a73994e60d7de9816c2f53d82a657984",
+    "status": "recorded"
+  },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
   "schema_diff_status": "passed",
   "schema_version": 1,
   "semantic_pass": true,
+  "skipped_gates": [],
   "slice_id": "copy-i32-ptr-arith",
   "source_commit": "demo-copy-i32-ptr-arith-20260625",
   "status": "passed",
   "target_id": "demo",
   "toolchain_status": "C_ORACLE_GENERATED",
   "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "a6128f934dedb7ed71bb846282e1c0da5a846ebb70d69d6affda506df47860a7",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
   "version_config_status": "recorded"
 }

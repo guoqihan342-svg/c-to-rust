@@ -40,6 +40,11 @@
     "risk_count": 0,
     "risk_level": "none"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+    "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+    "status": "skipped"
+  },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
@@ -47,16 +52,30 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+    "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
+    "status": "recorded"
+  },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
   "schema_diff_status": "passed",
   "schema_version": 1,
   "semantic_pass": true,
+  "skipped_gates": [],
   "slice_id": "store-add-one",
   "source_commit": "demo-store-add-one-20260625",
   "status": "passed",
   "target_id": "demo",
   "toolchain_status": "C_ORACLE_GENERATED",
   "unsafe_status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
+    "status": "passed"
+  },
+  "validation_profile_status": "passed",
   "version_config_status": "recorded"
 }

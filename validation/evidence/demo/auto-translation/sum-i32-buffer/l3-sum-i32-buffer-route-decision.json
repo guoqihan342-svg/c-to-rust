@@ -1,0 +1,51 @@
+{
+  "level": "L2",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "alias_requires_noalias_contract",
+      "risk_count": 1,
+      "weight": "medium"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sum-i32-buffer",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
+      "sha256": "45fd1fd317faf551a593c058bfeccd8b2c504d16fb04d363ed409f8ae3078009",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-cfg.json",
+      "sha256": "7bc2517833e770eb9c706f892bcbe7ee1ccd8059d451925b309a88fca16e4256",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-pointer-graph.json",
+      "sha256": "3e317c8106a5cff9c5a169f39214a2571c61536c49670fcc44154f33cd086541",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-type-map.json",
+      "sha256": "b1f6d6aab16c5b1f80cd066242e61f76ae097a869a07aef75044b113abe6323d",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L2-dev"
+}

@@ -1,4 +1,9 @@
 {
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-c2rust-baseline-manifest.json",
+    "sha256": "45fd1fd317faf551a593c058bfeccd8b2c504d16fb04d363ed409f8ae3078009",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=demo-sum-i32-buffer-20260625",
     "slice_spec_sha256=5f1cda9a0ca58bac78b28cbd7c2e22f299126e58472e54b7fb88c36b313df845",
@@ -102,6 +107,12 @@
   },
   "level": "L3",
   "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-route-decision.json",
+    "sha256": "eafd512cdd7c0857c0b6b4067b9dc8dc824cc1e52563ff473a71a5b398bc29b3",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "sum-i32-buffer",
   "source_commit": "demo-sum-i32-buffer-20260625",
@@ -137,6 +148,12 @@
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
     "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-buffer/l3-sum-i32-buffer-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "00c9a56a63c46e6bb22e847fa6942ea9dcb267b5d49c3b41eba009aac1792c09",
+    "status": "passed"
   },
   "verification_plan": [
     {

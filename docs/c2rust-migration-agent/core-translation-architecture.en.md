@@ -65,9 +65,11 @@ flowchart TD
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` remains optional for older route/profile evidence so legacy fixtures stay compatible.
   - Once `candidate_generation.typed_ir` is present, the schema allows only the `GenericTypedIr` / `Unsupported` typed IR routes and requires `semantic_pass=false`.
+  - Legacy route/profile payloads may omit `candidate_generation`, but semantic-pass fixtures still must include `c2rust_baseline`, `route_decision`, and `validation_profile` refs.
 - `validation/tools/validate_auto_translation_evidence.py`
   - Validates that typed IR candidate binding matches the clang-lowering-report artifact and rejects any candidate evidence claiming `semantic_pass=true`.
   - When the slice spec declares an external direct callee, both the default validation path and `--require-semantic-pass` check spec `external_direct_callees` / `signature_ref` / `source_files` against plan `translation_summary.call_expressions`, context-pack `direct_call_edges`, `callee_sources`, `signature_bindings`, and every `call_edge_to_callee_binding`; missing call sites, source-hash drift, signature-shape drift, `callee_signature_id` drift, missing bindings, or stub/semantics-boundary drift fail closed.
+  - `--require-semantic-pass` also requires legacy accepted auto-translation fixtures to persist baseline/route/profile refs, cache identities, schema-aware diff metadata, and negative-diff mutation evidence. Helper-only test backfill is not a substitute for committed evidence.
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - Main behavior contract for the bounded translator.
   - Covers direct typed IR tests, real clang AST smoke tests, the real FlashDB crc32 parse spec, fail-closed boundaries, and rustc smoke compilation.
@@ -82,7 +84,7 @@ The typed IR candidate generation layer now has two explicit outcomes:
 - `GenericTypedIr`: the generic typed IR emitter. Real FlashDB `fdb_calc_crc32` now reaches this route through clang lowering plus globals and passes rustc smoke.
 - `Unsupported`: no Rust candidate; the error carries route metadata and the fail-closed reason.
 
-The typed IR `CandidateRouteDecision` selects the candidate generation implementation only. It does not decide `semantic_pass`. New route/profile evidence binds it into `route_decision.candidate_generation.typed_ir` and `validation_profile.candidate_generation` as provenance; route decision may use it to distinguish the L1 generic typed IR path from the L2 typed IR unsupported repair path; existing route/profile evidence that does not yet carry the field remains accepted for legacy compatibility. Acceptance still belongs to validation profile gates such as C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
+The typed IR `CandidateRouteDecision` selects the candidate generation implementation only. It does not decide `semantic_pass`. New route/profile evidence binds it into `route_decision.candidate_generation.typed_ir` and `validation_profile.candidate_generation` as provenance; route decision may use it to distinguish the L1 generic typed IR path from the L2 typed IR unsupported repair path; existing route/profile evidence that does not yet carry the field remains accepted for legacy compatibility. Acceptance still belongs to validation profile gates such as C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification. Legacy compatibility covers optional fields only, not semantic-pass refs: `c2rust_baseline`, `route_decision`, `validation_profile`, schema-aware diff evidence, and negative-diff evidence must be persisted and consistently cross-referenced.
 
 Generic typed IR emission now covers:
 
@@ -107,6 +109,6 @@ Still incomplete:
 
 ## Next Implementation Cut
 
-1. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
-2. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.
-3. Keep extending generic typed IR instead of adding FlashDB-specific logic.
+1. Keep extending generic typed IR scalar expression coverage; the next narrow step is `*`, `/`, and `%`, while pointer arithmetic remains fail-closed.
+2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
+3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

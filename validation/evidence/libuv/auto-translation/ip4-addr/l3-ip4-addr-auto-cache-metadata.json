@@ -9,6 +9,10 @@
     "risk_level": "none"
   },
   "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
+  "c2rust_baseline_identity": {
+    "sha256": "8cbc6fbe79719956583e96b9b6cbe064c5ff3937b02ef6ce5f65f29f92c72415",
+    "status": "skipped"
+  },
   "cache_input_fields": [
     "source_commit",
     "source_file_hashes",
@@ -21,7 +25,10 @@
     "translator_version",
     "translator_manifest_sha256",
     "command_arguments",
-    "alias_gate_identity"
+    "alias_gate_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
   "command_arguments": [
@@ -30,6 +37,25 @@
     "validation/slice-specs/libuv-ip4-addr.json",
     "--accept-existing-evidence"
   ],
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+      "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+      "sha256": "097a6aa2dc6b95ad22d0bbfce1c4e999ae64b48ae4c71b3b496b78db179d3e05",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "70ffee3dfed7b7427f5a704de72d1beab50d37d515e5adffcf15fb84af389625",
+      "status": "passed"
+    }
+  },
   "fixture_hash": "libuv-ip4-addr-fixture",
   "invalidates": [
     "context_pack",
@@ -45,8 +71,15 @@
     "negative_diff",
     "unsafe_ledger",
     "final_verification",
-    "summary"
+    "summary",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile"
   ],
+  "route_decision_identity": {
+    "sha256": "89e50eba79da52f5603588fa118769a6468fed2be8e836a7b49a8114a8b6fb1a",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "schema_versions": {
     "auto_cache_metadata": 1,
@@ -73,5 +106,9 @@
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
   "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-  "translator_version": "0.1.0"
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "637a7d68e9d5e76023fdfcca2f9daede6d9bf865a14cc9f1040aece6fa6413ad",
+    "status": "passed"
+  }
 }

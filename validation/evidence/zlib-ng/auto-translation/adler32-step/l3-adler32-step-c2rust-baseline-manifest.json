@@ -1,0 +1,46 @@
+{
+  "build_profile_hash": "50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+  "commands": [
+    {
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
+      "name": "c2rust",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    }
+  ],
+  "correctness_role": "candidate_context_only",
+  "diagnostics": [
+    "no executable c2rust-transpile or c2rust command found on PATH"
+  ],
+  "fallback_oracle": "original_c_oracle_required",
+  "must_not_claim": [
+    "C2Rust output proves semantic equivalence",
+    "C2Rust baseline was generated"
+  ],
+  "output": null,
+  "reason": "blocked_by_missing_tools",
+  "reference_tree": {
+    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
+    "path": "F:\\agent\\c2rust-master",
+    "status": "present"
+  },
+  "schema_version": 1,
+  "selected_command": null,
+  "slice_id": "adler32-step",
+  "slice_spec": {
+    "path": "validation/slice-specs/zlib-adler32-step.json",
+    "sha256": "be533c3d6a8ae40e2187bd3a758c4186804477b7eafb4ba82acb1a347a892a3a"
+  },
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "status": "skipped",
+  "target_id": "zlib-ng",
+  "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
+}

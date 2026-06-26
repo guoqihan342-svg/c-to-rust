@@ -5,6 +5,10 @@
 - [ ] Unsupported type or control-flow nodes are recorded and block false success claims.
 - [ ] Auto-translation plan records generated artifacts, source spans, generated spans, translation rule ids, unsupported count, and unsafe candidate count.
 - [ ] Auto-translation events JSONL records every major step, unsupported node, rustc failure, patch plan, patch application, verification rerun, and block.
+- [ ] C2Rust baseline manifest, route decision, and validation profile are persisted as files for semantic-pass fixtures.
+- [ ] Auto manifest, L3 evidence manifest, final verification, and cache metadata all reference the same baseline/route/profile files with matching `path`, `status`, and file `sha256`.
+- [ ] Cache metadata records baseline/route/profile identities using canonical JSON hashes, not file-byte hashes.
+- [ ] Schema-aware diff and negative diff include gate metadata, accepted evidence refs, required inputs, and mutation-detected evidence before any pass claim.
 - [ ] AI is not required for the default local pipeline.
 - [ ] AI candidate manifest records prompt scope, input hashes, output hash, applied status, and gate outcome when AI is used.
 - [ ] AI output is never cited as correctness evidence.

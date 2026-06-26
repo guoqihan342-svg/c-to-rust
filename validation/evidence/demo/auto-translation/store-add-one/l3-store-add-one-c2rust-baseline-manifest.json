@@ -1,0 +1,46 @@
+{
+  "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+  "commands": [
+    {
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
+      "name": "c2rust",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    }
+  ],
+  "correctness_role": "candidate_context_only",
+  "diagnostics": [
+    "no executable c2rust-transpile or c2rust command found on PATH"
+  ],
+  "fallback_oracle": "original_c_oracle_required",
+  "must_not_claim": [
+    "C2Rust output proves semantic equivalence",
+    "C2Rust baseline was generated"
+  ],
+  "output": null,
+  "reason": "blocked_by_missing_tools",
+  "reference_tree": {
+    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
+    "path": "F:\\agent\\c2rust-master",
+    "status": "present"
+  },
+  "schema_version": 1,
+  "selected_command": null,
+  "slice_id": "store-add-one",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-store-add-one.json",
+    "sha256": "6ab793a9e38f1282dce1bf8d441b4c821177a1131544c1575827e094f68ab6d6"
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "skipped",
+  "target_id": "demo",
+  "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
+}

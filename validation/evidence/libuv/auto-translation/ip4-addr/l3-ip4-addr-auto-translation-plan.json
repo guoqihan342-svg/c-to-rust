@@ -1,4 +1,9 @@
 {
+  "c2rust_baseline": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+    "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
     "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
@@ -100,6 +105,12 @@
   },
   "level": "L3",
   "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+    "sha256": "097a6aa2dc6b95ad22d0bbfce1c4e999ae64b48ae4c71b3b496b78db179d3e05",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
@@ -129,6 +140,12 @@
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
     "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "70ffee3dfed7b7427f5a704de72d1beab50d37d515e5adffcf15fb84af389625",
+    "status": "passed"
   },
   "verification_plan": [
     {

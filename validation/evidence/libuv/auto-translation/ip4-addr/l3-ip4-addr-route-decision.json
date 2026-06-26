@@ -1,0 +1,50 @@
+{
+  "level": "L1",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "bounded_pointer_surface",
+      "weight": "low"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+      "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-cfg.json",
+      "sha256": "8654a9569be2b763b8ac8e33fee72b10fa3844a286cbfe0da94c0a5857531d0f",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-pointer-graph.json",
+      "sha256": "1f7d949a17a3aa2f882361e20f21fe8cd818811b4ddd458209d4c8c6f3411b68",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-type-map.json",
+      "sha256": "546970675f522887892306c9407e1c81dd2714a7f56df0ac989c7b1306943c91",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "libuv",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L1-dev"
+}

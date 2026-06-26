@@ -1,0 +1,52 @@
+{
+  "generated_draft_semantic_pass": false,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
+    "kani"
+  ],
+  "profile": "L1-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "C_ORACLE_GENERATED",
+    "compile": "passed",
+    "final_verification": "passed",
+    "negative_diff": "expected_failed",
+    "schema_diff": "passed",
+    "unsafe_ledger": "passed",
+    "unsafe_scan": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff",
+    "schema_diff",
+    "negative_diff",
+    "unsafe_scan",
+    "unsafe_ledger",
+    "final_verification"
+  ],
+  "route_level": "L1",
+  "schema_version": 1,
+  "skipped_gates": [],
+  "slice_id": "store-add-one",
+  "status": "passed",
+  "target_id": "demo",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

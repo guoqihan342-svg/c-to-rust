@@ -35,6 +35,10 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Performance smoke exists and is marked secondary-only.
 - [ ] Summary JSON exists.
 - [ ] Version/config manifest or equivalent binding exists.
+- [ ] Automatic-translation L3 evidence includes persisted C2Rust baseline manifest, route decision, and validation profile refs.
+- [ ] Baseline/route/profile refs are present in the auto manifest, L3 evidence manifest, final verification, and cache metadata.
+- [ ] Cache identities for baseline/route/profile match canonical JSON content hashes.
+- [ ] Schema-aware diff and negative diff include accepted-evidence refs, required-input status, empty blocked lists, and mutation-detected evidence.
 
 ## Config Profile
 

@@ -4,6 +4,13 @@
     "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
     "status": "passed"
   },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "status": "skipped"
+  },
   "expected_failure": true,
   "first_mismatch": {
     "case_id": "single-positive",
@@ -12,8 +19,30 @@
     "rust_value": 7
   },
   "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "sum-i32-ptr-arith",
   "status": "expected_failed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "status": "passed"
+  }
 }

@@ -9,6 +9,10 @@
     "risk_level": "none"
   },
   "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+  "c2rust_baseline_identity": {
+    "sha256": "8918d9896e63262a76e50dbc5b575a16b12a43a62a298af0585e9f4bcf7da566",
+    "status": "skipped"
+  },
   "cache_input_fields": [
     "source_commit",
     "source_file_hashes",
@@ -21,7 +25,10 @@
     "translator_version",
     "translator_manifest_sha256",
     "command_arguments",
-    "alias_gate_identity"
+    "alias_gate_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
   "command_arguments": [
@@ -30,6 +37,25 @@
     "validation/slice-specs/demo-store-add-one.json",
     "--accept-existing-evidence"
   ],
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+      "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+      "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
+      "status": "passed"
+    }
+  },
   "fixture_hash": "store-add-one-fixture",
   "invalidates": [
     "context_pack",
@@ -45,8 +71,15 @@
     "negative_diff",
     "unsafe_ledger",
     "final_verification",
-    "summary"
+    "summary",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile"
   ],
+  "route_decision_identity": {
+    "sha256": "3672dfc96272747b85665e2e3a427e6e8f7dd0283c367805531331c2d2bc8bc8",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "schema_versions": {
     "auto_cache_metadata": 1,
@@ -71,5 +104,9 @@
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
   "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-  "translator_version": "0.1.0"
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "726885dbaa5f503416e65adcfa61509851c3c1b2ddc76e9cd1ad4b9f17d8ec3d",
+    "status": "passed"
+  }
 }

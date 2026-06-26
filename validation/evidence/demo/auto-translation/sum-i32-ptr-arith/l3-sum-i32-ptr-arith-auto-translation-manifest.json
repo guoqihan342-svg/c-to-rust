@@ -32,6 +32,11 @@
     "target_id": "demo",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+    "status": "skipped"
+  },
   "cache": {
     "alias_gate_identity": {
       "alias_set_count": 1,
@@ -43,6 +48,10 @@
       "risk_level": "unknown_alias"
     },
     "build_profile_hash": "84a18a27b406e8c2841ad34b46438a59993acaceea9e27d985dd1d9f3ee41153",
+    "c2rust_baseline_identity": {
+      "sha256": "7c460045a1b84a9e4ab3ef91e874126914f782cf4f1b3b75910d732aacccb6d3",
+      "status": "skipped"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
@@ -55,7 +64,10 @@
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -64,6 +76,25 @@
       "validation/slice-specs/demo-sum-i32-ptr-arith.json",
       "--accept-existing-evidence"
     ],
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c2rust-baseline-manifest.json",
+        "sha256": "551b5fa2a724da6f2c6b5e074717299637ee44c2119ab6b3ed961b660750e54e",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L2",
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+        "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+        "profile": "L2-dev",
+        "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+        "status": "passed"
+      }
+    },
     "fixture_hash": "sum-i32-ptr-arith-fixture",
     "invalidates": [
       "context_pack",
@@ -79,8 +110,15 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
-      "summary"
+      "summary",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile"
     ],
+    "route_decision_identity": {
+      "sha256": "43a3e8ca1e9cce190f8c8b387a761821442f730a6e75e7af83f0fae5881730b7",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
@@ -105,7 +143,11 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "56be936839f40c24a385c5b23bc03e33d7aec8b101bf78c03715fca348457a68",
+      "status": "passed"
+    }
   },
   "claim_boundary": {
     "alias_gate": {
@@ -351,6 +393,12 @@
       }
     ]
   },
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json",
+    "sha256": "be22c1bbb0221c9eb99f7f565b3a7d3adeca2c7e113ab900054034ecfa9fa2aa",
+    "status": "recorded"
+  },
   "rust_check": {
     "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-2lnecj8y C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\sum-i32-ptr-arith\\l3-sum-i32-ptr-arith-rust-draft.rs",
     "error_count": 0,
@@ -382,5 +430,11 @@
     "slice_id": "sum-i32-ptr-arith",
     "status": "generated",
     "target_id": "demo"
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "7f771c155b7a3fb738f818f12f7ac85f00314bb4ef52a14c18d5bbf1c66a8612",
+    "status": "passed"
   }
 }

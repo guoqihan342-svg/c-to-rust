@@ -4,6 +4,13 @@
     "sha256": "0d41d4cf7830a323a961e6312ac0b50b1a3570d03cd23788a6c7e52d53102a66",
     "status": "passed"
   },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+    "status": "skipped"
+  },
   "compared_fields": [
     "return_code",
     "status",
@@ -20,10 +27,31 @@
     "alias_case",
     "alias_matrix"
   ],
+  "diff_gate": "schema_aware_c_rust_diff",
   "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
+    "sha256": "41a3fad2d8e24549ed4639913bdca2a9dacd4c9c7583bb7212bd5d598a2f6014",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "add-i32-pair-ptr-arith",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "e178e8b431c09b7ba446e468cea0e6332dbba714613e8dc1f81622240b66e579",
+    "status": "passed"
+  }
 }

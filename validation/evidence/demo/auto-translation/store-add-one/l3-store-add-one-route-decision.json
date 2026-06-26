@@ -1,0 +1,50 @@
+{
+  "level": "L1",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "bounded_pointer_surface",
+      "weight": "low"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+      "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
+      "sha256": "c0ae3c548e9db490596e7a2d7a834d571234ec91e80e79a3378763bb913b8db1",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
+      "sha256": "fbe02f45941ba886be265890353441dd110bb6b47295811f7ca89eccec5d3272",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-type-map.json",
+      "sha256": "fcab8dc2ee3d273e94b217eea3a08af07f655b07d965f072256e295109d6c84a",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L1-dev"
+}

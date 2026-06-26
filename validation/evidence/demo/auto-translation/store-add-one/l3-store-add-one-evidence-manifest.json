@@ -32,6 +32,11 @@
     "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
   },
   "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+      "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+      "status": "skipped"
+    },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-status.json",
       "sha256": "3fe7905be36a48b055fcc482ead6e5b2475ab17e838035d43ccda5d948bbe697",
@@ -39,7 +44,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-cache-metadata.json",
-      "sha256": "688c1a2adae0571d0a051ac0bfdc530532a473bb1280978cc03bd30c53980629",
+      "sha256": "8060c460b5a7ae74f2cf97c30aefe2c3b4f3fe284e2a273696bb1291922598b2",
       "status": "recorded"
     },
     "config_profile": {
@@ -55,14 +60,14 @@
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-      "sha256": "d0741df60b063e426238d5ba5fb8e3027796fab3074c6dafda13f59a5fdbb248",
+      "sha256": "77699c69697837fae075ae5d997614cf2df848ed98f2326c22c05ee7993e8ac0",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-negative-diff.json",
-      "sha256": "9f8f41705d384bb213ed07d401bc9af2c5ac3056ed40f8d3f4269c9a22bc9472",
+      "sha256": "ebc9d70588163ad1f46ed43f9bf790ebbe2dce76bc4a1cfbec2a498451b88901",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -74,6 +79,12 @@
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
       "sha256": "fbe02f45941ba886be265890353441dd110bb6b47295811f7ca89eccec5d3272",
+      "status": "recorded"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+      "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
       "status": "recorded"
     },
     "rust_check": {
@@ -88,7 +99,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
-      "sha256": "7b24fda3902970ba81eae7240f5ff7707ca50c02b225d51fa8bb8593708ea809",
+      "sha256": "b5c49e2d39713b2d0ca8103c977e9fd1cc2a6548fa29619aabf65067e14bdbe0",
       "status": "passed"
     },
     "slice_contract": {
@@ -114,6 +125,12 @@
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-unsafe-scan.json",
       "sha256": "23a9da8ff328e92a73bf76e4e7a9ac196516a6124d80f2a34790cbd350b78b36",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
       "status": "passed"
     },
     "version_or_config_binding": {

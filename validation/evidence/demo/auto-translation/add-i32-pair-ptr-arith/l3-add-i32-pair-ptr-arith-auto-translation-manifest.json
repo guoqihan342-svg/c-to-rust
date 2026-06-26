@@ -28,6 +28,11 @@
     "target_id": "demo",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+    "status": "skipped"
+  },
   "cache": {
     "alias_gate_identity": {
       "alias_set_count": 2,
@@ -39,6 +44,10 @@
       "risk_level": "unknown_alias"
     },
     "build_profile_hash": "94c414cf2b321782b1f3fd2e3fb44419c1fbb6260e8dde3a4d41345363987848",
+    "c2rust_baseline_identity": {
+      "sha256": "7863948f587fe2d148baa9b519485307fe0d500da342f284ce2e115d670d08e6",
+      "status": "skipped"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
@@ -51,7 +60,10 @@
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -60,6 +72,25 @@
       "validation/slice-specs/demo-add-i32-pair-ptr-arith.json",
       "--accept-existing-evidence"
     ],
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
+        "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L2",
+        "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
+        "sha256": "41a3fad2d8e24549ed4639913bdca2a9dacd4c9c7583bb7212bd5d598a2f6014",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
+        "profile": "L2-dev",
+        "sha256": "e178e8b431c09b7ba446e468cea0e6332dbba714613e8dc1f81622240b66e579",
+        "status": "passed"
+      }
+    },
     "fixture_hash": "add-i32-pair-ptr-arith-fixture",
     "invalidates": [
       "context_pack",
@@ -75,8 +106,15 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
-      "summary"
+      "summary",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile"
     ],
+    "route_decision_identity": {
+      "sha256": "4adcbc363673eeb82202c139b7a8aeee82585ebaf8e5c1e97a8be6a16aa2a064",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
@@ -101,7 +139,11 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "269b635c148b4c4d933d590870bd8f014a70b851ec3d7244db021a6518c32138",
+      "status": "passed"
+    }
   },
   "claim_boundary": {
     "alias_gate": {
@@ -385,6 +427,12 @@
       }
     ]
   },
+  "route_decision": {
+    "level": "L2",
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
+    "sha256": "41a3fad2d8e24549ed4639913bdca2a9dacd4c9c7583bb7212bd5d598a2f6014",
+    "status": "recorded"
+  },
   "rust_check": {
     "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-4qmpi1a8 C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\add-i32-pair-ptr-arith\\l3-add-i32-pair-ptr-arith-rust-draft.rs",
     "error_count": 0,
@@ -416,5 +464,11 @@
     "slice_id": "add-i32-pair-ptr-arith",
     "status": "generated",
     "target_id": "demo"
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
+    "profile": "L2-dev",
+    "sha256": "e178e8b431c09b7ba446e468cea0e6332dbba714613e8dc1f81622240b66e579",
+    "status": "passed"
   }
 }

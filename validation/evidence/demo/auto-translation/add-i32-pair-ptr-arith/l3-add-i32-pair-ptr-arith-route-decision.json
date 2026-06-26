@@ -1,0 +1,51 @@
+{
+  "level": "L2",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "alias_requires_noalias_contract",
+      "risk_count": 2,
+      "weight": "medium"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "add-i32-pair-ptr-arith",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
+      "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-cfg.json",
+      "sha256": "38c354cae8be30e9b96ed95bc48236551a1e057fd4cf716ee4063c9efae7f135",
+      "status": "recorded"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-pointer-graph.json",
+      "sha256": "fbd06c879bd0bed769455d937226980f45616d1bca35dea3ac71e974aaa6dfcb",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-type-map.json",
+      "sha256": "abcc91bfe095f76e6512bb58821288a748e0068f8a114aadf8a4a51e6e376460",
+      "status": "recorded"
+    }
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L2-dev"
+}

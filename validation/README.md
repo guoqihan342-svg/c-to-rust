@@ -66,6 +66,10 @@ English: `auto_migrate.py` now emits three first-class evidence files for each a
 
 English: the route decision controls candidate generation path and context budget only; the validation profile controls the required gates for the run. Output from an Agent, C2Rust, deterministic rules, or Rust compilation can be bound as a semantic pass only when the selected validation profile passes with no skipped required gate.
 
+中文：历史 accepted auto-translation fixtures 若要被当前 `--require-semantic-pass` 直接验证，也必须持久化 baseline/route/profile refs，并补齐 schema-aware diff / negative-diff gate metadata。只在单元测试 helper 中临时补字段不是可提交的 pass evidence。
+
+English: legacy accepted auto-translation fixtures must persist baseline/route/profile refs and schema-aware diff / negative-diff gate metadata before they can pass the current `--require-semantic-pass` path. Helper-only backfill inside unit tests is not committed pass evidence.
+
 ## Current Candidate Count
 
 The catalog currently contains 40 targets across database/storage, networking, crypto, media, runtime, allocator, image/codec, terminal/system, kernel/virtualization, document processing, scientific data, VPN, packet analysis, and embedded domains.
