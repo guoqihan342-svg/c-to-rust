@@ -24,6 +24,7 @@ flowchart TD
     comparison conditions,
     const pointer slices,
     readonly global const integer arrays,
+    local fixed integer arrays,
     table index via slice param or global,
     bounded direct calls,
     nested byte *p++ prelude,
@@ -44,6 +45,7 @@ flowchart TD
   - `emit_rust_from_ir()` remains the no-globals compatibility entrypoint.
   - `emit_rust_from_ir_with_globals(function, globals)` is the main entrypoint for the clang lowering path and returns `EmittedRust { rust, route }`.
   - The generic emitter now emits readonly global integer arrays as Rust `const` items and supports table indexing such as `CRC32_TABLE[...]`.
+  - The generic emitter also supports typed IR local fixed-length integer array literals and readonly index reads, emitting Rust local `[T; N]` arrays.
   - The typed IR legacy crc32 matcher, canned emitter, and `DeprecatedLegacyCrc32` fallback have been removed. A crc32 IR without modeled globals now fails closed instead of silently using a template.
 - `crates/c2r-translator/src/translation_route.rs`
   - Defines route metadata for typed IR candidate generation.
@@ -87,6 +89,7 @@ Generic typed IR emission now covers:
 - no-brace `if` / `while` bodies from clang AST;
 - readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
 - `static const` readonly integer array initializers as Rust `const`, for example `crc32_table[] -> const CRC32_TABLE: [u32; 256]`;
+- typed IR local fixed-length integer array literals and index reads, for example `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`;
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
 - nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
 - assignment RHS prelude, covering `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`;

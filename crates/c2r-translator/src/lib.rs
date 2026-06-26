@@ -670,6 +670,7 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::Unary { op, .. } => format!("{op:?}"),
         typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
         typed_ir::IrExpr::Index { .. } => "index".to_string(),
+        typed_ir::IrExpr::ArrayLiteral { .. } => "array_literal".to_string(),
         typed_ir::IrExpr::Call { callee, .. } => format!("call {callee}"),
         typed_ir::IrExpr::IncDec { op, prefix, .. } => format!("{op:?} prefix={prefix}"),
         typed_ir::IrExpr::Deref { .. } => "deref".to_string(),
@@ -869,6 +870,11 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
         typed_ir::IrExpr::Index { base, index, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(base, vars);
             collect_ir_post_increment_deref_vars_from_expr(index, vars);
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_ir_post_increment_deref_vars_from_expr(element, vars);
+            }
         }
         typed_ir::IrExpr::Call { args, .. } => {
             for arg in args {

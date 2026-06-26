@@ -111,6 +111,11 @@ pub enum IrExpr {
         ty: IrType,
         source_span: Option<SourceSpan>,
     },
+    ArrayLiteral {
+        elements: Vec<IrExpr>,
+        ty: IrType,
+        source_span: Option<SourceSpan>,
+    },
     Call {
         callee: String,
         args: Vec<IrExpr>,
@@ -483,6 +488,52 @@ fn emit_scalar_type(ty: &IrType) -> Result<String, String> {
     }
 }
 
+fn emit_fixed_array_type(ty: &IrType) -> Result<String, String> {
+    let IrTypeKind::Array { element, len } = &ty.kind else {
+        return Err(format!("type {} is not an array", type_label(ty)));
+    };
+    let Some(len) = len else {
+        return Err(format!("array type {} has unknown length", type_label(ty)));
+    };
+    let element_ty =
+        emit_scalar_type(element).map_err(|detail| format!("array element has {detail}"))?;
+    Ok(format!("[{element_ty}; {len}]"))
+}
+
+fn emit_array_literal(
+    elements: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<String, String> {
+    let IrTypeKind::Array { element, len } = &ty.kind else {
+        return Err(format!("{path} type {} is not an array", type_label(ty)));
+    };
+    let Some(len) = len else {
+        return Err(format!("{path} array length is unknown"));
+    };
+    if elements.len() != *len {
+        return Err(format!(
+            "{path} element count {} does not match array length {len}",
+            elements.len()
+        ));
+    }
+    emit_scalar_type(element).map_err(|detail| format!("{path} element has {detail}"))?;
+    let emitted = elements
+        .iter()
+        .enumerate()
+        .map(|(index, element_expr)| {
+            validate_expr_matches_type(element_expr, element, &format!("{path} element[{index}]"))?;
+            let emitted = emit_expr(element_expr, symbols, context)
+                .map_err(|detail| format!("{path} element[{index}] {detail}"))?;
+            Ok(emitted)
+        })
+        .collect::<Result<Vec<_>, String>>()?
+        .join(", ");
+    Ok(format!("[{emitted}]"))
+}
+
 fn emit_stmt(
     stmt: &IrStmt,
     return_type: &IrType,
@@ -500,6 +551,36 @@ fn emit_stmt(
             if init.is_none() && context.byte_cursor_source(name).is_some() && is_u8_pointer(ty) {
                 symbols.insert(name.clone());
                 return Ok(format!("{indent}let mut {decl_name}: usize = 0;\n"));
+            }
+            if matches!(ty.kind, IrTypeKind::Array { .. }) {
+                let decl_ty = emit_fixed_array_type(ty)
+                    .map_err(|detail| format!("decl {name} has {detail}"))?;
+                let Some(IrExpr::ArrayLiteral {
+                    elements,
+                    ty: literal_ty,
+                    ..
+                }) = init
+                else {
+                    return Err(format!(
+                        "decl {name} array initializer must be an array literal"
+                    ));
+                };
+                if literal_ty != ty {
+                    return Err(format!(
+                        "decl {name} array literal type {} does not match declared type {}",
+                        type_label(literal_ty),
+                        type_label(ty)
+                    ));
+                }
+                let init = emit_array_literal(
+                    elements,
+                    ty,
+                    symbols,
+                    context,
+                    &format!("decl {name} initializer"),
+                )?;
+                symbols.insert(name.clone());
+                return Ok(format!("{indent}let {decl_name}: {decl_ty} = {init};\n"));
             }
             let decl_ty =
                 emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
@@ -792,6 +873,9 @@ fn emit_expr(
         IrExpr::Index {
             base, index, ty, ..
         } => emit_index_expr(base, index, ty, symbols, context),
+        IrExpr::ArrayLiteral { .. } => Err(
+            "array literal expression is only supported as a declaration initializer".to_string(),
+        ),
         IrExpr::Call {
             callee, args, ty, ..
         } => emit_call_expr(callee, args, ty, symbols, context),
@@ -845,6 +929,9 @@ fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
             validate_bounded_call_arg(base)?;
             validate_bounded_call_arg(index)
         }
+        IrExpr::ArrayLiteral { .. } => {
+            Err("array literal arguments are outside the bounded call subset".to_string())
+        }
         IrExpr::Call { .. } => {
             Err("nested call expressions are outside the bounded call subset".to_string())
         }
@@ -872,6 +959,7 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         IrExpr::Index { base, index, .. } => {
             find_call_callee(base).or_else(|| find_call_callee(index))
         }
+        IrExpr::ArrayLiteral { elements, .. } => elements.iter().find_map(find_call_callee),
         IrExpr::IncDec { target, .. } => find_call_callee(target),
         IrExpr::Deref { ptr, .. } => find_call_callee(ptr),
         IrExpr::AddrOf { operand, .. } => find_call_callee(operand),
@@ -958,6 +1046,9 @@ fn emit_expr_with_prelude(
                 expr,
             })
         }
+        IrExpr::ArrayLiteral { .. } => Err(format!(
+            "{path} array literal expression is only supported as a declaration initializer"
+        )),
         IrExpr::Deref { ptr, ty, .. } => {
             emit_post_increment_byte_read_expr(ptr, ty, symbols, context, indent_level, path)
         }
@@ -1070,12 +1161,14 @@ fn emit_index_expr(
         if !symbols.contains(base_name) {
             return Err(format!("index base {base_name} is not declared"));
         }
-        let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
-            format!(
-                "index base {base_name} has unsupported type {}",
-                type_label(base_ty)
-            )
-        })?;
+        let element_ty = fixed_integer_array_element_type(base_ty)
+            .or_else(|| readonly_pointer_slice_element_type(base_ty))
+            .ok_or_else(|| {
+                format!(
+                    "index base {base_name} has unsupported type {}",
+                    type_label(base_ty)
+                )
+            })?;
         (element_ty, emit_identifier(base_name, "index base")?)
     };
     let element_ty =
@@ -1124,12 +1217,14 @@ fn emit_index_expr_with_emitted_index(
         if !symbols.contains(base_name) {
             return Err(format!("index base {base_name} is not declared"));
         }
-        let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
-            format!(
-                "index base {base_name} has unsupported type {}",
-                type_label(base_ty)
-            )
-        })?;
+        let element_ty = fixed_integer_array_element_type(base_ty)
+            .or_else(|| readonly_pointer_slice_element_type(base_ty))
+            .ok_or_else(|| {
+                format!(
+                    "index base {base_name} has unsupported type {}",
+                    type_label(base_ty)
+                )
+            })?;
         (element_ty, emit_identifier(base_name, "index base")?)
     };
     let element_ty =
@@ -1627,6 +1722,9 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
+        IrExpr::ArrayLiteral { elements, .. } => elements
+            .iter()
+            .any(|element| expr_has_post_increment_byte_read(element, cursor)),
         IrExpr::Index { base, index, .. } => {
             expr_has_post_increment_byte_read(base, cursor)
                 || expr_has_post_increment_byte_read(index, cursor)
@@ -1649,6 +1747,9 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
+        IrExpr::ArrayLiteral { elements, .. } => {
+            elements.iter().map(count_post_increment_byte_reads).sum()
+        }
         IrExpr::Index { base, index, .. } => {
             count_post_increment_byte_reads(base) + count_post_increment_byte_reads(index)
         }
@@ -1715,6 +1816,7 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::Binary { ty, .. }
         | IrExpr::Unary { ty, .. }
         | IrExpr::Index { ty, .. }
+        | IrExpr::ArrayLiteral { ty, .. }
         | IrExpr::Call { ty, .. }
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
@@ -1733,6 +1835,16 @@ fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
         IrTypeKind::Pointer { pointee } if pointee.is_const && is_integer_type(pointee) => {
             Some(pointee.as_ref())
         }
+        _ => None,
+    }
+}
+
+fn fixed_integer_array_element_type(ty: &IrType) -> Option<&IrType> {
+    match &ty.kind {
+        IrTypeKind::Array {
+            element,
+            len: Some(_),
+        } if is_integer_type(element) => Some(element.as_ref()),
         _ => None,
     }
 }

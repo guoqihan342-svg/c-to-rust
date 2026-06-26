@@ -5656,3 +5656,45 @@ git diff --check -- <本轮目标文件>
 - 可以说：旧 string translator 的 crc32 canned/template 生成路径已经删除。
 - 不应说：仓库全程没有任何 crc32 专用代码。测试 fixture、FlashDB slice spec 和回归样本仍然保留 crc32，这是用例和验证输入，不是生成器 fallback。
 - 真实 FlashDB crc32 的 semantic acceptance 仍由 validation gates 决定，不能由 `GenericTypedIr` candidate route 直接宣称通过。
+
+## 82. 2026-06-27 typed IR local fixed array index read
+
+本轮继续按多线程审查下一步切口。三个只读线程结论：
+
+- direct-call signature evidence 是重要 soundness 切口，但需要重新设计 callee signature 进入 `ClangExprSkeleton::Call` / `IrExpr::Call` / evidence 的 contract。
+- simple struct field reads/writes 价值高，但会牵出 `MemberExpr`、record layout、Rust struct 定义、`&Point` / `&mut Point` 边界和 assignment target 泛化，切口偏大。
+- router risk floor 能防止 `GenericTypedIr` 把 alias-blocked pointer slice 误降到 L1，但它是路由正确性，不直接扩大 typed IR 可翻译 C 子集。
+
+本轮主线选了更小的核心翻译切口：typed IR 层的局部固定长度整数数组字面量 + 只读下标读取。它复用现有 `IrTypeKind::Array` 和 `IrExpr::Index`，先不接真实 clang `InitListExpr`。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrExpr::ArrayLiteral { elements, ty, source_span }`。
+  - `IrStmt::Decl` 现在允许固定长度整数数组声明使用数组字面量初始化，生成 Rust `let table: [u32; 3] = [1u32, 2u32, 3u32];`。
+  - `emit_index_expr()` / `emit_index_expr_with_emitted_index()` 现在除了 readonly global array 和 readonly pointer slice，也接受已声明的 local fixed integer array 作为 index base。
+  - 数组字面量保持窄化：只支持声明 initializer 位置；长度未知、元素数量不匹配、非整数元素或在 call/普通表达式位置使用都会 fail closed。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_read`。
+  - 红测阶段先失败于 `IrExpr::ArrayLiteral` variant 不存在；实现后通过，并用 `rustc` smoke 验证生成片段可编译。
+  - 顺手把 `without_implicit_cast()` / `repeated_c_u32_initializer()` 的 cfg 收窄到 clang frontend 相关 feature，避免 `typed-ir` 单独测试产生 dead_code warning。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 双语同步 generic typed IR coverage：local fixed integer arrays。
+
+本轮已跑过的验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_local_fixed_array_index_read -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+当前边界：
+
+- 这只是 typed IR -> Rust emitter 能力；真实 C `InitListExpr` / local array lowering 还没接到 clang frontend。
+- local array 当前只支持固定长度整数数组、声明时初始化、只读 index。数组元素写入、指针衰减、变长数组、struct array 仍应 fail closed。
+- 下一步可以在两个方向继续：接 clang `InitListExpr` 到 `ArrayLiteral`，或按并行线程建议补 direct-call callee signature evidence / router risk floor。

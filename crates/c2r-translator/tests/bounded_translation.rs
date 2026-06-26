@@ -189,6 +189,21 @@ fn ir_lit(value: u64, spelling: &str, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_array(element: IrType, len: usize) -> IrType {
+    IrType {
+        spelled: format!("{}[{len}]", element.spelled),
+        canonical: format!("{}[{len}]", element.canonical),
+        kind: IrTypeKind::Array {
+            element: Box::new(element),
+            len: Some(len),
+        },
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 fn without_implicit_cast(expr: &IrExpr) -> &IrExpr {
     match expr {
         IrExpr::Cast {
@@ -403,7 +418,7 @@ fn ir_u32_global_array(name: &str, len: usize, values: Vec<u64>) -> IrGlobal {
     }
 }
 
-#[cfg(feature = "typed-ir")]
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 fn repeated_c_u32_initializer(len: usize, value: &str) -> String {
     std::iter::repeat(value)
         .take(len)
@@ -469,6 +484,57 @@ fn typed_ir_rejects_readonly_global_array_initializer_length_mismatch() {
     assert!(error
         .reason
         .contains("initializer length 2 does not match array length 4"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_fixed_array_index_read() {
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let table_ty = ir_array(u32_ty.clone(), 3);
+    let ir = IrFunction {
+        name: "lookup_local_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "i".to_string(),
+            ty: usize_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: table_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1U", u32_ty.clone()),
+                        ir_lit(2, "2U", u32_ty.clone()),
+                        ir_lit(3, "3U", u32_ty.clone()),
+                    ],
+                    ty: table_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Index {
+                    base: Box::new(ir_var("table", table_ty)),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: u32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit local fixed array index read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("let table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-local-fixed-array-index-read", rust);
 }
 
 #[cfg(feature = "typed-ir")]
