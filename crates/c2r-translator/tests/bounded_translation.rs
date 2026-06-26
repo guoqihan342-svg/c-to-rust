@@ -9,9 +9,9 @@ use c2r_translator::clang_frontend::ClangParseSpec;
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 use c2r_translator::clang_frontend::{
     lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
-    lower_function_skeleton, lower_function_skeleton_report, ClangBinaryOperator,
-    ClangExprSkeleton, ClangFunctionSkeleton, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind,
-    ClangTypeSkeleton,
+    lower_function_from_clang_parse_spec_report, lower_function_skeleton,
+    lower_function_skeleton_report, ClangBinaryOperator, ClangExprSkeleton, ClangFunctionSkeleton,
+    ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton,
 };
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
@@ -806,6 +806,84 @@ fn clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let const_void_ty = ClangTypeSkeleton {
+        spelled: "const void".to_string(),
+        canonical: "void".to_string(),
+        kind: ClangTypeKind::Void,
+    };
+    let const_void_ptr_ty = ClangTypeSkeleton {
+        spelled: "const void *".to_string(),
+        canonical: "void *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_void_ty),
+        },
+    };
+    let size_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_identity".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "crc".to_string(),
+                ty: uint32_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "buf".to_string(),
+                ty: const_void_ptr_ty,
+            },
+            ClangParamSkeleton {
+                name: "size".to_string(),
+                ty: size_ty,
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::DeclRef {
+                name: "crc".to_string(),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower crc_identity skeleton");
+
+    assert_eq!(ir.params.len(), 3);
+    match &ir.params[1].ty.kind {
+        IrTypeKind::Pointer { pointee } => {
+            assert!(!ir.params[1].ty.is_const);
+            assert!(matches!(pointee.kind, IrTypeKind::Void));
+            assert!(pointee.is_const);
+        }
+        other => panic!("expected pointer param, got {other:?}"),
+    }
+    assert!(matches!(
+        ir.params[2].ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 64
+        }
+    ));
+    assert_eq!(ir.params[2].ty.canonical, "size_t");
+    assert_eq!(ir.params[2].ty.width_bits, Some(64));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_report_records_unavailable_without_clang_path() {
     let environment = std::collections::BTreeMap::new();
 
@@ -928,6 +1006,189 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
             .map(|function| function.name.as_str()),
         Some("add_one")
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let source_root = unique_out_dir("clang-parse-spec-include-path");
+    let include_dir = source_root.join("inc");
+    let source_dir = source_root.join("src");
+    fs::create_dir_all(&include_dir).unwrap();
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        include_dir.join("fixture_config.h"),
+        "int add_one(int value);\n#define ADD_ONE_OFFSET 1\n",
+    )
+    .unwrap();
+    fs::write(
+        source_dir.join("add_one.c"),
+        "#include <fixture_config.h>\nint add_one(int value) { return value + ADD_ONE_OFFSET; }\n",
+    )
+    .unwrap();
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "add-one",
+        "source_commit": "source-sha",
+        "function_name": "add_one",
+        "c_source": "int add_one(int value) { return value + ADD_ONE_OFFSET; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root.to_string_lossy().replace('\\', "/"),
+        "source_file": "src/add_one.c",
+        "source_file_hashes": {
+            "src/add_one.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/add_one.c",
+            "line_start": 2,
+            "line_end": 2,
+            "byte_start": 28,
+            "byte_end": 83,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": [],
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(report.arguments.iter().any(|argument| {
+        argument
+            == &format!(
+                "-I{}",
+                source_root.join("inc").to_string_lossy().replace('\\', "/")
+            )
+    }));
+    assert_eq!(
+        report
+            .function_ir
+            .as_ref()
+            .map(|function| function.name.as_str()),
+        Some("add_one")
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_uint32_integer_type_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-uint32-add-one");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("add_one.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t add_one(uint32_t value) { return value + 1; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_one");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    assert!(matches!(
+        function.return_type.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        function.params[0].ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-const-void-size");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_identity.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\n#include <stdint.h>\nuint32_t crc_identity(uint32_t crc, const void *buf, size_t size) { return crc; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_identity");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    assert_eq!(function.params.len(), 3);
+    match &function.params[1].ty.kind {
+        IrTypeKind::Pointer { pointee } => {
+            assert!(!function.params[1].ty.is_const);
+            assert!(matches!(pointee.kind, IrTypeKind::Void));
+            assert!(pointee.is_const);
+        }
+        other => panic!("expected pointer param, got {other:?}"),
+    }
+    assert!(matches!(
+        function.params[2].ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 64
+        }
+    ));
 }
 
 #[test]

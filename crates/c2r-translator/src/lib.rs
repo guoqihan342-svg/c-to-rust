@@ -499,10 +499,9 @@ fn write_clang_lowering_report_artifact(
         Ok(parse_spec) => {
             let source_file = parse_spec.source_root.join(&parse_spec.source_file);
             let environment = std::env::vars().collect::<BTreeMap<_, _>>();
-            let report = clang_frontend::lower_function_from_clang_ast_dump_report(
+            let report = clang_frontend::lower_function_from_clang_parse_spec_report(
                 &environment,
-                &source_file,
-                &parse_spec.function_name,
+                &parse_spec,
             );
             json!({
                 "schema_version": 1,

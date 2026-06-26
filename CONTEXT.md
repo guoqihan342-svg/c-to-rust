@@ -3567,3 +3567,106 @@ git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_
 2. 基于 report 增加专门的 AST subset audit artifact 或测试，明确 `while(size--)`、
    `*p++`、table lookup 等节点的 lowering 缺口。
 3. 再选择最小 AST lowering 子集，不要直接承诺全函数 lowering。
+
+## 52. 2026-06-26 real-fdb clang lowering report crosses type layer
+
+本轮承接第 51 节第 1 条下一步：用已安装 LLVM 和 `--emit-clang-lowering-report`
+对 real-fdb `fdb_calc_crc32` 做临时 out-root report，并把 report 的失败点从环境/头文件/原型/类型层推进到语句层。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `lower_function_from_clang_parse_spec_report()`，让 lowering report 复用
+    `ClangParseSpec::clang_arguments()`，因此真实 AST dump 会带上 slice spec 中的 `-I...`
+    和 `-D...` 参数。
+  - `lower_function_from_clang_ast_dump()` 现在复用内部
+    `lower_function_from_clang_ast_dump_with_arguments()`，避免裸 source-file 入口和
+    parse-spec 入口逻辑分叉。
+  - `find_function_decl()` 改为优先选择带 `CompoundStmt` body 的 `FunctionDecl`，
+    再 fallback 到任意同名声明，避免 include header 中的 prototype 抢在函数定义前被选中。
+  - `ClangTypeKind` 新增 `Void` 和 `Pointer`。
+  - `type_from_qual_type()` 现在覆盖：
+    - `uint32_t` / `unsigned int` -> unsigned 32-bit integer
+    - `uint8_t` / `unsigned char` -> unsigned 8-bit integer
+    - `size_t` -> canonical `size_t` 的 unsigned 64-bit integer
+    - `unsigned long` / `unsigned long long` -> 保留自身 canonical 的 unsigned 64-bit integer
+    - `void` / `const void`
+    - `T *` pointer skeleton
+  - `lower_type()` 现在能把 `Void` 和 `Pointer` lower 到 typed IR；`const void *`
+    会被表示为非 const pointer，pointee 为 const void。
+- `crates/c2r-translator/src/lib.rs`
+  - `write_clang_lowering_report_artifact()` 改为调用 parse-spec aware 的 report 入口，
+    使 artifact 路径不再丢失 include/define 参数。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增默认 skeleton 测试：
+    `clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params`。
+  - 新增 opt-in 真实 clang 测试：
+    `clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled`。
+  - 新增 opt-in 真实 clang 类型测试：
+    `clang_ast_dump_lowers_uint32_integer_type_when_enabled`。
+  - 新增 opt-in 真实 clang 参数测试：
+    `clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled`。
+
+真实 real-fdb 临时 report 推进链：
+- 修复前：`clang_ast_dump_failed`，`flashdb.h` not found。
+- 带入 parse-spec include args 后：选中 header prototype，报
+  `unsupported_function_body: FunctionDecl fdb_calc_crc32 does not contain a CompoundStmt body`。
+- 优先选择函数定义后：报 `unsupported_clang_type: uint32_t is outside the current type skeleton`。
+- 支持 `uint32_t` 后：报 `unsupported_clang_type: const void * is outside the current type skeleton`。
+- 支持 `const void *` / `size_t` 后：当前真实 blocker 已推进到
+  `unsupported_clang_stmt: DeclStmt is outside the current clang lowering skeleton`。
+
+本轮并行只读审查结论：
+- Meitner：确认 real-fdb 后续会依次遇到 `DeclStmt`、assignment、`WhileStmt`、
+  postfix `UnaryOperator`、`ArraySubscriptExpr` 和 table lookup 等缺口；建议继续把 report
+  作为 diagnostic-only surface，不要把字符串模式 translator 的 CRC32 成功误认为 clang AST lowering 成功。
+- Cicero：确认 Python 侧当前 opt-in/report/cache 已够用；本轮不需要新增 Python artifact。
+  如果后续加真实 clang Python 测试，应继续用临时 out-root 和 `C2R_RUN_CLANG_AST_TESTS=1`
+  gate，断言 blocked/unsupported 而不是 lowered。
+- Boyle：确认 IR 已经具备 `Void` / `Pointer` / `is_const` / `width_bits` 承载能力；
+  建议 `const void *` 表示为非 const pointer + const void pointee，并提醒不要把普通
+  `unsigned long` 误 canonical 成 `size_t`。本轮已采纳 canonical 修正。
+- Bernoulli：采样真实 `fdb_calc_crc32` AST，确认函数体顶层顺序为
+  `DeclStmt -> BinaryOperator("=") -> BinaryOperator("=") -> WhileStmt -> ReturnStmt`。
+  因此当前第一层 blocker 是 `DeclStmt`；如果后续支持局部声明，下一层有价值 blocker
+  会是 `p = (const uint8_t *)buf;` 对应的 assignment `BinaryOperator("=")`，再往后才是
+  `WhileStmt`、postfix `--/++`、deref、`ArraySubscriptExpr` 和 `^/&/>>`。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_uint32_integer_type_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+git diff --check -- crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/src/lib.rs crates/c2r-translator/tests/bounded_translation.rs
+```
+
+完整结果：
+- focused skeleton test：`1 passed`。
+- 三条 opt-in 真实 clang smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`54 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="DeclStmt is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不启用 clang frontend/lowering report。
+- `--emit-clang-lowering-report` 能在真实 `fdb_calc_crc32` 上产出 diagnostic-only report，
+  并且已经进入目标函数定义和参数类型层。
+- real-fdb clang AST lowering 仍未完成；当前第一个真实语句层缺口是 `DeclStmt`。
+- 已有字符串/typed-IR emitter 路径能生成 CRC32 candidate，但这不是 clang AST lowering 成功。
+
+下一步建议：
+1. 对 `DeclStmt` 做最小 AST subset audit/fixture，优先记录变量声明、初始化和局部指针类型，
+   不要直接吞下整段 `while(size--)`。
+2. 在 report 中显式 inventory unsupported statement/expression kinds，尤其是 `WhileStmt`、
+   assignment `BinaryOperator("=")`、postfix `UnaryOperator("--"/"++")`、deref、`ArraySubscriptExpr`。
+3. 再按真实 blocker 顺序选择最小 lowering 子集。

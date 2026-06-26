@@ -118,7 +118,9 @@ pub struct ClangTypeSkeleton {
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangTypeKind {
+    Void,
     Integer { signed: bool, width: u16 },
+    Pointer { pointee: Box<ClangTypeSkeleton> },
     Unsupported { reason: String },
 }
 
@@ -287,8 +289,17 @@ pub fn lower_function_from_clang_ast_dump(
     function_name: &str,
 ) -> Result<IrFunction, ClangFrontendError> {
     let arguments = clang_ast_dump_arguments(source_file);
+    lower_function_from_clang_ast_dump_with_arguments(clang_path, &arguments, function_name)
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_function_from_clang_ast_dump_with_arguments(
+    clang_path: &Path,
+    arguments: &[String],
+    function_name: &str,
+) -> Result<IrFunction, ClangFrontendError> {
     let output = Command::new(clang_path)
-        .args(&arguments)
+        .args(arguments)
         .output()
         .map_err(|error| ClangFrontendError {
             kind: "clang_ast_dump_unavailable".to_string(),
@@ -313,6 +324,52 @@ pub fn lower_function_from_clang_ast_dump(
     let skeleton = function_skeleton_from_ast(function)?;
 
     lower_function_skeleton(&skeleton)
+}
+
+#[cfg(feature = "typed-ir")]
+pub fn lower_function_from_clang_parse_spec_report(
+    environment: &BTreeMap<String, String>,
+    parse_spec: &ClangParseSpec,
+) -> ClangLoweringReport {
+    let source_file = parse_spec.source_root.join(&parse_spec.source_file);
+    let arguments =
+        clang_ast_dump_arguments_with_extra(&source_file, &parse_spec.clang_arguments());
+    let Some(clang_path) = environment
+        .get("CLANG_PATH")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return ClangLoweringReport {
+            status: "unavailable".to_string(),
+            frontend: "clang".to_string(),
+            source_file: Some(normalized_report_path(&source_file)),
+            function_name: parse_spec.function_name.clone(),
+            clang_path: None,
+            arguments,
+            environment: ClangEnvironment::detect_from_env(environment),
+            diagnostics: vec![
+                "CLANG_PATH is not set; clang AST lowering is unavailable".to_string()
+            ],
+            errors: vec![ClangFrontendError {
+                kind: "missing_clang_path".to_string(),
+                message: "clang AST lowering requires CLANG_PATH".to_string(),
+            }],
+            function_ir: None,
+        };
+    };
+
+    report_from_lowering_result(
+        Some(normalized_report_path(&source_file)),
+        parse_spec.function_name.clone(),
+        Some(clang_path.to_string()),
+        arguments.clone(),
+        environment,
+        lower_function_from_clang_ast_dump_with_arguments(
+            &PathBuf::from(clang_path),
+            &arguments,
+            &parse_spec.function_name,
+        ),
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -400,12 +457,23 @@ pub fn lower_function_skeleton(
 
 #[cfg(feature = "typed-ir")]
 fn clang_ast_dump_arguments(source_file: &Path) -> Vec<String> {
+    clang_ast_dump_arguments_with_extra(source_file, &[])
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_ast_dump_arguments_with_extra(
+    source_file: &Path,
+    extra_arguments: &[String],
+) -> Vec<String> {
     vec![
         "-Xclang".to_string(),
         "-ast-dump=json".to_string(),
         "-fsyntax-only".to_string(),
-        source_file.to_string_lossy().into_owned(),
     ]
+    .into_iter()
+    .chain(extra_arguments.iter().cloned())
+    .chain(std::iter::once(source_file.to_string_lossy().into_owned()))
+    .collect()
 }
 
 #[cfg(feature = "typed-ir")]
@@ -629,15 +697,40 @@ fn expr_type(expr: &Value) -> Result<ClangTypeSkeleton, ClangFrontendError> {
 
 #[cfg(feature = "typed-ir")]
 fn find_function_decl<'a>(node: &'a Value, function_name: &str) -> Option<&'a Value> {
-    if string_field(node, "kind").as_deref() == Some("FunctionDecl")
-        && string_field(node, "name").as_deref() == Some(function_name)
+    find_function_decl_with_body(node, function_name)
+        .or_else(|| find_function_decl_any(node, function_name))
+}
+
+#[cfg(feature = "typed-ir")]
+fn find_function_decl_with_body<'a>(node: &'a Value, function_name: &str) -> Option<&'a Value> {
+    if is_named_function_decl(node, function_name)
+        && inner(node)
+            .iter()
+            .any(|child| string_field(child, "kind").as_deref() == Some("CompoundStmt"))
     {
         return Some(node);
     }
 
     inner(node)
         .iter()
-        .find_map(|child| find_function_decl(child, function_name))
+        .find_map(|child| find_function_decl_with_body(child, function_name))
+}
+
+#[cfg(feature = "typed-ir")]
+fn find_function_decl_any<'a>(node: &'a Value, function_name: &str) -> Option<&'a Value> {
+    if is_named_function_decl(node, function_name) {
+        return Some(node);
+    }
+
+    inner(node)
+        .iter()
+        .find_map(|child| find_function_decl_any(child, function_name))
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_named_function_decl(node: &Value, function_name: &str) -> bool {
+    string_field(node, "kind").as_deref() == Some("FunctionDecl")
+        && string_field(node, "name").as_deref() == Some(function_name)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -653,13 +746,62 @@ fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFront
 
 #[cfg(feature = "typed-ir")]
 fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFrontendError> {
-    match qual_type.trim() {
+    let trimmed = qual_type.trim();
+    if let Some(pointee) = trimmed.strip_suffix('*') {
+        let pointee = type_from_qual_type(pointee.trim())?;
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: format!("{} *", pointee.canonical),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(pointee),
+            },
+        });
+    }
+
+    match trimmed {
+        "void" | "const void" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "void".to_string(),
+            kind: ClangTypeKind::Void,
+        }),
         "int" => Ok(ClangTypeSkeleton {
             spelled: "int".to_string(),
             canonical: "int".to_string(),
             kind: ClangTypeKind::Integer {
                 signed: true,
                 width: 32,
+            },
+        }),
+        "unsigned int" | "uint32_t" => Ok(ClangTypeSkeleton {
+            spelled: qual_type.trim().to_string(),
+            canonical: "uint32_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 32,
+            },
+        }),
+        "unsigned char" | "uint8_t" => Ok(ClangTypeSkeleton {
+            spelled: qual_type.trim().to_string(),
+            canonical: "uint8_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 8,
+            },
+        }),
+        "size_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "size_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 64,
+            },
+        }),
+        "unsigned long" | "unsigned long long" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: trimmed.to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 64,
             },
         }),
         other => Ok(ClangTypeSkeleton {
@@ -728,6 +870,14 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
 #[cfg(feature = "typed-ir")]
 fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
     match &ty.kind {
+        ClangTypeKind::Void => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Void,
+            is_const: clang_type_is_const(ty),
+            width_bits: None,
+            source_span: None,
+        }),
         ClangTypeKind::Integer { signed, width } => Ok(IrType {
             spelled: ty.spelled.clone(),
             canonical: ty.canonical.clone(),
@@ -735,8 +885,18 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
                 signed: *signed,
                 width: *width,
             },
-            is_const: false,
+            is_const: clang_type_is_const(ty),
             width_bits: Some(*width),
+            source_span: None,
+        }),
+        ClangTypeKind::Pointer { pointee } => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Pointer {
+                pointee: Box::new(lower_type(pointee)?),
+            },
+            is_const: false,
+            width_bits: None,
             source_span: None,
         }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
@@ -744,6 +904,11 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             message: reason.clone(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_const(ty: &ClangTypeSkeleton) -> bool {
+    ty.spelled.trim_start().starts_with("const ")
 }
 
 #[cfg(feature = "typed-ir")]
