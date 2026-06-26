@@ -2793,6 +2793,82 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(summary["generated_draft_semantic_pass"])
             self.assertEqual(summary["paths"]["c_oracle"], accepted["paths"]["c_oracle"])
 
+    def test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            route = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-route-decision.json").read_text(encoding="utf-8")
+            )
+            profile = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-validation-profile.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["status"], "accepted_evidence_bound")
+            self.assertTrue(manifest["semantic_pass"])
+            self.assertTrue(manifest["claim_boundary"]["accepted_evidence_authoritative"])
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertTrue(route["policy"]["accepted_evidence_authoritative"])
+            self.assertEqual(profile["status"], "passed")
+            self.assertEqual(profile["profile"], "L4-accepted-evidence")
+            self.assertEqual(oracle["status"], "C_ORACLE_GENERATED")
+            self.assertEqual(oracle["toolchain_status"], "C_ORACLE_GENERATED")
+            self.assertEqual(oracle["global_linkage_requirements"][0]["name"], "crc32_table")
+            self.assertEqual(
+                oracle["harness_contract"]["global_dependencies"],
+                oracle["global_linkage_requirements"],
+            )
+
+            validation_result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-calc-crc32",
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                validation_result.returncode,
+                0,
+                f"stdout:\n{validation_result.stdout}\nstderr:\n{validation_result.stderr}",
+            )
+            self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
+
     def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
         auto_migrate = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "level": "L3",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "status": "passed",
+  "semantic_pass": true,
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+  "case_count": 2,
+  "compared_fields": [
+    "return_code"
+  ],
+  "cases": [
+    {
+      "id": "empty-crc-zero",
+      "return_code": 0,
+      "status": "passed"
+    },
+    {
+      "id": "ascii-123456789-crc-zero",
+      "return_code": 3421780262,
+      "status": "passed"
+    }
+  ],
+  "accepted_boundary": "Accepted C oracle report is bound to the fixture cases and WSL compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative."
+}

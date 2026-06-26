@@ -1,12 +1,14 @@
 {
+  "accepted_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+    "sha256": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
+    "status": "passed"
+  },
   "accepted_diff_required": true,
-  "blocked_by": [
-    "c_oracle",
-    "rust_replay"
-  ],
+  "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "99fefd2d17010b2dddb2f3ac8cf891e6c741aa14b1098cccf114fd98d8f7f754",
+    "sha256": "b7d025fadee6eb13b86364ef632b7b17659fa91cea2eb5053c55d3ec298cc392",
     "status": "skipped"
   },
   "compared_fields": [
@@ -14,31 +16,30 @@
   ],
   "diff_gate": "schema_aware_c_rust_diff",
   "first_mismatch": null,
-  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
-  "reason_code": "missing_accepted_c_oracle_and_rust_replay",
   "required_inputs": {
-    "c_oracle_actual_status": "DRAFT_GENERATED",
-    "c_oracle_actual_toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
     "rust_replay_actual_status": "recorded",
-    "rust_report_actual_status": "incomplete",
-    "rust_report_required_status": "passed"
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
   },
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "4465a3d4e26d01b32769d7959affcacb315e5fa1ea8adc19ea30a051213813ba",
+    "sha256": "beea7ffcf3212378e2254ce145de533012118bd31102661137da96aa13a7b07b",
     "status": "refused"
   },
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "real-fdb-calc-crc32",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "37c70fbb4edef7b0c1332bb924922adbda8ddb652533e742eab68ee4b6bb6a20",
-    "status": "blocked"
+    "profile": "L4-accepted-evidence",
+    "sha256": "d7ff44ab6833a8c559c6bf0d281e8688dfd1ddbbaefb16981561352e1037e5a1",
+    "status": "passed"
   }
 }

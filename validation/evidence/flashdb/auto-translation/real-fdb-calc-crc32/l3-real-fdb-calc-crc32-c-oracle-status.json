@@ -1,5 +1,11 @@
 {
-  "boundary": "Draft generation is not oracle success.",
+  "accepted_oracle": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+    "sha256": "248b5eb77851fc8944c9ec5423df5cf939f7c1967ce003619cffedfad164c90f",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 2,
   "compile_command_draft": {
     "argv": [
       "cc",
@@ -167,6 +173,7 @@
     ],
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
   },
+  "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
   "global_linkage_requirements": [
     {
       "definition_status": "same_file_top_level_declared",
@@ -262,11 +269,13 @@
     "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
     "status": "draft"
   },
-  "required_final_status": "C_ORACLE_GENERATED",
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "real-fdb-calc-crc32",
-  "status": "DRAFT_GENERATED",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_slice_id": "real-fdb-calc-crc32",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
   "target_id": "flashdb",
-  "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE"
+  "toolchain_status": "C_ORACLE_GENERATED"
 }

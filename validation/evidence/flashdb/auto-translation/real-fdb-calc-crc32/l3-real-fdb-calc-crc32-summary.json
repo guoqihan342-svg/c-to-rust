@@ -1,8 +1,36 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+    "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "248b5eb77851fc8944c9ec5423df5cf939f7c1967ce003619cffedfad164c90f",
+      "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
+      "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
+      "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
+      "unsafe_ledger": "bbc04bbec4a4dab4ba1db97df5107948a8470f66ecf39f7a7c984eadd6a83964",
+      "unsafe_scan": "14a1688e220e46a2d15b4c55e010b514f603361f8dced6b3b6d524782b2a47a1"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-calc-crc32",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "generated_draft_semantic_pass": false,
   "schema_version": 1,
-  "semantic_pass": false,
+  "semantic_pass": true,
   "slice_id": "real-fdb-calc-crc32",
-  "status": "incomplete",
-  "summary": "Auto-translation candidate generated with schema-bound evidence; acceptance gates remain open.",
+  "status": "passed",
+  "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
   "target_id": "flashdb"
 }

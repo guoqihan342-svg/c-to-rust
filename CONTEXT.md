@@ -2231,3 +2231,78 @@ python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence vali
    `claim_boundary.accepted_evidence_authoritative=true`，并绑定第 34 节的 Rust report/diff/negative diff。
 3. 继续扩 translator surface 时，再单独处理 `const uint8_t *p`、`const void *` cast、`size--`、
    `*p++`、`crc32_table[...]` 和 bit operations。
+
+## 36. 2026-06-26 real-fdb accepted evidence semantic pass
+
+本轮把 `flashdb/real-fdb-calc-crc32` 从 fail-closed evidence 推进到 accepted evidence
+语义通过，但仍不声称 generated Rust draft 本身通过。translator route 仍是 `L4/refused`，
+语义通过绑定到显式 accepted C oracle / Rust report / diff / negative diff / unsafe evidence。
+
+核心改动：
+- 新增 accepted C oracle 输入：
+  `validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json`
+  - `status=passed`
+  - `toolchain_status=C_ORACLE_GENERATED`
+  - `semantic_pass=true`
+  - 绑定两个 fixture case 的 `return_code`
+- 更新 `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+  - `claim_boundary.accepted_evidence_authoritative=true`
+  - `fixture_contract.c_oracle` 绑定新 root C oracle
+  - `fixture_contract.rust_report/diff/negative_diff` 绑定第 34 节生成的 root evidence
+  - `fixture_contract.unsafe_scan/unsafe_ledger` 绑定 auto-translation 目录已有 passed evidence
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - auto manifest 现在是 `status=accepted_evidence_bound`
+  - L3 evidence manifest `semantic_pass=true`
+  - validation profile `profile=L4-accepted-evidence`, `status=passed`
+  - route 仍为 `L4/refused`
+  - promoted c-oracle status 为 `C_ORACLE_GENERATED`
+  - promoted c-oracle 保留 `crc32_table` 的 `global_linkage_requirements`、
+    `harness_contract.global_dependencies`、`compile_command_draft`、`compile_execution`
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 允许 promoted accepted oracle wrapper 的顶层 `toolchain_status=C_ORACLE_GENERATED`
+    与 embedded draft compile provenance `COMPILE_SUCCEEDED_NOT_ORACLE` 并存。
+  - embedded compile/harness execution 仍必须 `semantic_pass=false`。
+  - WSL provenance 校验支持 Windows 8.3 短路径和 repo-relative path 到 `/mnt/<drive>/...`
+    的等价映射，避免 `ADMINI~1` 这类路径导致误报。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 real-fdb 端到端测试：运行 `auto_migrate.py --accept-existing-evidence` 到临时 out-root，
+    断言 manifest/profile/oracle/global linkage，并继续调用 validator `--require-semantic-pass`。
+
+TDD 红绿过程：
+- 初始红灯：
+  `--accept-existing-evidence requires fixture_contract.c_oracle`
+- 绑定 accepted evidence 后，validator 红灯：
+  `oracle harness compile execution toolchain status drift`
+- 修 promoted wrapper 后，validator 红灯：
+  `oracle harness harness execution toolchain provenance drift`
+- 补 WSL 等价路径后，real-fdb 端到端测试通过。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_wsl_compile_execution_missing_execution_argv validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_wsl_compile_execution_launcher_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_compile_execution_skipped_spoofing_generated_toolchain
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+git diff --check -- validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json validation/tools/test_auto_migrate.py validation/tools/validate_auto_translation_evidence.py
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+并行审查结论：
+- Pasteur：确认 root `rust_report/diff/negative_diff` 可作为 accepted binding 输入；
+  auto `unsafe_scan/unsafe_ledger` 可复用；原 auto `final_verification` 不应手工绑定，应由 accepted
+  run 重新生成。
+- Lovelace：确认 accepted C oracle 原始 report 最小条件是 `status=passed/expected_failed`、
+  `toolchain_status=C_ORACLE_GENERATED`、`source_commit` 匹配；promoted wrapper 必须保留
+  real-fdb 的 `crc32_table` global linkage audit 字段。
+
+下一步建议：
+1. 如果要减少 evidence 体积，后续可把 accepted C oracle 的 provenance 从手工 root JSON
+   提升为可重复生成脚本，但不要改变当前 semantic boundary。
+2. 继续扩 translator surface 时，仍应独立处理 `const void*` cast、byte cursor post-increment、
+   `size--` 和 `crc32_table[...]`；当前 semantic pass 不代表 translator 已支持这些语法。
+3. 提交时只 stage real-fdb evidence/spec/tool/test/CONTEXT 这一组；旧 demo/l2/libuv evidence
+   仍有换行/生成噪声，继续不要带入提交。

@@ -157,7 +157,13 @@
     ],
     "behavior_fields": [
       "return_code"
-    ]
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json"
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",
@@ -176,6 +182,7 @@
     }
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "non_goals": [
       "No full project migration claim.",

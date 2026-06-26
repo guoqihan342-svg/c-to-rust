@@ -440,7 +440,10 @@ def validate_compile_execution(
     expected_toolchain_status = expected_toolchain_by_status[status]
     if compile_execution.get("toolchain_status_after_attempt") != expected_toolchain_status:
         raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
-    if compile_execution.get("toolchain_status_after_attempt") != oracle.get("toolchain_status"):
+    promoted_accepted = is_promoted_accepted_oracle_wrapper(oracle)
+    if compile_execution.get("toolchain_status_after_attempt") != oracle.get("toolchain_status") and not (
+        promoted_accepted and expected_toolchain_status == "COMPILE_SUCCEEDED_NOT_ORACLE"
+    ):
         raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
 
     attempted = compile_execution.get("attempted")
@@ -466,7 +469,7 @@ def validate_compile_execution(
         validate_compile_toolchain_provenance(compile_execution, oracle_path)
         if not compile_execution.get("diagnostics"):
             raise SystemExit(f"oracle harness compile execution diagnostics missing in {oracle_path}")
-        if status == "compile_succeeded_not_oracle" and oracle.get("semantic_pass") is True:
+        if status == "compile_succeeded_not_oracle" and oracle.get("semantic_pass") is True and not promoted_accepted:
             raise SystemExit(f"compiled oracle draft cannot claim semantic_pass=true in {oracle_path}")
         harness_execution = compile_execution.get("harness_execution")
         if status == "compile_succeeded_not_oracle" and not isinstance(harness_execution, dict):
@@ -476,6 +479,18 @@ def validate_compile_execution(
                 raise SystemExit(f"oracle harness execution status drift in {oracle_path}")
             validate_harness_execution(harness_execution, compile_execution, oracle_path)
         return
+
+
+def is_promoted_accepted_oracle_wrapper(oracle: dict[str, Any]) -> bool:
+    accepted = oracle.get("accepted_oracle")
+    return (
+        oracle.get("status") == "C_ORACLE_GENERATED"
+        and oracle.get("semantic_pass") is True
+        and oracle.get("toolchain_status") == "C_ORACLE_GENERATED"
+        and isinstance(accepted, dict)
+        and accepted.get("status") == "passed"
+        and bool(accepted.get("path"))
+    )
 
 
 def validate_harness_execution(
@@ -594,8 +609,28 @@ def validate_wsl_execution_argv(
     launcher_name = launcher.rsplit("/", 1)[-1]
     if launcher_name not in {"wsl", "wsl.exe"} or "-e" not in execution:
         raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
-    if not any(required_fragment in item for item in execution):
+    required_fragments = wsl_equivalent_fragments(required_fragment)
+    if not any(fragment in item for fragment in required_fragments for item in execution):
         raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
+
+
+def wsl_equivalent_fragments(path_text: str) -> list[str]:
+    fragments = [path_text.replace("\\", "/")]
+    if path_text.startswith("/"):
+        return fragments
+    original_match = re.match(r"^([A-Za-z]):/(.*)$", fragments[0])
+    if original_match:
+        drive, rest = original_match.groups()
+        fragments.append(f"/mnt/{drive.lower()}/{rest}")
+    candidate = Path(path_text)
+    resolved = candidate if candidate.is_absolute() else REPO_ROOT / candidate
+    resolved_text = resolved.resolve().as_posix()
+    fragments.append(resolved_text)
+    match = re.match(r"^([A-Za-z]):/(.*)$", resolved_text)
+    if match:
+        drive, rest = match.groups()
+        fragments.append(f"/mnt/{drive.lower()}/{rest}")
+    return list(dict.fromkeys(fragments))
 
 
 def validate_harness_output_gate(

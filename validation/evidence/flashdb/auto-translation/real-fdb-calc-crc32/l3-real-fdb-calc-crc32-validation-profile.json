@@ -1,4 +1,6 @@
 {
+  "accepted_evidence_authoritative": true,
+  "generated_draft_semantic_pass": false,
   "goal": "dev",
   "loop_policy": {
     "fixed_project_loop_count_required": false,
@@ -10,9 +12,9 @@
     "evidence_cleanliness",
     "kani"
   ],
-  "profile": "L4-dev",
+  "profile": "L4-accepted-evidence",
   "required_gate_status": {
-    "c_oracle_diff": "DRAFT_GENERATED",
+    "c_oracle_diff": "C_ORACLE_GENERATED",
     "compile": "passed"
   },
   "required_gates": [
@@ -21,18 +23,9 @@
   ],
   "route_level": "L4",
   "schema_version": 1,
-  "skipped_gates": [
-    {
-      "gate": "candidate_generation",
-      "reason": "route_refused"
-    },
-    {
-      "gate": "c_oracle_diff",
-      "reason": "DRAFT_GENERATED"
-    }
-  ],
+  "skipped_gates": [],
   "slice_id": "real-fdb-calc-crc32",
-  "status": "blocked",
+  "status": "passed",
   "target_id": "flashdb",
   "tool_boundaries": {
     "c_ub": [

@@ -2,7 +2,9 @@
   "level": "L4",
   "misroute": null,
   "policy": {
+    "accepted_evidence_authoritative": true,
     "fixed_loop_count_required": false,
+    "generated_draft_semantic_pass": false,
     "goal": "dev",
     "repair_budget_source": "run_policy"
   },
@@ -16,6 +18,10 @@
         "type_map": "recorded"
       },
       "weight": "hard_refuse"
+    },
+    {
+      "feature": "accepted_evidence_authoritative",
+      "weight": "override"
     }
   ],
   "schema_version": 1,
@@ -23,17 +29,17 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "99fefd2d17010b2dddb2f3ac8cf891e6c741aa14b1098cccf114fd98d8f7f754",
+      "sha256": "b7d025fadee6eb13b86364ef632b7b17659fa91cea2eb5053c55d3ec298cc392",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "8f031298e67c3d8bb1088e68380f6236e68b76db86f1629fdb27bfba16f9b011",
+      "sha256": "fb1435a0781f5fe56b525286e08ae8b085c9b5320821fa1da7d6702d232d943f",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "fa67a4315f2a4ca7ac9143ea247621e80ce918fddab883e90bd710f4c436b29f",
+      "sha256": "4fc2659569b92964e454904cdd5294dd758639184e783c6a4a2bc6be9bae1808",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -42,7 +48,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "8f59ef43a01552e70e8c98e7be425bf701abfa48f1573388886295bf120970e0",
+      "sha256": "c62714884c928d65bfd17ceb5d12c01d971e69bac2e0e7a1ccaed3c47f839311",
       "status": "recorded"
     }
   },
@@ -52,5 +58,5 @@
     "candidate_generation_allowed": false,
     "kind": "refuse"
   },
-  "verification_profile": "L4-dev"
+  "verification_profile": "L4-accepted-evidence"
 }
