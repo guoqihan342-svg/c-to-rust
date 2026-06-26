@@ -87,6 +87,7 @@ flowchart TD
 generic typed IR emission 现在覆盖：
 
 - scalar declaration、assignment、return、`if`、`while`；
+- 标量整数二元表达式 `+`、`-`、`&`、`^`、`>>`；
 - 只允许出现在条件中的 comparison expression；
 - 来自 clang AST 的 initialized scalar local；
 - 来自 clang AST 的无大括号 `if` / `while` body；

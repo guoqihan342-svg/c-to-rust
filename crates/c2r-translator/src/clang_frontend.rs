@@ -232,6 +232,7 @@ pub enum ClangExprSkeleton {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangBinaryOperator {
     Add,
+    Sub,
     BitAnd,
     BitXor,
     Shr,
@@ -1033,6 +1034,7 @@ fn expr_skeleton_from_ast_with_options(
         Some("BinaryOperator") => {
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("+") => ClangBinaryOperator::Add,
+                Some("-") => ClangBinaryOperator::Sub,
                 Some("&") => ClangBinaryOperator::BitAnd,
                 Some("^") => ClangBinaryOperator::BitXor,
                 Some(">>") => ClangBinaryOperator::Shr,
@@ -1419,6 +1421,7 @@ fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
     matches!(
         op,
         ClangBinaryOperator::Add
+            | ClangBinaryOperator::Sub
             | ClangBinaryOperator::BitAnd
             | ClangBinaryOperator::BitXor
             | ClangBinaryOperator::Shr
@@ -1759,6 +1762,7 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
 fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
     match op {
         ClangBinaryOperator::Add => IrBinOp::Add,
+        ClangBinaryOperator::Sub => IrBinOp::Sub,
         ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
         ClangBinaryOperator::Shr => IrBinOp::Shr,
@@ -1919,6 +1923,74 @@ mod tests {
             };
             assert_eq!(op, expected);
         }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_subtraction_integral_cast_operands() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "-",
+            "type": { "qualType": "unsigned int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "unsigned int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "unsigned int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "unsigned int" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "1"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("subtraction skeleton");
+        let ir = lower_expr(&skeleton).expect("lower subtraction skeleton");
+
+        let IrExpr::Binary {
+            op, lhs, rhs, ty, ..
+        } = ir
+        else {
+            panic!("expected IR subtraction, got {ir:?}");
+        };
+        assert_eq!(op, IrBinOp::Sub);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            lhs.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
+        ));
+        assert!(matches!(
+            rhs.as_ref(),
+            IrExpr::Cast { target, .. }
+                if matches!(
+                    target.kind,
+                    IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    }
+                )
+        ));
     }
 
     #[test]

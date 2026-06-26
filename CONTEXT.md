@@ -5204,6 +5204,8 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 
 ## 75. 2026-06-27 CandidateRoute P0 skeleton
 
+历史状态说明：本节已被第 77、81 节和后续条目取代。不要按本节恢复任何 `DeprecatedLegacyCrc32`、crc32 canned emitter 或 fallback route。
+
 本轮承接 Candidate Route P0 设计，把 typed IR Rust emission 的候选生成路由从隐式 `String` 返回值升级为显式结构化元数据。
 
 核心改动：
@@ -5261,6 +5263,8 @@ git diff --check -- docs/c2rust-migration-agent/core-translation-architecture.md
 - candidate route 不是最终验收结论；语义接受仍由 evidence route decision、validation profile 和 differential gates 决定。
 
 ## 76. 2026-06-27 readonly global table support and real FlashDB GenericTypedIr route
+
+历史状态说明：本节已被第 77、81 节和后续条目取代。图中的 `DeprecatedLegacyCrc32 fallback` 是已删除的历史过渡状态，不是当前可实施路线。
 
 本轮承接第 75 节 CandidateRoute P0 之后的核心翻译主线：不再让真实 FlashDB crc32 依赖 canned crc32 helper，而是把 `static const uint32_t crc32_table[] = {...}` 作为受限 readonly global facts 接到 generic typed IR emitter。
 
@@ -5344,6 +5348,8 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - `DeprecatedLegacyCrc32` fallback 仍存在，下一步应缩小并删除 `is_crc32_byte_cursor_ir()` / `emit_crc32_byte_cursor_rust()`，但删除前要确保现有 legacy coverage 不再承担唯一回退。
 
 ## 77. 2026-06-27 typed IR crc32 legacy fallback removal
+
+历史状态说明：本节关于 typed IR fallback 删除仍有效；本节中如果提到旧 string translator 仍保留 legacy parser compatibility path，已被第 81 节取代。当前旧 string crc32 canned/template 生成路径也已删除。
 
 本轮承接第 76 节：真实 FlashDB crc32 已经能通过 clang lowering + readonly globals + generic typed IR emitter 生成可编译 Rust，因此删除 typed IR 层的 crc32 canned fallback，不再让 no-globals crc32 IR 偷偷走 `crc32_update_byte()` 模板。
 
@@ -5952,3 +5958,71 @@ English mirror summary:
 - The validator now fails closed on missing call-site bindings, source hash drift, signature-shape drift, `callee_signature_id` drift, call-edge metadata drift, and stub/semantics-boundary drift.
 - Unsupported blocked external callees are validated as fail-closed blocked evidence instead of being forced through compile-only binding.
 - This is evidence-integrity and provenance hardening only. Recorded external callees remain `compile_only`, blocked external callees remain `stub_kind=none`, and `semantics_verified=false`; semantic acceptance still belongs to the validation gates.
+
+## 87. 2026-06-27 scalar subtraction through typed IR and clang lowering
+
+本轮继续按多智能体并行推进。只读线程结论一致：标量二元减法 `-` 是当前最小、高收益的 generic typed IR 扩展；FlashDB crc32 不应再新增或恢复任何专用 canned route，后续语义接受要走完整 validation gates。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_binary_op()` 新增 `IrBinOp::Sub -> "-"`。
+  - `validate_binary_operand_types()` 把 `-` 纳入与 `+` 相同的标量整数类型规则：lhs、rhs、result 必须发射为同一 Rust 标量类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Sub`。
+  - clang AST `BinaryOperator opcode "-"` 现在 lowering 到 `ClangBinaryOperator::Sub`，再 lowering 到 `IrBinOp::Sub`。
+  - `preserves_integral_operand_casts()` 纳入 `Sub`，避免 `unsigned int value - 1` 这类 usual arithmetic conversion 被剥掉后在 typed IR emitter 类型校验阶段误拒。
+  - 新增内部单测覆盖 subtraction operand 的 `IntegralCast` 保留。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 红绿测试 `typed_ir_emits_scalar_subtraction`。
+  - 新增 clang skeleton 红绿测试 `typed_ir_emits_scalar_subtraction_from_clang_lowered_ir`，并断言 lhs/rhs 方向：`value - 1`，不能错成 `1 - value`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_scalar_subtraction_when_enabled`，验证真实 C `int sub_one(int value) { return value - 1; }` 从 clang AST 到 typed IR，再到可编译 Rust。
+- 文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `docs/superpowers/plans/2026-06-27-candidate-route-p0.md`
+  - `CONTEXT.md`
+
+文档边界修订：
+
+- 旧 `docs/superpowers/plans/2026-06-27-candidate-route-p0.md` 已改为 superseded tombstone，不再是可执行计划；它明确禁止恢复 `DeprecatedLegacyCrc32`、typed IR crc32 matcher、string translator crc32 byte-cursor recognizer 或 `crc32_update_byte()` canned template。
+- `CONTEXT.md` 第 75、76、77 节已加历史状态警告，避免后续 agent 搜索到旧“当前”措辞后恢复 legacy crc32 fallback。
+- candidate route P0 设计里的 “legacy route/profile evidence” 已改成“未带 candidate_generation 的历史 evidence artifacts”，避免把 legacy route 误读成当前允许路线。
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_subtraction -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_subtraction_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+
+- direct typed IR 失败于 `binary op Sub is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Sub found for enum ClangBinaryOperator`。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_subtraction -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_subtraction_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_scalar_subtraction_when_enabled -- --nocapture
+```
+
+当前边界：
+
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST 中的标量整数减法 `value - 1` 已经能进入 `GenericTypedIr` 并生成可编译 Rust。
+- 可以说：`Sub` 保留 clang integral casts，覆盖 unsigned subtraction 的核心类型风险。
+- 不应说：已支持所有 C 减号。`-value` 是 unary minus，`p - q` / `p - n` 是指针减法/指针算术，`-=` 是复合赋值；这些仍不在本轮能力范围内。
+- 不应说：FlashDB semantic acceptance 已完成。FlashDB 只是用例；真实 generated draft 接受仍需要 C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Scalar integer subtraction now flows through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust.
+- `ClangBinaryOperator::Sub`, AST opcode `"-"`, cast-preserving operand lowering, and `IrBinOp::Sub` emission are all wired.
+- The old Candidate Route P0 plan is now a superseded tombstone and must not be used to restore any crc32 canned or fallback route.
+- This does not mean all C minus forms are supported: unary minus, pointer subtraction/arithmetic, and compound `-=` remain outside the current subset.
+- This is still candidate generation only. Real FlashDB generated-draft semantic acceptance remains gated by C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.

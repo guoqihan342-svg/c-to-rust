@@ -124,7 +124,7 @@ When the generic typed IR emitter fails closed:
 
 For unsupported typed IR, `typed_ir.status = "unsupported"`, `candidate_route.route = "Unsupported"`, `rust_draft_generated = false`, and `unsupported_reason` records the failure detail.
 
-Schema compatibility rule: `candidate_generation` remains optional for legacy route/profile evidence; once present, it must satisfy the current two-route typed IR contract. This preserves older evidence tests while rejecting new typed IR candidate evidence that reintroduces `DeprecatedLegacyCrc32` or claims `semantic_pass=true`.
+Schema compatibility rule: `candidate_generation` remains optional for historical evidence artifacts without candidate_generation; once present, it must satisfy the current two-route typed IR contract. This preserves older evidence tests while rejecting new typed IR candidate evidence that reintroduces `DeprecatedLegacyCrc32` or claims `semantic_pass=true`.
 
 ## Relationship To Evidence Route Decisions
 
@@ -162,7 +162,7 @@ Minimum verification:
 2. `clang-lowering-report.typed_ir_candidate` records `semantic_pass=false`.
 3. `route_decision.candidate_generation.typed_ir` matches the typed IR candidate in the clang-lowering-report.
 4. `validation_profile.candidate_generation` exactly matches the route decision.
-5. The schema accepts legacy route/profile evidence without `candidate_generation`, but rejects new typed IR candidate evidence containing `DeprecatedLegacyCrc32` or `semantic_pass=true`.
+5. The schema accepts historical evidence artifacts without `candidate_generation`, but rejects new typed IR candidate evidence containing `DeprecatedLegacyCrc32` or `semantic_pass=true`.
 6. A `GenericTypedIr` candidate must not override alias route floors: `requires_noalias_contract` / `unknown_alias` routes to L2, and `alias_blocked` routes to L3.
 7. `GenericTypedIr` direct-call candidates from clang lowering must emit `call_expressions` evidence matching the bounded direct calls while keeping `semantic_pass=false`.
 8. If the slice spec declares an external direct callee, both the default validator and `--require-semantic-pass` must check every call site across plan `translation_summary.call_expressions`, context-pack `direct_call_edges`, `callee_sources`, `signature_bindings`, and `call_edge_to_callee_binding` for source/signature/stub/semantics-boundary consistency; this is evidence-integrity/provenance hardening only, not proof that the external callee semantics passed.

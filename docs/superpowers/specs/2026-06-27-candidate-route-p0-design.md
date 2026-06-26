@@ -124,7 +124,7 @@ pub struct EmittedRust {
 
 不支持时，`typed_ir.status = "unsupported"`，`candidate_route.route = "Unsupported"`，`rust_draft_generated = false`，并记录 `unsupported_reason`。
 
-schema 的兼容规则：`candidate_generation` 对 legacy route/profile evidence 仍是可选字段；一旦出现，就必须满足当前两路线 typed IR contract。这样不会破坏旧 evidence tests，但会拒绝新证据重新引入 `DeprecatedLegacyCrc32` 或 `semantic_pass=true`。
+schema 的兼容规则：`candidate_generation` 对未带 candidate_generation 的历史 evidence artifacts 仍是可选字段；一旦出现，就必须满足当前两路线 typed IR contract。这样不会破坏旧 evidence tests，但会拒绝新证据重新引入 `DeprecatedLegacyCrc32` 或 `semantic_pass=true`。
 
 ## 与 evidence route decision 的关系
 
@@ -162,7 +162,7 @@ typed IR `CandidateRouteDecision` 只回答：
 2. `clang-lowering-report.typed_ir_candidate` 记录 `semantic_pass=false`。
 3. `route_decision.candidate_generation.typed_ir` 与 clang-lowering-report 中的 typed IR candidate 一致。
 4. `validation_profile.candidate_generation` 与 route decision 完全一致。
-5. schema 接受没有 `candidate_generation` 的 legacy route/profile evidence，但拒绝包含 `DeprecatedLegacyCrc32` 或 `semantic_pass=true` 的新 typed IR candidate evidence。
+5. schema 接受没有 `candidate_generation` 的历史 evidence artifacts，但拒绝包含 `DeprecatedLegacyCrc32` 或 `semantic_pass=true` 的新 typed IR candidate evidence。
 6. `GenericTypedIr` candidate 不能覆盖 alias route floor：`requires_noalias_contract` / `unknown_alias` 路由到 L2，`alias_blocked` 路由到 L3。
 7. clang lowering 产生的 `GenericTypedIr` direct-call candidate 必须写出与 bounded direct call 匹配的 `call_expressions` 证据，同时保持 `semantic_pass=false`。
 8. 如果 slice spec 声明 external direct callee，默认 validator 和 `--require-semantic-pass` 都必须逐 call-site 校验 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings` 和 `call_edge_to_callee_binding` 的 source/signature/stub/semantics 边界一致；这只是 evidence integrity/provenance hardening，不代表 external callee 语义已通过。

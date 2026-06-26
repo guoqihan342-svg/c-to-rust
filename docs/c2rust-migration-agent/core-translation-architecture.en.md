@@ -87,6 +87,7 @@ The typed IR `CandidateRouteDecision` selects the candidate generation implement
 Generic typed IR emission now covers:
 
 - scalar declarations, assignment, return, `if`, and `while`;
+- scalar integer binary expressions `+`, `-`, `&`, `^`, and `>>`;
 - comparison expressions only in conditions;
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;

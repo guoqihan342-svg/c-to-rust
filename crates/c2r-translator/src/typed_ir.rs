@@ -1485,6 +1485,7 @@ fn first_available_named_temp(preferred: &str, symbols: &HashSet<String>) -> Str
 fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
     match op {
         IrBinOp::Add => Ok("+"),
+        IrBinOp::Sub => Ok("-"),
         IrBinOp::BitAnd => Ok("&"),
         IrBinOp::BitXor => Ok("^"),
         IrBinOp::Shr => Ok(">>"),
@@ -1518,7 +1519,7 @@ fn validate_binary_operand_types(
     let rhs_ty = emit_scalar_type(rhs_ty).map_err(|detail| format!("binary rhs has {detail}"))?;
 
     match op {
-        "+" | "&" | "^" => {
+        "+" | "-" | "&" | "^" => {
             if lhs_ty == result_ty && rhs_ty == result_ty {
                 Ok(())
             } else {

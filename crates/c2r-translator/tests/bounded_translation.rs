@@ -965,6 +965,40 @@ fn typed_ir_reports_generic_candidate_route_for_scalar_emit() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_subtraction() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "sub_one".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Sub,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit scalar subtraction");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
+    assert!(rust.contains("return (value - 1i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-scalar-subtraction", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_direct_identifier_call_expressions() {
     let i32_ty = ir_i32();
     let helper_call = |arg: IrExpr| IrExpr::Call {
@@ -3978,6 +4012,72 @@ fn typed_ir_emits_add_one_from_clang_lowered_ir() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn typed_ir_emits_scalar_subtraction_from_clang_lowered_ir() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "sub_one".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Sub,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower sub_one skeleton");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Sub,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected single return-sub statement");
+    };
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Var { name, .. } if name == "value"
+    ));
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { value: 1, spelling, .. } if spelling == "1"
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit sub_one from lowered typed IR");
+
+    assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
+    assert!(rust.contains("return (value - 1i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-sub-one", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_bitxor_bitnot_assignment() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -5375,6 +5475,57 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
             .map(|function| function.name.as_str()),
         Some("add_one")
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_real_scalar_subtraction_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-sub-one");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("sub_one.c");
+    fs::write(
+        &source_file,
+        "int sub_one(int value) { return value - 1; }\n",
+    )
+    .unwrap();
+
+    let ir = lower_function_from_clang_ast_dump(&clang_path, &source_file, "sub_one")
+        .expect("lower real clang AST sub_one");
+
+    assert_eq!(ir.name, "sub_one");
+    assert_eq!(ir.params.len(), 1);
+    assert_eq!(ir.params[0].name, "value");
+    assert!(matches!(
+        ir.body.as_slice(),
+        [IrStmt::Return {
+            value: Some(IrExpr::Binary {
+                op: IrBinOp::Sub,
+                ..
+            }),
+            ..
+        }]
+    ));
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit real clang sub_one from typed IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
+    assert!(rust.contains("return (value - 1i32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-scalar-subtraction", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
