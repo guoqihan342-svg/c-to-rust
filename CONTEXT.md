@@ -6273,3 +6273,75 @@ English mirror summary:
 - `IrUnOp::Not` remains fail-closed and is covered by a regression test; this slice does not emit Rust `!`.
 - This is candidate generation only. It does not support unsigned/wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, literal/min-value edge cases such as `-2147483648`, full usual arithmetic conversions, or semantic acceptance.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 91. 2026-06-27 condition-only logical not through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR condition emitter、clang AST `UnaryOperator` lowering 和中英文文档同步点；主线程按 TDD 把仅条件位置的 C logical not `!expr` 接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_condition_expr()` 现在在 `if` / `while` 条件位置识别 `IrUnOp::Not`。
+  - `if (!value)` / `while (!value)` 生成整数零比较，例如 `value == 0i32`，避免误用 Rust 整数位取反 `!value`。
+  - `!(value > 0)` 生成反转后的 comparison condition，例如 `value <= 0i32`，不把 comparison 当作 value expression 或 integer truthiness 包装。
+  - logical-not 表达式结果类型必须是 C `int`；operand 含 call、inc/dec、未建模 side effect、pointer/float/unsupported type 继续 fail closed。
+  - `emit_expr()` 没有放开 `IrUnOp::Not`，所以 value-position `return !value` 仍 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangUnaryOperator` 新增 `Not`。
+  - clang AST `UnaryOperator` opcode `"!"` 现在 lowering 到 `ClangUnaryOperator::Not`，再 lowering 到 `IrUnOp::Not`。
+  - 新增内部 JSON 单测覆盖 `UnaryOperator("!") -> IrUnOp::Not`，不依赖真实 clang 环境。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_if_with_logical_not_integer_condition`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_while_with_logical_not_integer_condition`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_if_with_logical_not_comparison_condition`。
+  - 新增 fail-closed 测试 `typed_ir_rejects_logical_not_condition_with_incdec_operand` 和 `typed_ir_rejects_logical_not_condition_with_non_int_result_type`。
+  - 既有 `typed_ir_rejects_logical_not_in_generic_emitter` 保持 value-position `IrUnOp::Not` fail-closed。
+  - 新增 clang skeleton 测试 `clang_lowering_skeleton_maps_logical_not_if_condition`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_logical_not_if_condition_when_enabled`，覆盖真实 C `int is_zero(int value) { if (!value) { return 1; } return 0; }`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_if_with_logical_not_integer_condition -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_logical_not_if_condition -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].if condition unary op Not is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Not found for enum ClangUnaryOperator`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report logical_not -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not_if_condition_when_enabled -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 198 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not_if_condition_when_enabled -- --nocapture`: PASS，真实 clang AST smoke 实际运行。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 condition-only logical not 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`if (!value)` / `while (!value)` 使用整数零比较；`!(value > 0)` 使用反转 comparison condition。
+- 可以说：value-position `IrUnOp::Not` 仍有 fail-closed 回归覆盖；本轮没有把 `return !value`、assignment RHS 或 declaration initializer 的 C `int` 结果语义接入 generic emitter。
+- 不应说：已经支持完整 C unary `!`、短路逻辑、pointer null test、float truthiness、call/deref/inc/dec side-effect operand、或者 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+English mirror summary:
+
+- Condition-only logical not now flows through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `ClangUnaryOperator::Not`, AST opcode `"!"`, and `IrUnOp::Not` condition emission are wired.
+- `if (!value)` / `while (!value)` emit integer zero comparisons; `!(value > 0)` emits a negated comparison condition.
+- Value-position `IrUnOp::Not` remains fail-closed, so C `int` result semantics such as `return !value`, assignment RHS, and declaration initializer are not supported yet.
+- This is candidate generation only. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

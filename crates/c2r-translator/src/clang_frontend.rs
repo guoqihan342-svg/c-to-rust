@@ -251,6 +251,7 @@ pub enum ClangBinaryOperator {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangUnaryOperator {
     Neg,
+    Not,
     BitNot,
 }
 
@@ -1159,6 +1160,7 @@ fn expr_skeleton_from_ast_with_options(
 
             let op = match opcode.as_str() {
                 "-" => ClangUnaryOperator::Neg,
+                "!" => ClangUnaryOperator::Not,
                 "~" => ClangUnaryOperator::BitNot,
                 opcode => {
                     return Ok(ClangExprSkeleton::Unsupported {
@@ -1793,6 +1795,7 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
 fn lower_unary_operator(op: &ClangUnaryOperator) -> IrUnOp {
     match op {
         ClangUnaryOperator::Neg => IrUnOp::Neg,
+        ClangUnaryOperator::Not => IrUnOp::Not,
         ClangUnaryOperator::BitNot => IrUnOp::BitNot,
     }
 }
@@ -2040,6 +2043,51 @@ mod tests {
             panic!("expected IR unary minus, got {ir:?}");
         };
         assert_eq!(op, IrUnOp::Neg);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_logical_not() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "!",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("logical not skeleton");
+        let ir = lower_expr(&skeleton).expect("lower logical not skeleton");
+
+        let IrExpr::Unary {
+            op, operand, ty, ..
+        } = ir
+        else {
+            panic!("expected IR logical not, got {ir:?}");
+        };
+        assert_eq!(op, IrUnOp::Not);
         assert!(matches!(
             ty.kind,
             IrTypeKind::Integer {

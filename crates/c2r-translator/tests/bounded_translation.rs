@@ -247,6 +247,16 @@ fn ir_neg(expr: IrExpr, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_not(expr: IrExpr, ty: IrType) -> IrExpr {
+    IrExpr::Unary {
+        op: IrUnOp::Not,
+        operand: Box::new(expr),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn flashdb_crc32_typed_ir() -> IrFunction {
     let u32_ty = ir_u32();
     let u8_ty = ir_u8();
@@ -2784,6 +2794,138 @@ fn typed_ir_emits_scalar_while_with_comparison_condition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_if_with_logical_not_integer_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "is_zero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(ir_var("value", i32_ty.clone()), i32_ty.clone()),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar if logical not condition");
+
+    assert!(rust.contains("pub fn is_zero(value: i32) -> i32"));
+    assert!(rust.contains("if value == 0i32 {"));
+    assert!(rust.contains("return 1i32;"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-if-logical-not", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_scalar_while_with_logical_not_integer_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bump_until_nonzero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_not(ir_var("value", i32_ty.clone()), i32_ty.clone()),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar while logical not condition");
+
+    assert!(rust.contains("pub fn bump_until_nonzero(mut value: i32) -> i32"));
+    assert!(rust.contains("while value == 0i32 {"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-while-logical-not", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_scalar_if_with_logical_not_comparison_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "clamp_nonpositive".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(
+                    ir_binary(
+                        IrBinOp::Gt,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(0, "0", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar if logical not comparison condition");
+
+    assert!(rust.contains("pub fn clamp_nonpositive(value: i32) -> i32"));
+    assert!(rust.contains("if (value <= 0i32) {"));
+    assert!(!rust.contains("!(value > 0i32)"));
+    assert!(!rust.contains("(value > 0i32) == 0i32"));
+    assert!(rust.contains("return 0i32;"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-if-logical-not-comparison", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_comparison_expression_outside_condition() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -3105,6 +3247,98 @@ fn typed_ir_rejects_if_with_incdec_condition_expr() {
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("stmt[0].if condition"));
     assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_logical_not_condition_with_incdec_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_if_not_incdec".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_var("value", i32_ty.clone()),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("logical not incdec operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error.reason.contains("logical not operand"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_logical_not_condition_with_non_int_result_type() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_if_not_result_type".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(ir_var("value", i32_ty.clone()), u32_ty),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("logical not result type must be C int");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("logical not result type must be C int"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5090,6 +5324,72 @@ fn clang_lowering_skeleton_maps_comparison_if_condition() {
     let rust = emit_rust_from_ir(&ir).expect("emit comparison if from lowered IR");
     assert!(rust.contains("if (value > 0i32) {"));
     assert_rust_snippet_compiles("typed-ir-clang-if-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_logical_not_if_condition() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "is_zero".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::If {
+                condition: ClangExprSkeleton::Unary {
+                    op: ClangUnaryOperator::Not,
+                    operand: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty.clone(),
+                },
+                then_body: vec![ClangStmtSkeleton::Return {
+                    value: Some(ClangExprSkeleton::IntegerLiteral {
+                        value: 1,
+                        spelling: "1".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                }],
+                else_body: vec![],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower logical not if condition");
+
+    let [IrStmt::If {
+        condition: IrExpr::Unary {
+            op: IrUnOp::Not, ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!(
+            "expected logical not if followed by return, got {:?}",
+            ir.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit logical not if from lowered IR");
+    assert!(rust.contains("if value == 0i32 {"));
+    assert_rust_snippet_compiles("typed-ir-clang-if-logical-not", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -7819,6 +8119,59 @@ fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
     assert!(rust.contains("value = (value + 1i32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_logical_not_if_condition_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-logical-not-if");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("is_zero.c");
+    fs::write(
+        &source_file,
+        "int is_zero(int value) { if (!value) { return 1; } return 0; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "is_zero");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::If {
+        condition: IrExpr::Unary {
+            op: IrUnOp::Not, ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected logical not if followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit logical not if from real clang AST");
+    assert!(rust.contains("pub fn is_zero(value: i32) -> i32"));
+    assert!(rust.contains("if value == 0i32 {"));
+    assert!(rust.contains("return 1i32;"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-if-logical-not", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

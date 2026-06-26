@@ -24,6 +24,7 @@ flowchart TD
     narrow scalar-integer ops: binary + - * / % & ^ >>, signed unary -
     (candidate generation only),
     comparison conditions,
+    condition-only logical !,
     const pointer slices,
     readonly global const integer arrays,
     local fixed integer array reads/writes,
@@ -94,6 +95,7 @@ Generic typed IR emission now covers:
 - scalar integer binary expressions `+`, `-`, `*`, `/`, `%`, `&`, `^`, and `>>`;
 - signed scalar integer unary minus `-value`;
 - comparison expressions only in conditions;
+- logical not `!expr` only in conditions, for example `if (!value)` / `while (!value)` as `value == 0`, and `!(value > 0)` as a negated comparison condition;
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;
 - readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
@@ -110,10 +112,11 @@ Still incomplete:
 - The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
 - `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 - Signed unary minus is also narrow candidate generation only. It requires the operand and result to be the same signed integer scalar type; unsigned or wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, and literal edge cases such as `-2147483648` remain outside this subset until modeled explicitly.
+- Condition-only logical not is candidate generation only. Value-position `!` with C `int` result semantics, such as `return !x`, assignment RHS, or declaration initializer, still fails closed; operands containing calls, inc/dec, unmodeled deref/side effects, pointer/float/unsupported types also continue to fail closed.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR scalar expression coverage with red tests first; the next narrow candidate is condition-only logical not `!expr`, while value-position `!`, unsigned/wrapping arithmetic, pointer/deref/call side effects, and full C unary semantics remain fail-closed until typed rules exist.
+1. Keep extending generic typed IR scalar expression coverage with red tests first; the next narrow candidate is value-position logical not with C `int` result semantics, for example `return !x` / RHS / initializer, while pointer/deref/call side effects, unsigned/wrapping arithmetic, and full C unary semantics remain fail-closed until typed rules exist.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

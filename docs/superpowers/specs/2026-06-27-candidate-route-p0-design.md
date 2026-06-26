@@ -169,6 +169,7 @@ typed IR `CandidateRouteDecision` 只回答：
 9. clang lowering 产生的局部固定长度整数数组元素写入可以进入 `GenericTypedIr`，但 readonly global array 写入、const pointer slice 写入、VLA 和 array-to-pointer decay 必须继续 fail closed，且仍只代表 candidate generation，不代表 semantic acceptance。
 10. `GenericTypedIr` 的标量整数 `*`、`/`、`%` candidate 必须保持 `semantic_pass=false`，且不能覆盖 alias floors、除零风险或指针算术边界；除法/取模只有在非零 divisor 由 literal、fixture 输入域或 slice contract 明确约束时，才可进入后续 semantic gate。
 11. `GenericTypedIr` 的 signed 标量 unary minus `-value` candidate 必须保持 `semantic_pass=false`；operand/result 必须是同一个 signed integer scalar type，unsigned/wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界继续 fail closed。
+12. `GenericTypedIr` 的 condition-only logical not `!expr` candidate 必须保持 `semantic_pass=false`；`if (!x)` / `while (!x)` 可发射为整数零比较，`!(x > 0)` 可发射为反转 comparison，但 value-position `!` 的 C `int` 结果语义、call/inc/dec/deref 副作用、pointer/float/unsupported type 继续 fail closed。
 
 建议验证命令：
 

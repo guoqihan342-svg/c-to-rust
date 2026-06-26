@@ -1516,6 +1516,18 @@ fn emit_comparison_op(op: &IrBinOp) -> Result<&'static str, String> {
     }
 }
 
+fn emit_negated_comparison_op(op: &IrBinOp) -> Result<&'static str, String> {
+    match op {
+        IrBinOp::Eq => Ok("!="),
+        IrBinOp::Neq => Ok("=="),
+        IrBinOp::Lt => Ok(">="),
+        IrBinOp::Le => Ok(">"),
+        IrBinOp::Gt => Ok("<="),
+        IrBinOp::Ge => Ok("<"),
+        _ => Err(format!("binary op {op:?} is not a comparison")),
+    }
+}
+
 fn validate_binary_operand_types(
     op: &str,
     lhs: &IrExpr,
@@ -1615,6 +1627,29 @@ fn emit_condition_expr(
     if let Some(callee) = find_call_callee(expr) {
         return Err(format!("call expression {callee} is unsupported"));
     }
+    if let IrExpr::Unary {
+        op: IrUnOp::Not,
+        operand,
+        ty,
+        ..
+    } = expr
+    {
+        return emit_logical_not_condition_expr(operand, ty, symbols, context);
+    }
+    if let Some(condition) = emit_comparison_condition_expr(expr, symbols, context)? {
+        return Ok(condition);
+    }
+    let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
+    let zero = zero_literal_for_type(ty)?;
+    let expr = emit_expr(expr, symbols, context)?;
+    Ok(format!("{expr} != {zero}"))
+}
+
+fn emit_comparison_condition_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
     if let IrExpr::Binary {
         op, lhs, rhs, ty, ..
     } = expr
@@ -1625,13 +1660,55 @@ fn emit_condition_expr(
                 .map_err(|detail| format!("comparison lhs {detail}"))?;
             let rhs = emit_expr(rhs, symbols, context)
                 .map_err(|detail| format!("comparison rhs {detail}"))?;
-            return Ok(format!("({lhs} {op} {rhs})"));
+            return Ok(Some(format!("({lhs} {op} {rhs})")));
         }
     }
-    let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
-    let zero = zero_literal_for_type(ty)?;
-    let expr = emit_expr(expr, symbols, context)?;
-    Ok(format!("{expr} != {zero}"))
+    Ok(None)
+}
+
+fn emit_logical_not_condition_expr(
+    operand: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !is_c_int_type(result_ty) {
+        return Err(format!(
+            "logical not result type must be C int, got {}",
+            type_label(result_ty)
+        ));
+    }
+    if let Some(condition) = emit_negated_comparison_condition_expr(operand, symbols, context)? {
+        return Ok(condition);
+    }
+    let ty =
+        expr_type(operand).ok_or_else(|| "logical not operand type is unsupported".to_string())?;
+    let zero =
+        zero_literal_for_type(ty).map_err(|detail| format!("logical not operand zero {detail}"))?;
+    let operand = emit_expr(operand, symbols, context)
+        .map_err(|detail| format!("logical not operand {detail}"))?;
+    Ok(format!("{operand} == {zero}"))
+}
+
+fn emit_negated_comparison_condition_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    if let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = expr
+    {
+        if let Ok(negated_op) = emit_negated_comparison_op(op) {
+            validate_comparison_condition_types(lhs, rhs, ty, negated_op)?;
+            let lhs = emit_expr(lhs, symbols, context)
+                .map_err(|detail| format!("logical not operand comparison lhs {detail}"))?;
+            let rhs = emit_expr(rhs, symbols, context)
+                .map_err(|detail| format!("logical not operand comparison rhs {detail}"))?;
+            return Ok(Some(format!("({lhs} {negated_op} {rhs})")));
+        }
+    }
+    Ok(None)
 }
 
 fn validate_comparison_condition_types(
