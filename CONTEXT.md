@@ -4837,3 +4837,48 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - 现在已经有一条非 CRC32 特例的最小通路：`clang skeleton lowering -> typed IR -> scalar recursive emitter -> Rust`。
 - real-fdb CRC32 路径仍由严格 matcher 和安全模板保护；本轮没有把 pointer/loop/call/index 语义交给通用 emitter。
 - 下一步可以继续把 phase1b emitter 扩到小型结构化 IR：先加真实红灯测试，再逐步引入 `If`/`While`、更完整的整数算术语义、以及与 clang-lowered report 的可审计接线；不要一次性放开 pointer/deref/index/call。
+
+## 67. 2026-06-26 scalar typed IR while emitter
+
+本轮承接第 66 节：继续 phase1b emitter，但仍不碰 CLI、Python validation、oracle/diff evidence，也不放开 pointer/deref/index/call。两个只读子智能体结论一致：`While` 比 `If` 更适合作为下一刀，因为 clang skeleton 和 real AST lowering 已经能产出 `IrStmt::While`，而 `If` 在 clang skeleton 层还不存在。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 在 scalar emitter 中新增 `IrStmt::While` 输出。
+  - 条件只支持当前 scalar integer truthiness，输出成 Rust bool：`while <expr> != 0suffix { ... }`。
+  - 条件表达式仍复用 `emit_expr()`，所以 `Call`、`Index`、`Deref`、`AddrOf`、`IncDec` 等继续 fail-closed。
+  - while body 递归复用现有 statement emitter；body symbol set 使用外层 clone，允许写外层参数/local，但不让 while body 内声明泄漏到外层。
+  - CRC32 special-case 仍在 `emit_rust_from_ir()` 最前面，未改分流顺序。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例：`countdown(mut count: i32)` 输出 `while count != 0i32 { count = (count + !0i32); }`，并用 `rustc --crate-type lib` smoke。
+  - 新增 fail-closed 负例：while condition 为 `Call` / `IncDec`、while body 非 `Var` assignment target、while body local decl 不泄漏。
+  - 新增 clang skeleton -> typed IR -> emitter 集成测试：`crc_while(mut crc: u32)` 经 `lower_function_skeleton()` 后输出 `while crc != 0u32 { crc = (crc ^ !0u32); }`，并用 rustc smoke。
+
+已验证命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_while_with_integer_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_unsupported_condition_expr -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_incdec_condition_expr -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_non_var_assignment_target -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_body_decl_scope_leak -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_while_from_clang_lowered_ir -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_simple_while_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation translates_while_loop_with_cfg_back_edge -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+验证结果：
+- direct typed IR while 红灯最初失败于 `stmt[0].while statement is unsupported`；实现后通过。
+- typed IR focused suite：`25 passed`。
+- `clang_lowering_skeleton_maps_simple_while_statement`：`1 passed`。
+- `translates_while_loop_with_cfg_back_edge`：`1 passed`。
+- `bounded_translation`：`109 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `109 passed`，doc tests `0`。
+
+当前核心翻译功能状态：
+- typed IR scalar emitter 已从单层语句推进到最小结构化 `while`，并能接已有 clang skeleton lowering。
+- 这仍不是一般循环语义：`IncDec` 条件、比较运算、pointer/deref/index/call 仍 fail-closed。
+- 下一刀建议：要么补 clang `IfStmt` skeleton/lowering 再做 `If` emitter，要么继续在 `while` 上加一个更真实的 clang AST opt-in smoke；不要直接把 CRC32 的 pointer/index/deref 普通化。

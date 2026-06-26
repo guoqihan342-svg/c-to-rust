@@ -519,7 +519,22 @@ fn emit_stmt(
             Ok(format!("{indent}{expr};\n"))
         }
         IrStmt::If { .. } => Err("if statement is unsupported".to_string()),
-        IrStmt::While { .. } => Err("while statement is unsupported".to_string()),
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            let condition = emit_condition_expr(condition, symbols)
+                .map_err(|detail| format!("while condition {detail}"))?;
+            let mut loop_symbols = symbols.clone();
+            let mut block = String::new();
+            block.push_str(&format!("{indent}while {condition} {{\n"));
+            for (index, stmt) in body.iter().enumerate() {
+                let line = emit_stmt(stmt, return_type, indent_level + 1, &mut loop_symbols)
+                    .map_err(|detail| format!("while body[{index}].{detail}"))?;
+                block.push_str(&line);
+            }
+            block.push_str(&format!("{indent}}}\n"));
+            Ok(block)
+        }
         IrStmt::Unsupported { node, reason, .. } => {
             Err(format!("unsupported statement {node}: {reason}"))
         }
@@ -649,6 +664,13 @@ fn validate_expr_matches_type(
     }
 }
 
+fn emit_condition_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
+    let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
+    let zero = zero_literal_for_type(ty)?;
+    let expr = emit_expr(expr, symbols)?;
+    Ok(format!("{expr} != {zero}"))
+}
+
 fn ends_with_return_value(body: &[IrStmt]) -> bool {
     matches!(body.last(), Some(IrStmt::Return { value: Some(_), .. }))
 }
@@ -680,6 +702,10 @@ fn emit_integer_literal(value: u64, ty: &IrType) -> Result<String, String> {
     validate_integer_literal_range(value, ty)?;
     let suffix = emit_integer_literal_suffix(ty)?;
     Ok(format!("{value}{suffix}"))
+}
+
+fn zero_literal_for_type(ty: &IrType) -> Result<String, String> {
+    emit_integer_literal(0, ty)
 }
 
 fn validate_integer_literal_range(value: u64, ty: &IrType) -> Result<(), String> {

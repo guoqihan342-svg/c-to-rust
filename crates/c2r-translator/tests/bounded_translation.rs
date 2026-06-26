@@ -444,6 +444,224 @@ fn typed_ir_emits_scalar_decl_init_and_integer_cast() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_while_with_integer_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "countdown".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_var("count", i32_ty.clone()),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("count", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("count", i32_ty.clone()),
+                        ir_bitnot(ir_lit(0, "0", i32_ty.clone()), i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar while");
+
+    assert!(rust.contains("pub fn countdown(mut count: i32) -> i32"));
+    assert!(rust.contains("while count != 0i32 {"));
+    assert!(rust.contains("count = (count + !0i32);"));
+    assert!(rust.contains("return count;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-while", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_with_unsupported_condition_expr() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_call".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("count", i32_ty.clone()),
+                    value: ir_var("count", i32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while call condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].while condition"));
+    assert!(error
+        .reason
+        .contains("call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_with_incdec_condition_expr() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_incdec".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::IncDec {
+                    target: Box::new(ir_var("count", i32_ty.clone())),
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("count", i32_ty.clone()),
+                    value: ir_var("count", i32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while incdec condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].while condition"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_with_non_var_assignment_target() {
+    let i32_ty = ir_i32();
+    let pointer_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_while_target".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_var("count", i32_ty.clone()),
+                body: vec![IrStmt::Assign {
+                    target: IrExpr::Deref {
+                        ptr: Box::new(ir_var("ptr", pointer_ty)),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    value: ir_lit(1, "1", i32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while non-var assignment must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].while body[0]"));
+    assert!(error.reason.contains("assign target must be Var"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_body_decl_scope_leak() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_scope".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_var("count", i32_ty.clone()),
+                body: vec![IrStmt::Decl {
+                    name: "tmp".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("tmp", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while body decl must not leak");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("var tmp is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_pointer_param_in_generic_emitter() {
     let u32_ty = ir_u32();
     let const_void_ptr = ir_pointer(
@@ -1645,6 +1863,74 @@ fn clang_lowering_skeleton_maps_simple_while_statement() {
     };
     assert!(matches!(target, IrExpr::Var { name, .. } if name == "crc"));
     assert!(matches!(value, IrExpr::Var { name, .. } if name == "crc"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_scalar_while_from_clang_lowered_ir() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_while".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "crc".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::While {
+                condition: ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty.clone(),
+                },
+                body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "crc".to_string(),
+                        ty: uint32_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::BitXor,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "crc".to_string(),
+                            ty: uint32_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::Unary {
+                            op: ClangUnaryOperator::BitNot,
+                            operand: Box::new(ClangExprSkeleton::IntegerLiteral {
+                                value: 0,
+                                spelling: "0U".to_string(),
+                                ty: uint32_ty.clone(),
+                            }),
+                            ty: uint32_ty.clone(),
+                        }),
+                        ty: uint32_ty.clone(),
+                    },
+                }],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower scalar while skeleton");
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar while from lowered IR");
+
+    assert!(rust.contains("pub fn crc_while(mut crc: u32) -> u32"));
+    assert!(rust.contains("while crc != 0u32 {"));
+    assert!(rust.contains("crc = (crc ^ !0u32);"));
+    assert!(rust.contains("return crc;"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-clang-scalar-while", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
