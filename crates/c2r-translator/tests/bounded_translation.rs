@@ -2082,10 +2082,17 @@ fn default_translation_artifacts_do_not_emit_clang_dry_run() {
     assert!(!out_dir
         .join("l3-real-fdb-calc-crc32-clang-dry-run.json")
         .exists());
+    assert!(!out_dir
+        .join("l3-real-fdb-calc-crc32-clang-lowering-report.json")
+        .exists());
     assert!(!manifest
         .artifact_paths
         .iter()
         .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
+    assert!(!manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-lowering-report.json")));
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -2147,6 +2154,127 @@ fn clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata() {
         "source-file-sha"
     );
     assert!(dry_run["errors"].as_array().unwrap().is_empty());
+}
+
+#[cfg(all(feature = "clang-frontend", not(feature = "clang-lowering-report")))]
+#[test]
+fn clang_frontend_feature_does_not_emit_lowering_report_without_opt_in() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "add-one",
+        "source_commit": "1234567",
+        "function_name": "add_one",
+        "c_source": "int add_one(int value) { return value + 1; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/demo",
+        "source_file": "add_one.c",
+        "source_file_hashes": {
+            "add_one.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "add_one.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 43,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target_triple": "x86_64-pc-windows-msvc",
+            "abi": "msvc",
+            "compiler_command_source": "clang",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("no-clang-lowering-report");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert!(!out_dir
+        .join("l3-add-one-clang-lowering-report.json")
+        .exists());
+    assert!(!manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-add-one-clang-lowering-report.json")));
+}
+
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status() {
+    let source_root = unique_out_dir("clang-lowering-source");
+    fs::create_dir_all(&source_root).unwrap();
+    fs::write(
+        source_root.join("add_one.c"),
+        "int add_one(int value) { return value + 1; }\n",
+    )
+    .unwrap();
+    let source_root = source_root.to_string_lossy().replace('\\', "/");
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "add-one",
+        "source_commit": "1234567",
+        "function_name": "add_one",
+        "c_source": "int add_one(int value) { return value + 1; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root,
+        "source_file": "add_one.c",
+        "source_file_hashes": {
+            "add_one.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "add_one.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 43,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target_triple": "x86_64-pc-windows-msvc",
+            "abi": "msvc",
+            "compiler_command_source": "clang",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("clang-lowering-report");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let report = json_file(out_dir.join("l3-add-one-clang-lowering-report.json"));
+
+    assert_eq!(manifest.status, "generated");
+    assert!(manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-add-one-clang-lowering-report.json")));
+    assert_eq!(report["schema_version"], 1);
+    assert_eq!(report["artifact_kind"], "clang-lowering-report");
+    assert_eq!(report["frontend"], "clang");
+    assert_eq!(report["function_name"], "add_one");
+    assert_eq!(report["claim_boundary"]["role"], "diagnostic_only");
+    assert_eq!(report["claim_boundary"]["affects_manifest_status"], false);
+    assert_eq!(report["claim_boundary"]["affects_semantic_pass"], false);
+    assert_eq!(report["claim_boundary"]["authoritative_evidence"], false);
+    assert!(["lowered", "unavailable", "blocked", "unsupported"]
+        .contains(&report["status"].as_str().unwrap()));
+    assert_eq!(report["lowering_report"]["function_name"], "add_one");
+    assert_eq!(
+        report["lowering_report"]["source_file"],
+        report["source_file"]
+    );
+    assert_eq!(
+        report["metadata"]["logical_source_file"],
+        serde_json::json!("add_one.c")
+    );
+    assert!(report["diagnostics"].as_array().is_some());
+    assert!(report["errors"].as_array().is_some());
+    assert!(out_dir.join("l3-add-one-rust-draft.rs").exists());
 }
 
 #[cfg(feature = "clang-frontend")]

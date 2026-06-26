@@ -3374,3 +3374,98 @@ python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_v
 2. 在 Python 中单独新增 opt-in，不复用 `--emit-clang-dry-run`，并把 `CLANG_PATH`/`LIBCLANG_PATH`
    纳入 cache identity。
 3. 对 real-fdb `fdb_calc_crc32` 先做 AST 结构审计 report，而不是直接 lowering 全函数。
+
+## 50. 2026-06-26 Rust opt-in clang lowering report artifact
+
+本轮承接第 49 节第 1 条下一步：增加默认关闭的 Rust-only artifact opt-in，
+写出 `l3-{slice_id}-clang-lowering-report.json`，但不影响 `ArtifactManifest.status`、
+普通 translation errors、semantic pass 或 Python pipeline。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - 新增 feature：`clang-lowering-report = ["clang-frontend", "typed-ir"]`。
+  - 默认仍为空；`clang-frontend` 单独开启时仍只写 dry-run artifact，不写 lowering report。
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在 `#[cfg(feature = "clang-lowering-report")]` 下追加
+    `write_clang_lowering_report_artifact()`。
+  - 新 artifact 文件名：`l3-{slice_id}-clang-lowering-report.json`。
+  - report source path 使用 `source_root.join(source_file)`，支持相对 `source_file`。
+  - `manifest.status` 仍只来自 `translate_slice(spec).errors`；lowering report 的
+    `unavailable/blocked/unsupported` 不回写普通翻译状态。
+  - artifact JSON 包含：
+    - `artifact_kind=clang-lowering-report`
+    - `frontend=clang`
+    - `status=lowered|unavailable|blocked|unsupported`
+    - `source_file`, `function_name`
+    - `claim_boundary.role=diagnostic_only`
+    - `claim_boundary.affects_manifest_status=false`
+    - `claim_boundary.affects_semantic_pass=false`
+    - `claim_boundary.authoritative_evidence=false`
+    - `diagnostics`, `errors`, `lowering_report`, `metadata`
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangLoweringReport.source_file` 统一将 Windows `\` 规范化为 `/`，避免 artifact 顶层和
+    report 内部路径风格不一致。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 扩展默认测试：默认 feature 不写 dry-run，也不写 lowering report。
+  - 新增 `clang_frontend_feature_does_not_emit_lowering_report_without_opt_in`。
+  - 新增 `clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status`。
+
+本轮未改 Python / cache：
+- `validation/tools/auto_migrate.py` 仍只有 `--emit-clang-dry-run`，不复用该 flag 产出 lowering
+  report。
+- cache identity 暂不记录 `CLANG_PATH` / `LIBCLANG_PATH`。后续如果 Python 要产出/消费 lowering
+  report，应新增独立 `--emit-clang-lowering-report`，并记录 feature set、clang 环境和版本身份。
+- 未刷新仓库 `validation/evidence/**`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status`
+  初始失败：crate 没有 `clang-lowering-report` feature。
+- 红灯 2：
+  增加 feature 和 artifact writer 后，测试失败在 report 内部 `source_file` 仍含 Windows 反斜杠，
+  与 artifact 顶层规范化路径不一致。
+- 绿灯：
+  增加 `normalized_report_path()`，report 内部路径也规范化为 `/` 后，聚焦测试通过。
+
+本轮并行只读审查结论：
+- Lorentz：建议 feature 默认关闭、只追加 artifact、不改变 manifest status；JSON 应显式声明
+  diagnostic-only claim boundary。本轮实现与该建议一致。
+- Gauss：确认 Python 本轮不应改；后续应新增独立 `--emit-clang-lowering-report`，不能复用
+  `--emit-clang-dry-run`。本节已记录该边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_does_not_emit_lowering_report_without_opt_in
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features clang-frontend` translator crate：`44 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`50 passed`，真实 clang AST smoke 已执行。
+- `--features clang-lowering-report` translator crate：`50 passed`，report artifact 测试已执行。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变。
+- Rust 侧已有可显式 opt-in 的 clang lowering report artifact。
+- artifact 是 diagnostic-only，不影响 manifest status、semantic pass 或 Python cache。
+- real-fdb `fdb_calc_crc32` 仍未改为真实 AST 驱动。
+
+下一步建议：
+1. 给 Python 增加独立 `--emit-clang-lowering-report`，只在显式 opt-in 时启用
+   `--features clang-lowering-report`。
+2. 为该 opt-in 增加 cache identity：至少记录 command arg、feature set、`CLANG_PATH` /
+   `LIBCLANG_PATH` 配置状态和 clang version。
+3. 再做 real-fdb `fdb_calc_crc32` 的 AST 结构审计 report，不直接承诺全函数 lowering。

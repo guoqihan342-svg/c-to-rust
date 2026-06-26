@@ -469,6 +469,14 @@ pub fn write_translation_artifacts(
         artifacts.push(write_clang_dry_run_artifact(spec, out_dir, &prefix)?);
         artifacts
     };
+    #[cfg(feature = "clang-lowering-report")]
+    let artifacts = {
+        let mut artifacts = artifacts;
+        artifacts.push(write_clang_lowering_report_artifact(
+            spec, out_dir, &prefix,
+        )?);
+        artifacts
+    };
 
     Ok(ArtifactManifest {
         target_id: spec.target_id.clone(),
@@ -479,6 +487,93 @@ pub fn write_translation_artifacts(
             .map(|path| path.to_string_lossy().replace('\\', "/"))
             .collect(),
     })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn write_clang_lowering_report_artifact(
+    spec: &SliceSpec,
+    out_dir: &Path,
+    prefix: &str,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
+        Ok(parse_spec) => {
+            let source_file = parse_spec.source_root.join(&parse_spec.source_file);
+            let environment = std::env::vars().collect::<BTreeMap<_, _>>();
+            let report = clang_frontend::lower_function_from_clang_ast_dump_report(
+                &environment,
+                &source_file,
+                &parse_spec.function_name,
+            );
+            json!({
+                "schema_version": 1,
+                "artifact_kind": "clang-lowering-report",
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "fixture_hash": spec.fixture_hash,
+                "frontend": "clang",
+                "status": report.status,
+                "source_file": source_file.to_string_lossy().replace('\\', "/"),
+                "function_name": parse_spec.function_name,
+                "claim_boundary": {
+                    "role": "diagnostic_only",
+                    "affects_manifest_status": false,
+                    "affects_semantic_pass": false,
+                    "authoritative_evidence": false,
+                },
+                "diagnostics": report.diagnostics,
+                "errors": report.errors,
+                "lowering_report": report,
+                "metadata": {
+                    "source_root": parse_spec.source_root,
+                    "logical_source_file": parse_spec.source_file,
+                    "compile_commands": parse_spec.compile_commands,
+                    "source_file_hashes": parse_spec.source_file_hashes,
+                    "function_source_span": parse_spec.function_source_span,
+                },
+            })
+        }
+        Err(error) => json!({
+            "schema_version": 1,
+            "artifact_kind": "clang-lowering-report",
+            "target_id": spec.target_id,
+            "slice_id": spec.slice_id,
+            "source_commit": spec.source_commit,
+            "fixture_hash": spec.fixture_hash,
+            "frontend": "clang",
+            "status": "blocked",
+            "source_file": spec.source_file,
+            "function_name": spec.function_name,
+            "claim_boundary": {
+                "role": "diagnostic_only",
+                "affects_manifest_status": false,
+                "affects_semantic_pass": false,
+                "authoritative_evidence": false,
+            },
+            "diagnostics": [
+                error.message,
+            ],
+            "lowering_report": null,
+            "metadata": {
+                "source_root": spec.source_root,
+                "logical_source_file": spec.source_file,
+                "compile_commands": spec.compile_commands,
+                "source_file_hashes": spec.source_file_hashes,
+                "function_source_span": spec.function_source_span,
+            },
+            "errors": [
+                {
+                    "kind": error.kind,
+                    "message": error.message,
+                }
+            ],
+        }),
+    };
+    write_json_file(
+        out_dir,
+        &format!("{prefix}-clang-lowering-report.json"),
+        &value,
+    )
 }
 
 #[cfg(feature = "clang-frontend")]

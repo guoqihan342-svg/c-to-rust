@@ -10,6 +10,7 @@ path = "src/lib.rs"
 [features]
 default = []
 clang-frontend = []
+clang-lowering-report = ["clang-frontend", "typed-ir"]
 typed-ir = []
 
 [dependencies]

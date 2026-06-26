@@ -330,7 +330,7 @@ pub fn lower_function_from_clang_ast_dump_report(
         return ClangLoweringReport {
             status: "unavailable".to_string(),
             frontend: "clang".to_string(),
-            source_file: Some(source_file.to_string_lossy().into_owned()),
+            source_file: Some(normalized_report_path(source_file)),
             function_name: function_name.to_string(),
             clang_path: None,
             arguments,
@@ -347,7 +347,7 @@ pub fn lower_function_from_clang_ast_dump_report(
     };
 
     report_from_lowering_result(
-        Some(source_file.to_string_lossy().into_owned()),
+        Some(normalized_report_path(source_file)),
         function_name.to_string(),
         Some(clang_path.to_string()),
         arguments,
@@ -759,6 +759,11 @@ fn string_field(node: &Value, field: &str) -> Option<String> {
     node.get(field)
         .and_then(Value::as_str)
         .map(ToString::to_string)
+}
+
+#[cfg(feature = "typed-ir")]
+fn normalized_report_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn normalized_path(path: &PathBuf) -> String {
