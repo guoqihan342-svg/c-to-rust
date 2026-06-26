@@ -27,7 +27,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `build-and-c2rust-baseline.md`: FlashDB build capture, C2Rust baseline, and C oracle fallback.
 - `agent-contract.md`: OpenCode/Codex runtime contract, phases, IO, subagents, AI policy, async/thread policy.
 - `context-store-and-self-healing.md`: SQLite/JSONL schema, ContextPack, impact sets, rustc repair loop, PatchPlan.
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, and crc32 generic-emitter progress.
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, crc32 generic-emitter progress, and typed IR legacy cleanup boundary.
 - `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide.

@@ -5342,3 +5342,79 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - 真实 FlashDB crc32 的 clang lowering + typed IR + globals + Rust draft 路径已经能走 `GenericTypedIr`，并通过 rustc smoke。
 - 这还不是 semantic acceptance；C/Rust oracle、negative diff、unsafe ledger、validation profile 和 final verification 仍要跑完整证据链。
 - `DeprecatedLegacyCrc32` fallback 仍存在，下一步应缩小并删除 `is_crc32_byte_cursor_ir()` / `emit_crc32_byte_cursor_rust()`，但删除前要确保现有 legacy coverage 不再承担唯一回退。
+
+## 77. 2026-06-27 typed IR crc32 legacy fallback removal
+
+本轮承接第 76 节：真实 FlashDB crc32 已经能通过 clang lowering + readonly globals + generic typed IR emitter 生成可编译 Rust，因此删除 typed IR 层的 crc32 canned fallback，不再让 no-globals crc32 IR 偷偷走 `crc32_update_byte()` 模板。
+
+当前核心链路：
+
+```mermaid
+flowchart TD
+    C["real C source"] --> Clang["clang_frontend.rs<br/>AST dump"]
+    Clang --> FunctionIR["IrFunction"]
+    Clang --> Globals["Vec<IrGlobal><br/>readonly static const arrays"]
+    FunctionIR --> Emit["typed_ir.rs<br/>emit_rust_from_ir_with_globals"]
+    Globals --> Emit
+    Emit --> Route["translation_route.rs<br/>CandidateRouteDecision"]
+    Route --> Generic["GenericTypedIr"]
+    Route --> Unsupported["Unsupported fail-closed"]
+    Generic --> Rust["Rust draft with const CRC32_TABLE"]
+    Rust --> Smoke["rustc smoke / cargo tests"]
+    Smoke --> Validation["validation profile / evidence gates"]
+```
+
+代码改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 删除 `is_crc32_byte_cursor_ir()` 和相关 crc32 shape matcher helpers。
+  - 删除 typed IR 内的 canned `emit_crc32_byte_cursor_rust()`。
+  - 删除 `crc32_byte_cursor_function()` hard-coded fixture helper。
+  - `emit_rust_from_ir()` 与 `emit_rust_from_ir_with_globals()` 现在只走 generic emitter；不满足当前 subset 时返回 `Unsupported`。
+  - 无 globals 的 FlashDB crc32 typed IR 现在 fail closed，错误会指向 `crc32_table` 未声明，而不是生成 bitwise helper。
+
+- `crates/c2r-translator/src/translation_route.rs`
+  - 删除 `CandidateRoute::DeprecatedLegacyCrc32`、`CandidateGenerator::LegacyCrc32Emitter`、`LEGACY_CRC32_DELETE_WHEN` 和 `deprecated_legacy_crc32_route()`。
+  - typed IR candidate route 当前只保留 `GenericTypedIr` 与 `Unsupported`。
+
+- `crates/c2r-translator/src/lib.rs`
+  - 旧字符串 translator 的 crc32 byte-cursor 模板仍保留为 legacy parser compatibility path。
+  - 该旧路径不再桥接 `typed_ir::crc32_byte_cursor_function()` 或 `typed_ir::emit_rust_from_ir()`。
+  - 该旧路径不再记录 `typed-ir-crc32-emitter` provenance。
+  - clang-lowered typed IR 规则记录也不再写入 `typed-ir-crc32-emitter`，只保留 `clang-lowered-typed-ir` 和结构化规则。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_rejects_flashdb_crc32_without_readonly_global_table` 断言 no-globals crc32 typed IR 必须 `Unsupported`。
+  - `typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32` 断言不再存在 deprecated route 行为。
+  - `typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route` 继续证明 with-globals 路径是 `GenericTypedIr` 且不含 `crc32_update_byte`。
+  - `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules` 继续覆盖旧字符串路径，但断言它不再声称 `typed-ir-crc32-emitter`。
+
+文档同步：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+
+这些文档已经改为：typed IR route 只有 `GenericTypedIr` 和 `Unsupported`；typed IR crc32 fallback 已删除；旧字符串 translator 的 crc32 模板仍是单独的 legacy parser 路径。
+
+本轮已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_flashdb_crc32_without_readonly_global_table
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+```
+
+最新验证结果：
+
+- `--features typed-ir,clang-frontend`：12 个 lib tests passed，163 个 bounded tests passed，doc tests 0。
+- `--features clang-lowering-report`：13 个 lib tests passed，164 个 bounded tests passed，doc tests 0。
+
+当前边界：
+
+- typed IR 核心翻译链路已经不再包含 crc32 canned fallback。
+- 旧字符串 translator 仍有 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它是 legacy parser 路径，后续应单独清理或明确标为 compatibility。
+- 真实 FlashDB crc32 仍只是 candidate generation + rustc smoke 通过；完整 semantic acceptance 还需要 validation profile、C/Rust oracle、negative diff、unsafe ledger 和 final verification。

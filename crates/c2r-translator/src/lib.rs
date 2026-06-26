@@ -568,7 +568,6 @@ fn record_clang_lowered_ir_evidence(
             "const-void-byte-slice",
             "byte-cursor-post-increment-read",
             "crc32-byte-cursor-loop",
-            "typed-ir-crc32-emitter",
             "structured-while",
             "structured-return-expression",
         ] {
@@ -1854,8 +1853,6 @@ fn record_crc32_byte_cursor_rules(result: &mut TranslationResult) {
         "const-void-byte-slice",
         "byte-cursor-post-increment-read",
         "crc32-byte-cursor-loop",
-        #[cfg(feature = "typed-ir")]
-        "typed-ir-crc32-emitter",
         "structured-while",
         "structured-return-expression",
     ] {
@@ -2982,40 +2979,29 @@ fn supports_pointer_output_buffer_translation(
 }
 
 fn emit_crc32_byte_cursor_rust(function: &ParsedFunction) -> String {
-    #[cfg(feature = "typed-ir")]
-    {
-        let ir = typed_ir::crc32_byte_cursor_function(&function.name);
-        typed_ir::emit_rust_from_ir(&ir)
-            .expect("hard-coded crc32 typed IR bridge must match the typed IR emitter")
-            .rust
-    }
-
-    #[cfg(not(feature = "typed-ir"))]
-    {
-        format!(
-            "fn crc32_update_byte(mut crc: u32, byte: u8) -> u32 {{\n\
-                 crc ^= u32::from(byte);\n\
-                 for _ in 0..8 {{\n\
-                     let mask = 0u32.wrapping_sub(crc & 1);\n\
-                     crc = (crc >> 1) ^ (0xEDB8_8320u32 & mask);\n\
-                 }}\n\
-                 crc\n\
-             }}\n\n\
-             pub fn {}(mut crc: u32, buf: &[u8], size: usize) -> u32 {{\n\
-                 let mut p: usize = 0;\n\
-                 let mut remaining = size;\n\
-                 crc = crc ^ !0u32;\n\
-                 while remaining != 0 {{\n\
-                     remaining -= 1;\n\
-                     let byte = buf[p];\n\
-                     p += 1;\n\
-                     crc = crc32_update_byte(crc, byte);\n\
-                 }}\n\
-                 return crc ^ !0u32;\n\
-             }}\n",
-            function.name
-        )
-    }
+    format!(
+        "fn crc32_update_byte(mut crc: u32, byte: u8) -> u32 {{\n\
+             crc ^= u32::from(byte);\n\
+             for _ in 0..8 {{\n\
+                 let mask = 0u32.wrapping_sub(crc & 1);\n\
+                 crc = (crc >> 1) ^ (0xEDB8_8320u32 & mask);\n\
+             }}\n\
+             crc\n\
+         }}\n\n\
+         pub fn {}(mut crc: u32, buf: &[u8], size: usize) -> u32 {{\n\
+             let mut p: usize = 0;\n\
+             let mut remaining = size;\n\
+             crc = crc ^ !0u32;\n\
+             while remaining != 0 {{\n\
+                 remaining -= 1;\n\
+                 let byte = buf[p];\n\
+                 p += 1;\n\
+                 crc = crc32_update_byte(crc, byte);\n\
+             }}\n\
+             return crc ^ !0u32;\n\
+         }}\n",
+        function.name
+    )
 }
 
 fn emit_rust(

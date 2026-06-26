@@ -14,10 +14,8 @@ flowchart TD
     Globals --> EmitCtx
     EmitCtx --> RouteMeta["translation_route.rs<br/>CandidateRouteDecision"]
     RouteMeta --> Generic["GenericTypedIr<br/>generic typed IR emitter"]
-    RouteMeta --> Canned["DeprecatedLegacyCrc32<br/>legacy matcher + canned emitter"]
     RouteMeta --> Unsupported["Unsupported<br/>no Rust candidate"]
     Generic --> Rust["safe Rust draft"]
-    Canned --> Rust
     Rust --> Rustc["rustc smoke / cargo tests"]
     Rustc --> Validation["validation pipeline<br/>route_decision / validation_profile / evidence gates"]
 
@@ -45,15 +43,15 @@ flowchart TD
   - `emit_rust_from_ir()` remains the no-globals compatibility entrypoint.
   - `emit_rust_from_ir_with_globals(function, globals)` is the main entrypoint for the clang lowering path and returns `EmittedRust { rust, route }`.
   - The generic emitter now emits readonly global integer arrays as Rust `const` items and supports table indexing such as `CRC32_TABLE[...]`.
-  - The legacy crc32 matcher and canned emitter still live here: `is_crc32_byte_cursor_ir`, `emit_crc32_byte_cursor_rust`. They are retained only as the `DeprecatedLegacyCrc32` fallback.
+  - The typed IR legacy crc32 matcher, canned emitter, and `DeprecatedLegacyCrc32` fallback have been removed. A crc32 IR without modeled globals now fails closed instead of silently using a template.
 - `crates/c2r-translator/src/translation_route.rs`
   - Defines route metadata for typed IR candidate generation.
   - `GenericTypedIr` is the normal typed IR emitter.
-  - `DeprecatedLegacyCrc32` is the retained crc32 canned path, with delete conditions recorded by `LEGACY_CRC32_DELETE_WHEN`.
   - `Unsupported` means no Rust candidate; the error keeps route metadata and the fail-closed reason.
 - `crates/c2r-translator/src/lib.rs`
   - `try_translate_slice_with_clang_lowered_ir()` passes both `ClangLoweringReport.function_ir` and `report.globals` into `emit_rust_from_ir_with_globals()`.
   - `write_translation_artifacts()` can produce a Rust draft driven by clang-lowered typed IR when the `clang-lowering-report` feature is enabled.
+  - The old string translator still keeps a crc32 byte-cursor template path in `is_crc32_byte_cursor_loop()` and the local `emit_crc32_byte_cursor_rust()`. It no longer bridges into typed IR and no longer records `typed-ir-crc32-emitter` provenance.
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - Main behavior contract for the bounded translator.
   - Covers direct typed IR tests, real clang AST smoke tests, the real FlashDB crc32 parse spec, fail-closed boundaries, and rustc smoke compilation.
@@ -63,10 +61,9 @@ flowchart TD
 
 ## Current Core Translation Status
 
-The candidate generation layer now has three explicit outcomes:
+The typed IR candidate generation layer now has two explicit outcomes:
 
 - `GenericTypedIr`: the generic typed IR emitter. Real FlashDB `fdb_calc_crc32` now reaches this route through clang lowering plus globals and passes rustc smoke.
-- `DeprecatedLegacyCrc32`: the old crc32 shape matcher plus canned Rust fallback. It still exists, but it is no longer the route proving core translation capability.
 - `Unsupported`: no Rust candidate; the error carries route metadata and the fail-closed reason.
 
 Candidate route selects the candidate generation implementation only. It does not decide `semantic_pass` and does not replace the evidence `route_decision` in `validation/tools/auto_migrate.py`. Acceptance still belongs to validation profile gates such as C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
@@ -86,13 +83,13 @@ Generic typed IR emission now covers:
 
 Still incomplete:
 
-- legacy `is_crc32_byte_cursor_ir` and `emit_crc32_byte_cursor_rust` have not been removed.
+- The old string translator still has a crc32 byte-cursor recognizer and canned Rust template. That is a legacy parser path, not a typed IR fallback.
 - The current work proves candidate generation plus rustc smoke, not semantic acceptance for the real FlashDB slice.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Shrink the remaining `DeprecatedLegacyCrc32` tests and fallback path so the legacy matcher/canned emitter can be deleted.
-2. Extend validation evidence so `ClangLoweringReport.globals` and the `GenericTypedIr` route are bound into route decision/profile evidence.
-3. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
+1. Extend validation evidence so `ClangLoweringReport.globals` and the `GenericTypedIr` route are bound into route decision/profile evidence.
+2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
+3. Clean up the old string translator crc32 recognizer and canned template separately, or downgrade it to an explicit legacy compatibility path.
 4. Keep extending generic typed IR instead of adding FlashDB-specific logic.

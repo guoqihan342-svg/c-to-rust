@@ -373,23 +373,15 @@ fn repeated_c_u32_initializer(len: usize, value: &str) -> String {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
-    let emitted = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
-    let rust = &emitted.rust;
+fn typed_ir_rejects_flashdb_crc32_without_readonly_global_table() {
+    let error = emit_rust_from_ir(&flashdb_crc32_typed_ir())
+        .expect_err("crc32 typed IR without a modeled readonly global table must fail closed");
 
-    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
-    assert!(emitted.route.deprecated);
-    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
-    assert!(rust.contains("let mut p: usize = 0;"));
-    assert!(rust.contains("let mut remaining = size;"));
-    assert!(rust.contains("while remaining != 0 {"));
-    assert!(rust.contains("let byte = buf[p];"));
-    assert!(rust.contains("p += 1;"));
-    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
-    assert!(rust.contains("return crc ^ !0u32;"));
-    assert!(!rust.contains("*p++"));
-    assert!(!rust.contains("crc32_table"));
-    assert_rust_snippet_compiles("typed-ir-crc32", &rust);
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert_eq!(error.route.candidate_generator, CandidateGenerator::None);
+    assert!(!error.route.deprecated);
+    assert!(error.reason.contains("crc32_table"));
+    assert!(error.reason.contains("not declared"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -441,25 +433,14 @@ fn typed_ir_rejects_readonly_global_array_initializer_length_mismatch() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_reports_deprecated_legacy_crc32_candidate_route() {
-    let emitted = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
+fn typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32() {
+    let error = emit_rust_from_ir(&flashdb_crc32_typed_ir())
+        .expect_err("no-globals crc32 must not be emitted through a canned legacy route");
 
-    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
-    assert_eq!(
-        emitted.route.candidate_generator,
-        CandidateGenerator::LegacyCrc32Emitter
-    );
-    assert!(emitted.route.deprecated);
-    assert_eq!(
-        emitted.route.replacement,
-        Some(CandidateRoute::GenericTypedIr)
-    );
-    assert!(emitted
-        .route
-        .delete_when
-        .iter()
-        .any(|item| item.contains("readonly global const table IR")));
-    assert!(emitted.rust.contains("crc32_update_byte"));
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert_eq!(error.route.candidate_generator, CandidateGenerator::None);
+    assert!(!error.route.deprecated);
+    assert!(error.route.delete_when.is_empty());
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7334,8 +7315,6 @@ fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
         "const-void-byte-slice",
         "byte-cursor-post-increment-read",
         "crc32-byte-cursor-loop",
-        #[cfg(feature = "typed-ir")]
-        "typed-ir-crc32-emitter",
     ] {
         assert!(
             result.plan.translation_rule_ids.contains(&rule.to_string()),
@@ -7343,6 +7322,14 @@ fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
             result.plan.translation_rule_ids
         );
     }
+    assert!(
+        !result
+            .plan
+            .translation_rule_ids
+            .contains(&"typed-ir-crc32-emitter".to_string()),
+        "{:?}",
+        result.plan.translation_rule_ids
+    );
 }
 
 #[test]

@@ -2,14 +2,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CandidateRoute {
-    DeprecatedLegacyCrc32,
     GenericTypedIr,
     Unsupported,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum CandidateGenerator {
-    LegacyCrc32Emitter,
     GenericTypedIrEmitter,
     None,
 }
@@ -51,38 +49,6 @@ impl std::ops::Deref for EmittedRust {
 impl AsRef<str> for EmittedRust {
     fn as_ref(&self) -> &str {
         &self.rust
-    }
-}
-
-pub const LEGACY_CRC32_DELETE_WHEN: &[&str] = &[
-    "readonly global const table IR is supported",
-    "real FlashDB crc32 emits through GenericTypedIr",
-    "legacy crc32 matcher has no remaining callers",
-];
-
-pub fn deprecated_legacy_crc32_route() -> CandidateRouteDecision {
-    CandidateRouteDecision {
-        route_id: "deprecated-legacy-crc32-byte-cursor".to_string(),
-        route: CandidateRoute::DeprecatedLegacyCrc32,
-        candidate_generator: CandidateGenerator::LegacyCrc32Emitter,
-        reasons: vec![CandidateRouteReason {
-            code: "legacy_crc32_byte_cursor_match".to_string(),
-            detail:
-                "temporary crc32 byte-cursor matcher kept as an explicit deprecated candidate route"
-                    .to_string(),
-        }],
-        fallback: Some(CandidateRoute::GenericTypedIr),
-        token_cost: 0,
-        deprecated: true,
-        replacement: Some(CandidateRoute::GenericTypedIr),
-        delete_when: LEGACY_CRC32_DELETE_WHEN
-            .iter()
-            .map(|item| (*item).to_string())
-            .collect(),
-        suggested_required_gates: vec![
-            "rustc_smoke".to_string(),
-            "existing_crc32_contract_tests".to_string(),
-        ],
     }
 }
 
