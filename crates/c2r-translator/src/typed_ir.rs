@@ -1,3 +1,6 @@
+use crate::translation_route::{
+    deprecated_legacy_crc32_route, generic_typed_ir_route, unsupported_route, EmittedRust,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -205,6 +208,7 @@ pub enum IrIncDecOp {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IrEmitError {
     pub reason: String,
+    pub route: crate::translation_route::CandidateRouteDecision,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -247,17 +251,29 @@ impl EmitContext {
     }
 }
 
-pub fn emit_rust_from_ir(function: &IrFunction) -> Result<String, IrEmitError> {
+pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitError> {
     if is_crc32_byte_cursor_ir(function) {
-        return Ok(emit_crc32_byte_cursor_rust(&function.name));
+        return Ok(EmittedRust {
+            rust: emit_crc32_byte_cursor_rust(&function.name),
+            route: deprecated_legacy_crc32_route(),
+        });
     }
 
-    emit_scalar_rust_from_ir(function).map_err(|detail| IrEmitError {
-        reason: format!(
-            "{} is outside the current typed IR emitter subset: {}",
-            function.name, detail
-        ),
-    })
+    emit_scalar_rust_from_ir(function)
+        .map(|rust| EmittedRust {
+            rust,
+            route: generic_typed_ir_route(),
+        })
+        .map_err(|detail| {
+            let reason = format!(
+                "{} is outside the current typed IR emitter subset: {}",
+                function.name, detail
+            );
+            IrEmitError {
+                route: unsupported_route(reason.clone()),
+                reason,
+            }
+        })
 }
 
 pub fn crc32_byte_cursor_function(function_name: &str) -> IrFunction {

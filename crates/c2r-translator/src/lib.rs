@@ -11,6 +11,8 @@ use serde_json::json;
 #[cfg(feature = "clang-frontend")]
 pub mod clang_frontend;
 #[cfg(feature = "typed-ir")]
+pub mod translation_route;
+#[cfg(feature = "typed-ir")]
 pub mod typed_ir;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -504,7 +506,7 @@ fn try_translate_slice_with_clang_lowered_ir(spec: &SliceSpec) -> Option<Transla
     let report =
         clang_frontend::lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
     let function_ir = report.function_ir.as_ref()?;
-    let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?;
+    let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?.rust;
 
     let mut result = TranslationResult {
         rust_code,
@@ -2983,6 +2985,7 @@ fn emit_crc32_byte_cursor_rust(function: &ParsedFunction) -> String {
         let ir = typed_ir::crc32_byte_cursor_function(&function.name);
         typed_ir::emit_rust_from_ir(&ir)
             .expect("hard-coded crc32 typed IR bridge must match the typed IR emitter")
+            .rust
     }
 
     #[cfg(not(feature = "typed-ir"))]

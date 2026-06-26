@@ -16,6 +16,8 @@ use c2r_translator::clang_frontend::{
     ClangUnaryOperator,
 };
 #[cfg(feature = "typed-ir")]
+use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
+#[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
     emit_rust_from_ir, IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType,
     IrTypeKind, IrUnOp,
@@ -328,8 +330,11 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
-    let rust = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
+    let emitted = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
+    let rust = &emitted.rust;
 
+    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
+    assert!(emitted.route.deprecated);
     assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
     assert!(rust.contains("let mut p: usize = 0;"));
     assert!(rust.contains("let mut remaining = size;"));
@@ -341,6 +346,65 @@ fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
     assert!(!rust.contains("*p++"));
     assert!(!rust.contains("crc32_table"));
     assert_rust_snippet_compiles("typed-ir-crc32", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_reports_deprecated_legacy_crc32_candidate_route() {
+    let emitted = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
+
+    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
+    assert_eq!(
+        emitted.route.candidate_generator,
+        CandidateGenerator::LegacyCrc32Emitter
+    );
+    assert!(emitted.route.deprecated);
+    assert_eq!(
+        emitted.route.replacement,
+        Some(CandidateRoute::GenericTypedIr)
+    );
+    assert!(emitted
+        .route
+        .delete_when
+        .iter()
+        .any(|item| item.contains("readonly global const table IR")));
+    assert!(emitted.rust.contains("crc32_update_byte"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_reports_generic_candidate_route_for_scalar_emit() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "add_one_route".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Add,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit scalar route");
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert_eq!(
+        emitted.route.candidate_generator,
+        CandidateGenerator::GenericTypedIrEmitter
+    );
+    assert!(!emitted.route.deprecated);
+    assert!(emitted.rust.contains("pub fn add_one_route"));
+    assert!(!emitted.rust.contains("crc32_update_byte"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -477,8 +541,11 @@ fn typed_ir_emits_crc_update_assignment_with_nested_byte_read() {
         source_span: None,
     };
 
-    let rust = emit_rust_from_ir(&ir).expect("emit crc update assignment");
+    let emitted = emit_rust_from_ir(&ir).expect("emit crc update assignment");
+    let rust = &emitted.rust;
 
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
     assert!(rust.contains("pub fn update_crc_step(mut crc: u32, p: &[u8], table: &[u32]) -> u32"));
     assert!(rust.contains("let mut p_index: usize = 0;"));
     assert!(rust.contains("let byte0: u8 = p[p_index];"));
@@ -563,6 +630,12 @@ fn typed_ir_rejects_multiple_post_increment_reads_in_assign_value() {
     assert!(error
         .reason
         .contains("assign value multiple post-increment byte reads are unsupported"));
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert_eq!(error.route.candidate_generator, CandidateGenerator::None);
+    assert_eq!(error.route.fallback, None);
+    assert!(error.route.reasons.iter().any(|reason| reason
+        .detail
+        .contains("assign value multiple post-increment byte reads are unsupported")));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1020,6 +1093,12 @@ fn typed_ir_rejects_multiple_nested_post_increment_reads_in_one_expr() {
     assert!(error
         .reason
         .contains("multiple post-increment byte reads are unsupported"));
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert_eq!(error.route.candidate_generator, CandidateGenerator::None);
+    assert_eq!(error.route.fallback, None);
+    assert!(error.route.reasons.iter().any(|reason| reason
+        .detail
+        .contains("multiple post-increment byte reads are unsupported")));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5415,8 +5494,12 @@ fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() 
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let rust =
+    let emitted =
         emit_rust_from_ir(function).expect("emit clang crc update assignment with pointer table");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
     assert!(rust.contains(
         "pub fn update_crc_step_from_clang(mut crc: u32, p: &[u8], table: &[u32]) -> u32"
     ));
@@ -5467,8 +5550,15 @@ fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let rust = emit_rust_from_ir(function).expect("emit rust from real clang-lowered crc32 ir");
+    let emitted = emit_rust_from_ir(function).expect("emit rust from real clang-lowered crc32 ir");
+    let rust = &emitted.rust;
 
+    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
+    assert!(emitted.route.deprecated);
+    assert_eq!(
+        emitted.route.replacement,
+        Some(CandidateRoute::GenericTypedIr)
+    );
     assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
     assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
     assert!(!rust.contains("crc32_table"));
@@ -5546,8 +5636,15 @@ fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let rust = emit_rust_from_ir(function).expect("emit rust from real fdb clang-lowered ir");
+    let emitted = emit_rust_from_ir(function).expect("emit rust from real fdb clang-lowered ir");
+    let rust = &emitted.rust;
 
+    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
+    assert!(emitted.route.deprecated);
+    assert_eq!(
+        emitted.route.replacement,
+        Some(CandidateRoute::GenericTypedIr)
+    );
     assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
     assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
     assert!(!rust.contains("crc32_table"));

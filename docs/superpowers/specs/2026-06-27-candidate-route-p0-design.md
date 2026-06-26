@@ -10,7 +10,7 @@ P0 的目标是把 `c2r-translator` 里隐藏在 `emit_rust_from_ir()` 内部的
 
 - `GenericTypedIr`：普通 typed IR emitter 生成候选。
 - `DeprecatedLegacyCrc32`：现有 crc32 canned path 生成候选，但明确标记为 deprecated technical debt。
-- `Unsupported`：没有生成候选，错误中带候选路线、原因和建议 fallback。
+- `Unsupported`：没有生成候选，错误中带候选路线、原因和人工处理建议。
 
 ## 非目标
 
@@ -192,7 +192,7 @@ generic emitter 返回错误时，包装为 `IrEmitError`：
 
 - `route = Unsupported`
 - `candidate_generator = None`
-- `fallback = Some(GenericTypedIr)` 或后续扩展为 `Some(L2BaselineRepair)`，P0 只保留当前 enum。
+- `fallback = None`，因为该 route 表示当前 generic typed IR 已经失败；后续 L2/L3 候选应由更高层 router 另起路线，而不是伪装成当前 emitter 的 fallback。
 - `deprecated = false`
 - `suggested_required_gates` 为空或包含 `manual_review`
 

@@ -9,9 +9,11 @@ flowchart TD
     C["C 源码 / compile_commands.json"] --> Clang["clang AST dump 前端"]
     Clang --> Skeleton["clang skeleton AST 子集"]
     Skeleton --> IR["typed IR: IrFunction / IrStmt / IrExpr / IrType"]
-    IR --> Emitter{"Rust emitter 路由"}
+    IR --> RouteMeta["translation_route.rs: CandidateRouteDecision"]
+    RouteMeta --> Emitter{"Rust emitter 路由"}
     Emitter --> Generic["generic typed IR emitter"]
-    Emitter --> Canned["legacy crc32 typed-IR matcher + canned emitter"]
+    Emitter --> Canned["DeprecatedLegacyCrc32: legacy matcher + canned emitter"]
+    Emitter --> Unsupported["Unsupported: no Rust candidate"]
     Generic --> Rust["safe Rust 草稿"]
     Canned --> Rust
     Rust --> Rustc["rustc smoke / cargo tests"]
@@ -39,9 +41,14 @@ flowchart TD
   - 关键函数：`expr_skeleton_from_ast_with_options`、`stmt_skeleton_from_ast`、`lower_function_from_clang_ast_dump_report`、`lower_stmt`、`lower_expr`。
 - `crates/c2r-translator/src/typed_ir.rs`
   - 定义 `IrFunction`、`IrStmt`、`IrExpr`、`IrType`。
-  - 从 typed IR 生成 Rust。
+  - 从 typed IR 生成 Rust；`emit_rust_from_ir()` 现在返回 `EmittedRust { rust, route }`。
   - 关键函数：`emit_rust_from_ir`、`emit_scalar_rust_from_ir`、`emit_stmt`、`emit_expr_with_prelude`、`emit_post_increment_byte_read_expr`、`emit_postfix_decrement_while_loop`。
-  - 旧 crc32 路由仍在这里：`is_crc32_byte_cursor_ir`、`emit_crc32_byte_cursor_rust`。
+  - 旧 crc32 matcher 和 canned emitter 仍在这里：`is_crc32_byte_cursor_ir`、`emit_crc32_byte_cursor_rust`，但现在会被显式标记为 deprecated candidate route。
+- `crates/c2r-translator/src/translation_route.rs`
+  - 定义 typed IR candidate generation 的路由元数据。
+  - `GenericTypedIr` 表示普通 typed IR emitter。
+  - `DeprecatedLegacyCrc32` 表示当前保留的 crc32 canned path，删除条件由 `LEGACY_CRC32_DELETE_WHEN` 记录。
+  - `Unsupported` 表示没有 Rust candidate；错误中保留 route metadata 和 fail-closed reason。
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - bounded translator 的主要行为契约。
   - 覆盖直接 typed IR 测试、真实 clang AST smoke 测试、fail-closed 边界和 rustc smoke 编译。
@@ -50,6 +57,14 @@ flowchart TD
   - 恢复开发时先看最新编号章节。
 
 ## 当前核心翻译状态
+
+P0 后，Rust emitter route 不再只是隐藏在 `emit_rust_from_ir()` 里的 `if`。`translation_route.rs` 会返回 `CandidateRouteDecision`：
+
+- `GenericTypedIr`：普通 typed IR emitter。
+- `DeprecatedLegacyCrc32`：现有 crc32 canned path，显式标记为 deprecated。
+- `Unsupported`：没有候选 Rust，错误中带 route metadata 和 fail-closed reason。
+
+注意：candidate route 只选择候选生成实现，不决定 `semantic_pass`，也不替代 `validation/tools/auto_migrate.py` 里的 evidence `route_decision`。
 
 generic typed IR emission 现在覆盖：
 
@@ -66,7 +81,7 @@ generic typed IR emission 现在覆盖：
 仍未泛化：
 
 - `static const uint32_t crc32_table[256]` 还没有显式 typed IR global-data model。
-- 真实 FlashDB crc32 仍通过 legacy typed-IR shape matcher 和 canned Rust 路由。
+- 真实 FlashDB crc32 仍通过 `DeprecatedLegacyCrc32` legacy typed-IR shape matcher 和 canned Rust 路由。
 - 在 `is_crc32_byte_cursor_ir` 和 `emit_crc32_byte_cursor_rust` 被删除、generic 路径通过前，项目不能声称“全程零 crc32 专用代码”。
 
 ## 下一步实现切口

@@ -39,7 +39,7 @@
 - Modify: `crates/c2r-translator/src/lib.rs`
 - Modify: `crates/c2r-translator/tests/bounded_translation.rs`
 
-- [ ] **Step 1: Write failing route metadata imports and tests**
+- [x] **Step 1: Write failing route metadata imports and tests**
 
 Add this import near the existing `typed_ir` imports in `crates/c2r-translator/tests/bounded_translation.rs`:
 
@@ -116,7 +116,7 @@ fn typed_ir_reports_generic_candidate_route_for_scalar_emit() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify RED**
+- [x] **Step 2: Run test to verify RED**
 
 Run:
 
@@ -126,7 +126,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 
 Expected: compile failure because `c2r_translator::translation_route` and `EmittedRust` do not exist yet, or because `emit_rust_from_ir()` still returns `String`.
 
-- [ ] **Step 3: Add `translation_route.rs` minimal implementation**
+- [x] **Step 3: Add `translation_route.rs` minimal implementation**
 
 Create `crates/c2r-translator/src/translation_route.rs`:
 
@@ -233,7 +233,7 @@ pub fn unsupported_route(reason: impl Into<String>) -> CandidateRouteDecision {
             code: "outside_typed_ir_emitter_subset".to_string(),
             detail: reason.into(),
         }],
-        fallback: Some(CandidateRoute::GenericTypedIr),
+        fallback: None,
         token_cost: 0,
         deprecated: false,
         replacement: None,
@@ -250,7 +250,7 @@ Update `crates/c2r-translator/src/lib.rs` module exports:
 pub mod translation_route;
 ```
 
-- [ ] **Step 4: Run test again**
+- [x] **Step 4: Run test again**
 
 Run:
 
@@ -267,7 +267,7 @@ Expected: still fails until Task 2 changes `emit_rust_from_ir()` to return `Emit
 - Modify: `crates/c2r-translator/src/lib.rs`
 - Test: `crates/c2r-translator/tests/bounded_translation.rs`
 
-- [ ] **Step 1: Change `IrEmitError` and `emit_rust_from_ir()`**
+- [x] **Step 1: Change `IrEmitError` and `emit_rust_from_ir()`**
 
 In `crates/c2r-translator/src/typed_ir.rs`, import route helpers:
 
@@ -316,7 +316,7 @@ pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitErr
 }
 ```
 
-- [ ] **Step 2: Update production call site `try_translate_slice_with_clang_lowered_ir`**
+- [x] **Step 2: Update production call site `try_translate_slice_with_clang_lowered_ir`**
 
 In `crates/c2r-translator/src/lib.rs`, change:
 
@@ -330,7 +330,7 @@ to:
 let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?.rust;
 ```
 
-- [ ] **Step 3: Update typed-ir crc32 bridge**
+- [x] **Step 3: Update typed-ir crc32 bridge**
 
 In `crates/c2r-translator/src/lib.rs`, change:
 
@@ -347,7 +347,7 @@ typed_ir::emit_rust_from_ir(&ir)
     .rust
 ```
 
-- [ ] **Step 4: Run focused route tests**
+- [x] **Step 4: Run focused route tests**
 
 Run:
 
@@ -362,9 +362,11 @@ Expected: new route tests pass after existing success call sites in those tests 
 **Files:**
 - Modify: `crates/c2r-translator/tests/bounded_translation.rs`
 
-- [ ] **Step 1: Mechanically update successful call sites**
+- [x] **Step 1: Keep successful call sites compatible**
 
-For each success pattern:
+Implemented with a narrower churn strategy: `EmittedRust` implements `Deref<Target = str>` and `AsRef<str>`, so existing string-style assertions such as `rust.contains(...)` and `assert_rust_snippet_compiles(..., &rust)` remain valid. Route-specific tests use `emitted.rust` directly.
+
+Original mechanical alternative:
 
 ```rust
 let rust = emit_rust_from_ir(&ir).expect("...");
@@ -386,7 +388,7 @@ let rust = emitted.rust;
 
 Keep existing `rust.contains(...)` and `assert_rust_snippet_compiles(..., &rust)` assertions.
 
-- [ ] **Step 2: Add route assertions to representative existing tests**
+- [x] **Step 2: Add route assertions to representative existing tests**
 
 Add to `typed_ir_emits_flashdb_crc32_without_string_recognizer`:
 
@@ -408,7 +410,7 @@ Add to at least one real clang generic emit test such as `clang_ast_dump_emits_c
 assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
 ```
 
-- [ ] **Step 3: Add unsupported route assertion to one existing fail-closed test**
+- [x] **Step 3: Add unsupported route assertion to one existing fail-closed test**
 
 In `typed_ir_rejects_multiple_post_increment_reads_in_assign_value`, after capturing `error`, add:
 
@@ -423,7 +425,7 @@ assert!(
 );
 ```
 
-- [ ] **Step 4: Run bounded typed IR tests**
+- [x] **Step 4: Run bounded typed IR tests**
 
 Run:
 
@@ -440,7 +442,7 @@ Expected: all bounded translation tests pass, excluding opt-in clang tests that 
 - Modify: `docs/c2rust-migration-agent/core-translation-architecture.en.md`
 - Modify: `CONTEXT.md`
 
-- [ ] **Step 1: Update Chinese architecture doc**
+- [x] **Step 1: Update Chinese architecture doc**
 
 In `docs/c2rust-migration-agent/core-translation-architecture.md`, update the emitter route text so it says:
 
@@ -454,7 +456,7 @@ P0 后，Rust emitter route 不再是隐藏在 `emit_rust_from_ir()` 里的裸 `
 注意：candidate route 只选择候选生成实现，不决定 `semantic_pass`，也不替代 `validation/tools/auto_migrate.py` 的 evidence `route_decision`。
 ```
 
-- [ ] **Step 2: Update English architecture doc**
+- [x] **Step 2: Update English architecture doc**
 
 Mirror the same meaning in `docs/c2rust-migration-agent/core-translation-architecture.en.md`:
 
@@ -468,7 +470,7 @@ After P0, the Rust emitter route is no longer a hidden `if` inside `emit_rust_fr
 Candidate route selects the candidate generation implementation only. It does not decide `semantic_pass` and does not replace the evidence `route_decision` in `validation/tools/auto_migrate.py`.
 ```
 
-- [ ] **Step 3: Append CONTEXT entry**
+- [x] **Step 3: Append CONTEXT entry**
 
 Append a new numbered entry to `CONTEXT.md` that records:
 
@@ -485,7 +487,7 @@ Verified commands:
 ...
 ```
 
-- [ ] **Step 4: Run doc checks**
+- [x] **Step 4: Run doc checks**
 
 Run:
 
@@ -500,7 +502,7 @@ Expected: no whitespace errors.
 **Files:**
 - Verify all modified files.
 
-- [ ] **Step 1: Format**
+- [x] **Step 1: Format**
 
 Run:
 
@@ -510,7 +512,7 @@ cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
 
 Expected: exit code 0.
 
-- [ ] **Step 2: Run bounded translator tests**
+- [x] **Step 2: Run bounded translator tests**
 
 Run:
 
@@ -520,7 +522,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 
 Expected: all non-opt-in tests pass.
 
-- [ ] **Step 3: Run full crate tests**
+- [x] **Step 3: Run full crate tests**
 
 Run:
 
@@ -530,7 +532,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 
 Expected: lib tests and bounded translation tests pass.
 
-- [ ] **Step 4: Run opt-in clang smoke tests if LLVM exists**
+- [x] **Step 4: Run opt-in clang smoke tests if LLVM exists**
 
 If `C:\Program Files\LLVM\bin\clang.exe` exists, run:
 
@@ -544,7 +546,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 
 Expected: all opt-in clang smoke tests pass.
 
-- [ ] **Step 5: Run git checks**
+- [x] **Step 5: Run git checks**
 
 Run:
 
@@ -555,7 +557,7 @@ git status -sb --untracked-files=all
 
 Expected: no whitespace errors. Status may still show pre-existing `validation/evidence/**` dirty files, but staged files must be limited to Candidate Route P0 changes.
 
-- [ ] **Step 6: Request code review**
+- [x] **Step 6: Request code review**
 
 Dispatch a reviewer subagent with:
 
@@ -568,7 +570,7 @@ HEAD_SHA: current HEAD after implementation commit.
 
 Address Critical and Important findings before proceeding.
 
-- [ ] **Step 7: Commit and push**
+- [x] **Step 7: Commit and push**
 
 Stage only intended files:
 

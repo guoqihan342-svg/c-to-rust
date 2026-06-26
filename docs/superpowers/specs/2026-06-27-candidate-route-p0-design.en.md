@@ -10,7 +10,7 @@ After P0, callers can distinguish:
 
 - `GenericTypedIr`: the normal typed IR emitter generated the candidate.
 - `DeprecatedLegacyCrc32`: the current crc32 canned path generated the candidate, explicitly marked as deprecated technical debt.
-- `Unsupported`: no candidate was generated, and the error carries route metadata, reasons, and fallback guidance.
+- `Unsupported`: no candidate was generated, and the error carries route metadata, reasons, and manual-review guidance.
 
 ## Non-Goals
 
@@ -192,7 +192,7 @@ When the generic emitter returns an error, wrap it in `IrEmitError`:
 
 - `route = Unsupported`
 - `candidate_generator = None`
-- `fallback = Some(GenericTypedIr)` or later `Some(L2BaselineRepair)`; P0 keeps only the current enum.
+- `fallback = None`, because this route means the current generic typed IR emitter has already failed; later L2/L3 candidates should be selected by a higher-level router instead of being represented as this emitter's fallback.
 - `deprecated = false`
 - `suggested_required_gates` is empty or includes `manual_review`
 

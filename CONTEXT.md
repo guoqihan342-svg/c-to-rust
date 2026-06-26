@@ -5201,3 +5201,61 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
   - 新增英文镜像版本。
 
 注意：目录内部分早期文档仍是“中文说明 + English summary”的混合格式，还不是完整双文件版本。后续触及时应按本轮约定拆成完整双语版本；若用户要求一次性补齐历史文档，应批量处理这些文件的 `.en.md` 镜像和中文主文档。
+
+## 75. 2026-06-27 CandidateRoute P0 skeleton
+
+本轮承接 Candidate Route P0 设计，把 typed IR Rust emission 的候选生成路由从隐式 `String` 返回值升级为显式结构化元数据。
+
+核心改动：
+- `crates/c2r-translator/src/translation_route.rs`
+  - 新增 `CandidateRoute`、`CandidateGenerator`、`CandidateRouteDecision`、`CandidateRouteReason` 和 `EmittedRust`。
+  - 当前真实执行路线只有三类：`GenericTypedIr`、`DeprecatedLegacyCrc32`、`Unsupported`。
+  - `DeprecatedLegacyCrc32` 记录 `LEGACY_CRC32_DELETE_WHEN`，避免 crc32 canned path 被误认为长期能力。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_rust_from_ir()` 现在返回 `Result<EmittedRust, IrEmitError>`。
+  - generic typed IR 成功时返回 `GenericTypedIr` route。
+  - 当前 crc32 canned path 保留，但显式返回 `DeprecatedLegacyCrc32` route。
+  - fail-closed 错误保留原 reason，同时在 `IrEmitError.route` 中返回 `Unsupported`。
+  - `Unsupported.fallback = None`：它表示当前 generic typed IR emitter 已失败，后续 L2/L3 应由更高层 router 另起路线。
+- `crates/c2r-translator/src/lib.rs`
+  - 两个生产调用点已更新为取 `emitted.rust`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 legacy crc32 route metadata contract。
+  - 新增 generic typed IR route metadata contract。
+  - 在两个多 `*p++` fail-closed 样例中断言 `Unsupported` route。
+  - 在真实 clang pointer-table generic 路径中断言 `GenericTypedIr`。
+  - 在真实 clang/real-fdb crc32 lowering 路径中断言 `DeprecatedLegacyCrc32`。
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 架构图和代码地图同步加入 `translation_route.rs`。
+  - 明确 candidate route 只选择候选生成实现，不决定 `semantic_pass`，也不替代 `validation/tools/auto_migrate.py` 的 evidence `route_decision`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_reports_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_post_increment_reads_in_assign_value -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+git diff --check -- docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md CONTEXT.md docs/superpowers/plans/2026-06-27-candidate-route-p0.md
+```
+
+当前结果：
+- route metadata focused tests：`2 passed`
+- typed IR focused suite：`56 passed`
+- unsupported route focused test：`1 passed`
+- `bounded_translation`：`157 passed`
+- translator crate with `typed-ir,clang-frontend`：lib `11 passed`，bounded `157 passed`，doc tests `0`
+- real clang AST opt-in focused suite：`38 passed`
+- doc diff check：exit code `0`，只有 CRLF warning
+
+当前边界：
+- 这一步没有删除 crc32 特例，而是把它显式标为 deprecated candidate route。
+- real FlashDB crc32 仍未全程 generic：`static const uint32_t crc32_table[256]` 的 typed IR global-data model 仍是下一刀。
+- candidate route 不是最终验收结论；语义接受仍由 evidence route decision、validation profile 和 differential gates 决定。

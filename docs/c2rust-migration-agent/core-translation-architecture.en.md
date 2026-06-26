@@ -9,9 +9,11 @@ flowchart TD
     C["C source / compile_commands.json"] --> Clang["clang AST dump frontend"]
     Clang --> Skeleton["clang skeleton AST subset"]
     Skeleton --> IR["typed IR: IrFunction / IrStmt / IrExpr / IrType"]
-    IR --> Emitter{"Rust emitter route"}
+    IR --> RouteMeta["translation_route.rs: CandidateRouteDecision"]
+    RouteMeta --> Emitter{"Rust emitter route"}
     Emitter --> Generic["generic typed IR emitter"]
-    Emitter --> Canned["legacy crc32 typed-IR matcher + canned emitter"]
+    Emitter --> Canned["DeprecatedLegacyCrc32: legacy matcher + canned emitter"]
+    Emitter --> Unsupported["Unsupported: no Rust candidate"]
     Generic --> Rust["safe Rust draft"]
     Canned --> Rust
     Rust --> Rustc["rustc smoke / cargo tests"]
@@ -39,9 +41,14 @@ flowchart TD
   - Important functions: `expr_skeleton_from_ast_with_options`, `stmt_skeleton_from_ast`, `lower_function_from_clang_ast_dump_report`, `lower_stmt`, `lower_expr`.
 - `crates/c2r-translator/src/typed_ir.rs`
   - Defines `IrFunction`, `IrStmt`, `IrExpr`, `IrType`.
-  - Emits Rust from typed IR.
+  - Emits Rust from typed IR; `emit_rust_from_ir()` now returns `EmittedRust { rust, route }`.
   - Important functions: `emit_rust_from_ir`, `emit_scalar_rust_from_ir`, `emit_stmt`, `emit_expr_with_prelude`, `emit_post_increment_byte_read_expr`, `emit_postfix_decrement_while_loop`.
-  - Legacy crc32 route still lives here: `is_crc32_byte_cursor_ir`, `emit_crc32_byte_cursor_rust`.
+  - The legacy crc32 matcher and canned emitter still live here: `is_crc32_byte_cursor_ir`, `emit_crc32_byte_cursor_rust`, but they are now explicitly marked as a deprecated candidate route.
+- `crates/c2r-translator/src/translation_route.rs`
+  - Defines route metadata for typed IR candidate generation.
+  - `GenericTypedIr` is the normal typed IR emitter.
+  - `DeprecatedLegacyCrc32` is the currently retained crc32 canned path, with delete conditions recorded by `LEGACY_CRC32_DELETE_WHEN`.
+  - `Unsupported` means no Rust candidate; the error keeps route metadata and the fail-closed reason.
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - Main behavior contract for the bounded translator.
   - Covers direct typed IR tests, real clang AST smoke tests, fail-closed boundaries, and rustc smoke compilation.
@@ -50,6 +57,14 @@ flowchart TD
   - Use the latest numbered section first when resuming work.
 
 ## Current Core Translation Status
+
+After P0, the Rust emitter route is no longer only a hidden `if` inside `emit_rust_from_ir()`. `translation_route.rs` returns a `CandidateRouteDecision`:
+
+- `GenericTypedIr`: the normal typed IR emitter.
+- `DeprecatedLegacyCrc32`: the existing crc32 canned path, explicitly deprecated.
+- `Unsupported`: no Rust candidate; the error carries route metadata and the fail-closed reason.
+
+Candidate route selects the candidate generation implementation only. It does not decide `semantic_pass` and does not replace the evidence `route_decision` in `validation/tools/auto_migrate.py`.
 
 Generic typed IR emission now covers:
 
@@ -66,7 +81,7 @@ Generic typed IR emission now covers:
 Still not generic:
 
 - `static const uint32_t crc32_table[256]` has no explicit typed IR global-data model yet.
-- Real FlashDB crc32 still passes through the legacy typed-IR shape matcher and canned Rust route.
+- Real FlashDB crc32 still passes through the `DeprecatedLegacyCrc32` legacy typed-IR shape matcher and canned Rust route.
 - The project should not claim "zero crc32-specific code" until `is_crc32_byte_cursor_ir` and `emit_crc32_byte_cursor_rust` are removed after a generic path passes.
 
 ## Next Implementation Cut
