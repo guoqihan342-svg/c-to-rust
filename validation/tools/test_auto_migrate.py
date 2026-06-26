@@ -1358,6 +1358,205 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
             self.assertFalse(profile["generated_draft_semantic_pass"])
 
+    def test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-alias-risk-floor",
+            "source_commit": "1234567",
+            "function_name": "copy_i32",
+            "c_source": "int copy_i32(const int* values, int* out) { *out = values[0]; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-alias-risk-floor"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps(
+                    {
+                        "status": "recorded",
+                        "pointer_nodes": [
+                            {"name": "values", "ownership_role": "input"},
+                            {"name": "out", "ownership_role": "output"},
+                        ],
+                        "alias_contract": {
+                            "decision": "requires_noalias_contract",
+                            "proven": False,
+                            "requires_noalias": True,
+                        },
+                        "alias_risks": [
+                            {
+                                "pointer_nodes": ["values", "out"],
+                                "risk_level": "unknown_alias",
+                                "gate_decision": "requires_noalias_contract",
+                                "requires_noalias": True,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            self.assertEqual(route["level"], "L2")
+            self.assertEqual(route["verification_profile"], "L2-dev")
+            self.assertEqual(
+                route["candidate_generation"]["typed_ir"]["candidate_route"]["route"],
+                "GenericTypedIr",
+            )
+            self.assertIn(
+                {
+                    "feature": "alias_requires_noalias_contract",
+                    "risk_count": 1,
+                    "weight": "medium",
+                },
+                route["rationale"],
+            )
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
+
+    def test_generated_typed_ir_candidate_does_not_override_blocked_alias_route(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-blocked-alias-floor",
+            "source_commit": "1234567",
+            "function_name": "copy_i32",
+            "c_source": "int copy_i32(const int* values, int* out) { *out = values[0]; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-blocked-alias-floor"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps(
+                    {
+                        "status": "recorded",
+                        "pointer_nodes": [
+                            {"name": "values", "ownership_role": "input"},
+                            {"name": "out", "ownership_role": "output"},
+                        ],
+                        "alias_contract": {
+                            "decision": "blocked",
+                            "proven": False,
+                            "requires_noalias": True,
+                        },
+                        "alias_risks": [
+                            {
+                                "pointer_nodes": ["values", "out"],
+                                "risk_level": "unknown_alias",
+                                "gate_decision": "blocked",
+                                "requires_noalias": True,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            self.assertEqual(route["level"], "L3")
+            self.assertEqual(route["verification_profile"], "L3-dev")
+            self.assertEqual(
+                route["candidate_generation"]["typed_ir"]["candidate_route"]["route"],
+                "GenericTypedIr",
+            )
+            self.assertIn({"feature": "alias_blocked", "weight": "high"}, route["rationale"])
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
+
     def test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2(self) -> None:
         module = load_auto_migrate_module()
         spec = {

@@ -39,7 +39,8 @@ flowchart TD
   - 把支持的 C AST 节点 lowering 成紧凑的 clang skeleton。
   - 把 skeleton 节点转换成 typed IR。
   - 现在还会收集顶层 `static const` 固定长度整数数组 initializer，输出为 `ClangLoweringReport.globals: Vec<IrGlobal>`。
-  - 关键函数：`lower_function_from_clang_ast_dump_report`、`lower_function_from_clang_parse_spec_report`、`readonly_globals_from_ast`、`readonly_global_from_toplevel_var_decl`、`integer_literal_init_list_values`、`expr_skeleton_from_ast_with_options`、`lower_stmt`、`lower_expr`。
+  - 现在也会把局部固定长度整数数组 `InitListExpr` lowering 成 `IrExpr::ArrayLiteral`，但只接受元素数量等于数组长度、且元素为纯整数字面量或整型 cast 包裹整数字面量的一维整数数组。
+  - 关键函数：`lower_function_from_clang_ast_dump_report`、`lower_function_from_clang_parse_spec_report`、`readonly_globals_from_ast`、`readonly_global_from_toplevel_var_decl`、`integer_literal_init_list_values`、`expr_skeleton_from_ast_with_options`、`init_list_expr_skeleton_from_ast`、`lower_stmt`、`lower_expr`。
 - `crates/c2r-translator/src/typed_ir.rs`
   - 定义 `IrFunction`、`IrStmt`、`IrExpr`、`IrType`、`IrGlobal`、`IrGlobalInit`。
   - `emit_rust_from_ir()` 仍保留无 globals 的兼容入口。
@@ -59,7 +60,7 @@ flowchart TD
 - `validation/tools/auto_migrate.py`
   - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
   - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
-  - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 L1 route signal；`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件仍优先。
+  - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 L1 route signal；`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件、`alias_blocked`、`requires_noalias_contract` 和未知 pointer ownership floor 仍优先；typed IR provenance 会保留在 rationale 中，但不能覆盖这些风险 floor。
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` 对旧 route/profile evidence 保持可选，避免破坏 legacy fixtures。
   - 一旦出现 `candidate_generation.typed_ir`，schema 只允许 `GenericTypedIr` / `Unsupported` 两条 typed IR route，并要求 `semantic_pass=false`。
@@ -89,7 +90,7 @@ generic typed IR emission 现在覆盖：
 - 来自 clang AST 的无大括号 `if` / `while` body；
 - readonly integer pointer parameter 到 Rust slice，例如 `const uint32_t *table -> table: &[u32]`；
 - `static const` readonly integer array initializer 到 Rust `const`，例如 `crc32_table[] -> const CRC32_TABLE: [u32; 256]`；
-- typed IR 层的局部固定长度整数数组字面量和下标读取，例如 `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`；
+- clang-lowered typed IR 的局部固定长度整数数组字面量和下标读取，例如 `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`；只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素。partial initializer zero-fill、nested array、struct array、非 literal 或有副作用的 initializer、VLA/incomplete array 仍 fail closed；
 - 当已经证明存在 `const uint8_t *p` byte cursor 和 byte read 时，把 `const void *buf` 翻译成 `&[u8]`；
 - 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
 - assignment RHS prelude，覆盖 `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`；

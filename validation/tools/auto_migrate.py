@@ -3021,23 +3021,57 @@ def route_level(
         rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
         return "L4", rationale
     typed_ir_signal = typed_ir_candidate_route_signal(candidate_generation or {})
+    pointer_nodes = pointer.get("pointer_nodes", [])
+    alias_floor = alias_route_floor(pointer)
+    if alias_floor is not None:
+        level, alias_rationale = alias_floor
+        rationale.append(alias_rationale)
+        if typed_ir_signal is not None:
+            rationale.append(typed_ir_signal[1])
+        return level, rationale
+    if any(node.get("ownership_role") == "unknown" for node in pointer_nodes):
+        rationale.append({"feature": "unknown_pointer_role", "weight": "medium"})
+        if typed_ir_signal is not None:
+            rationale.append(typed_ir_signal[1])
+        return "L2", rationale
     if typed_ir_signal is not None:
         level, typed_ir_rationale = typed_ir_signal
         rationale.append(typed_ir_rationale)
         return level, rationale
-    pointer_nodes = pointer.get("pointer_nodes", [])
     if not pointer_nodes:
         rationale.append({"feature": "scalar_only", "weight": "low"})
         return "L0", rationale
-    alias_contract = pointer.get("alias_contract", {})
-    if alias_contract.get("decision") == "blocked":
-        rationale.append({"feature": "alias_blocked", "weight": "high"})
-        return "L3", rationale
-    if any(node.get("ownership_role") == "unknown" for node in pointer_nodes):
-        rationale.append({"feature": "unknown_pointer_role", "weight": "medium"})
-        return "L2", rationale
     rationale.append({"feature": "bounded_pointer_surface", "weight": "low"})
     return "L1", rationale
+
+
+def alias_route_floor(pointer: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    alias_contract = pointer.get("alias_contract", {})
+    if not isinstance(alias_contract, dict):
+        alias_contract = {}
+    alias_risks = pointer.get("alias_risks", [])
+    if not isinstance(alias_risks, list):
+        alias_risks = []
+    if alias_contract.get("decision") == "blocked":
+        return "L3", {"feature": "alias_blocked", "weight": "high"}
+    if alias_contract.get("decision") == "requires_noalias_contract" or any(
+        isinstance(risk, dict)
+        and (
+            risk.get("risk_level") == "unknown_alias"
+            or risk.get("gate_decision") == "requires_noalias_contract"
+            or risk.get("requires_noalias") is True
+        )
+        for risk in alias_risks
+    ):
+        return (
+            "L2",
+            {
+                "feature": "alias_requires_noalias_contract",
+                "risk_count": len(alias_risks),
+                "weight": "medium",
+            },
+        )
+    return None
 
 
 def typed_ir_candidate_route_signal(candidate_generation: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:

@@ -537,6 +537,103 @@ fn typed_ir_emits_local_fixed_array_index_read() {
     assert_rust_snippet_compiles("typed-ir-local-fixed-array-index-read", rust);
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let u32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let usize_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let table_ty = ClangTypeSkeleton {
+        spelled: "uint32_t[3]".to_string(),
+        canonical: "uint32_t[3]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(u32_ty.clone()),
+            len: Some(3),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "lookup_local_table".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "i".to_string(),
+            ty: usize_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "table".to_string(),
+                ty: table_ty.clone(),
+                init: Some(ClangExprSkeleton::ArrayLiteral {
+                    elements: vec![
+                        ClangExprSkeleton::Cast {
+                            target: u32_ty.clone(),
+                            expr: Box::new(ClangExprSkeleton::IntegerLiteral {
+                                value: 1,
+                                spelling: "1".to_string(),
+                                ty: int_ty,
+                            }),
+                            implicit: true,
+                        },
+                        ClangExprSkeleton::IntegerLiteral {
+                            value: 2,
+                            spelling: "2U".to_string(),
+                            ty: u32_ty.clone(),
+                        },
+                        ClangExprSkeleton::IntegerLiteral {
+                            value: 3,
+                            spelling: "3U".to_string(),
+                            ty: u32_ty.clone(),
+                        },
+                    ],
+                    ty: table_ty.clone(),
+                }),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::Index {
+                    base: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "table".to_string(),
+                        ty: table_ty,
+                    }),
+                    index: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "i".to_string(),
+                        ty: usize_ty,
+                    }),
+                    ty: u32_ty,
+                }),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower local fixed array skeleton");
+    let emitted = emit_rust_from_ir(&ir).expect("emit local fixed array from clang-lowered IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("let table: [u32; 3] = [(1i32 as u32), 2u32, 3u32];"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("clang-lowered-local-fixed-array-index-read", rust);
+}
+
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32() {
@@ -7196,6 +7293,113 @@ fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
     assert!(rust.contains("let mut next: u32 = crc;"));
     assert!(rust.contains("return next;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-initialized-decl", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_local_fixed_array_initializer_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-local-array-init");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("lookup_local_table.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\n#include <stddef.h>\nuint32_t lookup_local_table(size_t i) { uint32_t table[3] = {1U, 2U, 3U}; return table[i]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "lookup_local_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        name,
+        init: Some(IrExpr::ArrayLiteral { elements, .. }),
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Index { base, index, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected local array declaration followed by index return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "table");
+    assert_eq!(elements.len(), 3);
+    assert!(matches!(base.as_ref(), IrExpr::Var { name, .. } if name == "table"));
+    assert!(matches!(index.as_ref(), IrExpr::Var { name, .. } if name == "i"));
+
+    let rust = emit_rust_from_ir(function).expect("emit local array init from real clang AST");
+    assert!(rust.contains("pub fn lookup_local_table(i: usize) -> u32"));
+    assert!(rust.contains("let table: [u32; 3] = [1u32, 2u32, 3u32];"));
+    assert!(rust.contains("return table[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-local-array-init", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_local_array_initializer_call_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-local-array-call-init-reject");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("lookup_local_table_call_init.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\n#include <stddef.h>\nuint32_t helper(void);\nuint32_t lookup_local_table_call_init(size_t i) { uint32_t table[3] = {helper(), 2U, 3U}; return table[i]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "lookup_local_table_call_init",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    let message = report
+        .errors
+        .first()
+        .map(|error| error.message.as_str())
+        .unwrap_or("");
+    assert!(message.contains("InitListExpr"), "{message}");
+    assert!(message.contains("initializer element 0"), "{message}");
+    assert!(
+        message.contains("only pure integer literal elements"),
+        "{message}"
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

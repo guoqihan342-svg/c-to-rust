@@ -29,6 +29,7 @@ P0 的目标是让 `c2r-translator` 的 typed IR 候选生成显式返回 route 
 - 不接 LLM candidate generation。
 - 不把旧 crc32 模板恢复为 typed IR fallback。
 - 不把 generated Rust draft 当作语义通过证据。
+- 不让 `GenericTypedIr` 覆盖 pointer graph 已记录的 alias 风险 floor；P0 只补最小 route floor，不实现完整多路线调度器。
 
 ## 核心类型
 
@@ -142,9 +143,16 @@ typed IR `CandidateRouteDecision` 只回答：
 二者不能混用：
 
 - candidate route 不设置 acceptance。
-- candidate route 不覆盖 L4/refuse 语义。
+- candidate route 不覆盖 L4/refuse 语义，也不覆盖 `alias_blocked`、`requires_noalias_contract` 或未知 pointer ownership floor。
 - generated Rust draft 只是 candidate evidence。
 - semantic acceptance 仍由 C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。
+
+当前 route decision 的最小风险 floor：
+
+- `GenericTypedIr` generated 仍会写入 `candidate_generation.typed_ir` 和 rationale。
+- 若 pointer graph 已记录 `alias_contract.decision="blocked"`，路线保持 L3，不降到 L1。
+- 若 pointer graph 已记录 `requires_noalias_contract` 或 `unknown_alias` risk，路线保持 L2，不降到 L1。
+- 若 pointer ownership role 仍为 `unknown`，路线保持 L2。
 
 ## 验证策略
 
@@ -155,6 +163,7 @@ typed IR `CandidateRouteDecision` 只回答：
 3. `route_decision.candidate_generation.typed_ir` 与 clang-lowering-report 中的 typed IR candidate 一致。
 4. `validation_profile.candidate_generation` 与 route decision 完全一致。
 5. schema 接受没有 `candidate_generation` 的 legacy route/profile evidence，但拒绝包含 `DeprecatedLegacyCrc32` 或 `semantic_pass=true` 的新 typed IR candidate evidence。
+6. `GenericTypedIr` candidate 不能覆盖 alias route floor：`requires_noalias_contract` / `unknown_alias` 路由到 L2，`alias_blocked` 路由到 L3。
 
 建议验证命令：
 
@@ -163,4 +172,4 @@ python validation/tools/validate_auto_translation_evidence.py --target-id demo -
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32
 ```
 
-如需验证 Rust route contract，可继续运行现有 `crates/c2r-translator` 测试；本修订不要求修改 Rust 或 Python source/tests。
+如需验证 Rust route contract，可继续运行现有 `crates/c2r-translator` 测试；route floor 还应运行 `validation.tools.test_auto_migrate` 中的 typed IR route signal 用例。

@@ -29,6 +29,7 @@ Successful state:
 - Do not connect LLM candidate generation.
 - Do not restore the old crc32 template as a typed IR fallback.
 - Do not treat a generated Rust draft as semantic-pass evidence.
+- Do not let `GenericTypedIr` override alias-risk floors already recorded in the pointer graph; P0 adds only the minimal route floor, not the full multi-route scheduler.
 
 ## Core Types
 
@@ -142,9 +143,16 @@ What are this slice's candidate-generation path, validation profile, and evidenc
 They must not be mixed:
 
 - Candidate route does not set acceptance.
-- Candidate route does not project L4/refuse semantics.
+- Candidate route does not project L4/refuse semantics and does not override `alias_blocked`, `requires_noalias_contract`, or unknown pointer-ownership floors.
 - Generated Rust draft is candidate evidence only.
 - Semantic acceptance remains owned by C oracle, Rust replay, schema diff, negative diff, unsafe ledger, final verification, and related gates.
+
+The current route-decision risk floor is intentionally small:
+
+- A generated `GenericTypedIr` candidate still records `candidate_generation.typed_ir` and a rationale entry.
+- If the pointer graph records `alias_contract.decision="blocked"`, the route stays L3 and is not downgraded to L1.
+- If the pointer graph records `requires_noalias_contract` or an `unknown_alias` risk, the route stays L2 and is not downgraded to L1.
+- If any pointer ownership role is still `unknown`, the route stays L2.
 
 ## Verification Strategy
 
@@ -155,6 +163,7 @@ Minimum verification:
 3. `route_decision.candidate_generation.typed_ir` matches the typed IR candidate in the clang-lowering-report.
 4. `validation_profile.candidate_generation` exactly matches the route decision.
 5. The schema accepts legacy route/profile evidence without `candidate_generation`, but rejects new typed IR candidate evidence containing `DeprecatedLegacyCrc32` or `semantic_pass=true`.
+6. A `GenericTypedIr` candidate must not override alias route floors: `requires_noalias_contract` / `unknown_alias` routes to L2, and `alias_blocked` routes to L3.
 
 Suggested verification commands:
 
@@ -163,4 +172,4 @@ python validation/tools/validate_auto_translation_evidence.py --target-id demo -
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32
 ```
 
-Rust route-contract tests may still be run from the existing `crates/c2r-translator` suite; this revision does not require Python or Rust source/test edits.
+Rust route-contract tests may still be run from the existing `crates/c2r-translator` suite; the route-floor checks should also run the typed IR route-signal tests in `validation.tools.test_auto_migrate`.

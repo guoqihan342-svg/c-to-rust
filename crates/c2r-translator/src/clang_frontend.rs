@@ -213,6 +213,10 @@ pub enum ClangExprSkeleton {
         index: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    ArrayLiteral {
+        elements: Vec<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     Call {
         callee: String,
         args: Vec<ClangExprSkeleton>,
@@ -1093,6 +1097,7 @@ fn expr_skeleton_from_ast_with_options(
                 ty: expr_type(expr)?,
             })
         }
+        Some("InitListExpr") => init_list_expr_skeleton_from_ast(expr),
         Some("CallExpr") => call_expr_skeleton_from_ast(expr, preserve_integral_casts),
         Some("UnaryOperator") => {
             let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
@@ -1207,6 +1212,84 @@ fn expr_skeleton_from_ast_with_options(
 }
 
 #[cfg(feature = "typed-ir")]
+fn init_list_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let ty = expr_type(expr)?;
+    let ClangTypeKind::Array { element, len } = &ty.kind else {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: format!(
+                "initializer list type {} is outside the current clang lowering skeleton",
+                ty.spelled
+            ),
+        });
+    };
+    let Some(len) = len else {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason:
+                "incomplete array initializer list is outside the current clang lowering skeleton"
+                    .to_string(),
+        });
+    };
+    if !matches!(&element.kind, ClangTypeKind::Integer { .. }) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: format!(
+                "array element type {} is outside the current clang lowering skeleton",
+                element.spelled
+            ),
+        });
+    }
+    let init_children = inner(expr);
+    if init_children.len() != *len {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: format!(
+                "initializer element count {} does not match array length {len}",
+                init_children.len()
+            ),
+        });
+    }
+    let elements = init_children
+        .iter()
+        .map(|element| expr_skeleton_from_ast_with_options(element, true))
+        .collect::<Result<Vec<_>, ClangFrontendError>>()?;
+    for (index, element) in elements.iter().enumerate() {
+        if let Some(reason) = array_literal_element_rejection_reason(element) {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "InitListExpr".to_string(),
+                reason: format!("initializer element {index} {reason}"),
+            });
+        }
+    }
+
+    Ok(ClangExprSkeleton::ArrayLiteral { elements, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn array_literal_element_rejection_reason(expr: &ClangExprSkeleton) -> Option<String> {
+    match expr {
+        ClangExprSkeleton::IntegerLiteral { .. } => None,
+        ClangExprSkeleton::Cast { target, expr, .. } => {
+            if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+                return Some(format!(
+                    "cast target {} is not an integer; only pure integer literal elements are supported",
+                    target.spelled
+                ));
+            }
+            array_literal_element_rejection_reason(expr)
+        }
+        ClangExprSkeleton::Unsupported { node, reason } => Some(format!(
+            "is unsupported {node}: {reason}; only pure integer literal elements are supported"
+        )),
+        _ => Some(
+            "uses a non-literal or side-effecting expression; only pure integer literal elements are supported"
+                .to_string(),
+        ),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn call_expr_skeleton_from_ast(
     expr: &Value,
     preserve_integral_casts: bool,
@@ -1305,6 +1388,9 @@ fn bounded_call_arg_rejection_reason(expr: &ClangExprSkeleton) -> Option<String>
         }
         ClangExprSkeleton::Index { base, index, .. } => bounded_call_arg_rejection_reason(base)
             .or_else(|| bounded_call_arg_rejection_reason(index)),
+        ClangExprSkeleton::ArrayLiteral { .. } => {
+            Some("array initializer lists are outside the bounded call subset".to_string())
+        }
         ClangExprSkeleton::Call { .. } => {
             Some("nested call expressions are outside the bounded call subset".to_string())
         }
@@ -1642,6 +1728,14 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::Index { base, index, ty } => Ok(IrExpr::Index {
             base: Box::new(lower_expr(base)?),
             index: Box::new(lower_expr(index)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::ArrayLiteral { elements, ty } => Ok(IrExpr::ArrayLiteral {
+            elements: elements
+                .iter()
+                .map(lower_expr)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             ty: lower_type(ty)?,
             source_span: None,
         }),
@@ -2192,6 +2286,226 @@ mod tests {
             init,
             ClangExprSkeleton::DeclRef { name, .. } if name == "crc"
         ));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_maps_fixed_array_initializer_list() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "type": { "qualType": "uint32_t[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "uint32_t[3]" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "IntegralCast",
+                                    "type": { "qualType": "uint32_t" },
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "1"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "2"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "3"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Decl {
+            name,
+            ty,
+            init: Some(init),
+        } = skeleton
+        else {
+            panic!("expected initialized array decl skeleton, got {skeleton:?}");
+        };
+        assert_eq!(name, "table");
+        assert!(matches!(ty.kind, ClangTypeKind::Array { len: Some(3), .. }));
+        let ClangExprSkeleton::ArrayLiteral { elements, ty } = init else {
+            panic!("expected array literal initializer, got {init:?}");
+        };
+        assert!(matches!(ty.kind, ClangTypeKind::Array { len: Some(3), .. }));
+        assert!(matches!(
+            &elements[0],
+            ClangExprSkeleton::Cast {
+                target,
+                expr,
+                implicit: true
+            } if matches!(
+                target.kind,
+                ClangTypeKind::Integer {
+                    signed: false,
+                    width: 32
+                }
+            ) && matches!(
+                expr.as_ref(),
+                ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+            )
+        ));
+        assert!(matches!(
+            &elements[1],
+            ClangExprSkeleton::IntegerLiteral { value: 2, .. }
+        ));
+        assert!(matches!(
+            &elements[2],
+            ClangExprSkeleton::IntegerLiteral { value: 3, .. }
+        ));
+
+        let ir = lower_expr(&ClangExprSkeleton::ArrayLiteral { elements, ty })
+            .expect("lower array literal initializer");
+        let IrExpr::ArrayLiteral { elements, .. } = ir else {
+            panic!("expected lowered IR array literal, got {ir:?}");
+        };
+        assert!(matches!(
+            &elements[0],
+            IrExpr::Cast {
+                target,
+                expr,
+                implicit: true,
+                ..
+            } if matches!(
+                target.kind,
+                IrTypeKind::Integer {
+                    signed: false,
+                    width: 32
+                }
+            ) && matches!(
+                expr.as_ref(),
+                IrExpr::LitInt { value: 1, .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_count_mismatch() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "type": { "qualType": "uint32_t[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "uint32_t[3]" },
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "1"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "2"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Decl {
+            init: Some(ClangExprSkeleton::Unsupported { node, reason, .. }),
+            ..
+        } = skeleton
+        else {
+            panic!("expected unsupported array initializer, got {skeleton:?}");
+        };
+        assert_eq!(node, "InitListExpr");
+        assert!(reason.contains("initializer element count 2 does not match array length 3"));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_call_element() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "type": { "qualType": "uint32_t[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "uint32_t[3]" },
+                            "inner": [
+                                {
+                                    "kind": "CallExpr",
+                                    "type": { "qualType": "uint32_t" },
+                                    "inner": [
+                                        {
+                                            "kind": "ImplicitCastExpr",
+                                            "castKind": "FunctionToPointerDecay",
+                                            "type": { "qualType": "uint32_t (*)(void)" },
+                                            "inner": [
+                                                {
+                                                    "kind": "DeclRefExpr",
+                                                    "type": { "qualType": "uint32_t (void)" },
+                                                    "referencedDecl": {
+                                                        "kind": "FunctionDecl",
+                                                        "name": "helper"
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "2"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "3"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Decl {
+            init: Some(ClangExprSkeleton::Unsupported { node, reason, .. }),
+            ..
+        } = skeleton
+        else {
+            panic!("expected unsupported array initializer, got {skeleton:?}");
+        };
+        assert_eq!(node, "InitListExpr");
+        assert!(reason.contains("initializer element 0"));
+        assert!(reason.contains("only pure integer literal elements"));
     }
 
     #[test]

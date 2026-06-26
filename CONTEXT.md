@@ -5698,3 +5698,90 @@ $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-pat
 - 这只是 typed IR -> Rust emitter 能力；真实 C `InitListExpr` / local array lowering 还没接到 clang frontend。
 - local array 当前只支持固定长度整数数组、声明时初始化、只读 index。数组元素写入、指针衰减、变长数组、struct array 仍应 fail closed。
 - 下一步可以在两个方向继续：接 clang `InitListExpr` 到 `ArrayLiteral`，或按并行线程建议补 direct-call callee signature evidence / router risk floor。
+
+## 83. 2026-06-27 clang local array InitListExpr and typed IR route risk floor
+
+本轮按多智能体并行继续。三个只读线程结论：
+
+- `InitListExpr -> ArrayLiteral` 是上一节 typed IR local array 能力的最小前端接线，应立即做，并补真实 clang AST smoke。
+- router risk floor 有实际问题：`GenericTypedIr` generated 当前会先返回 L1，绕过 pointer graph 中的 alias blocked / requires-noalias 风险。
+- direct-call callee signature evidence 是下一步 soundness hardening，建议排在 InitListExpr 之后，不要拖到 broad direct-call 推广之后。
+
+本轮主线完成两件事。
+
+1. clang frontend 现在支持局部固定长度整数数组 initializer。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `ArrayLiteral { elements, ty }`。
+  - `expr_skeleton_from_ast_with_options()` 新增 `InitListExpr` 分支。
+  - 新增 `init_list_expr_skeleton_from_ast()`，只接受一维 fixed-size integer array，且 initializer element count 必须等于数组长度。
+  - initializer 元素只允许纯 `IntegerLiteral` 或整型 cast 包裹的 `IntegerLiteral`；变量、call、binary、inc/dec、deref 等非 literal 或副作用表达式 fail closed。
+  - initializer 元素保留 `IntegralCast` / `IntegralPromotion`，避免真实 clang 把 `{1}` 初始化 `uint32_t[]` 时丢掉 cast。
+  - `ArrayLiteral` 作为 call argument 继续 fail closed。
+  - `lower_expr()` 把 `ClangExprSkeleton::ArrayLiteral` lowering 成 `IrExpr::ArrayLiteral`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir`，覆盖 `ClangFunctionSkeleton -> IrFunction -> Rust`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_local_fixed_array_initializer_when_enabled`，验证真实 C：
+    `uint32_t table[3] = {1U, 2U, 3U}; return table[i];`
+    能从 clang AST lowering 到 `IrExpr::ArrayLiteral`，并生成可 rustc 编译的 Rust。
+  - code review 后补 `decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_call_element` 和 gated real clang smoke `clang_ast_dump_rejects_local_array_initializer_call_when_enabled`，避免 array initializer 里带 direct call 时按 Rust 数组 literal 发射。
+
+2. route decision 现在有最小 alias risk floor。
+
+- `validation/tools/auto_migrate.py`
+  - `route_level()` 不再让 typed IR generated signal 提前覆盖 pointer graph risk。
+  - 新增 `alias_route_floor()`。
+  - `alias_contract.decision == "blocked"` 时保持 L3。
+  - `requires_noalias_contract` 或 `unknown_alias` risk 时保持 L2。
+  - pointer ownership role 为 `unknown` 时保持 L2。
+  - `GenericTypedIr` provenance 仍写入 rationale，但不能把上述风险降到 L1。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1`。
+  - 新增 `test_generated_typed_ir_candidate_does_not_override_blocked_alias_route`。
+
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend decl_stmt_skeleton_from_ast_maps_fixed_array_initializer_list -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_count_mismatch -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_local_fixed_array_initializer_when_enabled -- --nocapture
+ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_rejects_local_array_initializer_call_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2
+```
+
+本轮最终验证已跑：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+openspec validate --all --strict
+git diff --check -- CONTEXT.md crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
+```
+
+当前边界：
+
+- 可以说：真实 clang AST 中的局部固定长度整数数组 initializer 已能进入 typed IR，并生成可编译 Rust。
+- 不应说：已支持 C 数组完整语义。当前只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素；partial initializer zero-fill、nested array、struct array、非 literal 或有副作用 initializer、VLA/incomplete array、local array write、array-to-pointer decay 仍 fail closed。
+- 可以说：`GenericTypedIr` 不再覆盖 alias blocked / requires-noalias 风险 floor。
+- 不应说：完整 L0-L4 router 已完成；当前只是 typed IR route signal 上方的最小 alias/ownership floor。
+
+English mirror summary:
+
+- Local fixed-size integer-array `InitListExpr` now lowers to `IrExpr::ArrayLiteral` and reaches compilable Rust through the generic typed IR emitter.
+- The route decision now keeps `GenericTypedIr` provenance but does not let it override alias-blocked, requires-noalias, unknown-alias, or unknown pointer-ownership floors.
+- Next soundness cut: direct-call callee signature evidence binding across plan/context/validator.

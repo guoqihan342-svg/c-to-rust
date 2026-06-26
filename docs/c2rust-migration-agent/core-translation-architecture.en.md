@@ -39,7 +39,8 @@ flowchart TD
   - Lowers supported C AST nodes into a compact clang skeleton.
   - Converts skeleton nodes into typed IR.
   - Also collects top-level `static const` fixed-length integer array initializers as `ClangLoweringReport.globals: Vec<IrGlobal>`.
-  - Important functions: `lower_function_from_clang_ast_dump_report`, `lower_function_from_clang_parse_spec_report`, `readonly_globals_from_ast`, `readonly_global_from_toplevel_var_decl`, `integer_literal_init_list_values`, `expr_skeleton_from_ast_with_options`, `lower_stmt`, `lower_expr`.
+  - It also lowers local fixed-length integer-array `InitListExpr` nodes into `IrExpr::ArrayLiteral`, limited to one-dimensional integer arrays whose initializer element count exactly matches the array length and whose elements are pure integer literals or integer casts around integer literals.
+  - Important functions: `lower_function_from_clang_ast_dump_report`, `lower_function_from_clang_parse_spec_report`, `readonly_globals_from_ast`, `readonly_global_from_toplevel_var_decl`, `integer_literal_init_list_values`, `expr_skeleton_from_ast_with_options`, `init_list_expr_skeleton_from_ast`, `lower_stmt`, `lower_expr`.
 - `crates/c2r-translator/src/typed_ir.rs`
   - Defines `IrFunction`, `IrStmt`, `IrExpr`, `IrType`, `IrGlobal`, and `IrGlobalInit`.
   - `emit_rust_from_ir()` remains the no-globals compatibility entrypoint.
@@ -59,7 +60,7 @@ flowchart TD
 - `validation/tools/auto_migrate.py`
   - Newly generated `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
   - Newly generated `validation_profile.candidate_generation` repeats the same binding while keeping `generated_draft_semantic_pass=false`.
-  - `typed_ir.status=generated` with route `GenericTypedIr` acts as an L1 route signal; `typed_ir.status=unsupported` preserves the reason and acts as an L2 repair/baseline route signal. Hard-refuse conditions still take priority.
+  - `typed_ir.status=generated` with route `GenericTypedIr` acts as an L1 route signal; `typed_ir.status=unsupported` preserves the reason and acts as an L2 repair/baseline route signal. Hard-refuse conditions, `alias_blocked`, `requires_noalias_contract`, and unknown pointer-ownership floors still take priority; typed IR provenance stays in the rationale but cannot override those risk floors.
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` remains optional for older route/profile evidence so legacy fixtures stay compatible.
   - Once `candidate_generation.typed_ir` is present, the schema allows only the `GenericTypedIr` / `Unsupported` typed IR routes and requires `semantic_pass=false`.
@@ -89,7 +90,7 @@ Generic typed IR emission now covers:
 - no-brace `if` / `while` bodies from clang AST;
 - readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
 - `static const` readonly integer array initializers as Rust `const`, for example `crc32_table[] -> const CRC32_TABLE: [u32; 256]`;
-- typed IR local fixed-length integer array literals and index reads, for example `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`;
+- clang-lowered typed IR local fixed-length integer array literals and index reads, for example `uint32_t table[3] = {1,2,3}; return table[i]; -> let table: [u32; 3] = ...; table[i as usize]`; only initializer elements canonicalized by clang AST to pure integer literals/casts are supported. Partial-initializer zero fill, nested arrays, struct arrays, non-literal or side-effecting initializers, VLAs, and incomplete arrays still fail closed;
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
 - nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
 - assignment RHS prelude, covering `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`;
