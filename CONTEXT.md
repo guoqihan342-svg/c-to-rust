@@ -4559,3 +4559,64 @@ python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_r
 - 下一步建议：新增一个整函数测试，直接把真实 clang-lowered `fdb_calc_crc32`
   的 `IrFunction` 传给 `emit_rust_from_ir`，先观察 fail-closed 的真实形状差异；
   然后只按实际 diff 调整 `is_crc32_byte_cursor_ir()` 或接线 report/translation 路径。
+
+## 63. 2026-06-26 clang-lowered typed IR rust draft path
+
+本轮承接第 62 节：`>>` 之后 real-fdb clang lowering report 已经是
+`status=lowered`、`errors=[]`，下一步不再继续扩前端语法点，而是验证
+"真实 clang-lowered IR -> typed IR emitter -> Rust draft" 这条端到端路径。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在启用 `clang-lowering-report` feature 时先走
+    `translate_slice_with_optional_clang_lowered_ir()`。
+  - 新路径依次执行 `ClangParseSpec::from_slice_spec()`、
+    `lower_function_from_clang_parse_spec_report()`、取 `function_ir`、
+    `typed_ir::emit_rust_from_ir()`。
+  - 成功时写入 `translation_rule_ids=["clang-lowered-typed-ir"]`。
+  - 任一步失败都会 fail-closed 回落到原 `translate_slice()`，不改变默认非 feature
+    行为。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 synthetic full `fdb_calc_crc32` 的真实 clang smoke：直接把
+    `lower_function_from_clang_ast_dump_report()` 产出的 `function_ir` 传给
+    `emit_rust_from_ir()`。
+  - 新增真实 validation slice spec smoke：从
+    `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 构造当前
+    `SliceSpec`，经 `ClangParseSpec` 和 lowering report 后再进入
+    `emit_rust_from_ir()`。
+  - 新增 artifact path smoke：临时真实 `src/fdb_utils.c` 是完整 CRC32，
+    但 `spec.c_source` 故意写成 `{ return crc; }`，证明 `rust-draft.rs`
+    中的 `crc32_update_byte()` 不是旧字符串识别路径生成的。
+
+边界声明：
+- 这只证明在 `clang-lowering-report` opt-in 下，真实 clang-lowered
+  `fdb_calc_crc32` 的 `function_ir` 已经能驱动当前 typed emitter 生成 CRC32 Rust
+  draft。
+- 这仍然不是 semantic pass，不声明行为等价，不把 diagnostic-only 的 lowering report
+  扩大成 accepted evidence。
+- `auto_migrate` 仍应按既有 evidence/rust-check/oracle 规则决定
+  `generated_draft_semantic_pass`，本轮没有把临时 report 提升为验收证据。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `88 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root：`report_status=lowered`、`report_errors=[]`、
+  `lowering_report_status=lowered`、`rust_has_crc32_update_byte=true`、
+  `rust_has_crc32_table=false`。
+
+当前核心翻译功能状态：
+- clang 前端已经跨过 real-fdb `fdb_calc_crc32` 已知语法 blocker，并能产出可被当前
+  CRC32 typed emitter 接收的 `IrFunction`。
+- `write_translation_artifacts()` 在 `clang-lowering-report` opt-in 下已经能用这份真实
+  clang-lowered IR 写出 CRC32 Rust draft。
+- 下一步建议不要再做前端 blocker 猜测；应补强 clang-lowered path 的
+  type-map/cfg/evidence 接线，或者运行真实 rust-check/oracle 路径来推进 semantic pass。

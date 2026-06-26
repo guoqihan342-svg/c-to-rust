@@ -2535,6 +2535,125 @@ fn clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-flashdb-crc32-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("fdb_utils.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256];\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n    return crc ^ ~0U;\n}\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "fdb_calc_crc32");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit rust from real clang-lowered crc32 ir");
+
+    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
+    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(!rust.contains("crc32_table"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let real_spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../validation/slice-specs/flashdb-real-fdb-calc-crc32.json");
+    let real_spec: Value = serde_json::from_str(
+        &fs::read_to_string(&real_spec_path).expect("read real fdb slice spec"),
+    )
+    .expect("parse real fdb slice spec");
+    let source_file = "src/fdb_utils.c";
+    let function_source_span = serde_json::from_value(
+        real_spec
+            .pointer("/c_boundary/signatures/0/source_span")
+            .expect("function source span")
+            .clone(),
+    )
+    .expect("parse function source span");
+    let spec = SliceSpec {
+        target_id: real_spec["target_id"].as_str().unwrap().to_string(),
+        slice_id: real_spec["slice_id"].as_str().unwrap().to_string(),
+        source_commit: real_spec["source_commit"].as_str().unwrap().to_string(),
+        function_name: real_spec["function_name"].as_str().unwrap().to_string(),
+        c_source: real_spec["c_source"].as_str().unwrap().to_string(),
+        fixture_hash: real_spec["fixture_hash"].as_str().unwrap().to_string(),
+        source_root: Some(
+            real_spec["source"]["source_root"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        ),
+        source_file: Some(source_file.to_string()),
+        source_file_hashes: std::collections::BTreeMap::from([(
+            source_file.to_string(),
+            real_spec["source"]["source_file_hashes"][source_file]
+                .as_str()
+                .unwrap()
+                .to_string(),
+        )]),
+        function_source_span: Some(function_source_span),
+        build_profile: BuildProfile {
+            include_paths: vec!["inc".to_string(), "tests".to_string()],
+            defines: Vec::new(),
+            target_triple: None,
+            abi: None,
+            compiler_command_source: "real-flashdb-slice-spec-test".to_string(),
+            clang_available: true,
+        },
+        ..SliceSpec::default()
+    };
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit rust from real fdb clang-lowered ir");
+
+    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
+    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(!rust.contains("crc32_table"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_lowers_array_subscript_expr_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -4437,6 +4556,76 @@ fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifes
     assert!(report["diagnostics"].as_array().is_some());
     assert!(report["errors"].as_array().is_some());
     assert!(out_dir.join("l3-add-one-rust-draft.rs").exists());
+}
+
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let source_root = unique_out_dir("clang-lowered-rust-draft-source");
+    fs::create_dir_all(source_root.join("src")).unwrap();
+    fs::create_dir_all(source_root.join("inc")).unwrap();
+    fs::write(
+        source_root.join("src/fdb_utils.c"),
+        "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256];\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n    return crc ^ ~0U;\n}\n",
+    )
+    .unwrap();
+    let source_root = source_root.to_string_lossy().replace('\\', "/");
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "93d1755",
+        "function_name": "fdb_calc_crc32",
+        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root,
+        "source_file": "src/fdb_utils.c",
+        "source_file_hashes": {
+            "src/fdb_utils.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/fdb_utils.c",
+            "line_start": 4,
+            "line_end": 12,
+            "byte_start": 86,
+            "byte_end": 357,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": ["inc"],
+            "defines": [],
+            "target_triple": "x86_64-pc-windows-msvc",
+            "abi": "msvc",
+            "compiler_command_source": "clang",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("clang-lowered-rust-draft");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let plan = json_file(out_dir.join("l3-real-fdb-calc-crc32-auto-translation-plan.json"));
+    let rust = fs::read_to_string(out_dir.join("l3-real-fdb-calc-crc32-rust-draft.rs")).unwrap();
+
+    assert_eq!(manifest.status, "generated");
+    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
+    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(!rust.contains("return crc;"));
+    assert!(plan["plan"]["translation_rule_ids"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("clang-lowered-typed-ir")));
 }
 
 #[cfg(feature = "clang-frontend")]

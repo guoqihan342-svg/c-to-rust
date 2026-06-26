@@ -362,6 +362,9 @@ pub fn write_translation_artifacts(
     out_dir: &Path,
 ) -> Result<ArtifactManifest, Box<dyn Error>> {
     fs::create_dir_all(out_dir)?;
+    #[cfg(feature = "clang-lowering-report")]
+    let result = translate_slice_with_optional_clang_lowered_ir(spec);
+    #[cfg(not(feature = "clang-lowering-report"))]
     let result = translate_slice(spec);
     let prefix = format!("l3-{}", spec.slice_id);
     let status = if result.errors.is_empty() {
@@ -486,6 +489,35 @@ pub fn write_translation_artifacts(
             .into_iter()
             .map(|path| path.to_string_lossy().replace('\\', "/"))
             .collect(),
+    })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> TranslationResult {
+    try_translate_slice_with_clang_lowered_ir(spec).unwrap_or_else(|| translate_slice(spec))
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn try_translate_slice_with_clang_lowered_ir(spec: &SliceSpec) -> Option<TranslationResult> {
+    let parse_spec = clang_frontend::ClangParseSpec::from_slice_spec(spec).ok()?;
+    let environment = std::env::vars().collect::<BTreeMap<_, _>>();
+    let report =
+        clang_frontend::lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+    let function_ir = report.function_ir.as_ref()?;
+    let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?;
+
+    Some(TranslationResult {
+        rust_code,
+        plan: TranslationPlan {
+            target_id: spec.target_id.clone(),
+            slice_id: spec.slice_id.clone(),
+            function_name: spec.function_name.clone(),
+            translation_rule_ids: vec!["clang-lowered-typed-ir".to_string()],
+            call_expressions: Vec::new(),
+            unsupported_node_count: 0,
+            unsafe_candidate_count: 0,
+        },
+        ..TranslationResult::default()
     })
 }
 
