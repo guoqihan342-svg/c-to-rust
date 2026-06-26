@@ -662,6 +662,156 @@ fn typed_ir_rejects_while_body_decl_scope_leak() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_if_else_with_integer_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "adjust".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_var("flag", i32_ty.clone()),
+                then_body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                else_body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("value", i32_ty.clone()),
+                        ir_bitnot(ir_lit(0, "0", i32_ty.clone()), i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar if");
+
+    assert!(rust.contains("pub fn adjust(mut value: i32, flag: i32) -> i32"));
+    assert!(rust.contains("if flag != 0i32 {"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("} else {"));
+    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-if", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_if_with_unsupported_condition_expr() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_if_call".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                then_body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_var("value", i32_ty.clone()),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("if call condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_if_body_decl_scope_leak() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_if_scope".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "flag".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_var("flag", i32_ty.clone()),
+                then_body: vec![IrStmt::Decl {
+                    name: "tmp".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("tmp", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("if body decl must not leak");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("var tmp is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_pointer_param_in_generic_emitter() {
     let u32_ty = ir_u32();
     let const_void_ptr = ir_pointer(
@@ -1931,6 +2081,207 @@ fn typed_ir_emits_scalar_while_from_clang_lowered_ir() {
     assert!(rust.contains("return crc;"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-clang-scalar-while", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn clang_scalar_if_skeleton() -> ClangFunctionSkeleton {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    ClangFunctionSkeleton {
+        name: "adjust_if".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "flag".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::If {
+                condition: ClangExprSkeleton::DeclRef {
+                    name: "flag".to_string(),
+                    ty: int_ty.clone(),
+                },
+                then_body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::Add,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "value".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                            value: 1,
+                            spelling: "1".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        ty: int_ty.clone(),
+                    },
+                }],
+                else_body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::Add,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "value".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::Unary {
+                            op: ClangUnaryOperator::BitNot,
+                            operand: Box::new(ClangExprSkeleton::IntegerLiteral {
+                                value: 0,
+                                spelling: "0".to_string(),
+                                ty: int_ty.clone(),
+                            }),
+                            ty: int_ty.clone(),
+                        }),
+                        ty: int_ty.clone(),
+                    },
+                }],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_simple_if_statement() {
+    let skeleton = clang_scalar_if_skeleton();
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower if statement");
+
+    let [IrStmt::If {
+        condition,
+        then_body,
+        else_body,
+        ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!("expected if followed by return, got {:?}", ir.body);
+    };
+    assert!(matches!(condition, IrExpr::Var { name, .. } if name == "flag"));
+    assert!(matches!(
+        then_body.as_slice(),
+        [IrStmt::Assign { target, value, .. }]
+            if matches!(target, IrExpr::Var { name, .. } if name == "value")
+                && matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+    assert!(matches!(
+        else_body.as_slice(),
+        [IrStmt::Assign { target, value, .. }]
+            if matches!(target, IrExpr::Var { name, .. } if name == "value")
+                && matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_if_without_else_to_empty_else_body() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "adjust_if_no_else".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "flag".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::If {
+                condition: ClangExprSkeleton::DeclRef {
+                    name: "flag".to_string(),
+                    ty: int_ty.clone(),
+                },
+                then_body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::Add,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "value".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                            value: 1,
+                            spelling: "1".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        ty: int_ty.clone(),
+                    },
+                }],
+                else_body: vec![],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower if without else");
+
+    let [IrStmt::If { else_body, .. }, IrStmt::Return { .. }] = ir.body.as_slice() else {
+        panic!("expected if followed by return, got {:?}", ir.body);
+    };
+    assert!(
+        else_body.is_empty(),
+        "expected missing else to lower to empty else body"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_scalar_if_from_clang_lowered_ir() {
+    let skeleton = clang_scalar_if_skeleton();
+    let ir = lower_function_skeleton(&skeleton).expect("lower scalar if skeleton");
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar if from lowered IR");
+
+    assert!(rust.contains("pub fn adjust_if(mut value: i32, flag: i32) -> i32"));
+    assert!(rust.contains("if flag != 0i32 {"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("} else {"));
+    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("return value;"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-clang-scalar-if", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -3792,6 +4143,71 @@ fn clang_ast_dump_lowers_simple_while_statement_when_enabled() {
             if matches!(target, IrExpr::Var { name, .. } if name == "crc")
                 && matches!(value, IrExpr::Var { name, .. } if name == "crc")
     ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-simple-if");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("adjust_if.c");
+    fs::write(
+        &source_file,
+        "int adjust_if(int value, int flag) { if (flag) { value = value + 1; } else { value = value + ~0; } return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "adjust_if");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::If {
+        condition,
+        then_body,
+        else_body,
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!("expected if followed by return, got {:?}", function.body);
+    };
+    assert!(matches!(condition, IrExpr::Var { name, .. } if name == "flag"));
+    assert!(matches!(
+        then_body.as_slice(),
+        [IrStmt::Assign { target, value, .. }]
+            if matches!(target, IrExpr::Var { name, .. } if name == "value")
+                && matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+    assert!(matches!(
+        else_body.as_slice(),
+        [IrStmt::Assign { target, value, .. }]
+            if matches!(target, IrExpr::Var { name, .. } if name == "value")
+                && matches!(value, IrExpr::Binary { op: IrBinOp::Add, .. })
+    ));
+
+    let rust = emit_rust_from_ir(function).expect("emit simple if from real clang AST");
+    assert!(rust.contains("pub fn adjust_if(mut value: i32, flag: i32) -> i32"));
+    assert!(rust.contains("if flag != 0i32 {"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("} else {"));
+    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-if", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

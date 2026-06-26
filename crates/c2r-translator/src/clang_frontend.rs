@@ -149,6 +149,11 @@ pub enum ClangStmtSkeleton {
         target: ClangExprSkeleton,
         value: ClangExprSkeleton,
     },
+    If {
+        condition: ClangExprSkeleton,
+        then_body: Vec<ClangStmtSkeleton>,
+        else_body: Vec<ClangStmtSkeleton>,
+    },
     While {
         condition: ClangExprSkeleton,
         body: Vec<ClangStmtSkeleton>,
@@ -659,6 +664,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
             assign_stmt_skeleton_from_ast(stmt)
         }
+        Some("IfStmt") => if_stmt_skeleton_from_ast(stmt),
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
         Some("ReturnStmt") => {
             let value = inner(stmt)
@@ -707,6 +713,47 @@ fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clan
     Ok(ClangStmtSkeleton::Assign {
         target: expr_skeleton_from_ast(target)?,
         value: expr_skeleton_from_ast(value)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn if_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let children = inner(stmt);
+    let (condition, then_body, else_body) = match children {
+        [condition, then_body] => (condition, then_body, None),
+        [condition, then_body, else_body] => (condition, then_body, Some(else_body)),
+        _ => {
+            return Err(ClangFrontendError {
+                kind: "invalid_if_stmt".to_string(),
+                message: "IfStmt must have condition and then body".to_string(),
+            })
+        }
+    };
+    if string_field(then_body, "kind").as_deref() != Some("CompoundStmt") {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason:
+                "IfStmt without CompoundStmt then body is outside the current clang lowering skeleton"
+                    .to_string(),
+        });
+    }
+    let else_body = match else_body {
+        Some(else_body) if string_field(else_body, "kind").as_deref() == Some("CompoundStmt") => {
+            compound_body_skeleton_from_ast(else_body)?
+        }
+        Some(_) => {
+            return Ok(ClangStmtSkeleton::Unsupported {
+                reason:
+                    "IfStmt without CompoundStmt else body is outside the current clang lowering skeleton"
+                        .to_string(),
+            });
+        }
+        None => Vec::new(),
+    };
+
+    Ok(ClangStmtSkeleton::If {
+        condition: expr_skeleton_from_ast(condition)?,
+        then_body: compound_body_skeleton_from_ast(then_body)?,
+        else_body,
     })
 }
 
@@ -1164,6 +1211,22 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
         ClangStmtSkeleton::Assign { target, value } => Ok(IrStmt::Assign {
             target: lower_expr(target)?,
             value: lower_expr(value)?,
+            source_span: None,
+        }),
+        ClangStmtSkeleton::If {
+            condition,
+            then_body,
+            else_body,
+        } => Ok(IrStmt::If {
+            condition: lower_expr(condition)?,
+            then_body: then_body
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
+            else_body: else_body
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             source_span: None,
         }),
         ClangStmtSkeleton::While { condition, body } => Ok(IrStmt::While {

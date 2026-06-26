@@ -518,7 +518,36 @@ fn emit_stmt(
             let expr = emit_expr(expr, symbols).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
         }
-        IrStmt::If { .. } => Err("if statement is unsupported".to_string()),
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            let condition = emit_condition_expr(condition, symbols)
+                .map_err(|detail| format!("if condition {detail}"))?;
+            let mut block = String::new();
+            block.push_str(&format!("{indent}if {condition} {{\n"));
+            let mut then_symbols = symbols.clone();
+            for (index, stmt) in then_body.iter().enumerate() {
+                let line = emit_stmt(stmt, return_type, indent_level + 1, &mut then_symbols)
+                    .map_err(|detail| format!("if then[{index}].{detail}"))?;
+                block.push_str(&line);
+            }
+            if else_body.is_empty() {
+                block.push_str(&format!("{indent}}}\n"));
+            } else {
+                block.push_str(&format!("{indent}}} else {{\n"));
+                let mut else_symbols = symbols.clone();
+                for (index, stmt) in else_body.iter().enumerate() {
+                    let line = emit_stmt(stmt, return_type, indent_level + 1, &mut else_symbols)
+                        .map_err(|detail| format!("if else[{index}].{detail}"))?;
+                    block.push_str(&line);
+                }
+                block.push_str(&format!("{indent}}}\n"));
+            }
+            Ok(block)
+        }
         IrStmt::While {
             condition, body, ..
         } => {

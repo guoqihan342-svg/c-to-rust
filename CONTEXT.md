@@ -4882,3 +4882,58 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - typed IR scalar emitter 已从单层语句推进到最小结构化 `while`，并能接已有 clang skeleton lowering。
 - 这仍不是一般循环语义：`IncDec` 条件、比较运算、pointer/deref/index/call 仍 fail-closed。
 - 下一刀建议：要么补 clang `IfStmt` skeleton/lowering 再做 `If` emitter，要么继续在 `while` 上加一个更真实的 clang AST opt-in smoke；不要直接把 CRC32 的 pointer/index/deref 普通化。
+
+## 68. 2026-06-26 scalar typed IR if emitter and clang IfStmt skeleton
+
+本轮承接第 67 节的下一刀建议：补 `If`，但仍维持 phase1b 的保守边界，不打开比较运算、pointer/deref/index/call，也不把 `IncDec` 条件普通化。并行只读意见有分歧：Nietzsche 建议 `If` 是合理小步；Dalton 建议优先加强真实 clang `while`。实际执行选择先收束 `If`，因为 `while (size--)` 需要有副作用条件语义，会冲掉上一轮刚钉住的 `IncDec` fail-closed 边界。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - scalar emitter 新增 `IrStmt::If` 输出。
+  - 条件复用 `emit_condition_expr()`，仍是整数 truthiness：`if <expr> != 0suffix { ... }`。
+  - then/else body 分别使用外层 `symbols.clone()` 递归 emit，允许写外层变量，但分支内 local `Decl` 不泄漏。
+  - `Call`、`Index`、`Deref`、`AddrOf`、`IncDec`、比较运算等仍通过 `emit_expr()` / `emit_binary_op()` fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `If { condition, then_body, else_body }`。
+  - `stmt_skeleton_from_ast()` 新增 `IfStmt` 分支。
+  - `if_stmt_skeleton_from_ast()` 只接受 CompoundStmt then/else；缺 else 允许为空；非 CompoundStmt body fail-closed。
+  - `lower_stmt()` 新增 `ClangStmtSkeleton::If -> IrStmt::If`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR 正例：`adjust(mut value, flag)` 输出 `if flag != 0i32 { ... } else { ... }`，并用 rustc smoke。
+  - direct typed IR 负例：if condition 为 `Call` fail-closed；分支内 local decl 不泄漏。
+  - clang skeleton 正例：`ClangStmtSkeleton::If` lower 成 `IrStmt::If`。
+  - clang skeleton no-else 正例：缺 else lower 成空 `else_body`。
+  - clang skeleton -> typed IR -> emitter 正例：`adjust_if` 输出可编译 Rust。
+  - real clang AST opt-in smoke：真实 `IfStmt` 经 clang AST dump lower 到 typed IR，再经 scalar emitter 输出可编译 Rust。
+
+TDD/验证要点：
+- direct typed IR `If` 正例红灯最初失败于 `stmt[0].if statement is unsupported`。
+- direct typed IR `If` condition 负例最初未包含 `stmt[0].if condition` 上下文，实现后通过。
+- clang skeleton 红灯最初编译失败于 `no variant named If found for enum ClangStmtSkeleton`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_if_else_with_integer_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_if_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_simple_if_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_if_without_else_to_empty_else_body -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_if_from_clang_lowered_ir -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_simple_if_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- typed IR scalar emitter 已支持最小结构化 `If` 和 `While`。
+- clang skeleton/真实 AST lowering 已能产出最小 scalar `IfStmt` 并接到 emitter。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `116 passed`，doc tests `0`。
+- real clang AST opt-in focused suite：`25 passed`。
+- 这仍不是一般 C 控制流翻译：比较运算、`IncDec` condition、副作用条件、pointer/deref/index/call 仍 fail-closed。
+- 下一步建议：补 `If` 的更多 fail-closed 边界测试（例如 `IncDec` condition、非 Var assignment target），再考虑比较运算的 typed IR 语义；不要直接做 `while (size--)` 泛化，除非先设计副作用条件 IR/emit 规则。
