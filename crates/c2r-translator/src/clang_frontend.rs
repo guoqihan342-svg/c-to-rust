@@ -127,8 +127,17 @@ pub enum ClangTypeKind {
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangStmtSkeleton {
-    Return { value: Option<ClangExprSkeleton> },
-    Unsupported { reason: String },
+    Decl {
+        name: String,
+        ty: ClangTypeSkeleton,
+        init: Option<ClangExprSkeleton>,
+    },
+    Return {
+        value: Option<ClangExprSkeleton>,
+    },
+    Unsupported {
+        reason: String,
+    },
 }
 
 #[cfg(feature = "typed-ir")]
@@ -587,6 +596,7 @@ fn param_skeleton_from_ast(param: &Value) -> Result<ClangParamSkeleton, ClangFro
 #[cfg(feature = "typed-ir")]
 fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     match string_field(stmt, "kind").as_deref() {
+        Some("DeclStmt") => decl_stmt_skeleton_from_ast(stmt),
         Some("ReturnStmt") => {
             let value = inner(stmt)
                 .first()
@@ -595,13 +605,63 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
             Ok(ClangStmtSkeleton::Return { value })
         }
         Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
-            reason: format!("{kind} is outside the current clang lowering skeleton"),
+            reason: unsupported_stmt_reason(stmt, kind),
         }),
         None => Err(ClangFrontendError {
             kind: "invalid_clang_stmt".to_string(),
             message: "clang statement node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn unsupported_stmt_reason(stmt: &Value, kind: &str) -> String {
+    match string_field(stmt, "opcode") {
+        Some(opcode) => {
+            format!("{kind} opcode {opcode} is outside the current clang lowering skeleton")
+        }
+        None => format!("{kind} is outside the current clang lowering skeleton"),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let var_decls = inner(stmt)
+        .iter()
+        .filter(|child| string_field(child, "kind").as_deref() == Some("VarDecl"))
+        .collect::<Vec<_>>();
+    let [var_decl] = var_decls.as_slice() else {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!(
+                "DeclStmt with {} VarDecl children is outside the current clang lowering skeleton",
+                var_decls.len()
+            ),
+        });
+    };
+    let name = string_field(var_decl, "name").ok_or_else(|| ClangFrontendError {
+        kind: "invalid_var_decl".to_string(),
+        message: "VarDecl is missing name".to_string(),
+    })?;
+    let ty = var_decl
+        .get("type")
+        .and_then(|value| string_field(value, "qualType"))
+        .ok_or_else(|| ClangFrontendError {
+            kind: "invalid_var_decl".to_string(),
+            message: format!("VarDecl {name} is missing qualType"),
+        })
+        .and_then(|qual_type| type_from_qual_type(&qual_type))?;
+    if var_decl.get("init").is_some() || !inner(var_decl).is_empty() {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "VarDecl initializer is outside the current clang lowering skeleton"
+                .to_string(),
+        });
+    }
+
+    Ok(ClangStmtSkeleton::Decl {
+        name,
+        ty,
+        init: None,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -757,9 +817,17 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
             },
         });
     }
+    if let Some(unqualified) = trimmed.strip_prefix("const ") {
+        let unqualified = type_from_qual_type(unqualified.trim())?;
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: unqualified.canonical,
+            kind: unqualified.kind,
+        });
+    }
 
     match trimmed {
-        "void" | "const void" => Ok(ClangTypeSkeleton {
+        "void" => Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: "void".to_string(),
             kind: ClangTypeKind::Void,
@@ -817,6 +885,12 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
 #[cfg(feature = "typed-ir")]
 fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
     match stmt {
+        ClangStmtSkeleton::Decl { name, ty, init } => Ok(IrStmt::Decl {
+            name: name.clone(),
+            ty: lower_type(ty)?,
+            init: init.as_ref().map(lower_expr).transpose()?,
+            source_span: None,
+        }),
         ClangStmtSkeleton::Return { value } => Ok(IrStmt::Return {
             value: value.as_ref().map(lower_expr).transpose()?,
             source_span: None,

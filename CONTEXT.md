@@ -3670,3 +3670,96 @@ git diff --check -- crates/c2r-translator/src/clang_frontend.rs crates/c2r-trans
 2. 在 report 中显式 inventory unsupported statement/expression kinds，尤其是 `WhileStmt`、
    assignment `BinaryOperator("=")`、postfix `UnaryOperator("--"/"++")`、deref、`ArraySubscriptExpr`。
 3. 再按真实 blocker 顺序选择最小 lowering 子集。
+
+## 53. 2026-06-26 clang DeclStmt minimal lowering
+
+本轮承接第 52 节的真实 blocker：只为 clang AST lowering report 增加最小 `DeclStmt`
+支持，让 real-fdb `fdb_calc_crc32` 从局部声明层推进到下一层 assignment blocker。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `Decl { name, ty, init }`。
+  - `stmt_skeleton_from_ast()` 现在识别 `DeclStmt`，并调用 `decl_stmt_skeleton_from_ast()`。
+  - `decl_stmt_skeleton_from_ast()` 当前只接受单个、无 initializer 的 `VarDecl`：
+    - 读取 `VarDecl.name`。
+    - 读取 `VarDecl.type.qualType`。
+    - 如果 `VarDecl` 存在 `init` 字段或 `inner` 子节点，则返回
+      `Unsupported("VarDecl initializer is outside ...")`。
+  - `type_from_qual_type()` 增加 `const ` qualifier peeling，使 `const uint8_t *`
+    能 lower 成 pointer-to-const-uint8。
+  - `lower_stmt()` 能把 `ClangStmtSkeleton::Decl` lower 成 `IrStmt::Decl`。
+  - unsupported statement 诊断现在会带 opcode，例如
+    `BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_const_uint8_pointer_decl`，覆盖 deterministic
+    skeleton -> typed IR declaration。
+  - 新增 `clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled`，用真实 clang
+    验证 `const uint8_t *p; return crc;`。
+  - 新增 `clang_ast_dump_reports_assignment_opcode_statement_when_enabled`，确认 assignment
+    仍 unsupported，但 report 明确给出 `BinaryOperator opcode =`。
+  - 新增 `clang_ast_dump_rejects_initialized_decl_stmt_when_enabled`，确认
+    `uint32_t next = crc;` 这类 initialized declaration 仍不被本轮误收。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_const_uint8_pointer_decl` 先失败在
+  `ClangStmtSkeleton::Decl` variant 不存在。
+- 绿灯 1：新增 `Decl` skeleton、`DeclStmt -> VarDecl` parser、`const uint8_t *`
+  type lowering 和 `IrStmt::Decl` lowering 后，skeleton test 通过。
+- 红灯 2：真实 clang `clang_ast_dump_reports_assignment_opcode_statement_when_enabled`
+  先失败，错误信息只有 `BinaryOperator is outside ...`。
+- 绿灯 2：unsupported statement reason 加入 `opcode` 后，该测试通过。
+- 红灯 3：真实 clang `clang_ast_dump_rejects_initialized_decl_stmt_when_enabled`
+  先失败，因为 initialized declaration 被误 lower 为 `lowered`。
+- 绿灯 3：`decl_stmt_skeleton_from_ast()` 遇到 `init` 或 `inner` 时返回 unsupported，
+  避免本轮越界支持 cast/init 表达式。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 52 节末尾：`unsupported_clang_stmt: DeclStmt is outside the current clang lowering skeleton`。
+- 本轮后：`unsupported_clang_stmt: BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- 这对应 `fdb_utils.c` 中 `p = (const uint8_t *)buf;` 的 assignment 层。
+
+本轮并行只读审查结论：
+- Mendel：采样真实 AST，确认 `const uint8_t *p;` 的形状为
+  `DeclStmt -> VarDecl(name=p, type.qualType="const uint8_t *")`，无 initializer 时
+  `VarDecl` 没有 `init` 和 `inner`；带 cast init 时才出现 `init` 和
+  `inner[0]=CStyleCastExpr`。
+- Linnaeus：确认 `IrStmt::Decl` 的最小契约是 `name/ty/init/source_span`；
+  提醒 initialized declaration 会扩大支持面。本轮采纳该建议，显式拒绝 initializer。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_const_uint8_pointer_decl -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_reports_assignment_opcode_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_initialized_decl_stmt_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused DeclStmt skeleton test：`1 passed`。
+- 三条真实 clang smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`58 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="BinaryOperator opcode = is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部 `const uint8_t *p;` 声明。
+- 当前真实 blocker 是 assignment `BinaryOperator("=")`，其中 RHS 是
+  `CStyleCastExpr -> ImplicitCastExpr -> DeclRefExpr(buf)`。
+- initialized declaration、assignment、while、postfix inc/dec、deref、array subscript、
+  位运算仍未纳入 clang AST lowering subset。
+
+下一步建议：
+1. 先为 assignment `BinaryOperator("=")` 写最小 AST fixture，覆盖 `p = (const uint8_t *)buf;`。
+2. 同时补 `CStyleCastExpr(BitCast)` 和 `DeclRefExpr` RHS 的最小表达式 lowering。
+3. 继续保持 diagnostic-only report 边界，下一步目标只是把 real-fdb blocker 推进到
+   `crc = crc ^ ~0U;` 或 `WhileStmt`，不是一次性 lower 完整 CRC32。
