@@ -222,6 +222,12 @@ pub enum ClangBinaryOperator {
     BitAnd,
     BitXor,
     Shr,
+    Eq,
+    Neq,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 #[cfg(feature = "typed-ir")]
@@ -832,17 +838,39 @@ fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangF
 
 #[cfg(feature = "typed-ir")]
 fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    expr_skeleton_from_ast_with_options(expr, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn expr_skeleton_from_ast_with_options(
+    expr: &Value,
+    preserve_integral_casts: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
     match string_field(expr, "kind").as_deref() {
-        Some("ImplicitCastExpr") | Some("ParenExpr") => inner(expr)
+        Some("ImplicitCastExpr") => {
+            let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                kind: "invalid_clang_expr".to_string(),
+                message: "ImplicitCastExpr is missing operand".to_string(),
+            })?;
+            let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+            if preserve_integral_casts && is_integral_conversion_cast_expr(expr) {
+                return Ok(ClangExprSkeleton::Cast {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
+                    implicit: true,
+                });
+            }
+            Ok(operand)
+        }
+        Some("ParenExpr") => inner(expr)
             .first()
             .ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
-                message: format!(
-                    "{} is missing operand",
-                    string_field(expr, "kind").unwrap_or_else(|| "clang expression".to_string())
-                ),
+                message: "ParenExpr is missing operand".to_string(),
             })
-            .and_then(expr_skeleton_from_ast),
+            .and_then(|operand| {
+                expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)
+            }),
         Some("DeclRefExpr") => {
             let name = expr
                 .get("referencedDecl")
@@ -878,6 +906,12 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 Some("&") => ClangBinaryOperator::BitAnd,
                 Some("^") => ClangBinaryOperator::BitXor,
                 Some(">>") => ClangBinaryOperator::Shr,
+                Some("==") => ClangBinaryOperator::Eq,
+                Some("!=") => ClangBinaryOperator::Neq,
+                Some("<") => ClangBinaryOperator::Lt,
+                Some("<=") => ClangBinaryOperator::Le,
+                Some(">") => ClangBinaryOperator::Gt,
+                Some(">=") => ClangBinaryOperator::Ge,
                 Some(opcode) => {
                     return Ok(ClangExprSkeleton::Unsupported {
                         node: "BinaryOperator".to_string(),
@@ -898,10 +932,18 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                     message: "BinaryOperator must have two operands".to_string(),
                 });
             };
+            let preserve_operand_integral_casts =
+                preserve_integral_casts || is_comparison_operator(&op);
             Ok(ClangExprSkeleton::Binary {
                 op,
-                lhs: Box::new(expr_skeleton_from_ast(lhs)?),
-                rhs: Box::new(expr_skeleton_from_ast(rhs)?),
+                lhs: Box::new(expr_skeleton_from_ast_with_options(
+                    lhs,
+                    preserve_operand_integral_casts,
+                )?),
+                rhs: Box::new(expr_skeleton_from_ast_with_options(
+                    rhs,
+                    preserve_operand_integral_casts,
+                )?),
                 ty: expr_type(expr)?,
             })
         }
@@ -914,8 +956,14 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 });
             };
             Ok(ClangExprSkeleton::Index {
-                base: Box::new(expr_skeleton_from_ast(base)?),
-                index: Box::new(expr_skeleton_from_ast(index)?),
+                base: Box::new(expr_skeleton_from_ast_with_options(
+                    base,
+                    preserve_integral_casts,
+                )?),
+                index: Box::new(expr_skeleton_from_ast_with_options(
+                    index,
+                    preserve_integral_casts,
+                )?),
                 ty: expr_type(expr)?,
             })
         }
@@ -945,7 +993,10 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                     ClangIncDecOperator::Dec
                 };
                 return Ok(ClangExprSkeleton::IncDec {
-                    target: Box::new(expr_skeleton_from_ast(target)?),
+                    target: Box::new(expr_skeleton_from_ast_with_options(
+                        target,
+                        preserve_integral_casts,
+                    )?),
                     op,
                     prefix: false,
                     ty: expr_type(expr)?,
@@ -957,7 +1008,10 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                     message: "UnaryOperator is missing operand".to_string(),
                 })?;
                 return Ok(ClangExprSkeleton::Deref {
-                    ptr: Box::new(expr_skeleton_from_ast(ptr)?),
+                    ptr: Box::new(expr_skeleton_from_ast_with_options(
+                        ptr,
+                        preserve_integral_casts,
+                    )?),
                     ty: expr_type(expr)?,
                 });
             }
@@ -977,7 +1031,10 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
             })?;
             Ok(ClangExprSkeleton::Unary {
                 op,
-                operand: Box::new(expr_skeleton_from_ast(operand)?),
+                operand: Box::new(expr_skeleton_from_ast_with_options(
+                    operand,
+                    preserve_integral_casts,
+                )?),
                 ty: expr_type(expr)?,
             })
         }
@@ -1001,7 +1058,10 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
             })?;
             Ok(ClangExprSkeleton::Cast {
                 target,
-                expr: Box::new(expr_skeleton_from_ast(operand)?),
+                expr: Box::new(expr_skeleton_from_ast_with_options(
+                    operand,
+                    preserve_integral_casts,
+                )?),
                 implicit: false,
             })
         }
@@ -1014,6 +1074,27 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
             message: "clang expression node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integral_conversion_cast_expr(expr: &Value) -> bool {
+    matches!(
+        string_field(expr, "castKind").as_deref(),
+        Some("IntegralCast" | "IntegralPromotion")
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_comparison_operator(op: &ClangBinaryOperator) -> bool {
+    matches!(
+        op,
+        ClangBinaryOperator::Eq
+            | ClangBinaryOperator::Neq
+            | ClangBinaryOperator::Lt
+            | ClangBinaryOperator::Le
+            | ClangBinaryOperator::Gt
+            | ClangBinaryOperator::Ge
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1326,6 +1407,12 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
         ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
         ClangBinaryOperator::Shr => IrBinOp::Shr,
+        ClangBinaryOperator::Eq => IrBinOp::Eq,
+        ClangBinaryOperator::Neq => IrBinOp::Neq,
+        ClangBinaryOperator::Lt => IrBinOp::Lt,
+        ClangBinaryOperator::Le => IrBinOp::Le,
+        ClangBinaryOperator::Gt => IrBinOp::Gt,
+        ClangBinaryOperator::Ge => IrBinOp::Ge,
     }
 }
 
@@ -1440,6 +1527,142 @@ fn required_path(value: Option<&str>, field: &str) -> Result<PathBuf, ClangFront
 #[cfg(all(test, feature = "typed-ir"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expr_skeleton_from_ast_maps_comparison_opcodes() {
+        let cases = [
+            ("==", ClangBinaryOperator::Eq),
+            ("!=", ClangBinaryOperator::Neq),
+            ("<", ClangBinaryOperator::Lt),
+            ("<=", ClangBinaryOperator::Le),
+            (">", ClangBinaryOperator::Gt),
+            (">=", ClangBinaryOperator::Ge),
+        ];
+
+        for (opcode, expected) in cases {
+            let expr = serde_json::json!({
+                "kind": "BinaryOperator",
+                "opcode": opcode,
+                "type": { "qualType": "int" },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": "int" },
+                        "referencedDecl": { "name": "value" }
+                    },
+                    {
+                        "kind": "IntegerLiteral",
+                        "type": { "qualType": "int" },
+                        "value": "0"
+                    }
+                ]
+            });
+
+            let skeleton = expr_skeleton_from_ast(&expr).expect("comparison skeleton");
+            let ClangExprSkeleton::Binary { op, .. } = skeleton else {
+                panic!("expected binary skeleton for {opcode}, got {skeleton:?}");
+            };
+            assert_eq!(op, expected);
+        }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_integer_implicit_casts() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": ">",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "uint32_t" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "0"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("comparison skeleton");
+        let ClangExprSkeleton::Binary { lhs, rhs, .. } = skeleton else {
+            panic!("expected binary skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(lhs.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "value"));
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = rhs.as_ref()
+        else {
+            panic!("expected preserved integral cast, got {rhs:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_strips_integer_implicit_casts_outside_comparisons() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "&",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "uint32_t" },
+                    "referencedDecl": { "name": "crc" }
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "255"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("bitand skeleton");
+        let ClangExprSkeleton::Binary { rhs, .. } = skeleton else {
+            panic!("expected binary skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            rhs.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 255, .. }
+        ));
+    }
 
     #[test]
     fn type_from_qual_type_maps_fixed_array() {

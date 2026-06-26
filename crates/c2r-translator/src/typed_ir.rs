@@ -638,6 +638,18 @@ fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
     }
 }
 
+fn emit_comparison_op(op: &IrBinOp) -> Result<&'static str, String> {
+    match op {
+        IrBinOp::Eq => Ok("=="),
+        IrBinOp::Neq => Ok("!="),
+        IrBinOp::Lt => Ok("<"),
+        IrBinOp::Le => Ok("<="),
+        IrBinOp::Gt => Ok(">"),
+        IrBinOp::Ge => Ok(">="),
+        _ => Err(format!("binary op {op:?} is not a comparison")),
+    }
+}
+
 fn validate_binary_operand_types(
     op: &str,
     lhs: &IrExpr,
@@ -694,10 +706,50 @@ fn validate_expr_matches_type(
 }
 
 fn emit_condition_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
+    if let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = expr
+    {
+        if let Ok(op) = emit_comparison_op(op) {
+            validate_comparison_condition_types(lhs, rhs, ty, op)?;
+            let lhs =
+                emit_expr(lhs, symbols).map_err(|detail| format!("comparison lhs {detail}"))?;
+            let rhs =
+                emit_expr(rhs, symbols).map_err(|detail| format!("comparison rhs {detail}"))?;
+            return Ok(format!("({lhs} {op} {rhs})"));
+        }
+    }
     let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
     let zero = zero_literal_for_type(ty)?;
     let expr = emit_expr(expr, symbols)?;
     Ok(format!("{expr} != {zero}"))
+}
+
+fn validate_comparison_condition_types(
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    op: &str,
+) -> Result<(), String> {
+    if !is_c_int_type(result_ty) {
+        return Err(format!(
+            "comparison result type must be C int, got {}",
+            type_label(result_ty)
+        ));
+    }
+    let lhs_ty = expr_type(lhs).ok_or_else(|| "comparison lhs type is unsupported".to_string())?;
+    let rhs_ty = expr_type(rhs).ok_or_else(|| "comparison rhs type is unsupported".to_string())?;
+    let lhs_ty =
+        emit_scalar_type(lhs_ty).map_err(|detail| format!("comparison lhs has {detail}"))?;
+    let rhs_ty =
+        emit_scalar_type(rhs_ty).map_err(|detail| format!("comparison rhs has {detail}"))?;
+    if lhs_ty == rhs_ty {
+        Ok(())
+    } else {
+        Err(format!(
+            "comparison operand types must match for {op}: lhs={lhs_ty}, rhs={rhs_ty}"
+        ))
+    }
 }
 
 fn ends_with_return_value(body: &[IrStmt]) -> bool {
@@ -832,6 +884,16 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
 
 fn is_integer_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Integer { .. })
+}
+
+fn is_c_int_type(ty: &IrType) -> bool {
+    matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    )
 }
 
 fn is_void_type(ty: &IrType) -> bool {

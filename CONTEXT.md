@@ -4937,3 +4937,60 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 - real clang AST opt-in focused suite：`25 passed`。
 - 这仍不是一般 C 控制流翻译：比较运算、`IncDec` condition、副作用条件、pointer/deref/index/call 仍 fail-closed。
 - 下一步建议：补 `If` 的更多 fail-closed 边界测试（例如 `IncDec` condition、非 Var assignment target），再考虑比较运算的 typed IR 语义；不要直接做 `while (size--)` 泛化，除非先设计副作用条件 IR/emit 规则。
+
+## 69. 2026-06-26 condition-only comparison support
+
+本轮承接第 68 节：开始处理比较运算，但只允许它出现在 `If` / `While` condition 中。关键语义边界是：C 的比较表达式在 clang AST 中通常仍是 `int`，而 Rust 的 `< <= > >= == !=` 返回 `bool`。因此本轮没有把比较加入普通 `emit_expr()` / `emit_binary_op()`；`return value > 0;`、`x = value > 0;` 等位置仍必须 fail-closed。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_comparison_op()`，只映射 `Eq`、`Neq`、`Lt`、`Le`、`Gt`、`Ge`。
+  - `emit_condition_expr()` 对 comparison binary 做专用分支，输出 Rust bool：`(lhs > rhs)`，不再追加 `!= 0suffix`。
+  - 普通整数 truthiness 仍保持 `expr != 0suffix`。
+  - `emit_binary_op()` 仍只支持 `+`、`&`、`^`、`>>`；比较表达式离开 condition 继续 fail-closed。
+  - `validate_comparison_condition_types()` 要求 comparison result 是 C `int`，且 lhs/rhs 是相同 Rust scalar type；不同 signedness/width 不生成 Rust。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Eq`、`Neq`、`Lt`、`Le`、`Gt`、`Ge`。
+  - clang AST `BinaryOperator` opcode 新增 `==`、`!=`、`<`、`<=`、`>`、`>=` 映射。
+  - `ImplicitCastExpr` 不再全部透明剥离：`IntegralCast` / `IntegralPromotion` 会 lower 成 `Cast { implicit: true }`，用于保留 `uint32_t value > 0` 中 `0` 的 unsigned 目标类型；`LValueToRValue` 等仍透明。
+  - `lower_binary_operator()` 将这些 op lower 到对应 `IrBinOp`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR：`if value > 0`、casted unsigned comparison literal、六个 comparison op 表驱动、`while value > 0` 均输出 Rust bool condition，并用 rustc smoke。
+  - fail-closed：comparison 离开 condition 时仍拒绝；comparison lhs/rhs 类型不匹配、comparison result 非 C `int` 时拒绝。
+  - `If` 边界补测：`IncDec` condition 拒绝；else body 非 `Var` assignment target 拒绝。
+  - clang skeleton：comparison if condition lower 到 `IrBinOp::Gt` 后能 emit 可编译 Rust。
+  - real clang AST：`if (value > 0)` 和 `uint32_t value > 0` 能 lower+emit+rustc；`if (value++)` 和 `while (size--)` 能 lower，但 scalar emitter 必须拒绝，继续保护副作用条件边界。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - ungated JSON AST parser 测试覆盖 6 个 comparison opcode。
+  - ungated JSON AST parser 测试覆盖 `IntegralCast` 保留、`LValueToRValue` 透明剥离。
+  - ungated JSON AST parser 测试覆盖非 comparison 表达式继续透明剥离 `IntegralCast`，避免破坏 CRC bitwise 识别。
+
+TDD/验证要点：
+- direct typed IR comparison-if 红灯最初失败于 `stmt[0].if condition binary op Gt is unsupported`。
+- clang skeleton comparison-if 红灯最初编译失败于 `no variant or associated item named Gt found for enum ClangBinaryOperator`。
+- real clang unsigned comparison 红灯复现：`uint32_t value > 0` 的 RHS 仍是 `int` literal，缺少 `IntegralCast`，会被 typed emitter 作为 `u32` vs `i32` 拒绝。
+- comparison result 非 C `int` 红灯复现：手写错误 IR 曾能把 `u32` result comparison 作为 condition emit。
+- 并行跑两个 `cargo test` 曾在 Windows 链接阶段撞同一个 test exe，出现 `LNK1104`；串行重跑后通过，属于测试运行方式问题，不是代码失败。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::expr_skeleton_from_ast -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation comparison -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_if_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- condition-only comparison 支持已接到 direct typed IR、clang skeleton lowering 和 real clang AST opt-in smoke。
+- comparison focused suite 当前为 `11 passed`。
+- real clang AST focused suite 当前为 `29 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `6 passed`，`bounded_translation` `131 passed`，doc tests `0`。
+- 副作用条件仍 fail-closed：`IncDec` condition 不会被普通化成 Rust。
+- 下一步建议：可以考虑把 comparison condition 支持接入 clang-lowering-report 的 evidence 路径，或继续补无大括号 `IfStmt`/`WhileStmt` unsupported smoke。
