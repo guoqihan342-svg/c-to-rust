@@ -2166,3 +2166,68 @@ python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence
 2. 把本轮生成的 Rust report/diff/negative diff 绑定进 `fixture_contract` accepted evidence。
 3. 解除 real-fdb 当前 L4 route，或明确新增 accepted-evidence route 策略；否则
    `semantic_pass_for_run()` 仍会拒绝。
+
+## 35. 2026-06-26 L4 accepted-evidence authoritative policy hardening
+
+本轮从第 34 节的第三个阻塞点继续：L4/refused route 默认仍不能语义通过，但允许 slice spec
+显式声明 accepted evidence 作为权威证据链，从而表达“生成草稿未被验收，语义通过绑定到已有 accepted
+C oracle / Rust report / diff / negative diff / unsafe evidence”。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `claim_boundary.accepted_evidence_authoritative=true` 显式开关。
+  - 只有同时满足 `--accept-existing-evidence` 成功解析出 `accepted.status=accepted`，且 route 为
+    `L4/refused` 时，才会在 route policy 写入：
+    - `accepted_evidence_authoritative=true`
+    - `generated_draft_semantic_pass=false`
+    - `verification_profile=L4-accepted-evidence`
+  - `emit_validation_profile()` 对该显式路线不再把 `candidate_generation` 记为 skipped gate。
+  - `semantic_pass_for_run()` 仍默认拒绝 L4；只有 profile 同时声明
+    `accepted_evidence_authoritative=true` 和 `generated_draft_semantic_pass=false` 时才允许通过。
+  - auto manifest、L3 evidence manifest、final verification 都同步写入 authoritative / generated-draft
+    边界字段。
+  - `promote_accepted_oracle()` 对带 global dependency 的 slice 保留 draft oracle 中的
+    `fixture_binding`、`harness_contract`、`global_linkage_requirements`、`compile_command_draft`、
+    `compile_execution`，避免 real-fdb `crc32_table` 这类全局依赖在 accepted oracle promotion
+    时丢失审计字段。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - L4/refused 的 candidate artifact status 扫描保持默认 fail-closed。
+  - 只有 auto manifest、route policy、accepted evidence binding、claim boundary 一致声明
+    authoritative，且 slice spec 本身也声明
+    `claim_boundary.accepted_evidence_authoritative=true`，才跳过 L4/refused candidate status 扫描。
+  - semantic pass 对 L4/refused 同样回查 slice spec 授权，防止手工篡改 evidence artifacts 绕过
+    spec claim boundary。
+
+新增/加强测试：
+- 默认 L4/refused + `--accept-existing-evidence` 仍为 `candidate_refused`，且
+  `semantic_pass=false`、authoritative 字段全为 false。
+- 显式 authoritative 的 L4/refused accepted evidence 可生成 `accepted_evidence_bound`，并能被
+  `validate_auto_translation_evidence.py --require-semantic-pass` 接受。
+- 未授权 spec 即使手工伪造 route/profile/manifest/final authoritative artifacts，也会被 validator
+  拒绝。
+- `semantic_pass_for_run()` 覆盖 L4 默认拒绝和 L4 authoritative 放行分支。
+- accepted oracle promotion 对 global linkage audit 字段有单测覆盖。
+
+本轮使用三条只读/分析子任务：
+- Fermat：确认提交后工作树里的大量 evidence 改动主要是生成噪声，真实待提交范围是工具和测试文件。
+- Ampere：建议优先补 accepted-evidence authoritative route/profile policy，而不是继续扩 translator surface。
+- Kepler：指出 validator 还需回查 slice spec 授权；本轮已按该 review 补负例和修复。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_semantic_pass_requires_validation_profile_passed
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_l4_refused_accept_existing_evidence_keeps_generated_draft_blocked validation.tools.test_auto_migrate.AutoMigrateTests.test_l4_refused_accept_existing_evidence_can_be_authoritative_when_requested
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_l4_authoritative_artifacts_without_spec_authorization validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_l4_refused_status_scanner_rejects_draft_and_accepted_artifact_statuses
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+```
+
+完整相关 Python 回归结果：`Ran 89 tests ... OK`。
+
+下一步建议：
+1. 给 real-fdb `fdb_calc_crc32` 生成/绑定真正 accepted C oracle report，保留 `crc32_table`
+   global linkage provenance。
+2. 在 real-fdb slice spec 上显式选择是否使用
+   `claim_boundary.accepted_evidence_authoritative=true`，并绑定第 34 节的 Rust report/diff/negative diff。
+3. 继续扩 translator surface 时，再单独处理 `const uint8_t *p`、`const void *` cast、`size--`、
+   `*p++`、`crc32_table[...]` 和 bit operations。

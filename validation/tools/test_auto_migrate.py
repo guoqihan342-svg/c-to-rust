@@ -13,6 +13,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
+VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
 
 
 def load_auto_migrate_module():
@@ -1036,6 +1037,26 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertFalse(auto_migrate.semantic_pass_for_run(accepted, rust_check, profile))
         self.assertFalse(auto_migrate.semantic_pass_for_run(None, rust_check, {"status": "passed"}))
         self.assertTrue(auto_migrate.semantic_pass_for_run(accepted, rust_check, {"status": "passed", "skipped_gates": []}))
+        self.assertFalse(
+            auto_migrate.semantic_pass_for_run(
+                accepted,
+                rust_check,
+                {"status": "passed", "route_level": "L4", "skipped_gates": []},
+            )
+        )
+        self.assertTrue(
+            auto_migrate.semantic_pass_for_run(
+                accepted,
+                rust_check,
+                {
+                    "status": "passed",
+                    "route_level": "L4",
+                    "skipped_gates": [],
+                    "accepted_evidence_authoritative": True,
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+        )
 
     def test_generates_candidate_without_claiming_semantic_pass(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -2350,16 +2371,29 @@ class AutoMigrateTests(unittest.TestCase):
             rust_report = json.loads(
                 (evidence_dir / "l3-unbounded-accepted-rust-report.json").read_text(encoding="utf-8")
             )
+            profile = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-validation-profile.json").read_text(encoding="utf-8")
+            )
+            final = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-final-verification.json").read_text(encoding="utf-8")
+            )
             diff = json.loads((evidence_dir / "l3-unbounded-accepted-diff.json").read_text(encoding="utf-8"))
             negative = json.loads(
                 (evidence_dir / "l3-unbounded-accepted-negative-diff.json").read_text(encoding="utf-8")
             )
 
             self.assertEqual(manifest["status"], "candidate_refused")
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["accepted_evidence_authoritative"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
             self.assertEqual(manifest["route_decision"]["status"], "refused")
             self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
             self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
             self.assertEqual(rust_report["generated_draft"]["status"], "blocked")
+            self.assertFalse(profile["accepted_evidence_authoritative"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(final["accepted_evidence_authoritative"])
+            self.assertFalse(final["generated_draft_semantic_pass"])
             self.assertEqual(diff["diff_gate"], "schema_aware_c_rust_diff")
             self.assertEqual(diff["blocked_by"], [])
             self.assertTrue(diff["accepted_diff_required"])
@@ -2373,6 +2407,171 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertTrue(negative["accepted_negative_diff_required"])
             self.assertEqual(negative["required_inputs"]["schema_diff_actual_status"], "passed")
             self.assertIn("accepted_negative_diff", negative)
+
+    def test_l4_refused_accept_existing_evidence_can_be_authoritative_when_requested(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
+            spec.update(
+                {
+                    "schema_version": 1,
+                    "target_id": "demo",
+                    "slice_id": "unbounded-authoritative",
+                    "level": "L3",
+                    "status": "ready",
+                    "function_name": "unbounded_index",
+                    "c_source": "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+                    "l1_evidence": {
+                        "path": "validation/evidence/demo/l1-native-build.json",
+                        "status": "passed",
+                        "accepted": True,
+                    },
+                    "source": {
+                        "source_root": "<unit-test>",
+                        "source_commit": "1234567",
+                        "repo_commit": "workspace",
+                    },
+                    "c_boundary": {
+                        "files": [{"path": "unit.c", "role": "source"}],
+                        "functions": ["unbounded_index"],
+                        "signatures": [
+                            {
+                                "function": "unbounded_index",
+                                "return_type": "int",
+                                "parameters": [
+                                    {"name": "out", "c_type": "int*", "direction": "output"},
+                                    {"name": "i", "c_type": "int", "direction": "input"},
+                                    {"name": "value", "c_type": "int", "direction": "input"},
+                                ],
+                            }
+                        ],
+                    },
+                    "build_profile": {
+                        "profile_id": "demo-unbounded-authoritative",
+                        "compiler_command_source": "unit-test",
+                        "include_paths": [],
+                        "defines": [],
+                        "target": {
+                            "triple_or_abi": "x86_64-unknown-linux-gnu",
+                            "endianness": "little",
+                            "int_width": 32,
+                            "long_width": 64,
+                            "pointer_width": 64,
+                        },
+                        "preprocessing_mode": "generated_stub",
+                        "tool_versions": {},
+                        "clang_type_extraction": {"available": True},
+                    },
+                    "claim_boundary": {
+                        "accepted_evidence_authoritative": True,
+                        "accepted_metadata_differences": [],
+                        "non_goals": ["generated Rust draft is not accepted"],
+                        "must_not_claim": ["semantic equivalence for the generated Rust draft"],
+                    },
+                    "rust_boundary": {
+                        "crate": "validation/l2_slices",
+                        "module": "validation/l2_slices/src/unbounded_authoritative.rs",
+                        "public_api": [
+                            {
+                                "name": "unbounded_index",
+                                "visibility": "public",
+                                "boundary_kind": "safe_wrapper",
+                            }
+                        ],
+                        "raw_pointer_policy": "internal_only",
+                        "unsafe_policy": {
+                            "max_first_party_non_test_ratio": 0.1,
+                            "ledger_required": True,
+                        },
+                    },
+                    "non_goals": ["unit test only"],
+                    "cache_invalidation_keys": [
+                        "source.source_commit",
+                        "fixture_contract.hash",
+                        "rust_boundary.module",
+                    ],
+                }
+            )
+            spec["fixture_contract"].update(
+                {
+                    "fixture_id": "unbounded-authoritative-fixture",
+                    "hash": "fixture-hash",
+                    "cases": [{"id": "case-one", "input_ref": "cases[0]", "expected_ref": spec["fixture_contract"]["c_oracle"]}],
+                    "observable_outputs": ["value"],
+                }
+            )
+            spec_path = tmp_path / "unbounded-authoritative.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "unbounded-authoritative"
+            route = json.loads(
+                (evidence_dir / "l3-unbounded-authoritative-route-decision.json").read_text(encoding="utf-8")
+            )
+            profile = json.loads(
+                (evidence_dir / "l3-unbounded-authoritative-validation-profile.json").read_text(encoding="utf-8")
+            )
+            final = json.loads(
+                (evidence_dir / "l3-unbounded-authoritative-final-verification.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["status"], "accepted_evidence_bound")
+            self.assertTrue(manifest["semantic_pass"])
+            self.assertEqual(route["status"], "refused")
+            self.assertEqual(route["level"], "L4")
+            self.assertTrue(route["policy"]["accepted_evidence_authoritative"])
+            self.assertFalse(route["policy"]["generated_draft_semantic_pass"])
+            self.assertEqual(profile["status"], "passed")
+            self.assertEqual(profile["route_level"], "L4")
+            self.assertTrue(profile["accepted_evidence_authoritative"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertTrue(final["accepted_evidence_authoritative"])
+            self.assertFalse(final["generated_draft_semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+
+            validation_result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "unbounded-authoritative",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                validation_result.returncode,
+                0,
+                f"stdout:\n{validation_result.stdout}\nstderr:\n{validation_result.stderr}",
+            )
+            self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
 
     def test_compile_failure_records_blocked_patch_evidence(self) -> None:
         spec = {
@@ -2594,6 +2793,66 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(summary["generated_draft_semantic_pass"])
             self.assertEqual(summary["paths"]["c_oracle"], accepted["paths"]["c_oracle"])
 
+    def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
+            global_dependency = {
+                "kind": "global",
+                "name": "table",
+                "source": "unit-test",
+                "definition_status": "same_file_top_level_declared",
+                "source_span": {
+                    "file": "unit.c",
+                    "line_start": 1,
+                    "line_end": 1,
+                    "byte_start": 0,
+                    "byte_end": 12,
+                    "sha256": "table-sha",
+                },
+                "sha256": "table-sha",
+            }
+            spec["c_boundary"] = {
+                "files": [{"path": "unit.c", "role": "source", "sha256": "unit-sha"}],
+                "functions": ["demo_slice"],
+                "signatures": [
+                    {
+                        "function": "demo_slice",
+                        "return_type": "int",
+                        "parameters": [],
+                    }
+                ],
+                "direct_dependencies": [global_dependency],
+            }
+            expected_globals = auto_migrate.global_dependency_requirements(spec)
+            draft_oracle = {
+                "harness_draft": "validation/evidence/demo/auto-translation/demo-slice/l3-demo-slice-c-oracle-harness-draft.c",
+                "harness_draft_ref": {"path": "draft.c", "sha256": "draft-sha", "status": "draft"},
+                "fixture_binding": {"case_count": 1, "observable_outputs": ["value"]},
+                "harness_contract": {
+                    "function_prototype": "int demo_slice(void);",
+                    "fixture": {"case_count": 1, "observable_outputs": ["value"]},
+                    "source_files": spec["c_boundary"]["files"],
+                    "global_dependencies": expected_globals,
+                },
+                "global_linkage_requirements": expected_globals,
+                "compile_command_draft": {"status": "draft_not_executed"},
+                "compile_execution": {"status": "compile_not_executed", "semantic_pass": False},
+            }
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            accepted = auto_migrate.resolve_accepted_evidence(spec)
+
+            promoted = auto_migrate.promote_accepted_oracle(spec, evidence_dir, draft_oracle, accepted)
+
+            self.assertEqual(promoted["status"], "C_ORACLE_GENERATED")
+            self.assertEqual(promoted["global_linkage_requirements"], expected_globals)
+            self.assertEqual(promoted["harness_contract"]["global_dependencies"], expected_globals)
+            self.assertEqual(promoted["compile_command_draft"], draft_oracle["compile_command_draft"])
+            self.assertEqual(promoted["compile_execution"], draft_oracle["compile_execution"])
+            self.assertFalse(promoted["compile_execution"]["semantic_pass"])
+
     def test_source_file_hashes_preserve_generated_real_source_hashes(self) -> None:
         auto_migrate = load_auto_migrate_module()
         spec = {
@@ -2645,7 +2904,14 @@ class AutoMigrateTests(unittest.TestCase):
             encoding="utf-8",
         )
         negative.write_text(
-            json.dumps({"status": "expected_failed", "source_commit": "1234567", "mutation_detected": True}),
+            json.dumps(
+                {
+                    "status": "expected_failed",
+                    "source_commit": "1234567",
+                    "mutation_detected": True,
+                    "first_mismatch": {"field": "value", "expected": 1, "actual": 2},
+                }
+            ),
             encoding="utf-8",
         )
         unsafe_scan.write_text(

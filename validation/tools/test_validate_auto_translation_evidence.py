@@ -1770,6 +1770,71 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("external callee", result.stderr + result.stdout)
 
+    def test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+            spec_path = tmp_path / "demo-call-expression-authoritative.json"
+            self._write_json(spec_path, spec)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["semantic_pass"])
+
+    def test_semantic_pass_rejects_l4_authoritative_artifacts_without_spec_authorization(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("accepted_evidence_authoritative", result.stderr + result.stdout)
+
     def test_rejects_semantic_pass_schema_diff_missing_accepted_ref(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
@@ -2090,6 +2155,71 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         )
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
+
+    def _promote_call_expression_fixture_to_l4_authoritative(self, evidence_dir: Path) -> None:
+        prefix = "l3-call-expression"
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+
+        route = json.loads(route_path.read_text(encoding="utf-8"))
+        route["status"] = "refused"
+        route["level"] = "L4"
+        route["translator"] = {"kind": "refuse", "candidate_generation_allowed": False}
+        route["verification_profile"] = "L4-accepted-evidence"
+        route["rationale"] = [{"feature": "accepted_evidence_authoritative", "weight": "override"}]
+        route["policy"]["accepted_evidence_authoritative"] = True
+        route["policy"]["generated_draft_semantic_pass"] = False
+        self._write_json(route_path, route)
+
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile["status"] = "passed"
+        profile["profile"] = "L4-accepted-evidence"
+        profile["route_level"] = "L4"
+        profile["skipped_gates"] = []
+        profile["accepted_evidence_authoritative"] = True
+        profile["generated_draft_semantic_pass"] = False
+        self._write_json(profile_path, profile)
+
+        route_ref = self._ref(route_path, "refused")
+        route_ref["level"] = "L4"
+        profile_ref = self._ref(profile_path, "passed")
+        profile_ref["profile"] = "L4-accepted-evidence"
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["route_decision"] = route_ref
+        final["validation_profile"] = profile_ref
+        final["validation_profile_status"] = "passed"
+        final["skipped_gates"] = []
+        final["accepted_evidence_authoritative"] = True
+        final["generated_draft_semantic_pass"] = False
+        self._write_json(final_path, final)
+
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["route_decision_identity"] = {"status": "refused", "sha256": self._sha256_json(route)}
+        cache["validation_profile_identity"] = {"status": "passed", "sha256": self._sha256_json(profile)}
+        cache["dependent_artifacts"]["route_decision"] = route_ref
+        cache["dependent_artifacts"]["validation_profile"] = profile_ref
+        self._write_json(cache_path, cache)
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["route_decision"] = route_ref
+        auto_manifest["validation_profile"] = profile_ref
+        auto_manifest["claim_boundary"]["accepted_evidence_authoritative"] = True
+        auto_manifest["claim_boundary"]["generated_draft_semantic_pass"] = False
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["route_decision"] = route_ref
+        manifest["evidence"]["validation_profile"] = profile_ref
+        manifest["evidence"]["final_verification"] = self._ref(final_path, "passed")
+        manifest["evidence"]["cache_metadata"] = self._ref(cache_path, "recorded")
+        manifest["claim_boundary"]["accepted_evidence_authoritative"] = True
+        manifest["claim_boundary"]["generated_draft_semantic_pass"] = False
+        self._write_json(manifest_path, manifest)
 
     def _assert_call_expression_passed_diff_gate_fields(self, evidence_dir: Path, prefix: str) -> None:
         diff_path = evidence_dir / f"{prefix}-diff.json"

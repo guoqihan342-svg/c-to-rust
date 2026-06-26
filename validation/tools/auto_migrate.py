@@ -91,6 +91,7 @@ def main() -> int:
     if accepted is not None:
         oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
         replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted, route_decision)
+        mark_accepted_evidence_authoritative_route(spec, evidence_dir, route_decision, accepted)
     validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
@@ -2715,10 +2716,11 @@ def emit_validation_profile(
     prefix = f"l3-{slice_id}"
     goal = route_decision.get("policy", {}).get("goal", "dev")
     level = str(route_decision.get("level", "L4"))
-    profile = validation_profile_name(level, goal)
+    profile = route_decision.get("verification_profile") or validation_profile_name(level, goal)
     required = required_gates_for_profile(level, goal)
     skipped = []
-    if route_decision.get("translator", {}).get("kind") == "refuse":
+    accepted_authoritative = accepted_evidence_authoritative_route(route_decision)
+    if route_decision.get("translator", {}).get("kind") == "refuse" and not accepted_authoritative:
         skipped.append({"gate": "candidate_generation", "reason": "route_refused"})
     if "compile" in required and rust_check.get("status") not in {"passed", "failed"}:
         skipped.append({"gate": "compile", "reason": rust_check.get("status", "unknown")})
@@ -2758,6 +2760,8 @@ def emit_validation_profile(
             "compile": rust_check.get("status"),
             "c_oracle_diff": oracle.get("status"),
         },
+        "accepted_evidence_authoritative": accepted_authoritative,
+        "generated_draft_semantic_pass": False,
         "loop_policy": {
             "source": "run_policy",
             "fixed_project_loop_count_required": False,
@@ -2842,7 +2846,10 @@ def semantic_pass_for_run(
         return False
     if validation_profile.get("status") != "passed":
         return False
-    if validation_profile.get("route_level") == "L4":
+    if validation_profile.get("route_level") == "L4" and not (
+        validation_profile.get("accepted_evidence_authoritative") is True
+        and validation_profile.get("generated_draft_semantic_pass") is False
+    ):
         return False
     return not validation_profile.get("skipped_gates")
 
@@ -2883,6 +2890,7 @@ def emit_manifest(
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
         "status": auto_manifest_status(semantic_pass, route_decision),
+        "semantic_pass": semantic_pass,
         "source_commit": spec.get("source_commit"),
         "fixture": {
             "hash": fixture_hash(spec),
@@ -2906,6 +2914,7 @@ def emit_manifest(
         "claim_boundary": {
             "scope": auto_manifest_claim_scope(semantic_pass, route_decision),
             "semantic_pass": semantic_pass,
+            "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
             "generated_draft_semantic_pass": False,
             "must_still_pass": []
             if semantic_pass
@@ -2956,6 +2965,43 @@ def auto_manifest_claim_scope(semantic_pass: bool, route_decision: dict[str, Any
     if route_refuses_candidate_generation(route_decision):
         return "route-refused auto-translation run; generated draft artifacts, if present, are blocked diagnostics and not candidate evidence"
     return "auto-translation candidate evidence only"
+
+
+def accepted_evidence_authoritative_requested(spec: dict[str, Any], accepted: dict[str, Any] | None) -> bool:
+    if accepted is None or accepted.get("status") != "accepted":
+        return False
+    return spec.get("claim_boundary", {}).get("accepted_evidence_authoritative") is True
+
+
+def accepted_evidence_authoritative_route(route_decision: dict[str, Any]) -> bool:
+    policy = route_decision.get("policy", {})
+    return (
+        route_decision.get("level") == "L4"
+        and route_decision.get("status") == "refused"
+        and policy.get("accepted_evidence_authoritative") is True
+        and policy.get("generated_draft_semantic_pass") is False
+    )
+
+
+def mark_accepted_evidence_authoritative_route(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    accepted: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not accepted_evidence_authoritative_requested(spec, accepted):
+        return route_decision
+    if route_decision.get("level") != "L4" or route_decision.get("status") != "refused":
+        return route_decision
+    policy = route_decision.setdefault("policy", {})
+    policy["accepted_evidence_authoritative"] = True
+    policy["generated_draft_semantic_pass"] = False
+    route_decision["verification_profile"] = "L4-accepted-evidence"
+    rationale = route_decision.setdefault("rationale", [])
+    if not any(item.get("feature") == "accepted_evidence_authoritative" for item in rationale):
+        rationale.append({"feature": "accepted_evidence_authoritative", "weight": "override"})
+    write_json(evidence_dir / f"l3-{required_str(spec, 'slice_id')}-route-decision.json", route_decision)
+    return route_decision
 
 
 def emit_l3_evidence_manifest(
@@ -3042,6 +3088,8 @@ def emit_l3_evidence_manifest(
             "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass."
             if not semantic_pass
             else "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft.",
+            "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
+            "generated_draft_semantic_pass": False,
             "behavior_fields_checked": behavior_fields(spec),
             "accepted_metadata_differences": accepted_metadata_differences(spec),
             "known_gaps": non_goals(spec)
@@ -3386,6 +3434,17 @@ def promote_accepted_oracle(
         "harness_draft_ref": draft_oracle.get("harness_draft_ref"),
         "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
     }
+    if global_dependency_requirements(spec):
+        for key in [
+            "fixture_binding",
+            "harness_contract",
+            "global_linkage_requirements",
+            "compile_command_draft",
+            "compile_execution",
+        ]:
+            if key in draft_oracle:
+                payload[key] = draft_oracle[key]
+        payload.setdefault("global_linkage_requirements", global_dependency_requirements(spec))
     write_json(path, payload)
     return payload
 
@@ -3632,6 +3691,7 @@ def write_accepted_supporting_evidence(
             "negative_diff_mutation_detected": mutation_detected(reports["negative_diff"]),
             "unsafe_status": reports["unsafe_scan"].get("status"),
             "version_config_status": "recorded",
+            "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
             "generated_draft_semantic_pass": False,
             "alias_gate": alias_gate,
             "external_callee_scope": external_callee_claim_scope(external_context),

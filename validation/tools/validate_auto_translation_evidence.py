@@ -60,7 +60,7 @@ def main() -> int:
         validated.append(rel(data_path))
 
     validate_alias_gate(evidence_dir, prefix)
-    validate_route_baseline_profile_refs(evidence_dir, prefix)
+    validate_route_baseline_profile_refs(evidence_dir, prefix, slice_spec)
     validate_oracle_harness_contract(evidence_dir, prefix, slice_spec)
     validate_global_dependency_requirements(evidence_dir, prefix, slice_spec)
     validate_schema_diff_contract(evidence_dir, prefix, slice_spec)
@@ -204,13 +204,14 @@ def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
         raise SystemExit(f"alias gate evidence missing final_verification.alias_gate in {final_path}")
 
 
-def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str) -> None:
+def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
     baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
     route_path = evidence_dir / f"{prefix}-route-decision.json"
     profile_path = evidence_dir / f"{prefix}-validation-profile.json"
     baseline = load_json(baseline_path)
     route = load_json(route_path)
     profile = load_json(profile_path)
+    slice_spec = load_json(slice_spec_path)
 
     if baseline.get("correctness_role") != "candidate_context_only":
         raise SystemExit(f"C2Rust baseline must be candidate context only in {baseline_path}")
@@ -233,12 +234,18 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str) -> Non
             raise SystemExit(
                 f"L4/refused route cannot have generated candidate evidence in {auto_manifest_path}"
             )
-        validate_l4_refused_has_no_candidate_artifact_status(
-            evidence_dir,
-            prefix,
-            auto_manifest,
-            auto_manifest_path,
-        )
+        if not accepted_evidence_authoritative_manifest(route, auto_manifest, slice_spec):
+            if accepted_evidence_authoritative_artifacts_claimed(route, auto_manifest):
+                raise SystemExit(
+                    "L4/refused accepted_evidence_authoritative requires "
+                    "slice spec claim_boundary.accepted_evidence_authoritative=true"
+                )
+            validate_l4_refused_has_no_candidate_artifact_status(
+                evidence_dir,
+                prefix,
+                auto_manifest,
+                auto_manifest_path,
+            )
     validate_route_source_artifact_refs(evidence_dir, prefix, route, baseline_path)
     require_ref(auto_manifest.get("c2rust_baseline"), baseline_path, "auto_manifest.c2rust_baseline")
     require_ref(auto_manifest.get("route_decision"), route_path, "auto_manifest.route_decision")
@@ -1278,6 +1285,53 @@ def l4_refuses_candidate_generation(route: dict[str, Any]) -> bool:
     )
 
 
+def accepted_evidence_authoritative_artifacts_claimed(route: dict[str, Any], auto_manifest: dict[str, Any]) -> bool:
+    binding = auto_manifest.get("accepted_evidence_binding", {})
+    claim = auto_manifest.get("claim_boundary", {})
+    return (
+        l4_refuses_candidate_generation(route)
+        and route.get("policy", {}).get("accepted_evidence_authoritative") is True
+        and route.get("policy", {}).get("generated_draft_semantic_pass") is False
+        and binding.get("status") == "accepted"
+        and binding.get("generated_draft_semantic_pass") is False
+        and claim.get("accepted_evidence_authoritative") is True
+        and claim.get("generated_draft_semantic_pass") is False
+    )
+
+
+def accepted_evidence_authoritative_manifest(
+    route: dict[str, Any],
+    auto_manifest: dict[str, Any],
+    slice_spec: dict[str, Any],
+) -> bool:
+    return (
+        slice_spec.get("claim_boundary", {}).get("accepted_evidence_authoritative") is True
+        and accepted_evidence_authoritative_artifacts_claimed(route, auto_manifest)
+    )
+
+
+def accepted_evidence_authoritative_semantic_pass(
+    route: dict[str, Any],
+    profile: dict[str, Any],
+    manifest: dict[str, Any],
+    final: dict[str, Any],
+    slice_spec: dict[str, Any],
+) -> bool:
+    manifest_claim = manifest.get("claim_boundary", {})
+    return (
+        slice_spec.get("claim_boundary", {}).get("accepted_evidence_authoritative") is True
+        and l4_refuses_candidate_generation(route)
+        and route.get("policy", {}).get("accepted_evidence_authoritative") is True
+        and route.get("policy", {}).get("generated_draft_semantic_pass") is False
+        and profile.get("accepted_evidence_authoritative") is True
+        and profile.get("generated_draft_semantic_pass") is False
+        and manifest_claim.get("accepted_evidence_authoritative") is True
+        and manifest_claim.get("generated_draft_semantic_pass") is False
+        and final.get("accepted_evidence_authoritative") is True
+        and final.get("generated_draft_semantic_pass") is False
+    )
+
+
 def validate_l4_refused_has_no_candidate_artifact_status(
     evidence_dir: Path,
     prefix: str,
@@ -1370,7 +1424,13 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
 
     if reports["c2rust_baseline"].get("correctness_role") != "candidate_context_only":
         raise SystemExit("semantic pass requires C2Rust baseline to remain candidate_context_only")
-    if reports["route_decision"].get("level") == "L4":
+    if reports["route_decision"].get("level") == "L4" and not accepted_evidence_authoritative_semantic_pass(
+        reports["route_decision"],
+        reports["validation_profile"],
+        manifest,
+        reports["final_verification"],
+        slice_spec,
+    ):
         raise SystemExit("semantic pass cannot accept L4 refused route")
     require_status(reports["validation_profile"], "validation_profile", {"passed"})
     if reports["validation_profile"].get("skipped_gates"):
