@@ -2163,20 +2163,42 @@ class AutoMigrateTests(unittest.TestCase):
             external_callee = plan["translation_summary"]["external_direct_callees"][0]
             self.assertEqual(external_callee["name"], "helper_add_one")
             self.assertEqual(external_callee["signature_ref"], "sig-helper-add-one")
+            self.assertEqual(external_callee["parameters"], [{"name": "value", "c_type": "int"}])
+            self.assertEqual(external_callee["return_type"], "int")
             self.assertEqual(external_callee["stub_kind"], "compile_only")
             self.assertFalse(external_callee["semantics_verified"])
-            self.assertEqual(len(plan["translation_summary"]["call_expressions"]), 3)
+            call_expressions = plan["translation_summary"]["call_expressions"]
+            self.assertEqual(len(call_expressions), 3)
             self.assertEqual(
-                plan["translation_summary"]["call_expressions"][0]["callee_signature_id"],
+                call_expressions[0]["callee_signature_id"],
                 "sig-helper-add-one",
             )
+            for call in call_expressions:
+                self.assertEqual(call["callee"], "helper_add_one")
+                self.assertEqual(call["callee_scope"], "external_direct_callee")
+                self.assertEqual(call["callee_signature_id"], "sig-helper-add-one")
+                self.assertEqual(call["callee_source_ref"], "unit/helper.c#helper_add_one")
+                self.assertEqual(call["definition_status"], "real_source_bound")
+                self.assertEqual(call["stub_status"], "compile_only")
             self.assertEqual(plan["inputs"]["external_callee_context"]["status"], "recorded")
             self.assertEqual(plan["inputs"]["external_callee_context"]["declared_count"], 1)
             self.assertEqual(plan["inputs"]["external_callee_context"]["blocked_count"], 0)
-            self.assertEqual(context_pack["external_direct_callees"][0]["name"], "helper_add_one")
-            self.assertEqual(context_pack["external_direct_callees"][0]["stub_kind"], "compile_only")
-            self.assertFalse(context_pack["external_direct_callees"][0]["semantics_verified"])
-            self.assertEqual(context_pack["call_edge_to_callee_binding"][0]["callee"], "helper_add_one")
+            context_callee = context_pack["external_direct_callees"][0]
+            self.assertEqual(context_callee["name"], "helper_add_one")
+            self.assertEqual(context_callee["parameters"], [{"name": "value", "c_type": "int"}])
+            self.assertEqual(context_callee["return_type"], "int")
+            self.assertEqual(context_callee["stub_kind"], "compile_only")
+            self.assertFalse(context_callee["semantics_verified"])
+            self.assertEqual(context_pack["direct_call_edges"], call_expressions)
+            bindings = context_pack["call_edge_to_callee_binding"]
+            self.assertEqual(len(bindings), 3)
+            for binding, call in zip(bindings, call_expressions):
+                self.assertEqual(binding["callee"], "helper_add_one")
+                self.assertEqual(binding["signature_ref"], "sig-helper-add-one")
+                self.assertEqual(binding["source_expression"], call["source_expression"])
+                self.assertEqual(binding["statement_context"], call["statement_context"])
+                self.assertEqual(binding["stub_kind"], "compile_only")
+                self.assertFalse(binding["semantics_verified"])
             self.assertEqual(
                 manifest["claim_boundary"]["external_callee_scope"]["status"],
                 "compile_context_only",

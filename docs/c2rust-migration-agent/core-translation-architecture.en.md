@@ -56,7 +56,7 @@ flowchart TD
   - `try_translate_slice_with_clang_lowered_ir()` passes both `ClangLoweringReport.function_ir` and `report.globals` into `emit_rust_from_ir_with_globals()`.
   - `write_translation_artifacts()` can produce a Rust draft driven by clang-lowered typed IR when the `clang-lowering-report` feature is enabled.
   - The `clang-lowering-report` artifact now includes `typed_ir_candidate`, recording the `CandidateRouteDecision`, readonly globals summary, and the `semantic_pass=false` boundary.
-  - Bounded direct identifier calls in clang-lowered typed IR now populate `plan.call_expressions`; `auto_migrate.py` maps that into `translation_summary.call_expressions` and context-pack `direct_call_edges`, and adds `callee_signature_id` / `call_edge_to_callee_binding` when the slice spec declares an external direct callee. This is call provenance only and does not raise `semantic_pass`.
+  - Bounded direct identifier calls in clang-lowered typed IR now populate `plan.call_expressions`; `auto_migrate.py` maps that into `translation_summary.call_expressions` and context-pack `direct_call_edges`, and adds `callee_signature_id` / `call_edge_to_callee_binding` when the slice spec declares an external direct callee. This is signature/call-edge/source-binding provenance only; it hardens evidence consistency and does not raise `semantic_pass`.
   - The old string translator crc32 byte-cursor recognizer and local `emit_crc32_byte_cursor_rust()` have been removed. The raw string path now fails closed on unmodeled side effects such as `*p++` / `size--` and no longer emits the `crc32_update_byte()` template. The positive FlashDB crc32 Rust draft comes only from clang-lowered typed IR + readonly globals + `GenericTypedIr`.
 - `validation/tools/auto_migrate.py`
   - Newly generated `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
@@ -67,6 +67,7 @@ flowchart TD
   - Once `candidate_generation.typed_ir` is present, the schema allows only the `GenericTypedIr` / `Unsupported` typed IR routes and requires `semantic_pass=false`.
 - `validation/tools/validate_auto_translation_evidence.py`
   - Validates that typed IR candidate binding matches the clang-lowering-report artifact and rejects any candidate evidence claiming `semantic_pass=true`.
+  - When the slice spec declares an external direct callee, both the default validation path and `--require-semantic-pass` check spec `external_direct_callees` / `signature_ref` / `source_files` against plan `translation_summary.call_expressions`, context-pack `direct_call_edges`, `callee_sources`, `signature_bindings`, and every `call_edge_to_callee_binding`; missing call sites, source-hash drift, signature-shape drift, `callee_signature_id` drift, missing bindings, or stub/semantics-boundary drift fail closed.
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - Main behavior contract for the bounded translator.
   - Covers direct typed IR tests, real clang AST smoke tests, the real FlashDB crc32 parse spec, fail-closed boundaries, and rustc smoke compilation.
@@ -95,7 +96,7 @@ Generic typed IR emission now covers:
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
 - nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
 - assignment RHS prelude, covering `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`;
-- bounded direct identifier calls: only direct function-name callees proven by clang `referencedDecl.kind=FunctionDecl`, covering call statements, declaration initializers, assignment RHS, and return values, while emitting callee, arguments, source expression, and statement context into `call_expressions` evidence; nested calls, function-pointer callees, callees without `FunctionDecl` proof, calls anywhere inside condition expression trees, and inc/dec or dereference arguments still fail closed;
+- bounded direct identifier calls: only direct function-name callees proven by clang `referencedDecl.kind=FunctionDecl`, covering call statements, declaration initializers, assignment RHS, and return values, while emitting callee, arguments, source expression, and statement context into `call_expressions` evidence; when the slice spec declares an external direct callee, the validator also requires every plan/context/binding call site and signature to match; nested calls, function-pointer callees, callees without `FunctionDecl` proof, calls anywhere inside condition expression trees, and inc/dec or dereference arguments still fail closed;
 - narrow `size_t` postfix-decrement while conditions, lowering `while (size--)` into a Rust `loop` that preserves postfix side effects.
 
 Still incomplete:

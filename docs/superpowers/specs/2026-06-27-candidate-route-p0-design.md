@@ -165,7 +165,8 @@ typed IR `CandidateRouteDecision` 只回答：
 5. schema 接受没有 `candidate_generation` 的 legacy route/profile evidence，但拒绝包含 `DeprecatedLegacyCrc32` 或 `semantic_pass=true` 的新 typed IR candidate evidence。
 6. `GenericTypedIr` candidate 不能覆盖 alias route floor：`requires_noalias_contract` / `unknown_alias` 路由到 L2，`alias_blocked` 路由到 L3。
 7. clang lowering 产生的 `GenericTypedIr` direct-call candidate 必须写出与 bounded direct call 匹配的 `call_expressions` 证据，同时保持 `semantic_pass=false`。
-8. clang lowering 产生的局部固定长度整数数组元素写入可以进入 `GenericTypedIr`，但 readonly global array 写入、const pointer slice 写入、VLA 和 array-to-pointer decay 必须继续 fail closed，且仍只代表 candidate generation，不代表 semantic acceptance。
+8. 如果 slice spec 声明 external direct callee，默认 validator 和 `--require-semantic-pass` 都必须逐 call-site 校验 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings` 和 `call_edge_to_callee_binding` 的 source/signature/stub/semantics 边界一致；这只是 evidence integrity/provenance hardening，不代表 external callee 语义已通过。
+9. clang lowering 产生的局部固定长度整数数组元素写入可以进入 `GenericTypedIr`，但 readonly global array 写入、const pointer slice 写入、VLA 和 array-to-pointer decay 必须继续 fail closed，且仍只代表 candidate generation，不代表 semantic acceptance。
 
 建议验证命令：
 

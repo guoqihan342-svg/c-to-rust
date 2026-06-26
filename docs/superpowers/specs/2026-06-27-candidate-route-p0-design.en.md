@@ -165,7 +165,8 @@ Minimum verification:
 5. The schema accepts legacy route/profile evidence without `candidate_generation`, but rejects new typed IR candidate evidence containing `DeprecatedLegacyCrc32` or `semantic_pass=true`.
 6. A `GenericTypedIr` candidate must not override alias route floors: `requires_noalias_contract` / `unknown_alias` routes to L2, and `alias_blocked` routes to L3.
 7. `GenericTypedIr` direct-call candidates from clang lowering must emit `call_expressions` evidence matching the bounded direct calls while keeping `semantic_pass=false`.
-8. Local fixed-length integer array element writes from clang lowering may reach `GenericTypedIr`, but writes to readonly global arrays, writes to const pointer slices, VLAs, and array-to-pointer decay must continue to fail closed; this still represents candidate generation only, not semantic acceptance.
+8. If the slice spec declares an external direct callee, both the default validator and `--require-semantic-pass` must check every call site across plan `translation_summary.call_expressions`, context-pack `direct_call_edges`, `callee_sources`, `signature_bindings`, and `call_edge_to_callee_binding` for source/signature/stub/semantics-boundary consistency; this is evidence-integrity/provenance hardening only, not proof that the external callee semantics passed.
+9. Local fixed-length integer array element writes from clang lowering may reach `GenericTypedIr`, but writes to readonly global arrays, writes to const pointer slices, VLAs, and array-to-pointer decay must continue to fail closed; this still represents candidate generation only, not semantic acceptance.
 
 Suggested verification commands:
 

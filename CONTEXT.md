@@ -5882,3 +5882,73 @@ English mirror summary:
 - Writes are deliberately narrow: only declared local fixed-size integer arrays are accepted. Readonly global writes, const pointer-slice writes, array-to-pointer decay, VLAs/incomplete arrays, nested/struct arrays, and side-effecting initializers still fail closed.
 - This remains candidate generation only; semantic acceptance belongs to the validation gates.
 - Recommended next cut remains external direct-callee signature/call-site binding hardening across plan, context pack, and validator, or the small scalar subtraction `-` expansion if prioritizing C subset breadth.
+
+## 86. 2026-06-27 external direct-callee binding validator hardening
+
+本轮按用户要求继续多智能体并行推进。四个只读线程结论：
+
+- validator 原先只做 callee name 级别检查，缺少逐 call-site、source binding 和 call-edge enrichment 校验。
+- `auto_migrate.py` 产物里 plan 使用 `callee_signature_id`，context binding 使用 `signature_ref`，这是当前显式兼容契约。
+- 文档必须写清：这是 evidence integrity / provenance hardening，不是 external callee semantic acceptance。
+- 预存 `validation/evidence/**` 仍是脏文件，本轮不 stage、不 revert。
+
+核心改动：
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 默认 validator 路径现在也会在 slice spec 声明 `external_direct_callees` 时调用 external direct-callee context 校验；不再只挂在 `--require-semantic-pass`。
+  - external direct-callee 校验现在把 spec `signature_ref` / `source_files` 与 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings`、`call_edge_to_callee_binding` 做一致性校验。
+  - 新增 source binding 校验：source path/sha、source_ref、definition_status 漂移会 fail closed。
+  - 新增 call-site metadata 校验：plan/context direct call edge 必须保持 `callee_scope=external_direct_callee`、`stub_status=compile_only`、`callee_source_ref`、`definition_status` 和 expected signature 一致。
+  - signature binding 现在要求每个 declared callee 恰好一个 binding，避免重复 binding 被静默覆盖。
+  - code review 后补 recorded/blocked 分流：unsupported external callee 的 blocked evidence 不再被默认 validator 误杀；blocked callee 现在校验 `external_direct_callee_blocks`、blocked call edge metadata 和 `stub_kind=none` / `semantics_verified=false`。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增红绿测试：默认 validator 路径缺 external callee binding 必须失败。
+  - 新增红绿测试：`callee_sources` sha 漂移必须失败。
+  - 新增红绿测试：call-site enrichment 字段漂移必须失败。
+  - code review 后补红绿测试：blocked external callee 必须允许通过 fail-closed evidence；plan/context direct call edge 单边漂移必须失败。
+  - helper 里的 plan/context call edge 改为深拷贝，避免测试 mutation 共享对象掩盖 drift。
+  - 保留并扩展上一轮红绿测试：缺 call-site binding、signature shape 漂移、signature binding 漂移都必须失败。
+- `validation/tools/test_auto_migrate.py`
+  - 正向断言 external direct callee descriptor、call expressions、context direct edges 和 call-edge bindings 的字段契约。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+TDD 红灯已确认：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift
+```
+
+实现后已跑验证：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_context_direct_call_edge_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_allows_blocked_external_callee validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_requires_every_call_site_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_shape_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_binding_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_missing_external_callee_context_binding
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence validation.tools.test_auto_migrate
+openspec validate --all --strict
+git diff --check -- CONTEXT.md validation/tools/validate_auto_translation_evidence.py validation/tools/test_validate_auto_translation_evidence.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
+```
+
+补充验证说明：
+
+- `python -B -m unittest discover -s validation/tools -p "test_*.py"` 已尝试，但失败在既有 `validation/evidence/**` 生成证据 fixture：6 个 semantic gate 测试的 evidence manifest 缺少 schema 要求的 `c2rust_baseline` ref。失败发生在 JSON schema 校验阶段，早于本轮 external direct-callee validator 新逻辑；本轮仍不触碰这些预存脏 evidence 文件。
+
+当前边界：
+
+- 可以说：external direct-callee 的 source/signature/call-site binding 现在进入默认 validator 和 semantic-pass validator 的强一致性校验。
+- 可以说：unsupported/blocked external direct-callee 会按 fail-closed evidence 校验，不要求 compile_only binding。
+- 不应说：external callee 语义已经验证通过。stub 仍是 `compile_only`，`semantics_verified=false`，semantic acceptance 仍由 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 决定。
+- 不应说：完整 direct-call 系统已完成。函数指针、嵌套 call、condition call、副作用参数、未声明 external callee 的 blocked contract 更强校验仍可继续补。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- External direct-callee source/signature/call-site binding is now checked by the default validator path as well as the semantic-pass validator path.
+- The validator now fails closed on missing call-site bindings, source hash drift, signature-shape drift, `callee_signature_id` drift, call-edge metadata drift, and stub/semantics-boundary drift.
+- Unsupported blocked external callees are validated as fail-closed blocked evidence instead of being forced through compile-only binding.
+- This is evidence-integrity and provenance hardening only. Recorded external callees remain `compile_only`, blocked external callees remain `stub_kind=none`, and `semantics_verified=false`; semantic acceptance still belongs to the validation gates.

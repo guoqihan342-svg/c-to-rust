@@ -2115,32 +2115,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             tmp_path = Path(tmp)
             _, out_root, _ = self._call_expression_semantic_pass_fixture(tmp_path)
-
-            spec = json.loads((REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json").read_text())
-            spec["c_boundary"]["signatures"].append(
-                {
-                    "id": "sig-helper-add-one",
-                    "role": "external_direct_callee",
-                    "function": "helper_add_one",
-                    "return_type": "int",
-                    "parameters": [{"name": "value", "c_type": "int"}],
-                    "source_ref": "unit/helper.c#helper_add_one",
-                    "signature_sha256": "helper-signature-sha",
-                    "definition_status": "real_source_bound",
-                    "c_source": "int helper_add_one(int value) { return value + 1; }",
-                }
-            )
-            spec["c_boundary"]["external_direct_callees"] = [
-                {
-                    "name": "helper_add_one",
-                    "signature_ref": "sig-helper-add-one",
-                    "source_files": [{"path": "unit/helper.c", "sha256": "helper-sha"}],
-                    "definition_status": "real_source_bound",
-                    "stub_boundary": "compile_only",
-                }
-            ]
-            spec_path = tmp_path / "demo-call-expression-external-callee.json"
-            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            spec_path = self._write_call_expression_external_callee_spec(tmp_path)
 
             result = subprocess.run(
                 [
@@ -2163,6 +2138,179 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("external callee", result.stderr + result.stdout)
+
+    def test_rejects_default_validation_missing_external_callee_context_binding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            _, out_root, _ = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec_path = self._write_call_expression_external_callee_spec(tmp_path)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("external callee", result.stderr + result.stdout)
+
+    def test_external_direct_callee_context_requires_every_call_site_binding(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            context["call_edge_to_callee_binding"] = context["call_edge_to_callee_binding"][:-1]
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("external callee call-site binding", str(raised.exception))
+
+    def test_external_direct_callee_context_rejects_context_direct_call_edge_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            context["direct_call_edges"][1]["statement_context"] = "assign:drifted"
+            context["call_edge_to_callee_binding"][1]["statement_context"] = "assign:drifted"
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("translation plan and context pack direct_call_edges", str(raised.exception))
+
+    def test_external_direct_callee_context_allows_blocked_external_callee(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._blocked_external_callee_context_payloads()
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            module.validate_external_direct_callee_context(
+                slice_spec,
+                evidence_dir,
+                prefix,
+                self._blocked_external_callee_manifest_scope(),
+                self._blocked_external_callee_manifest_scope(),
+            )
+
+    def test_external_direct_callee_context_rejects_signature_shape_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            plan["translation_summary"]["external_direct_callees"][0]["return_type"] = "long"
+            context["external_direct_callees"][0]["parameters"][0]["c_type"] = "long"
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("external callee signature shape mismatch", str(raised.exception))
+
+    def test_external_direct_callee_context_rejects_signature_binding_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            context["signature_bindings"][0]["signature_ref"] = "sig-other"
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("external callee signature binding mismatch", str(raised.exception))
+
+    def test_external_direct_callee_context_rejects_callee_source_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            context["callee_sources"][0]["sha256"] = "wrong-sha"
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("external callee source binding mismatch", str(raised.exception))
+
+    def test_external_direct_callee_context_rejects_call_site_enrichment_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            plan["translation_summary"]["call_expressions"][0]["callee_scope"] = "internal"
+            context["direct_call_edges"][1]["stub_status"] = "missing"
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_external_direct_callee_context(
+                    slice_spec,
+                    evidence_dir,
+                    prefix,
+                    self._external_callee_manifest_scope(),
+                    self._external_callee_manifest_scope(),
+                )
+
+            self.assertIn("external callee call-site metadata mismatch", str(raised.exception))
 
     def test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -2579,6 +2727,38 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("alias gate", result.stderr + result.stdout)
 
+    def _write_call_expression_external_callee_spec(self, tmp_path: Path) -> Path:
+        spec = json.loads(
+            (REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        spec["c_boundary"]["signatures"].append(
+            {
+                "id": "sig-call-expression-chain",
+                "role": "external_direct_callee",
+                "function": "call_expression_chain",
+                "return_type": "int",
+                "parameters": [{"name": "value", "c_type": "int"}],
+                "source_ref": "unit/call_expression.c#call_expression_chain",
+                "signature_sha256": "call-expression-signature-sha",
+                "definition_status": "real_source_bound",
+                "c_source": "int call_expression_chain(int value) { return value; }",
+            }
+        )
+        spec["c_boundary"]["external_direct_callees"] = [
+            {
+                "name": "call_expression_chain",
+                "signature_ref": "sig-call-expression-chain",
+                "source_files": [{"path": "unit/call_expression.c", "sha256": "call-expression-sha"}],
+                "definition_status": "real_source_bound",
+                "stub_boundary": "compile_only",
+            }
+        ]
+        spec_path = tmp_path / "demo-call-expression-external-callee.json"
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        return spec_path
+
     def _global_dependency_evidence(self, tmp_path: Path) -> tuple[Path, Path, Path]:
         spec_path = tmp_path / "global-dependency-validator.json"
         spec_path.write_text(json.dumps(self._global_dependency_spec()), encoding="utf-8")
@@ -2619,6 +2799,199 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         )
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
+
+    def _external_callee_context_payloads(self) -> tuple[dict, dict, dict]:
+        signature = {
+            "id": "sig-helper-add-one",
+            "role": "external_direct_callee",
+            "function": "helper_add_one",
+            "return_type": "int",
+            "parameters": [{"name": "value", "c_type": "int"}],
+            "source_ref": "unit/helper.c#helper_add_one",
+            "definition_status": "real_source_bound",
+        }
+        callee = {
+            "name": "helper_add_one",
+            "signature_ref": "sig-helper-add-one",
+            "source_ref": "unit/helper.c#helper_add_one",
+            "source_files": [{"path": "unit/helper.c", "sha256": "helper-sha"}],
+            "definition_status": "real_source_bound",
+            "stub_kind": "compile_only",
+            "stub_boundary": "compile_only",
+            "semantics_verified": False,
+            "parameters": [{"name": "value", "c_type": "int"}],
+            "return_type": "int",
+            "supported": True,
+            "unsupported_reasons": [],
+        }
+        call_edges = [
+            {
+                "callee": "helper_add_one",
+                "arguments": ["value"],
+                "source_expression": "helper_add_one(value)",
+                "statement_context": "decl:init:first",
+                "callee_scope": "external_direct_callee",
+                "callee_signature_id": "sig-helper-add-one",
+                "callee_source_ref": "unit/helper.c#helper_add_one",
+                "definition_status": "real_source_bound",
+                "stub_status": "compile_only",
+            },
+            {
+                "callee": "helper_add_one",
+                "arguments": ["first"],
+                "source_expression": "helper_add_one(first)",
+                "statement_context": "assign:value",
+                "callee_scope": "external_direct_callee",
+                "callee_signature_id": "sig-helper-add-one",
+                "callee_source_ref": "unit/helper.c#helper_add_one",
+                "definition_status": "real_source_bound",
+                "stub_status": "compile_only",
+            },
+            {
+                "callee": "helper_add_one",
+                "arguments": ["value"],
+                "source_expression": "helper_add_one(value)",
+                "statement_context": "return:value",
+                "callee_scope": "external_direct_callee",
+                "callee_signature_id": "sig-helper-add-one",
+                "callee_source_ref": "unit/helper.c#helper_add_one",
+                "definition_status": "real_source_bound",
+                "stub_status": "compile_only",
+            },
+        ]
+        slice_spec = {
+            "c_boundary": {
+                "signatures": [signature],
+                "external_direct_callees": [
+                    {
+                        "name": "helper_add_one",
+                        "signature_ref": "sig-helper-add-one",
+                        "source_files": [{"path": "unit/helper.c", "sha256": "helper-sha"}],
+                    }
+                ],
+            }
+        }
+        plan = {
+            "translation_summary": {
+                "external_direct_callees": [callee],
+                "external_direct_callee_blocks": [],
+                "call_expressions": json.loads(json.dumps(call_edges)),
+            }
+        }
+        context = {
+            "external_direct_callees": [callee],
+            "external_direct_callee_blocks": [],
+            "direct_call_edges": json.loads(json.dumps(call_edges)),
+            "signature_bindings": [
+                {
+                    "callee": "helper_add_one",
+                    "signature_ref": "sig-helper-add-one",
+                    "definition_status": "real_source_bound",
+                    "stub_kind": "compile_only",
+                    "semantics_verified": False,
+                }
+            ],
+            "callee_sources": [
+                {"callee": "helper_add_one", "path": "unit/helper.c", "sha256": "helper-sha"}
+            ],
+            "call_edge_to_callee_binding": [
+                {
+                    "callee": call["callee"],
+                    "signature_ref": "sig-helper-add-one",
+                    "source_expression": call["source_expression"],
+                    "statement_context": call["statement_context"],
+                    "stub_kind": "compile_only",
+                    "semantics_verified": False,
+                }
+                for call in call_edges
+            ],
+        }
+        return slice_spec, plan, context
+
+    def _blocked_external_callee_context_payloads(self) -> tuple[dict, dict, dict]:
+        signature = {
+            "id": "sig-helper-box",
+            "role": "external_direct_callee",
+            "function": "helper_box",
+            "return_type": "struct helper_box",
+            "parameters": [{"name": "value", "c_type": "int"}],
+            "source_ref": "unit/helper.c#helper_box",
+            "definition_status": "real_source_bound",
+        }
+        block = {
+            "name": "helper_box",
+            "reason": "unsupported_external_direct_callee_signature",
+            "unsupported_reasons": ["unsupported_return_type"],
+            "stub_kind": "none",
+            "semantics_verified": False,
+        }
+        call_edges = [
+            {
+                "callee": "helper_box",
+                "arguments": ["value"],
+                "source_expression": "helper_box(value)",
+                "statement_context": "return:value",
+                "callee_scope": "external_direct_callee",
+                "stub_status": "blocked",
+                "blocked_reason": "unsupported_external_direct_callee_signature",
+            }
+        ]
+        slice_spec = {
+            "c_boundary": {
+                "signatures": [signature],
+                "external_direct_callees": [
+                    {
+                        "name": "helper_box",
+                        "signature_ref": "sig-helper-box",
+                        "source_files": [{"path": "unit/helper.c", "sha256": "helper-sha"}],
+                    }
+                ],
+            }
+        }
+        plan = {
+            "translation_summary": {
+                "external_direct_callees": [],
+                "external_direct_callee_blocks": [block],
+                "call_expressions": json.loads(json.dumps(call_edges)),
+            }
+        }
+        context = {
+            "external_direct_callees": [],
+            "external_direct_callee_blocks": [block],
+            "direct_call_edges": json.loads(json.dumps(call_edges)),
+            "signature_bindings": [],
+            "callee_sources": [],
+            "call_edge_to_callee_binding": [],
+        }
+        return slice_spec, plan, context
+
+    def _external_callee_manifest_scope(self) -> dict:
+        return {
+            "claim_boundary": {
+                "external_callee_scope": {
+                    "stub_kind": "compile_only",
+                    "semantics_verified": False,
+                }
+            },
+            "external_callee_scope": {
+                "stub_kind": "compile_only",
+                "semantics_verified": False,
+            },
+        }
+
+    def _blocked_external_callee_manifest_scope(self) -> dict:
+        return {
+            "claim_boundary": {
+                "external_callee_scope": {
+                    "stub_kind": "none",
+                    "semantics_verified": False,
+                }
+            },
+            "external_callee_scope": {
+                "stub_kind": "none",
+                "semantics_verified": False,
+            },
+        }
 
     def _promote_call_expression_fixture_to_l4_authoritative(self, evidence_dir: Path) -> None:
         prefix = "l3-call-expression"
