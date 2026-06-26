@@ -9,7 +9,7 @@
 - `GenericTypedIr`：通用 typed IR emitter 成功生成 Rust candidate。
 - `Unsupported`：typed IR emitter fail closed，没有生成 Rust candidate，错误中保留 route metadata 和 fail-closed reason。
 
-`DeprecatedLegacyCrc32`、typed IR crc32 matcher 和 typed IR canned emitter 已从当前 typed IR route 模型中删除。旧字符串 translator 里仍可能存在 crc32 byte-cursor recognizer 和 canned Rust 模板，但它是 legacy parser compatibility path，不是 typed IR candidate route，也不能重新作为 typed IR fallback 记录。
+`DeprecatedLegacyCrc32`、typed IR crc32 matcher 和 typed IR canned emitter 已从当前 typed IR route 模型中删除。旧字符串 translator 的 crc32 byte-cursor recognizer 和 canned Rust 模板也已删除；raw string crc32 byte-cursor 输入现在 fail closed，除非它先通过 clang-lowered typed IR + globals 进入 `GenericTypedIr`。该模板不能作为 typed IR fallback 或 legacy parser fallback 被重新引入。
 
 ## 目标
 

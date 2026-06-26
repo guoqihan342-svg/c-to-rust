@@ -2340,7 +2340,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         return False
     plan = read_json(plan_path)
     rule_ids = plan.get("translation_summary", {}).get("translation_rule_ids", [])
-    return "crc32-byte-cursor-loop" in rule_ids
+    return "clang-lowered-typed-ir" in rule_ids
 
 
 def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:

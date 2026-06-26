@@ -5599,3 +5599,60 @@ git diff --check -- <本轮目标文件>
 
 - 在 route signal 已接入后，继续把真实 FlashDB crc32 的 oracle/diff/negative/unsafe/final verification 跑完整。
 - 继续扩展 generic typed IR 的常见 C 子集，例如更系统的 direct-call callee signature evidence、简单 struct field reads/writes、局部数组/指针边界，而不是恢复项目专用 fallback。
+
+## 81. 2026-06-27 remove legacy string crc32 canned path
+
+本轮承接第 80 节：route signal 已经接入后，继续处理“全程零 crc32 专用代码不能放水”的核心问题。结论要精确：仓库里仍有 FlashDB crc32 测试样本和回归 fixture，但旧 string translator 的 crc32 canned/template 真实生成路径已经删除；当前正向生成路径是 clang-lowered typed IR + readonly globals + generic emitter。
+
+核心改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - 删除旧 `translate_slice()` 里的 `is_crc32_byte_cursor_loop()` 早返回分支。
+  - 删除 `is_crc32_byte_cursor_loop()`、`record_crc32_byte_cursor_rules()`、本地 `emit_crc32_byte_cursor_rust()` 和只为旧 matcher 服务的 `normalize_expression()`。
+  - 删除 `emit_pointer_graph()` 中基于旧 crc32 matcher 的 `buf -> &[u8]`、`*p++` 和 `byte_cursor_post_increment_read` 注入。
+  - clang-lowered typed IR 证据 rule 从 `crc32-byte-cursor-loop` 改为更通用的 `byte-cursor-loop`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 旧 string translator crc32 byte-cursor 正向用例改为 fail-closed 回归：
+    `flashdb_crc32_byte_cursor_loop_blocks_without_legacy_canned_template`。
+  - 该测试断言 raw string 输入不再生成 Rust、不含 `crc32_update_byte`、不记录 `crc32-byte-cursor-loop`，并报告 inc/dec unsupported。
+  - clang-lowered FlashDB crc32 smoke 继续断言正向 plan 含 `byte-cursor-loop`，且不含 `crc32-byte-cursor-loop`。
+
+- `validation/tools/auto_migrate.py`
+  - `generated_rust_replay_supported()` 不再依赖 `crc32-byte-cursor-loop`，改为识别 `clang-lowered-typed-ir`。
+
+- `validation/tools/test_auto_migrate.py`
+  - 真实 FlashDB crc32 candidate/replay 测试改为显式开启 `--emit-clang-lowering-report`。
+  - 测试环境在未设置 `CLANG_PATH` 时会使用 `C:/Program Files/LLVM/bin/clang.exe`，不存在则 skip。
+  - 断言 draft 包含 `CRC32_TABLE`，不含 `crc32_update_byte` 和 `*p++`。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - 双语同步当前态：旧 string translator crc32 recognizer/template 已删除；typed IR route 仍只有 `GenericTypedIr` / `Unsupported`；FlashDB crc32 正向生成只走 clang-lowered typed IR + readonly globals + generic emitter。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml flashdb_crc32_byte_cursor_loop_blocks_without_legacy_canned_template -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_clang_typed_ir_translator_generates_candidate_route validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+```
+
+待最终提交前仍需跑：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+openspec validate --all --strict
+git diff --check -- <本轮目标文件>
+```
+
+当前边界：
+
+- 可以说：旧 string translator 的 crc32 canned/template 生成路径已经删除。
+- 不应说：仓库全程没有任何 crc32 专用代码。测试 fixture、FlashDB slice spec 和回归样本仍然保留 crc32，这是用例和验证输入，不是生成器 fallback。
+- 真实 FlashDB crc32 的 semantic acceptance 仍由 validation gates 决定，不能由 `GenericTypedIr` candidate route 直接宣称通过。

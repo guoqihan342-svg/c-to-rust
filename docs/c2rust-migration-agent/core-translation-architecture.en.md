@@ -53,7 +53,7 @@ flowchart TD
   - `try_translate_slice_with_clang_lowered_ir()` passes both `ClangLoweringReport.function_ir` and `report.globals` into `emit_rust_from_ir_with_globals()`.
   - `write_translation_artifacts()` can produce a Rust draft driven by clang-lowered typed IR when the `clang-lowering-report` feature is enabled.
   - The `clang-lowering-report` artifact now includes `typed_ir_candidate`, recording the `CandidateRouteDecision`, readonly globals summary, and the `semantic_pass=false` boundary.
-  - The old string translator still keeps a crc32 byte-cursor template path in `is_crc32_byte_cursor_loop()` and the local `emit_crc32_byte_cursor_rust()`. It no longer bridges into typed IR and no longer records `typed-ir-crc32-emitter` provenance.
+  - The old string translator crc32 byte-cursor recognizer and local `emit_crc32_byte_cursor_rust()` have been removed. The raw string path now fails closed on unmodeled side effects such as `*p++` / `size--` and no longer emits the `crc32_update_byte()` template. The positive FlashDB crc32 Rust draft comes only from clang-lowered typed IR + readonly globals + `GenericTypedIr`.
 - `validation/tools/auto_migrate.py`
   - Newly generated `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
   - Newly generated `validation_profile.candidate_generation` repeats the same binding while keeping `generated_draft_semantic_pass=false`.
@@ -95,12 +95,11 @@ Generic typed IR emission now covers:
 
 Still incomplete:
 
-- The old string translator still has a crc32 byte-cursor recognizer and canned Rust template. That is a legacy parser path, not a typed IR fallback.
-- The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence, not semantic acceptance for the real FlashDB slice.
+- The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
 1. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
-2. Clean up the old string translator crc32 recognizer and canned template separately, or downgrade it to an explicit legacy compatibility path.
+2. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.
 3. Keep extending generic typed IR instead of adding FlashDB-specific logic.

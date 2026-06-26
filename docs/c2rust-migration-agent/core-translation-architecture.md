@@ -53,7 +53,7 @@ flowchart TD
   - `try_translate_slice_with_clang_lowered_ir()` 把 `ClangLoweringReport.function_ir` 和 `report.globals` 一起传入 `emit_rust_from_ir_with_globals()`。
   - `write_translation_artifacts()` 在 `clang-lowering-report` feature 下可以写出由 clang-lowered typed IR 驱动的 Rust draft。
   - `clang-lowering-report` artifact 现在包含 `typed_ir_candidate`，记录 `CandidateRouteDecision`、readonly globals 摘要和 `semantic_pass=false` 边界。
-  - 旧字符串 translator 仍保留一个 crc32 byte-cursor 模板路径，位置是 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它不再桥接 typed IR，也不再记录 `typed-ir-crc32-emitter` provenance。
+  - 旧字符串 translator 中的 crc32 byte-cursor recognizer 和本地 `emit_crc32_byte_cursor_rust()` 已删除；raw string 路径遇到 `*p++` / `size--` 这类未建模副作用会 fail closed，不再生成 `crc32_update_byte()` 模板。FlashDB crc32 的正向 Rust draft 只来自 clang-lowered typed IR + readonly globals + `GenericTypedIr`。
 - `validation/tools/auto_migrate.py`
   - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
   - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
@@ -95,12 +95,11 @@ generic typed IR emission 现在覆盖：
 
 仍未完成：
 
-- 旧字符串 translator 里仍有 crc32 byte-cursor recognizer 和 canned Rust 模板；这是 legacy parser 路径，不是 typed IR fallback。
-- 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
+- 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；raw string crc32 byte-cursor 输入现在保持 fail-closed。真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
 1. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
-2. 单独清理旧字符串 translator 的 crc32 recognizer 和 canned 模板，或把它降级为明确的 legacy compatibility path。
+2. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。
 3. 继续扩展 generic typed IR，而不是为 FlashDB 写专用逻辑。

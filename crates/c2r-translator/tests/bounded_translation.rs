@@ -1,9 +1,11 @@
 use std::{
     fs,
     path::PathBuf,
-    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(feature = "typed-ir")]
+use std::process::Command;
 
 #[cfg(feature = "clang-frontend")]
 use c2r_translator::clang_frontend::ClangParseSpec;
@@ -7526,7 +7528,7 @@ fn bounded_pointer_arithmetic_read_generates_safe_slice_boundary_and_decisions()
 }
 
 #[test]
-fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
+fn flashdb_crc32_byte_cursor_loop_blocks_without_legacy_canned_template() {
     let spec = SliceSpec {
         target_id: "flashdb".to_string(),
         slice_id: "real-fdb-calc-crc32".to_string(),
@@ -7553,48 +7555,24 @@ fn flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules() {
 
     let result = translate_slice(&spec);
 
-    assert!(result.errors.is_empty(), "{:?}", result.errors);
-    assert!(result
-        .rust_code
-        .contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
-    assert!(result.rust_code.contains("let mut p: usize = 0;"));
-    assert!(result.rust_code.contains("let mut remaining = size;"));
-    assert!(result.rust_code.contains("while remaining != 0 {"));
-    assert!(result.rust_code.contains("let byte = buf[p];"));
-    assert!(result.rust_code.contains("p += 1;"));
-    assert!(result
-        .rust_code
-        .contains("crc = crc32_update_byte(crc, byte);"));
-    assert!(!result.rust_code.contains("*p++"));
-    assert!(!result.rust_code.contains("crc32_table"));
-    let buf = result
-        .pointer_graph
-        .nodes
-        .iter()
-        .find(|node| node.id == "buf")
-        .expect("buf pointer node");
-    assert_eq!(buf.role, "borrowed_input");
-    assert_eq!(buf.rust_boundary, "&[u8]");
-    assert!(buf.read_effects.contains(&"*p++".to_string()));
-    for rule in [
-        "const-void-byte-slice",
-        "byte-cursor-post-increment-read",
-        "crc32-byte-cursor-loop",
-    ] {
-        assert!(
-            result.plan.translation_rule_ids.contains(&rule.to_string()),
-            "{rule}: {:?}",
-            result.plan.translation_rule_ids
-        );
-    }
+    assert!(result.rust_code.is_empty());
+    assert!(!result.rust_code.contains("crc32_update_byte"));
+    assert!(!result
+        .plan
+        .translation_rule_ids
+        .contains(&"crc32-byte-cursor-loop".to_string()));
     assert!(
-        !result
-            .plan
-            .translation_rule_ids
-            .contains(&"typed-ir-crc32-emitter".to_string()),
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "unsupported_syntax"),
         "{:?}",
-        result.plan.translation_rule_ids
+        result.errors
     );
+    assert!(result
+        .errors
+        .iter()
+        .any(|error| error.message.contains("increment/decrement")));
 }
 
 #[test]
@@ -8712,6 +8690,14 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("clang-lowered-typed-ir")));
+    assert!(plan["plan"]["translation_rule_ids"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("byte-cursor-loop")));
+    assert!(!plan["plan"]["translation_rule_ids"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("crc32-byte-cursor-loop")));
     assert!(type_map["type_map"]["mappings"]
         .as_array()
         .unwrap()

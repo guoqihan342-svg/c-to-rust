@@ -9,7 +9,7 @@ This file supersedes the earlier three-route P0 draft. The current typed IR cand
 - `GenericTypedIr`: the generic typed IR emitter successfully generated a Rust candidate.
 - `Unsupported`: the typed IR emitter failed closed, produced no Rust candidate, and preserved route metadata plus the fail-closed reason.
 
-`DeprecatedLegacyCrc32`, the typed IR crc32 matcher, and the typed IR canned emitter have been removed from the current typed IR route model. The old string translator may still contain a crc32 byte-cursor recognizer and canned Rust template, but that is a legacy parser compatibility path, not a typed IR candidate route, and it must not be reintroduced as a typed IR fallback.
+`DeprecatedLegacyCrc32`, the typed IR crc32 matcher, and the typed IR canned emitter have been removed from the current typed IR route model. The old string translator crc32 byte-cursor recognizer and canned Rust template have also been removed; raw string crc32 byte-cursor input now fails closed unless it first enters through clang-lowered typed IR + globals and reaches `GenericTypedIr`. The template must not be reintroduced as either a typed IR fallback or a legacy parser fallback.
 
 ## Goal
 

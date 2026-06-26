@@ -26,6 +26,16 @@ def load_auto_migrate_module():
 
 
 class AutoMigrateTests(unittest.TestCase):
+    def _env_with_clang_path(self) -> dict[str, str]:
+        environment = dict(os.environ)
+        if environment.get("CLANG_PATH"):
+            return environment
+        default_clang = Path("C:/Program Files/LLVM/bin/clang.exe")
+        if not default_clang.exists():
+            self.skipTest("CLANG_PATH is required for real clang-lowering-report generation tests")
+        environment["CLANG_PATH"] = str(default_clang)
+        return environment
+
     def test_real_fdb_crc32_fixture_includes_non_empty_check_vector(self) -> None:
         fixture_path = REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json"
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
@@ -3278,7 +3288,7 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
 
-    def test_real_fdb_calc_crc32_byte_cursor_translator_generates_candidate_route(self) -> None:
+    def test_real_fdb_calc_crc32_clang_typed_ir_translator_generates_candidate_route(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
@@ -3290,8 +3300,10 @@ class AutoMigrateTests(unittest.TestCase):
                     "--out-root",
                     str(out_root),
                     "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
                 ],
                 cwd=REPO_ROOT,
+                env=self._env_with_clang_path(),
                 text=True,
                 capture_output=True,
             )
@@ -3322,15 +3334,16 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(route["translator"]["kind"], "tier1")
             self.assertTrue(route["translator"]["candidate_generation_allowed"])
             self.assertEqual(plan["status"], "draft_generated")
-            self.assertIn("crc32-byte-cursor-loop", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn("clang-lowered-typed-ir", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn("byte-cursor-loop", plan["translation_summary"]["translation_rule_ids"])
             self.assertEqual(pointer["pointer_nodes"][0]["symbol"], "buf")
             self.assertEqual(pointer["pointer_nodes"][0]["kind"], "buffer")
             self.assertEqual(pointer["pointer_nodes"][0]["buffer_role"], "input")
             self.assertEqual(pointer["pointer_nodes"][0]["length_companion"], "size")
             self.assertIn("byte_cursor_post_increment_read", pointer["pointer_nodes"][0]["boundary_decisions"])
-            self.assertIn("crc32_update_byte", draft)
+            self.assertIn("CRC32_TABLE", draft)
+            self.assertNotIn("crc32_update_byte", draft)
             self.assertNotIn("*p++", draft)
-            self.assertNotIn("crc32_table", draft)
             self.assertEqual(rust_check["status"], "passed")
 
     def test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata(self) -> None:
@@ -3852,8 +3865,10 @@ class AutoMigrateTests(unittest.TestCase):
                     "--out-root",
                     str(out_root),
                     "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
                 ],
                 cwd=REPO_ROOT,
+                env=self._env_with_clang_path(),
                 text=True,
                 capture_output=True,
             )
@@ -3950,8 +3965,10 @@ class AutoMigrateTests(unittest.TestCase):
                     "--out-root",
                     str(out_root),
                     "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
                 ],
                 cwd=REPO_ROOT,
+                env=self._env_with_clang_path(),
                 text=True,
                 capture_output=True,
             )
