@@ -8,7 +8,8 @@ use serde_json::Value;
 
 #[cfg(feature = "typed-ir")]
 use crate::typed_ir::{
-    IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, IrUnOp,
+    IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam, IrStmt, IrType,
+    IrTypeKind, IrUnOp,
 };
 use crate::{SliceSpec, SourceSpanRef};
 
@@ -256,6 +257,14 @@ pub struct ClangLoweringReport {
     pub diagnostics: Vec<String>,
     pub errors: Vec<ClangFrontendError>,
     pub function_ir: Option<IrFunction>,
+    pub globals: Vec<IrGlobal>,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct LoweredFunctionWithGlobals {
+    function_ir: IrFunction,
+    globals: Vec<IrGlobal>,
 }
 
 impl ClangParseSpec {
@@ -380,6 +389,40 @@ fn lower_function_from_clang_ast_dump_with_arguments(
     arguments: &[String],
     function_name: &str,
 ) -> Result<IrFunction, ClangFrontendError> {
+    lower_function_and_globals_from_clang_ast_dump_with_arguments(
+        clang_path,
+        arguments,
+        function_name,
+    )
+    .map(|lowered| lowered.function_ir)
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_function_and_globals_from_clang_ast_dump_with_arguments(
+    clang_path: &Path,
+    arguments: &[String],
+    function_name: &str,
+) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
+    let ast = clang_ast_dump_json(clang_path, arguments)?;
+    let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
+        kind: "missing_function_decl".to_string(),
+        message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
+    })?;
+    let skeleton = function_skeleton_from_ast(function)?;
+    let function_ir = lower_function_skeleton(&skeleton)?;
+    let globals = readonly_globals_from_ast(&ast)?;
+
+    Ok(LoweredFunctionWithGlobals {
+        function_ir,
+        globals,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_ast_dump_json(
+    clang_path: &Path,
+    arguments: &[String],
+) -> Result<Value, ClangFrontendError> {
     let output = Command::new(clang_path)
         .args(arguments)
         .output()
@@ -399,13 +442,7 @@ fn lower_function_from_clang_ast_dump_with_arguments(
             kind: "invalid_clang_ast_json".to_string(),
             message: format!("failed to parse clang AST JSON: {error}"),
         })?;
-    let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
-        kind: "missing_function_decl".to_string(),
-        message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
-    })?;
-    let skeleton = function_skeleton_from_ast(function)?;
-
-    lower_function_skeleton(&skeleton)
+    Ok(ast)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -437,6 +474,7 @@ pub fn lower_function_from_clang_parse_spec_report(
                 message: "clang AST lowering requires CLANG_PATH".to_string(),
             }],
             function_ir: None,
+            globals: Vec::new(),
         };
     };
 
@@ -446,7 +484,7 @@ pub fn lower_function_from_clang_parse_spec_report(
         Some(clang_path.to_string()),
         arguments.clone(),
         environment,
-        lower_function_from_clang_ast_dump_with_arguments(
+        lower_function_and_globals_from_clang_ast_dump_with_arguments(
             &PathBuf::from(clang_path),
             &arguments,
             &parse_spec.function_name,
@@ -482,6 +520,7 @@ pub fn lower_function_from_clang_ast_dump_report(
                 message: "clang AST lowering requires CLANG_PATH".to_string(),
             }],
             function_ir: None,
+            globals: Vec::new(),
         };
     };
 
@@ -489,9 +528,13 @@ pub fn lower_function_from_clang_ast_dump_report(
         Some(normalized_report_path(source_file)),
         function_name.to_string(),
         Some(clang_path.to_string()),
-        arguments,
+        arguments.clone(),
         environment,
-        lower_function_from_clang_ast_dump(&PathBuf::from(clang_path), source_file, function_name),
+        lower_function_and_globals_from_clang_ast_dump_with_arguments(
+            &PathBuf::from(clang_path),
+            &arguments,
+            function_name,
+        ),
     )
 }
 
@@ -506,7 +549,10 @@ pub fn lower_function_skeleton_report(
         None,
         Vec::new(),
         environment,
-        lower_function_skeleton(function),
+        lower_function_skeleton(function).map(|function_ir| LoweredFunctionWithGlobals {
+            function_ir,
+            globals: Vec::new(),
+        }),
     )
 }
 
@@ -565,10 +611,10 @@ fn report_from_lowering_result(
     clang_path: Option<String>,
     arguments: Vec<String>,
     environment: &BTreeMap<String, String>,
-    result: Result<IrFunction, ClangFrontendError>,
+    result: Result<LoweredFunctionWithGlobals, ClangFrontendError>,
 ) -> ClangLoweringReport {
     match result {
-        Ok(function_ir) => ClangLoweringReport {
+        Ok(lowered) => ClangLoweringReport {
             status: "lowered".to_string(),
             frontend: "clang".to_string(),
             source_file,
@@ -578,7 +624,8 @@ fn report_from_lowering_result(
             environment: ClangEnvironment::detect_from_env(environment),
             diagnostics: Vec::new(),
             errors: Vec::new(),
-            function_ir: Some(function_ir),
+            function_ir: Some(lowered.function_ir),
+            globals: lowered.globals,
         },
         Err(error) => ClangLoweringReport {
             status: lowering_status_for_error(&error).to_string(),
@@ -591,6 +638,7 @@ fn report_from_lowering_result(
             diagnostics: vec![error.message.clone()],
             errors: vec![error],
             function_ir: None,
+            globals: Vec::new(),
         },
     }
 }
@@ -603,6 +651,80 @@ fn lowering_status_for_error(error: &ClangFrontendError) -> &'static str {
         "unsupported"
     } else {
         "blocked"
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn readonly_globals_from_ast(ast: &Value) -> Result<Vec<IrGlobal>, ClangFrontendError> {
+    inner(ast)
+        .iter()
+        .filter(|child| string_field(child, "kind").as_deref() == Some("VarDecl"))
+        .filter_map(readonly_global_from_toplevel_var_decl)
+        .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn readonly_global_from_toplevel_var_decl(
+    var_decl: &Value,
+) -> Option<Result<IrGlobal, ClangFrontendError>> {
+    if string_field(var_decl, "storageClass").as_deref() != Some("static") {
+        return None;
+    }
+
+    let name = string_field(var_decl, "name")?;
+    let qual_type = var_decl
+        .get("type")
+        .and_then(|value| string_field(value, "qualType"))?;
+    let clang_ty = type_from_qual_type(&qual_type).ok()?;
+    let ClangTypeKind::Array { element, len } = &clang_ty.kind else {
+        return None;
+    };
+    if !clang_type_is_const(&clang_ty)
+        || len.is_none()
+        || !matches!(element.kind, ClangTypeKind::Integer { .. })
+    {
+        return None;
+    }
+
+    let [initializer] = inner(var_decl) else {
+        return None;
+    };
+    if string_field(initializer, "kind").as_deref() != Some("InitListExpr") {
+        return None;
+    }
+
+    let values = integer_literal_init_list_values(initializer)?;
+    if Some(values.len()) != *len {
+        return None;
+    }
+
+    Some(lower_type(&clang_ty).map(|ty| IrGlobal {
+        name,
+        ty,
+        init: IrGlobalInit::IntegerArray(values),
+        source_span: None,
+    }))
+}
+
+#[cfg(feature = "typed-ir")]
+fn integer_literal_init_list_values(init_list: &Value) -> Option<Vec<u64>> {
+    inner(init_list)
+        .iter()
+        .map(integer_literal_init_value)
+        .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn integer_literal_init_value(item: &Value) -> Option<u64> {
+    match string_field(item, "kind").as_deref() {
+        Some("IntegerLiteral") => string_field(item, "value")?.parse::<u64>().ok(),
+        Some("ImplicitCastExpr" | "ParenExpr") => {
+            let [operand] = inner(item) else {
+                return None;
+            };
+            integer_literal_init_value(operand)
+        }
+        _ => None,
     }
 }
 
@@ -926,7 +1048,7 @@ fn expr_skeleton_from_ast_with_options(
                 });
             };
             let preserve_operand_integral_casts =
-                preserve_integral_casts || is_comparison_operator(&op);
+                preserve_integral_casts || preserves_integral_operand_casts(&op);
             Ok(ClangExprSkeleton::Binary {
                 op,
                 lhs: Box::new(expr_skeleton_from_ast_with_options(
@@ -1081,10 +1203,14 @@ fn is_integral_conversion_cast_expr(expr: &Value) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
-fn is_comparison_operator(op: &ClangBinaryOperator) -> bool {
+fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
     matches!(
         op,
-        ClangBinaryOperator::Eq
+        ClangBinaryOperator::Add
+            | ClangBinaryOperator::BitAnd
+            | ClangBinaryOperator::BitXor
+            | ClangBinaryOperator::Shr
+            | ClangBinaryOperator::Eq
             | ClangBinaryOperator::Neq
             | ClangBinaryOperator::Lt
             | ClangBinaryOperator::Le
@@ -1624,7 +1750,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_strips_integer_implicit_casts_outside_comparisons() {
+    fn expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_operands() {
         let expr = serde_json::json!({
             "kind": "BinaryOperator",
             "opcode": "&",
@@ -1654,8 +1780,24 @@ mod tests {
         let ClangExprSkeleton::Binary { rhs, .. } = skeleton else {
             panic!("expected binary skeleton, got {skeleton:?}");
         };
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = rhs.as_ref()
+        else {
+            panic!("expected preserved bitwise integral cast, got {rhs:?}");
+        };
+        assert!(*implicit);
         assert!(matches!(
-            rhs.as_ref(),
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 255, .. }
         ));
     }
@@ -2030,5 +2172,71 @@ mod tests {
                 width: 32
             }
         ));
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_maps_static_const_integer_array_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "storageClass": "static",
+                    "type": { "qualType": "const uint32_t[4]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const uint32_t[4]" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "IntegralCast",
+                                    "type": { "qualType": "uint32_t" },
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "1"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "2"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "3988292384"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "unsigned int" },
+                                    "value": "4"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert_eq!(globals.len(), 1);
+        let global = &globals[0];
+        assert_eq!(global.name, "table");
+        assert!(global.ty.is_const);
+        assert!(matches!(
+            global.ty.kind,
+            IrTypeKind::Array { len: Some(4), .. }
+        ));
+        assert_eq!(
+            global.init,
+            IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+        );
     }
 }

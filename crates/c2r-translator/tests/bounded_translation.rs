@@ -19,8 +19,8 @@ use c2r_translator::clang_frontend::{
 use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
-    emit_rust_from_ir, IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType,
-    IrTypeKind, IrUnOp,
+    emit_rust_from_ir, emit_rust_from_ir_with_globals, IrBinOp, IrExpr, IrFunction, IrGlobal,
+    IrGlobalInit, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, IrUnOp,
 };
 use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;
@@ -149,6 +149,18 @@ fn ir_lit(value: u64, spelling: &str, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn without_implicit_cast(expr: &IrExpr) -> &IrExpr {
+    match expr {
+        IrExpr::Cast {
+            expr,
+            implicit: true,
+            ..
+        } => without_implicit_cast(expr),
+        _ => expr,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_binary(op: IrBinOp, lhs: IrExpr, rhs: IrExpr, ty: IrType) -> IrExpr {
     IrExpr::Binary {
         op,
@@ -174,7 +186,6 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
     let u32_ty = ir_u32();
     let u8_ty = ir_u8();
     let usize_ty = ir_usize();
-    let int_ty = ir_i32();
     let const_void_ptr = ir_pointer(
         "const void *",
         "const void *",
@@ -191,7 +202,7 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
     let const_u8_ptr = ir_pointer(
         "const uint8_t *",
         "const unsigned char *",
-        u8_ty.clone(),
+        ir_const(u8_ty.clone()),
         true,
     );
 
@@ -235,7 +246,7 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
     let table_index = ir_binary(
         IrBinOp::BitAnd,
         ir_binary(IrBinOp::BitXor, crc(), promoted_byte, u32_ty.clone()),
-        ir_lit(0xFF, "0xFF", int_ty.clone()),
+        ir_lit(0xFF, "0xFFU", u32_ty.clone()),
         u32_ty.clone(),
     );
     let table_lookup = IrExpr::Index {
@@ -247,7 +258,7 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
     let shift = ir_binary(
         IrBinOp::Shr,
         crc(),
-        ir_lit(8, "8", int_ty.clone()),
+        ir_lit(8, "8U", u32_ty.clone()),
         u32_ty.clone(),
     );
 
@@ -328,6 +339,39 @@ fn flashdb_crc32_typed_ir() -> IrFunction {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_u32_global_array(name: &str, len: usize, values: Vec<u64>) -> IrGlobal {
+    let u32_ty = ir_u32();
+    IrGlobal {
+        name: name.to_string(),
+        ty: IrType {
+            spelled: format!("const uint32_t[{len}]"),
+            canonical: format!("const unsigned int[{len}]"),
+            kind: IrTypeKind::Array {
+                element: Box::new(u32_ty),
+                len: Some(len),
+            },
+            is_const: true,
+            width_bits: None,
+            source_span: None,
+        },
+        init: if values.iter().all(|value| *value == 0) {
+            IrGlobalInit::Zeroed
+        } else {
+            IrGlobalInit::IntegerArray(values)
+        },
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn repeated_c_u32_initializer(len: usize, value: &str) -> String {
+    std::iter::repeat(value)
+        .take(len)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
     let emitted = emit_rust_from_ir(&flashdb_crc32_typed_ir()).expect("typed IR crc32 emit");
@@ -346,6 +390,53 @@ fn typed_ir_emits_flashdb_crc32_without_string_recognizer() {
     assert!(!rust.contains("*p++"));
     assert!(!rust.contains("crc32_table"));
     assert_rust_snippet_compiles("typed-ir-crc32", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route() {
+    let global = ir_u32_global_array("crc32_table", 256, vec![0; 256]);
+    let emitted = emit_rust_from_ir_with_globals(&flashdb_crc32_typed_ir(), &[global])
+        .expect("emit flashdb crc32 through generic typed IR with global table");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
+    assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32; 256];"));
+    assert!(
+        rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")
+    );
+    assert!(rust.contains("let byte0: u8 = buf[p];"));
+    assert!(rust.contains("p += 1;"));
+    assert!(rust.contains(
+        "crc = (CRC32_TABLE[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));"
+    ));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-crc32-global-table-generic", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_global_array_initializer_length_mismatch() {
+    let global = ir_u32_global_array("table", 4, vec![1, 2]);
+    let ir = IrFunction {
+        name: "return_zero".to_string(),
+        return_type: ir_u32(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(0, "0U", ir_u32())),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir_with_globals(&ir, &[global])
+        .expect_err("global initializer length mismatch must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("initializer length 2 does not match array length 4"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5102,7 +5193,10 @@ fn clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled() {
     else {
         panic!("expected bitxor lhs, got {lhs:?}");
     };
-    assert!(matches!(rhs.as_ref(), IrExpr::Deref { .. }));
+    assert!(matches!(
+        without_implicit_cast(rhs.as_ref()),
+        IrExpr::Deref { .. }
+    ));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5161,7 +5255,7 @@ fn clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when
     else {
         panic!("expected bitxor lhs, got {lhs:?}");
     };
-    let IrExpr::Deref { ptr, .. } = rhs.as_ref() else {
+    let IrExpr::Deref { ptr, .. } = without_implicit_cast(rhs.as_ref()) else {
         panic!("expected deref rhs, got {rhs:?}");
     };
     let IrExpr::IncDec {
@@ -5535,9 +5629,12 @@ fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
     let out_dir = unique_out_dir("clang-real-flashdb-crc32-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("fdb_utils.c");
+    let table_values = repeated_c_u32_initializer(256, "0U");
     fs::write(
         &source_file,
-        "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256];\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n    return crc ^ ~0U;\n}\n",
+        format!(
+            "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256] = {{ {table_values} }};\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {{\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {{\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }}\n    return crc ^ ~0U;\n}}\n"
+        ),
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -5549,19 +5646,23 @@ fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
         lower_function_from_clang_ast_dump_report(&environment, &source_file, "fdb_calc_crc32");
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert_eq!(report.globals.len(), 1);
     let function = report.function_ir.as_ref().expect("function ir");
-    let emitted = emit_rust_from_ir(function).expect("emit rust from real clang-lowered crc32 ir");
+    let emitted = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect("emit rust from real clang-lowered crc32 ir");
     let rust = &emitted.rust;
 
-    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
-    assert!(emitted.route.deprecated);
-    assert_eq!(
-        emitted.route.replacement,
-        Some(CandidateRoute::GenericTypedIr)
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
+    assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32, 0u32"));
+    assert!(
+        rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")
     );
-    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
-    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
-    assert!(!rust.contains("crc32_table"));
+    assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
+    assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
+    assert!(rust.contains("^ (crc >> 8"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-flashdb-crc32-generic", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5635,19 +5736,26 @@ fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert!(report.globals.iter().any(|global| {
+        global.name == "crc32_table"
+            && matches!(global.ty.kind, IrTypeKind::Array { len: Some(256), .. })
+    }));
     let function = report.function_ir.as_ref().expect("function ir");
-    let emitted = emit_rust_from_ir(function).expect("emit rust from real fdb clang-lowered ir");
+    let emitted = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect("emit rust from real fdb clang-lowered ir");
     let rust = &emitted.rust;
 
-    assert_eq!(emitted.route.route, CandidateRoute::DeprecatedLegacyCrc32);
-    assert!(emitted.route.deprecated);
-    assert_eq!(
-        emitted.route.replacement,
-        Some(CandidateRoute::GenericTypedIr)
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
+    assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32, 1996959894u32"));
+    assert!(
+        rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")
     );
-    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
-    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
-    assert!(!rust.contains("crc32_table"));
+    assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
+    assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
+    assert!(rust.contains("^ (crc >> 8"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-real-flashdb-crc32-generic", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -5756,6 +5864,185 @@ fn clang_ast_dump_lowers_global_const_array_subscript_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_records_static_const_integer_array_global_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-global-array-initializer");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_global_table_init.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[4] = { 1U, 2U, 0xEDB88320U, 4U };\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert_eq!(report.globals.len(), 1);
+    let global = &report.globals[0];
+    assert_eq!(global.name, "table");
+    assert!(global.ty.is_const);
+    assert!(matches!(
+        global.ty.kind,
+        IrTypeKind::Array { len: Some(4), .. }
+    ));
+    assert_eq!(
+        global.init,
+        IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_static_const_integer_array_global_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-global-array-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_global_table_emit.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[4] = { 1U, 2U, 0xEDB88320U, 4U };\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect("emit global table from clang typed IR");
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
+    assert!(emitted
+        .rust
+        .contains("const TABLE: [u32; 4] = [1u32, 2u32, 3988292384u32, 4u32];"));
+    assert!(emitted
+        .rust
+        .contains("pub fn read_global_table(idx: u32) -> u32"));
+    assert!(emitted.rust.contains("return TABLE[idx as usize];"));
+    assert!(!emitted.rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("clang_real_global_array_emit", &emitted.rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-incomplete-global-array-init");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_incomplete_global_table_init.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[] = { 1U, 2U, 0xEDB88320U, 4U };\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert_eq!(report.globals.len(), 1);
+    let global = &report.globals[0];
+    assert_eq!(global.name, "table");
+    assert!(matches!(
+        global.ty.kind,
+        IrTypeKind::Array { len: Some(4), .. }
+    ));
+    assert_eq!(
+        global.init,
+        IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-uninitialized-global-array");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_uninitialized_global_table.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[4];\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert!(report.globals.is_empty());
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect_err("uninitialized global table must not be synthesized");
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("index base table is not declared"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_lowers_bitand_array_index_expr_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -5809,7 +6096,10 @@ fn clang_ast_dump_lowers_bitand_array_index_expr_when_enabled() {
             ..
         }
     ));
-    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 255, .. }));
+    assert!(matches!(
+        without_implicit_cast(rhs.as_ref()),
+        IrExpr::LitInt { value: 255, .. }
+    ));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -8065,9 +8355,12 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
     let source_root = unique_out_dir("clang-lowered-rust-draft-source");
     fs::create_dir_all(source_root.join("src")).unwrap();
     fs::create_dir_all(source_root.join("inc")).unwrap();
+    let table_values = repeated_c_u32_initializer(256, "0U");
     fs::write(
         source_root.join("src/fdb_utils.c"),
-        "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256];\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n    return crc ^ ~0U;\n}\n",
+        format!(
+            "#include <stdint.h>\n#include <stddef.h>\nstatic const uint32_t crc32_table[256] = {{ {table_values} }};\nuint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) {{\n    const uint8_t *p;\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n    while (size--) {{\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }}\n    return crc ^ ~0U;\n}}\n"
+        ),
     )
     .unwrap();
     let source_root = source_root.to_string_lossy().replace('\\', "/");
@@ -8111,8 +8404,14 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
     let rust = fs::read_to_string(out_dir.join("l3-real-fdb-calc-crc32-rust-draft.rs")).unwrap();
 
     assert_eq!(manifest.status, "generated");
-    assert!(rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32"));
-    assert!(rust.contains("crc = crc32_update_byte(crc, byte);"));
+    assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32, 0u32"));
+    assert!(
+        rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")
+    );
+    assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
+    assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
+    assert!(rust.contains("^ (crc >> 8"));
+    assert!(!rust.contains("crc32_update_byte"));
     assert!(!rust.contains("return crc;"));
     assert!(plan["plan"]["translation_rule_ids"]
         .as_array()

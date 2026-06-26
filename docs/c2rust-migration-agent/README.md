@@ -1,6 +1,6 @@
 # C2Rust Migration Agent
 
-这里是 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文版本见 `README.en.md`。
+这里是 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
 
 ## 当前状态
 
@@ -27,7 +27,7 @@
 - `build-and-c2rust-baseline.md`：FlashDB build capture、C2Rust baseline 和 C oracle fallback。
 - `agent-contract.md`：OpenCode/Codex runtime contract、phase、IO、subagent、AI policy、async/thread policy。
 - `context-store-and-self-healing.md`：SQLite/JSONL schema、ContextPack、impact set、rustc repair loop、PatchPlan。
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 clang AST -> typed IR -> Rust emitter 架构、核心代码地图和 crc32 generic-emitter 进度。
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 `clang_frontend -> typed IR + globals -> translation_route -> validation` 架构、核心代码地图和 crc32 generic-emitter 进度。
 - `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
 - `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档。
@@ -52,7 +52,7 @@ c2rust-migrator --phase index --change design-c2rust-migration-agent --input req
 - 只在只读任务或不相交写入任务上并行多个 subagent。
 - 先用确定性规则，再使用 AI。
 - AI 输出只能作为候选，不能作为证据。
-- C2Rust 输出只作为 baseline/oracle。
+- C2Rust 输出只作 baseline/oracle。
 - 优先迁移小的、可编译通过的 slice。
 - 用 Rust 测试和 C/Rust differential evidence 证明行为。
 - 跟踪 unsafe，并把比例控制在 10% 以下。
@@ -60,4 +60,4 @@ c2rust-migrator --phase index --change design-c2rust-migration-agent --input req
 
 ## Native Windows 工具说明
 
-当前主机 PATH 缺少 native `c2rust`、`clang`、`cmake`、`bear`、`intercept-build`、`cargo-nextest`、`cargo-llvm-cov`、`cargo-fuzz` 和 `cargo-geiger`。设计仍然有效，但在真实迁移验证能声称完成前，这些 gate 需要 WSL/Linux 或后续工具安装。
+当前主机已有 native LLVM `clang`（默认路径 `C:/Program Files/LLVM/bin/clang.exe`），本轮真实 clang AST smoke 已使用它验证。PATH 仍可能缺少 native `c2rust`、`cmake`、`bear`、`intercept-build`、`cargo-nextest`、`cargo-llvm-cov`、`cargo-fuzz` 和 `cargo-geiger`。设计仍然有效，但这些 gate 需要 WSL/Linux 或后续工具安装后才能声称完整迁移验证完成。

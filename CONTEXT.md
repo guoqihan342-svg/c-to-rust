@@ -5259,3 +5259,86 @@ git diff --check -- docs/c2rust-migration-agent/core-translation-architecture.md
 - 这一步没有删除 crc32 特例，而是把它显式标为 deprecated candidate route。
 - real FlashDB crc32 仍未全程 generic：`static const uint32_t crc32_table[256]` 的 typed IR global-data model 仍是下一刀。
 - candidate route 不是最终验收结论；语义接受仍由 evidence route decision、validation profile 和 differential gates 决定。
+
+## 76. 2026-06-27 readonly global table support and real FlashDB GenericTypedIr route
+
+本轮承接第 75 节 CandidateRoute P0 之后的核心翻译主线：不再让真实 FlashDB crc32 依赖 canned crc32 helper，而是把 `static const uint32_t crc32_table[] = {...}` 作为受限 readonly global facts 接到 generic typed IR emitter。
+
+当前核心链路：
+
+```mermaid
+flowchart TD
+    C["real C source"] --> Clang["clang_frontend.rs<br/>AST dump"]
+    Clang --> FunctionIR["IrFunction"]
+    Clang --> Globals["Vec<IrGlobal><br/>static const integer arrays"]
+    FunctionIR --> Emit["typed_ir.rs<br/>emit_rust_from_ir_with_globals"]
+    Globals --> Emit
+    Emit --> Route["translation_route.rs<br/>CandidateRouteDecision"]
+    Route --> Generic["GenericTypedIr"]
+    Route --> Legacy["DeprecatedLegacyCrc32 fallback"]
+    Route --> Unsupported["Unsupported fail-closed"]
+    Generic --> Rust["Rust draft with const CRC32_TABLE"]
+    Rust --> Smoke["rustc smoke tests"]
+    Smoke --> Validation["validation profile / evidence gates"]
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrGlobal` 和 `IrGlobalInit`。
+  - 新增 `emit_rust_from_ir_with_globals(function, globals)`。
+  - `EmitContext` 现在携带 readonly globals，`IrExpr::Var` 和 `IrExpr::Index` 可以解析 global const array。
+  - generic emitter 能输出 Rust top-level `const CRC32_TABLE: [u32; 256] = [...]`，并生成 `CRC32_TABLE[index as usize]`。
+  - `IrGlobalInit::IntegerArray` 长度必须与数组长度完全匹配；不匹配会 `Unsupported` fail-closed。
+  - `IrGlobalInit::Zeroed` 只用于显式 typed IR 输入，不由 clang 无 initializer 自动合成。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangLoweringReport` 新增 `globals: Vec<IrGlobal>`。
+  - clang AST report 现在同时返回 `function_ir` 和 readonly global facts。
+  - 只收集顶层 `static const` 固定长度整数数组 initializer。
+  - 支持真实 FlashDB 表里的 `ImplicitCastExpr(IntegralCast -> IntegerLiteral)` initializer 元素。
+  - 无 initializer、非 static、非 const、非整数数组、长度不匹配或未知形状不会被合成 global。
+  - 二元表达式 operands 现在保留 `IntegralCast` / `IntegralPromotion`，因此 `0xFF` 这类 C `int` literal 可以按 clang AST 转为 Rust cast，而不是误判为类型不匹配。
+
+- `crates/c2r-translator/src/lib.rs`
+  - `try_translate_slice_with_clang_lowered_ir()` 已把 `report.globals` 传给 `typed_ir::emit_rust_from_ir_with_globals()`。
+  - `clang-lowering-report` feature 下写出的 Rust draft 可以走 global-aware generic emitter。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR global table positive test，断言 route 为 `GenericTypedIr` 且不含 `crc32_update_byte`。
+  - 新增真实 clang AST global capture/emit tests，包括 `static const uint32_t table[4] = {...}` 和 `static const uint32_t table[] = {...}`。
+  - 新增 fail-closed tests：无 initializer 不合成 global；global initializer 长度不匹配拒绝。
+  - `clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled` 已改为 initialized table + `emit_rust_from_ir_with_globals()` + `GenericTypedIr`。
+  - `clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled` 已对真实 FlashDB `src/fdb_utils.c` 断言 `crc32_table` global length 256，并走 `GenericTypedIr`。
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 已断言 artifact Rust draft 使用 `CRC32_TABLE[...]`，不再使用 `crc32_update_byte`。
+
+文档同步：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+
+这些文档已经同步到 `clang_frontend -> typed IR + globals -> translation_route -> validation` 的当前结构，并明确 candidate route 不等于 semantic pass。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_records_static_const_integer_array_global_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_static_const_integer_array_global_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_operands -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::readonly_globals_from_ast_maps_static_const_integer_array_initializer -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --test bounded_translation clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_readonly_global_array_initializer_length_mismatch -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_enabled -- --nocapture
+```
+
+当前边界：
+
+- 真实 FlashDB crc32 的 clang lowering + typed IR + globals + Rust draft 路径已经能走 `GenericTypedIr`，并通过 rustc smoke。
+- 这还不是 semantic acceptance；C/Rust oracle、negative diff、unsafe ledger、validation profile 和 final verification 仍要跑完整证据链。
+- `DeprecatedLegacyCrc32` fallback 仍存在，下一步应缩小并删除 `is_crc32_byte_cursor_ir()` / `emit_crc32_byte_cursor_rust()`，但删除前要确保现有 legacy coverage 不再承担唯一回退。

@@ -1,6 +1,6 @@
 # C2Rust Migration Agent
 
-This folder contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent. The Chinese version is `README.md`.
+This folder contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
 
 ## Current Status
 
@@ -27,7 +27,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `build-and-c2rust-baseline.md`: FlashDB build capture, C2Rust baseline, and C oracle fallback.
 - `agent-contract.md`: OpenCode/Codex runtime contract, phases, IO, subagents, AI policy, async/thread policy.
 - `context-store-and-self-healing.md`: SQLite/JSONL schema, ContextPack, impact sets, rustc repair loop, PatchPlan.
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current clang AST -> typed IR -> Rust emitter architecture, core code map, and crc32 generic-emitter progress.
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, and crc32 generic-emitter progress.
 - `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide.
@@ -60,4 +60,4 @@ c2rust-migrator --phase index --change design-c2rust-migration-agent --input req
 
 ## Native Windows Tool Note
 
-This host currently lacks native `c2rust`, `clang`, `cmake`, `bear`, `intercept-build`, `cargo-nextest`, `cargo-llvm-cov`, `cargo-fuzz`, and `cargo-geiger` on PATH. The design remains valid, but those gates need WSL/Linux or later tool installation before real migration verification can claim completion.
+This host now has native LLVM `clang` at the default path `C:/Program Files/LLVM/bin/clang.exe`, and this slice uses it for real clang AST smoke tests. PATH may still lack native `c2rust`, `cmake`, `bear`, `intercept-build`, `cargo-nextest`, `cargo-llvm-cov`, `cargo-fuzz`, and `cargo-geiger`. The design remains valid, but those gates need WSL/Linux or later tool installation before full migration verification can claim completion.

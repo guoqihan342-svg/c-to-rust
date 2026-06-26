@@ -506,7 +506,9 @@ fn try_translate_slice_with_clang_lowered_ir(spec: &SliceSpec) -> Option<Transla
     let report =
         clang_frontend::lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
     let function_ir = report.function_ir.as_ref()?;
-    let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?.rust;
+    let rust_code = typed_ir::emit_rust_from_ir_with_globals(function_ir, &report.globals)
+        .ok()?
+        .rust;
 
     let mut result = TranslationResult {
         rust_code,

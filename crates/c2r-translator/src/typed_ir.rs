@@ -29,6 +29,20 @@ pub struct IrParam {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IrGlobal {
+    pub name: String,
+    pub ty: IrType,
+    pub init: IrGlobalInit,
+    pub source_span: Option<SourceSpan>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IrGlobalInit {
+    IntegerArray(Vec<u64>),
+    Zeroed,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IrType {
     pub spelled: String,
     pub canonical: String,
@@ -215,6 +229,7 @@ pub struct IrEmitError {
 struct EmitContext {
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
+    readonly_globals: HashMap<String, IrGlobal>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -224,7 +239,10 @@ struct EmittedExpr {
 }
 
 impl EmitContext {
-    fn from_function(function: &IrFunction) -> Self {
+    fn from_function_and_globals(
+        function: &IrFunction,
+        globals: &[IrGlobal],
+    ) -> Result<Self, String> {
         let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
         let mut byte_slice_params = HashSet::new();
         for source in byte_cursor_sources.values() {
@@ -236,10 +254,23 @@ impl EmitContext {
                 byte_slice_params.insert(source.clone());
             }
         }
-        Self {
+        let mut readonly_globals = HashMap::new();
+        for global in globals {
+            if readonly_globals
+                .insert(global.name.clone(), global.clone())
+                .is_some()
+            {
+                return Err(format!(
+                    "global {} duplicates an existing global",
+                    global.name
+                ));
+            }
+        }
+        Ok(Self {
             byte_slice_params,
             byte_cursor_sources,
-        }
+            readonly_globals,
+        })
     }
 
     fn byte_cursor_source(&self, cursor: &str) -> Option<&str> {
@@ -248,6 +279,14 @@ impl EmitContext {
 
     fn is_byte_slice_param(&self, name: &str) -> bool {
         self.byte_slice_params.contains(name)
+    }
+
+    fn readonly_global(&self, name: &str) -> Option<&IrGlobal> {
+        self.readonly_globals.get(name)
+    }
+
+    fn global_rust_name(&self, name: &str) -> Result<String, String> {
+        emit_global_const_identifier(name)
     }
 }
 
@@ -260,6 +299,34 @@ pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitErr
     }
 
     emit_scalar_rust_from_ir(function)
+        .map(|rust| EmittedRust {
+            rust,
+            route: generic_typed_ir_route(),
+        })
+        .map_err(|detail| {
+            let reason = format!(
+                "{} is outside the current typed IR emitter subset: {}",
+                function.name, detail
+            );
+            IrEmitError {
+                route: unsupported_route(reason.clone()),
+                reason,
+            }
+        })
+}
+
+pub fn emit_rust_from_ir_with_globals(
+    function: &IrFunction,
+    globals: &[IrGlobal],
+) -> Result<EmittedRust, IrEmitError> {
+    if globals.is_empty() && is_crc32_byte_cursor_ir(function) {
+        return Ok(EmittedRust {
+            rust: emit_crc32_byte_cursor_rust(&function.name),
+            route: deprecated_legacy_crc32_route(),
+        });
+    }
+
+    emit_scalar_rust_from_ir_with_globals(function, globals)
         .map(|rust| EmittedRust {
             rust,
             route: generic_typed_ir_route(),
@@ -436,11 +503,18 @@ pub fn emit_crc32_byte_cursor_rust(function_name: &str) -> String {
 }
 
 fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
+    emit_scalar_rust_from_ir_with_globals(function, &[])
+}
+
+fn emit_scalar_rust_from_ir_with_globals(
+    function: &IrFunction,
+    globals: &[IrGlobal],
+) -> Result<String, String> {
     let return_type = emit_return_type(&function.return_type)?;
     if return_type.is_some() && !ends_with_return_value(&function.body) {
         return Err("non-void function must end with a return value".to_string());
     }
-    let context = EmitContext::from_function(function);
+    let context = EmitContext::from_function_and_globals(function, globals)?;
     let assigned_vars = collect_assigned_vars(&function.body);
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
@@ -452,6 +526,12 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     let mut symbols = collect_param_symbols(&function.params)?;
 
     let mut rust = String::new();
+    for global in globals {
+        rust.push_str(&emit_global_const(global)?);
+    }
+    if !globals.is_empty() {
+        rust.push('\n');
+    }
     rust.push_str(&format!("pub fn {function_name}({params})"));
     if let Some(return_type) = return_type {
         rust.push_str(&format!(" -> {}", return_type));
@@ -492,6 +572,51 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         return Ok(format!("&[{element_ty}]"));
     }
     emit_scalar_type(ty)
+}
+
+fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
+    let IrTypeKind::Array { element, len } = &global.ty.kind else {
+        return Err(format!(
+            "global {} has non-array type {}",
+            global.name,
+            type_label(&global.ty)
+        ));
+    };
+    if !global.ty.is_const {
+        return Err(format!("global {} is not readonly const", global.name));
+    }
+    let Some(len) = len else {
+        return Err(format!("global {} array length is unknown", global.name));
+    };
+    let element_ty = emit_scalar_type(element)
+        .map_err(|detail| format!("global {} element has {detail}", global.name))?;
+    let values = match &global.init {
+        IrGlobalInit::IntegerArray(values) => {
+            if values.len() != *len {
+                return Err(format!(
+                    "global {} initializer length {} does not match array length {len}",
+                    global.name,
+                    values.len()
+                ));
+            }
+            values
+                .iter()
+                .map(|value| emit_integer_literal(*value, element))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ")
+        }
+        IrGlobalInit::Zeroed => {
+            let zero = emit_integer_literal(0, element)?;
+            return Ok(format!(
+                "const {}: [{element_ty}; {len}] = [{zero}; {len}];\n",
+                emit_global_const_identifier(&global.name)?
+            ));
+        }
+    };
+    Ok(format!(
+        "const {}: [{element_ty}; {len}] = [{values}];\n",
+        emit_global_const_identifier(&global.name)?
+    ))
 }
 
 fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
@@ -555,7 +680,7 @@ fn emit_stmt(
                 emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
             if let Some(init) = init {
                 validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
-                let init = emit_expr(init, symbols)
+                let init = emit_expr(init, symbols, context)
                     .map_err(|detail| format!("decl {name} initializer {detail}"))?;
                 symbols.insert(name.clone());
                 Ok(format!(
@@ -619,7 +744,8 @@ fn emit_stmt(
             None => Err("return without value in non-void function".to_string()),
         },
         IrStmt::Expr { expr, .. } => {
-            let expr = emit_expr(expr, symbols).map_err(|detail| format!("expr {detail}"))?;
+            let expr =
+                emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
         }
         IrStmt::If {
@@ -628,7 +754,7 @@ fn emit_stmt(
             else_body,
             ..
         } => {
-            let condition = emit_condition_expr(condition, symbols)
+            let condition = emit_condition_expr(condition, symbols, context)
                 .map_err(|detail| format!("if condition {detail}"))?;
             let mut block = String::new();
             block.push_str(&format!("{indent}if {condition} {{\n"));
@@ -677,7 +803,7 @@ fn emit_stmt(
             )? {
                 return Ok(block);
             }
-            let condition = emit_condition_expr(condition, symbols)
+            let condition = emit_condition_expr(condition, symbols, context)
                 .map_err(|detail| format!("while condition {detail}"))?;
             let mut loop_symbols = symbols.clone();
             let mut block = String::new();
@@ -780,10 +906,18 @@ fn emit_postfix_decrement_while_loop(
     Ok(Some(block))
 }
 
-fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
+fn emit_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
     match expr {
         IrExpr::LitInt { value, ty, .. } => emit_integer_literal(*value, ty),
         IrExpr::Var { name, ty, .. } => {
+            if let Some(global) = context.readonly_global(name) {
+                validate_global_expr_type(global, ty)?;
+                return context.global_rust_name(name);
+            }
             if !symbols.contains(name) {
                 return Err(format!("var {name} is not declared"));
             }
@@ -795,8 +929,10 @@ fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String>
         } => {
             let op = emit_binary_op(op)?;
             validate_binary_operand_types(op, lhs, rhs, ty)?;
-            let lhs = emit_expr(lhs, symbols).map_err(|detail| format!("binary lhs {detail}"))?;
-            let rhs = emit_expr(rhs, symbols).map_err(|detail| format!("binary rhs {detail}"))?;
+            let lhs = emit_expr(lhs, symbols, context)
+                .map_err(|detail| format!("binary lhs {detail}"))?;
+            let rhs = emit_expr(rhs, symbols, context)
+                .map_err(|detail| format!("binary rhs {detail}"))?;
             Ok(format!("({lhs} {op} {rhs})"))
         }
         IrExpr::Unary {
@@ -804,7 +940,7 @@ fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String>
         } => match op {
             IrUnOp::BitNot => {
                 validate_expr_matches_type(operand, ty, "bitnot operand")?;
-                let operand = emit_expr(operand, symbols)
+                let operand = emit_expr(operand, symbols, context)
                     .map_err(|detail| format!("bitnot operand {detail}"))?;
                 Ok(format!("!{operand}"))
             }
@@ -824,12 +960,13 @@ fn emit_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String>
             }
             let target =
                 emit_scalar_type(target).map_err(|detail| format!("cast target has {detail}"))?;
-            let expr = emit_expr(expr, symbols).map_err(|detail| format!("cast expr {detail}"))?;
+            let expr = emit_expr(expr, symbols, context)
+                .map_err(|detail| format!("cast expr {detail}"))?;
             Ok(format!("({expr} as {target})"))
         }
         IrExpr::Index {
             base, index, ty, ..
-        } => emit_index_expr(base, index, ty, symbols),
+        } => emit_index_expr(base, index, ty, symbols, context),
         IrExpr::Call { callee, .. } => Err(format!("call expression {callee} is unsupported")),
         IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
         IrExpr::Deref { .. } => Err("deref expression is unsupported".to_string()),
@@ -912,7 +1049,7 @@ fn emit_expr_with_prelude(
                 indent_level,
                 &format!("{path} index operand"),
             )?;
-            let expr = emit_index_expr_with_emitted_index(base, &index.expr, ty, symbols)
+            let expr = emit_index_expr_with_emitted_index(base, &index.expr, ty, symbols, context)
                 .map_err(|detail| format!("{path} {detail}"))?;
             Ok(EmittedExpr {
                 prelude: index.prelude,
@@ -924,7 +1061,7 @@ fn emit_expr_with_prelude(
         }
         _ => Ok(EmittedExpr {
             prelude: String::new(),
-            expr: emit_expr(expr, symbols).map_err(|detail| format!("{path} {detail}"))?,
+            expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,
         }),
     }
 }
@@ -1011,6 +1148,7 @@ fn emit_index_expr(
     index: &IrExpr,
     ty: &IrType,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let IrExpr::Var {
         name: base_name,
@@ -1020,15 +1158,24 @@ fn emit_index_expr(
     else {
         return Err("index base must be Var".to_string());
     };
-    if !symbols.contains(base_name) {
-        return Err(format!("index base {base_name} is not declared"));
-    }
-    let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
-        format!(
-            "index base {base_name} has unsupported type {}",
-            type_label(base_ty)
+    let (element_ty, emitted_base) = if let Some(global) = context.readonly_global(base_name) {
+        validate_global_expr_type(global, base_ty)?;
+        (
+            readonly_global_array_element_type(global)?,
+            context.global_rust_name(base_name)?,
         )
-    })?;
+    } else {
+        if !symbols.contains(base_name) {
+            return Err(format!("index base {base_name} is not declared"));
+        }
+        let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
+            format!(
+                "index base {base_name} has unsupported type {}",
+                type_label(base_ty)
+            )
+        })?;
+        (element_ty, emit_identifier(base_name, "index base")?)
+    };
     let element_ty =
         emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
     let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
@@ -1045,9 +1192,9 @@ fn emit_index_expr(
             type_label(index_ty)
         ));
     }
-    let base_name = emit_identifier(base_name, "index base")?;
-    let index = emit_expr(index, symbols).map_err(|detail| format!("index operand {detail}"))?;
-    Ok(format!("{base_name}[{index} as usize]"))
+    let index =
+        emit_expr(index, symbols, context).map_err(|detail| format!("index operand {detail}"))?;
+    Ok(format!("{emitted_base}[{index} as usize]"))
 }
 
 fn emit_index_expr_with_emitted_index(
@@ -1055,6 +1202,7 @@ fn emit_index_expr_with_emitted_index(
     emitted_index: &str,
     ty: &IrType,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let IrExpr::Var {
         name: base_name,
@@ -1064,15 +1212,24 @@ fn emit_index_expr_with_emitted_index(
     else {
         return Err("index base must be Var".to_string());
     };
-    if !symbols.contains(base_name) {
-        return Err(format!("index base {base_name} is not declared"));
-    }
-    let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
-        format!(
-            "index base {base_name} has unsupported type {}",
-            type_label(base_ty)
+    let (element_ty, emitted_base) = if let Some(global) = context.readonly_global(base_name) {
+        validate_global_expr_type(global, base_ty)?;
+        (
+            readonly_global_array_element_type(global)?,
+            context.global_rust_name(base_name)?,
         )
-    })?;
+    } else {
+        if !symbols.contains(base_name) {
+            return Err(format!("index base {base_name} is not declared"));
+        }
+        let element_ty = readonly_pointer_slice_element_type(base_ty).ok_or_else(|| {
+            format!(
+                "index base {base_name} has unsupported type {}",
+                type_label(base_ty)
+            )
+        })?;
+        (element_ty, emit_identifier(base_name, "index base")?)
+    };
     let element_ty =
         emit_scalar_type(element_ty).map_err(|detail| format!("index element has {detail}"))?;
     let result_ty = emit_scalar_type(ty).map_err(|detail| format!("index result has {detail}"))?;
@@ -1081,8 +1238,7 @@ fn emit_index_expr_with_emitted_index(
             "index result type {result_ty} does not match element type {element_ty}"
         ));
     }
-    let base_name = emit_identifier(base_name, "index base")?;
-    Ok(format!("{base_name}[{emitted_index} as usize]"))
+    Ok(format!("{emitted_base}[{emitted_index} as usize]"))
 }
 
 fn is_byte_cursor_cast_assignment(
@@ -1318,23 +1474,27 @@ fn validate_expr_matches_type(
     }
 }
 
-fn emit_condition_expr(expr: &IrExpr, symbols: &HashSet<String>) -> Result<String, String> {
+fn emit_condition_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
     if let IrExpr::Binary {
         op, lhs, rhs, ty, ..
     } = expr
     {
         if let Ok(op) = emit_comparison_op(op) {
             validate_comparison_condition_types(lhs, rhs, ty, op)?;
-            let lhs =
-                emit_expr(lhs, symbols).map_err(|detail| format!("comparison lhs {detail}"))?;
-            let rhs =
-                emit_expr(rhs, symbols).map_err(|detail| format!("comparison rhs {detail}"))?;
+            let lhs = emit_expr(lhs, symbols, context)
+                .map_err(|detail| format!("comparison lhs {detail}"))?;
+            let rhs = emit_expr(rhs, symbols, context)
+                .map_err(|detail| format!("comparison rhs {detail}"))?;
             return Ok(format!("({lhs} {op} {rhs})"));
         }
     }
     let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
     let zero = zero_literal_for_type(ty)?;
-    let expr = emit_expr(expr, symbols)?;
+    let expr = emit_expr(expr, symbols, context)?;
     Ok(format!("{expr} != {zero}"))
 }
 
@@ -1672,6 +1832,43 @@ fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
     }
 }
 
+fn readonly_global_array_element_type(global: &IrGlobal) -> Result<&IrType, String> {
+    let IrTypeKind::Array { element, len } = &global.ty.kind else {
+        return Err(format!(
+            "global {} has unsupported type {}",
+            global.name,
+            type_label(&global.ty)
+        ));
+    };
+    if !global.ty.is_const {
+        return Err(format!("global {} is not readonly const", global.name));
+    }
+    if len.is_none() {
+        return Err(format!("global {} array length is unknown", global.name));
+    }
+    if !is_integer_type(element) {
+        return Err(format!(
+            "global {} element type {} is unsupported",
+            global.name,
+            type_label(element)
+        ));
+    }
+    Ok(element.as_ref())
+}
+
+fn validate_global_expr_type(global: &IrGlobal, ty: &IrType) -> Result<(), String> {
+    if &global.ty == ty {
+        Ok(())
+    } else {
+        Err(format!(
+            "global {} type {} does not match expression type {}",
+            global.name,
+            type_label(&global.ty),
+            type_label(ty)
+        ))
+    }
+}
+
 fn is_c_int_type(ty: &IrType) -> bool {
     matches!(
         ty.kind,
@@ -1715,6 +1912,34 @@ fn emit_identifier(name: &str, context: &str) -> Result<String, String> {
     } else {
         Err(format!("{context} identifier {name:?} is unsupported"))
     }
+}
+
+fn emit_global_const_identifier(name: &str) -> Result<String, String> {
+    let mut output = String::new();
+    let mut previous_was_underscore = false;
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            output.push(character.to_ascii_uppercase());
+            previous_was_underscore = false;
+        } else if character == '_' && !previous_was_underscore {
+            output.push('_');
+            previous_was_underscore = true;
+        } else {
+            return Err(format!("global identifier {name:?} is unsupported"));
+        }
+    }
+    while output.ends_with('_') {
+        output.pop();
+    }
+    if output.is_empty()
+        || output
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+    {
+        return Err(format!("global identifier {name:?} is unsupported"));
+    }
+    Ok(output)
 }
 
 fn is_rust_identifier(name: &str) -> bool {
