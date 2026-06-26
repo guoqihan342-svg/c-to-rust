@@ -132,6 +132,10 @@ pub enum ClangStmtSkeleton {
         ty: ClangTypeSkeleton,
         init: Option<ClangExprSkeleton>,
     },
+    Assign {
+        target: ClangExprSkeleton,
+        value: ClangExprSkeleton,
+    },
     Return {
         value: Option<ClangExprSkeleton>,
     },
@@ -157,6 +161,11 @@ pub enum ClangExprSkeleton {
         lhs: Box<ClangExprSkeleton>,
         rhs: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
+    },
+    Cast {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+        implicit: bool,
     },
     Unsupported {
         node: String,
@@ -597,6 +606,9 @@ fn param_skeleton_from_ast(param: &Value) -> Result<ClangParamSkeleton, ClangFro
 fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     match string_field(stmt, "kind").as_deref() {
         Some("DeclStmt") => decl_stmt_skeleton_from_ast(stmt),
+        Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
+            assign_stmt_skeleton_from_ast(stmt)
+        }
         Some("ReturnStmt") => {
             let value = inner(stmt)
                 .first()
@@ -612,6 +624,22 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
             message: "clang statement node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let children = inner(stmt);
+    let [target, value] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_assignment_operator".to_string(),
+            message: "assignment BinaryOperator must have two operands".to_string(),
+        });
+    };
+
+    Ok(ClangStmtSkeleton::Assign {
+        target: expr_skeleton_from_ast(target)?,
+        value: expr_skeleton_from_ast(value)?,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -731,6 +759,30 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 lhs: Box::new(expr_skeleton_from_ast(lhs)?),
                 rhs: Box::new(expr_skeleton_from_ast(rhs)?),
                 ty: expr_type(expr)?,
+            })
+        }
+        Some("CStyleCastExpr") => {
+            if string_field(expr, "castKind").as_deref() != Some("BitCast") {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "CStyleCastExpr".to_string(),
+                    reason: match string_field(expr, "castKind") {
+                        Some(cast_kind) => format!(
+                            "castKind {cast_kind} is outside the current clang lowering skeleton"
+                        ),
+                        None => "missing castKind is outside the current clang lowering skeleton"
+                            .to_string(),
+                    },
+                });
+            }
+            let target = expr_type(expr)?;
+            let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                kind: "invalid_cast_expr".to_string(),
+                message: "CStyleCastExpr is missing operand".to_string(),
+            })?;
+            Ok(ClangExprSkeleton::Cast {
+                target,
+                expr: Box::new(expr_skeleton_from_ast(operand)?),
+                implicit: false,
             })
         }
         Some(kind) => Ok(ClangExprSkeleton::Unsupported {
@@ -891,6 +943,11 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             init: init.as_ref().map(lower_expr).transpose()?,
             source_span: None,
         }),
+        ClangStmtSkeleton::Assign { target, value } => Ok(IrStmt::Assign {
+            target: lower_expr(target)?,
+            value: lower_expr(value)?,
+            source_span: None,
+        }),
         ClangStmtSkeleton::Return { value } => Ok(IrStmt::Return {
             value: value.as_ref().map(lower_expr).transpose()?,
             source_span: None,
@@ -925,6 +982,16 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             lhs: Box::new(lower_expr(lhs)?),
             rhs: Box::new(lower_expr(rhs)?),
             ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } => Ok(IrExpr::Cast {
+            target: lower_type(target)?,
+            expr: Box::new(lower_expr(expr)?),
+            implicit: *implicit,
             source_span: None,
         }),
         ClangExprSkeleton::Unsupported { node, reason } => Err(ClangFrontendError {

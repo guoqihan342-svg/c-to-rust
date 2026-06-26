@@ -3763,3 +3763,94 @@ python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_r
 2. 同时补 `CStyleCastExpr(BitCast)` 和 `DeclRefExpr` RHS 的最小表达式 lowering。
 3. 继续保持 diagnostic-only report 边界，下一步目标只是把 real-fdb blocker 推进到
    `crc = crc ^ ~0U;` 或 `WhileStmt`，不是一次性 lower 完整 CRC32。
+
+## 54. 2026-06-26 clang assignment and BitCast lowering
+
+本轮承接第 53 节的真实 blocker：只为 clang AST lowering report 增加最小 assignment
+和 `CStyleCastExpr(BitCast)` 支持，让 real-fdb `fdb_calc_crc32` 从
+`p = (const uint8_t *)buf;` 推进到 `crc = crc ^ ~0U;` 的表达式层。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `Assign { target, value }`。
+  - `ClangExprSkeleton` 新增 `Cast { target, expr, implicit }`。
+  - `stmt_skeleton_from_ast()` 现在仅把 statement-level `BinaryOperator opcode "="`
+    识别为 assignment；其他 statement-level binary op 仍走 unsupported。
+  - `assign_stmt_skeleton_from_ast()` 要求 assignment 有且仅有两个 operand。
+  - `expr_skeleton_from_ast()` 现在支持 `CStyleCastExpr`，但仅接受
+    `castKind == "BitCast"`；`IntegralCast` 等其他 castKind 仍 unsupported。
+  - `lower_stmt()` 能把 `Assign` lower 成 `IrStmt::Assign`。
+  - `lower_expr()` 能把显式 cast lower 成 `IrExpr::Cast { implicit=false }`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_pointer_cast_assignment`，验证 skeleton 层
+    `p = (const uint8_t *)buf` 会变成 `IrStmt::Assign` + 显式 `IrExpr::Cast`。
+  - 将真实 clang assignment smoke 从只检查 unsupported opcode 改为
+    `clang_ast_dump_lowers_assignment_statement_when_enabled`，验证 `crc = crc;` 能 lower。
+  - 新增 `clang_ast_dump_lowers_pointer_cast_assignment_when_enabled`，验证真实 clang
+    的 `p = (const uint8_t *)buf;` 形状能 lower。
+  - 新增 `clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled`，确认
+    `CStyleCastExpr castKind="IntegralCast"` 仍 fail-closed。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_pointer_cast_assignment` 先失败在
+  `ClangStmtSkeleton::Assign` 和 `ClangExprSkeleton::Cast` 不存在。
+- 绿灯 1：新增 `Assign`/`Cast` skeleton、assignment parser、`CStyleCastExpr` parser
+  和 lowering 后，skeleton 与真实 clang assignment/cast smoke 均通过。
+- 红灯 2：`clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled` 先失败，
+  因为当前实现会把 `IntegralCast` 错误 lower 为成功。
+- 绿灯 2：`CStyleCastExpr` 分支增加 `castKind == "BitCast"` 检查，非 BitCast
+  返回 unsupported。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 53 节末尾：
+  `unsupported_clang_stmt: BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: BinaryOperator: opcode ^ is outside the current skeleton`。
+- 这对应 `fdb_utils.c` 中 `crc = crc ^ ~0U;` 的 RHS 表达式层。
+
+本轮并行只读审查结论：
+- Carson：采样真实 `p = (const uint8_t *)buf;` AST，确认形状为
+  `BinaryOperator("=") -> DeclRefExpr(p) + CStyleCastExpr(BitCast) -> ImplicitCastExpr -> DeclRefExpr(buf)`。
+  同时指出必须检查 `castKind == "BitCast"`，否则会误收 `IntegralCast`。本轮已采纳。
+- McClintock：确认当前 lower 出的 `IrStmt::Assign { target: Var(p), value: Cast(target=u8*, expr=Var(buf), implicit=false) }`
+  能匹配 `matches_pointer_cast_assignment()`；但完整 `is_crc32_byte_cursor_ir()` gate
+  仍要求 5 条固定语句、固定参数名和后续 while/table/bit-op 形状，不能把本轮理解为完整 clang CRC32 通路打通。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_pointer_cast_assignment -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_assignment_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_pointer_cast_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused assignment/cast tests：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`60 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode ^ is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明和 `p = (const uint8_t *)buf;` assignment。
+- 当前真实 blocker 是 `crc = crc ^ ~0U;` 的 RHS：`BinaryOperator opcode "^"`。
+- `~0U` 的 `UnaryOperator`、`^`/`&`/`>>`、`while(size--)`、`*p++`、`crc32_table[...]`
+  仍未纳入 clang AST lowering subset。
+- 完整 CRC32 Rust 生成仍主要来自字符串 recognizer 构造的 hard-coded typed IR，
+  不是完整 clang AST lowering 已能驱动 emitter。
+
+下一步建议：
+1. 为 `crc = crc ^ ~0U;` 做最小表达式 lowering：`BinaryOperator("^")` 和
+   `UnaryOperator("~")` + unsigned zero literal。
+2. 补对应 fail-closed 负例，避免一次性放开其他 cast/位运算/复杂表达式。
+3. 继续用 real-fdb 临时 out-root report 验证 blocker 推进，下一层预期是
+   `WhileStmt` 或 loop condition 的 postfix decrement。

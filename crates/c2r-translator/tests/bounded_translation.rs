@@ -955,6 +955,111 @@ fn clang_lowering_skeleton_maps_const_uint8_pointer_decl() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_pointer_cast_assignment() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let const_void_ty = ClangTypeSkeleton {
+        spelled: "const void".to_string(),
+        canonical: "void".to_string(),
+        kind: ClangTypeKind::Void,
+    };
+    let const_void_ptr_ty = ClangTypeSkeleton {
+        spelled: "const void *".to_string(),
+        canonical: "void *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_void_ty),
+        },
+    };
+    let const_uint8_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let const_uint8_ptr_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t *".to_string(),
+        canonical: "uint8_t *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_uint8_ty),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_assign_ptr".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "crc".to_string(),
+                ty: uint32_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "buf".to_string(),
+                ty: const_void_ptr_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "p".to_string(),
+                ty: const_uint8_ptr_ty.clone(),
+                init: None,
+            },
+            ClangStmtSkeleton::Assign {
+                target: ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: const_uint8_ptr_ty.clone(),
+                },
+                value: ClangExprSkeleton::Cast {
+                    target: const_uint8_ptr_ty,
+                    expr: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "buf".to_string(),
+                        ty: const_void_ptr_ty,
+                    }),
+                    implicit: false,
+                },
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty,
+                }),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower pointer cast assignment");
+
+    let [IrStmt::Decl { .. }, IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] =
+        ir.body.as_slice()
+    else {
+        panic!(
+            "expected declaration, pointer cast assignment, return; got {:?}",
+            ir.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "p"));
+    match value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert!(matches!(target.kind, IrTypeKind::Pointer { .. }));
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "buf"));
+        }
+        other => panic!("expected explicit cast value, got {other:?}"),
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_report_records_unavailable_without_clang_path() {
     let environment = std::collections::BTreeMap::new();
 
@@ -1321,7 +1426,7 @@ fn clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_reports_assignment_opcode_statement_when_enabled() {
+fn clang_ast_dump_lowers_assignment_statement_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -1350,16 +1455,117 @@ fn clang_ast_dump_reports_assignment_opcode_statement_when_enabled() {
     let report =
         lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_assign");
 
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "crc"));
+    assert!(matches!(value, IrExpr::Var { name, .. } if name == "crc"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_pointer_cast_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-pointer-cast-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_assign_ptr.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_assign_ptr(uint32_t crc, const void *buf) { const uint8_t *p; p = (const uint8_t *)buf; return crc; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_assign_ptr");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { name, init, .. }, IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected declaration, pointer cast assignment, return; got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "p");
+    assert!(init.is_none());
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "p"));
+    match value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert!(matches!(target.kind, IrTypeKind::Pointer { .. }));
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "buf"));
+        }
+        other => panic!("expected explicit cast value, got {other:?}"),
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-integral-cast");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("narrow.c");
+    fs::write(
+        &source_file,
+        "unsigned int narrow(unsigned long value) { return (unsigned int)value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "narrow");
+
     assert_eq!(report.status, "unsupported", "{:?}", report.errors);
     assert_eq!(
         report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_stmt")
+        Some("unsupported_clang_expr")
     );
     assert!(
         report
             .errors
             .first()
-            .map(|error| error.message.contains("BinaryOperator opcode ="))
+            .map(|error| error.message.contains("castKind IntegralCast"))
             .unwrap_or(false),
         "{:?}",
         report.errors
