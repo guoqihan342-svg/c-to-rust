@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-    "sha256": "248b5eb77851fc8944c9ec5423df5cf939f7c1967ce003619cffedfad164c90f",
+    "sha256": "70c3bcef167c436abcd0eb7512a65da5097628ab06ad28a3fe748936a7ff501a",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",

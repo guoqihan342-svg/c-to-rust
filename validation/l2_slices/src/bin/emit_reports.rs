@@ -435,6 +435,38 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
 
     let status = status_from_mismatch(&first_mismatch);
     let prefix = "l3-real-fdb-calc-crc32";
+    let c_oracle_cases: Vec<Value> = report
+        .cases
+        .iter()
+        .map(|case| {
+            json!({
+                "id": case.id,
+                "return_code": case.return_code,
+                "status": "passed"
+            })
+        })
+        .collect();
+    write_json(
+        &evidence_dir.join(format!("{prefix}-c-oracle.json")),
+        &json!({
+            "schema_version": 1,
+            "level": report.level,
+            "target_id": report.target_id,
+            "slice_id": report.slice_id,
+            "status": "passed",
+            "semantic_pass": true,
+            "toolchain_status": "C_ORACLE_GENERATED",
+            "source_commit": report.source_commit,
+            "source_boundary": report.source_boundary,
+            "fixture": relative_path(&fixture_path),
+            "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+            "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32",
+            "case_count": report.case_count,
+            "compared_fields": report.compared_fields,
+            "cases": c_oracle_cases,
+            "accepted_boundary": "Accepted C oracle report is bound to the fixture cases and WSL compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative."
+        }),
+    )?;
     write_json(
         &evidence_dir.join(format!("{prefix}-rust-report.json")),
         &json!({

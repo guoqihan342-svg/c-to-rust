@@ -30,9 +30,29 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
 
         evidence_dir = REPO_ROOT / "validation" / "evidence" / "flashdb"
         prefix = "l3-real-fdb-calc-crc32"
+        c_oracle = self._load(evidence_dir / f"{prefix}-c-oracle.json")
         rust_report = self._load(evidence_dir / f"{prefix}-rust-report.json")
         diff = self._load(evidence_dir / f"{prefix}-diff.json")
         negative_diff = self._load(evidence_dir / f"{prefix}-negative-diff.json")
+
+        self.assertEqual(c_oracle["target_id"], "flashdb")
+        self.assertEqual(c_oracle["slice_id"], "real-fdb-calc-crc32")
+        self.assertEqual(c_oracle["status"], "passed")
+        self.assertTrue(c_oracle["semantic_pass"])
+        self.assertEqual(c_oracle["toolchain_status"], "C_ORACLE_GENERATED")
+        self.assertEqual(c_oracle["case_count"], 2)
+        self.assertEqual(
+            c_oracle["generator"],
+            "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32",
+        )
+        self.assertEqual(
+            c_oracle["command"],
+            "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+        )
+        self.assertEqual(
+            [case["return_code"] for case in c_oracle["cases"]],
+            [0, 3421780262],
+        )
 
         self.assertEqual(rust_report["target_id"], "flashdb")
         self.assertEqual(rust_report["slice_id"], "real-fdb-calc-crc32")

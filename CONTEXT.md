@@ -2306,3 +2306,67 @@ git diff --check -- validation/evidence/flashdb/auto-translation/real-fdb-calc-c
    `size--` 和 `crc32_table[...]`；当前 semantic pass 不代表 translator 已支持这些语法。
 3. 提交时只 stage real-fdb evidence/spec/tool/test/CONTEXT 这一组；旧 demo/l2/libuv evidence
    仍有换行/生成噪声，继续不要带入提交。
+
+## 37. 2026-06-26 real-fdb accepted C oracle root report generation
+
+本轮承接第 36 节的第一条下一步，把 root accepted C oracle 从手工 JSON 推进为
+`emit_reports` 可重复生成的 report，同时不改变 semantic boundary：语义通过仍绑定到 accepted
+C oracle / Rust report / diff / negative diff / unsafe evidence；generated Rust draft 仍是候选，
+translator route 仍为 `L4/refused`。
+
+核心改动：
+- `validation/l2_slices/src/bin/emit_reports.rs`
+  - `emit_real_fdb_calc_crc32()` 现在会同时生成：
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json`
+  - root C oracle 新增 `generator` 和 `command` provenance：
+    - `validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32`
+    - `cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports`
+  - root C oracle 仍保留 `toolchain_status=C_ORACLE_GENERATED`、`semantic_pass=true`、
+    `status=passed` 和两个 fixture case 的 `return_code`。
+- `validation/tools/test_real_fdb_calc_crc32_l3_evidence.py`
+  - 同一个 `emit_reports` 回归测试现在会读取 root C oracle，并断言 target/slice/status、
+    `semantic_pass`、`toolchain_status`、`generator`、`command` 和两个 return code。
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - accepted evidence binding 中 root C oracle 的 sha256 更新为
+    `70c3bcef167c436abcd0eb7512a65da5097628ab06ad28a3fe748936a7ff501a`。
+  - auto manifest 仍为 `status=accepted_evidence_bound`，validator 仍报告 `semantic_pass=true`。
+
+TDD 红绿过程：
+- 红灯：
+  `KeyError: 'generator'`
+- 绿灯：
+  `python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates`
+  通过。
+
+本轮并行只读审查结论：
+- Franklin：确认 root `c-oracle/rust-report/diff/negative-diff` 现在都由
+  `emit_real_fdb_calc_crc32()` 生成；建议后续如需继续增强，可把 `fixture_sha256`、
+  `source_file_hashes`、`source_span_sha256`、`crc32_table` global dependency、
+  harness/compile provenance 作为非循环 provenance 对象加入 root C oracle。
+- Epicurus：确认 translator 路线仍 blocked/refused，关键表面积是 `const uint8_t *p`、
+  `const void*` 到 byte buffer、`while (size--)`、`*p++`、`crc32_table[...]`
+  和全局表内容输入。该方向应作为独立 translator capability change 处理，不应混入本轮 evidence
+  生成化提交。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+下一步建议：
+1. 若继续增强 accepted C oracle provenance，按 Franklin 建议补非循环 provenance 字段，并继续用
+   `emit_reports` 单测先红后绿。
+2. 若转向 translator，要先做一个窄的 byte-cursor CRC loop capability change，不要泛化到完整 C
+   pointer side-effect 表达式。
+3. 提交时继续只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
+   `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。

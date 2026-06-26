@@ -4,7 +4,7 @@
     "sha256": "b7d025fadee6eb13b86364ef632b7b17659fa91cea2eb5053c55d3ec298cc392",
     "status": "skipped"
   },
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-43uj_4wh F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-t08p2jkf F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
   "error_count": 0,
   "errors": [],
   "external_callee_context": {
@@ -17,7 +17,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "beea7ffcf3212378e2254ce145de533012118bd31102661137da96aa13a7b07b",
+    "sha256": "c779684fa1b9baa56ba3ee74f5ddeb98487272c5c4b1c4d2312517140f1eb11b",
     "status": "refused"
   },
   "schema_version": 1,
