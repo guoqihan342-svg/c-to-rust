@@ -2581,3 +2581,80 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
    `++/--` value semantics。
 3. 提交时只 stage `crates/c2r-translator/*`、`validation/tools/auto_migrate.py`、
    `validation/tools/test_auto_migrate.py` 和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 41. 2026-06-26 real-fdb generated Rust replay gate
+
+本轮承接第 40 节第一条下一步，但只推进 generated draft semantic pass 的第一块：
+让 real-fdb `fdb_calc_crc32` generated Rust draft 执行 fixture replay，并把 auto evidence 下的
+Rust report 从 draft/incomplete 推到 `passed` 或 `failed`。这仍不是 full semantic pass：
+`semantic_pass=false`、`generated_draft_semantic_pass=false` 继续保持，C oracle、schema diff、
+negative diff、unsafe、final verification gates 仍未完成。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `generate_rust_replay_test_draft()` 现在对 `return_code` fixture case 生成真实调用：
+    `let actual = fdb_calc_crc32(case.crc, case.buf, case.size);`
+    并断言 `actual == case.return_code`，删除旧的 TODO/panic draft-only 逻辑。
+  - 新增 `run_generated_rust_replay()`：
+    - 只在 `rust_check.status == "passed"` 且 plan 含 `crc32-byte-cursor-loop` 时执行。
+    - 在临时目录拼接 generated `rust-draft.rs` 与 replay test，用 `rustc --test` 编译并运行。
+    - 把结果写回 `l3-*-test-translation-generated.json`：
+      `status=passed/failed`、`generated_draft_replay_pass=true/false`、
+      `generated_draft_semantic_pass=false`、`replay_execution` 日志引用。
+  - 非 accepted 分支的 `write_l3_candidate_supporting_evidence()` 现在会消费 replay 结果：
+    - replay 通过时 `l3-*-rust-report.json.status=passed`
+    - replay 失败时 `status=failed`
+    - 两种情况都保持 `semantic_pass=false`
+    - `diff.status` 仍为 `incomplete`，但 `required_inputs.rust_report_actual_status`
+      会记录 `passed` 或 `failed`。
+  - 新增 `generated_rust_report_cases()`，让 generated Rust report 带上与 root rust-report
+    对齐的 fixture `cases[]`。
+- `validation/tools/test_auto_migrate.py`
+  - 更新 replay draft 单测：现在期望真实 API call，而不是 TODO/panic。
+  - 新增正例 `test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture`。
+  - 新增负例 `test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic`：
+    临时篡改第二个 fixture `return_code`，要求 replay/rust-report failed，且 manifest 仍不 claim semantic pass。
+
+TDD 红绿过程：
+- 红灯：
+  - replay draft 仍缺 `fdb_calc_crc32(case.crc, case.buf, case.size)` 调用。
+  - real-fdb generated replay 正例初始只有 TODO/panic，不能写 `status=passed`。
+  - 负例初始缺 `cases[]`，且 replay 失败仍写 `rust-report.status=incomplete`。
+- 绿灯：
+  - 删除旧 panic、加入 generated replay runner 和 Rust report 状态消费后，三条目标测试通过。
+
+本轮并行只读审查结论：
+- Avicenna：建议最小路径是临时 Rust runner 调用 generated draft，写 auto-translation 下的
+  rust-report，同时只声明 `generated_draft_replay_pass=true`，不要复用 accepted evidence 语义。
+- Carver：确认 full generated semantic pass 还需要非 L4 generated path、profile/manifest/final、
+  draft binding refs、schema diff/negative diff/unsafe/final gates 同步；本轮不应只改 boolean 直接 claim。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_rust_replay_draft_enumerates_bound_fixture_cases_without_semantic_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+```
+
+完整结果：
+- `validation.tools.test_auto_migrate`：`Ran 41 tests ... OK`。
+- 相关 Python 回归：`Ran 94 tests ... OK`。
+- 临时 candidate-only auto_migrate：`status=candidate_generated`、route `L1`、
+  `rust_check=passed`、`generated_draft_replay_pass=true`、`semantic_pass=false`。
+- 当前仓库 accepted evidence validator 仍为 `semantic_pass=true`。
+
+当前核心翻译功能状态：
+- generated Rust draft 已经不只是 compile pass；它还能跑 real-fdb fixture replay，并生成 passed Rust report。
+- full generated draft semantic pass 仍未完成，因为 C oracle、schema diff、negative diff、unsafe、
+  final verification 还没有绑定到 exact generated draft。
+- accepted evidence authoritative 路径未改变，仍是当前仓库 `--require-semantic-pass` 的语义通过来源。
+
+下一步建议：
+1. 给 generated candidate 增加 schema diff gate：当 C oracle 可用且 generated Rust report passed 时，
+   比较 C oracle 与 generated Rust report 的 `return_code` cases，但仍不要复用 root accepted diff。
+2. 然后补 negative diff 和 final verification，使 generated path 最终能独立进入
+   `generated_draft_semantic_pass=true`。
+3. 提交时只 stage `validation/tools/auto_migrate.py`、`validation/tools/test_auto_migrate.py`
+   和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。

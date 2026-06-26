@@ -338,19 +338,17 @@ class AutoMigrateTests(unittest.TestCase):
                 'assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);',
                 replay_draft,
             )
-            self.assertIn("TODO: call generated Rust API and compare actual return_code", replay_draft)
-            self.assertIn(
-                'panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");',
-                replay_draft,
-            )
-            self.assertNotIn("fdb_calc_crc32(", replay_draft)
+            self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
+            self.assertIn("assert_eq!(actual, case.return_code", replay_draft)
+            self.assertNotIn("TODO: call generated Rust API", replay_draft)
+            self.assertNotIn("draft only: generated Rust API assertions are not bound", replay_draft)
             self.assertEqual(test_translation["status"], "recorded")
             self.assertFalse(test_translation["generated_draft_semantic_pass"])
             self.assertEqual(
                 test_translation["source_test_inputs"]["fixtures"][0]["operation_count"],
                 2,
             )
-            self.assertEqual(test_translation["translation_mappings"][0]["status"], "gap")
+            self.assertEqual(test_translation["translation_mappings"][0]["status"], "mapped")
 
     def test_compile_success_records_harness_execution_without_oracle_claim(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -2923,6 +2921,128 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertNotIn("*p++", draft)
             self.assertNotIn("crc32_table", draft)
             self.assertEqual(rust_check["status"], "passed")
+
+    def test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-rust-report.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-real-fdb-calc-crc32-diff.json").read_text(encoding="utf-8"))
+            replay_draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-replay-test-draft.rs").read_text(
+                encoding="utf-8"
+            )
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
+            self.assertEqual(test_translation["status"], "passed")
+            self.assertEqual(test_translation["replay_execution"]["status"], "passed")
+            self.assertTrue(test_translation["generated_draft_replay_pass"])
+            self.assertFalse(test_translation["generated_draft_semantic_pass"])
+            self.assertEqual(rust_report["status"], "passed")
+            self.assertFalse(rust_report["semantic_pass"])
+            self.assertTrue(rust_report["generated_draft_replay_pass"])
+            self.assertEqual(rust_report["case_count"], 2)
+            self.assertEqual(rust_report["cases"][0]["id"], "empty-crc-zero")
+            self.assertEqual(rust_report["cases"][1]["return_code"], 3421780262)
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "passed")
+
+    def test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture = json.loads(
+                (REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            fixture["cases"][1]["return_code"] = 1
+            fixture_path = tmp_path / "real-fdb-calc-crc32-wrong.json"
+            fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+            spec = json.loads(
+                (REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            spec["fixture_contract"]["path"] = fixture_path.as_posix()
+            for case in spec["fixture_contract"]["cases"]:
+                case["expected_ref"] = fixture_path.as_posix()
+            spec_path = tmp_path / "flashdb-real-fdb-calc-crc32-wrong.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-rust-report.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-real-fdb-calc-crc32-diff.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(manifest["status"], "candidate_generated")
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertEqual(test_translation["status"], "failed")
+            self.assertEqual(test_translation["replay_execution"]["status"], "failed")
+            self.assertFalse(test_translation["generated_draft_replay_pass"])
+            self.assertFalse(test_translation["generated_draft_semantic_pass"])
+            self.assertEqual(rust_report["status"], "failed")
+            self.assertFalse(rust_report["semantic_pass"])
+            self.assertFalse(rust_report["generated_draft_replay_pass"])
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "failed")
 
     def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
         auto_migrate = load_auto_migrate_module()

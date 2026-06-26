@@ -92,6 +92,8 @@ def main() -> int:
         oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
         replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted, route_decision)
         mark_accepted_evidence_authoritative_route(spec, evidence_dir, route_decision, accepted)
+    else:
+        replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
     validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
@@ -2009,7 +2011,6 @@ def generate_rust_replay_test_draft(
         f"    let _api = {rust_string_literal(function_name)};\n"
         "    const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;\n"
         f"{fixture_cases_source}"
-        '    panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");\n'
         "}\n"
     )
     write_text(path, text)
@@ -2064,7 +2065,7 @@ def generate_rust_replay_test_draft(
                 "rust_test": f"{rel(path)}::{test_name}",
                 "behavior_fields": list(behavior_fields),
                 "coverage_kind": "oracle_replay",
-                "status": "gap",
+                "status": "mapped",
                 "evidence": [
                     {
                         "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
@@ -2093,6 +2094,7 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
     if behavior_fields(spec) != ["return_code"]:
         return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
 
+    function_name = safe_ident(required_str(spec, "function_name"))
     case_literals: list[str] = []
     unsupported_comments: list[str] = []
     for case_binding in fixture_binding.get("case_bindings", []):
@@ -2129,9 +2131,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
             f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
             "    for case in fixture_cases {\n",
             '        assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);\n',
-            "        let _crc = case.crc;\n",
-            "        let _return_code = case.return_code;\n",
-            "        // TODO: call generated Rust API and compare actual return_code to return_code.\n",
+            f"        let actual = {function_name}(case.crc, case.buf, case.size);\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
             "    }\n",
         ]
     )
@@ -2176,6 +2177,136 @@ def rust_byte_slice_literal(values: list[int]) -> str:
 
 def rust_string_literal(value: Any) -> str:
     return json.dumps(str(value))
+
+
+def run_generated_rust_replay(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    if rust_check.get("status") != "passed":
+        return replay
+    if not generated_rust_replay_supported(spec, evidence_dir):
+        return replay
+    result = run_generated_rust_replay_once(draft_path, replay_path)
+    write_log_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
+    write_log_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
+    write_log_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
+    write_log_text(evidence_dir / "generated-rust-replay.stderr.log", result["run_stderr"])
+    passed = result["status"] == "passed"
+    replay["status"] = "passed" if passed else "failed"
+    replay["generated_draft_replay_pass"] = passed
+    replay["generated_draft_semantic_pass"] = False
+    replay["replay_execution"] = {
+        "status": result["status"],
+        "phase": result["phase"],
+        "compile_command": result["compile_command"],
+        "compile_returncode": result["compile_returncode"],
+        "run_command": result["run_command"],
+        "run_returncode": result["run_returncode"],
+        "stdout_log": rel(evidence_dir / "generated-rust-replay.stdout.log"),
+        "stderr_log": rel(evidence_dir / "generated-rust-replay.stderr.log"),
+    }
+    replay["known_gaps"] = [
+        "Generated Rust replay passed committed fixture cases; C oracle, schema diff, negative diff, unsafe, and final verification gates are still required."
+    ]
+    for mapping in replay.get("translation_mappings", []):
+        if isinstance(mapping, dict):
+            mapping["status"] = "passed" if passed else "failed"
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+    return replay
+
+
+def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
+    if behavior_fields(spec) != ["return_code"]:
+        return False
+    slice_id = required_str(spec, "slice_id")
+    plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    if not plan_path.exists() or not draft_path.exists() or not replay_path.exists():
+        return False
+    plan = read_json(plan_path)
+    rule_ids = plan.get("translation_summary", {}).get("translation_rule_ids", [])
+    return "crc32-byte-cursor-loop" in rule_ids
+
+
+def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-") as build_dir_text:
+        build_dir = Path(build_dir_text)
+        combined_path = build_dir / "generated_replay.rs"
+        exe_path = build_dir / "generated_replay.exe"
+        combined_path.write_text(
+            draft_path.read_text(encoding="utf-8-sig")
+            + "\n"
+            + replay_path.read_text(encoding="utf-8-sig"),
+            encoding="utf-8",
+        )
+        compile_cmd = [
+            "rustc",
+            "--edition=2021",
+            "--test",
+            "--error-format=json",
+            str(combined_path),
+            "-o",
+            str(exe_path),
+        ]
+        compile_result = subprocess.run(compile_cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        if compile_result.returncode != 0:
+            return {
+                "status": "failed",
+                "phase": "compile",
+                "compile_command": shlex.join(compile_cmd),
+                "compile_returncode": compile_result.returncode,
+                "compile_stdout": compile_result.stdout,
+                "compile_stderr": compile_result.stderr,
+                "run_command": None,
+                "run_returncode": None,
+                "run_stdout": "",
+                "run_stderr": "",
+            }
+        run_cmd = [str(exe_path), "--nocapture"]
+        run_result = subprocess.run(run_cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        return {
+            "status": "passed" if run_result.returncode == 0 else "failed",
+            "phase": "run",
+            "compile_command": shlex.join(compile_cmd),
+            "compile_returncode": compile_result.returncode,
+            "compile_stdout": compile_result.stdout,
+            "compile_stderr": compile_result.stderr,
+            "run_command": shlex.join(run_cmd),
+            "run_returncode": run_result.returncode,
+            "run_stdout": run_result.stdout,
+            "run_stderr": run_result.stderr,
+        }
+
+
+def generated_rust_report_cases(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    fixture_binding = oracle_fixture_binding(spec)
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_payload = oracle_fixture_input_payload(spec, case_binding)
+        expected_outputs = case_binding.get("expected_outputs")
+        if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+            continue
+        case = {
+            "id": case_binding.get("id"),
+            "crc": case_payload.get("crc"),
+            "buf": case_payload.get("buf"),
+            "size": case_payload.get("size"),
+            "return_code": expected_outputs.get("return_code"),
+        }
+        for optional_key in ["coverage_kind", "status"]:
+            if optional_key in case_payload:
+                case[optional_key] = case_payload[optional_key]
+        cases.append(case)
+    return cases
 
 
 def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -3177,6 +3308,10 @@ def write_l3_candidate_supporting_evidence(
     prefix = f"l3-{slice_id}"
     unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
     semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
+    generated_replay_pass = replay.get("status") == "passed" and replay.get("generated_draft_replay_pass") is True
+    generated_replay_failed = replay.get("status") == "failed"
+    rust_report_status = "passed" if generated_replay_pass else "failed" if generated_replay_failed else "incomplete"
+    rust_report_cases = generated_rust_report_cases(spec)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     write_json(
         evidence_dir / f"{prefix}-slice-contract.json",
@@ -3213,9 +3348,18 @@ def write_l3_candidate_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
-            "status": "incomplete",
+            "status": rust_report_status,
             "semantic_pass": False,
-            "reason": "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+            "reason": "Generated Rust replay passed fixture cases; semantic acceptance still requires C oracle, diff, negative diff, unsafe, and final verification gates."
+            if generated_replay_pass
+            else "Generated Rust replay failed fixture cases; semantic acceptance remains blocked."
+            if generated_replay_failed
+            else "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+            "case_count": len(rust_report_cases),
+            "cases": rust_report_cases,
+            "generated_draft": evidence_ref(evidence_dir / f"{prefix}-rust-draft.rs", generated_rust_draft_status(route_decision)),
+            "generated_draft_replay_pass": generated_replay_pass,
+            "generated_draft_semantic_pass": False,
             "replay": replay,
         },
     )
@@ -3238,10 +3382,14 @@ def write_l3_candidate_supporting_evidence(
                 "c_oracle_actual_status": oracle.get("status", "unknown"),
                 "c_oracle_actual_toolchain_status": oracle.get("toolchain_status", "unknown"),
                 "rust_replay_actual_status": replay.get("status", "unknown"),
-                "rust_report_actual_status": "incomplete",
+                "rust_report_actual_status": rust_report_status,
             },
-            "reason_code": "missing_accepted_c_oracle_and_rust_replay",
-            "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
+            "reason_code": "missing_accepted_c_oracle"
+            if generated_replay_pass
+            else "missing_accepted_c_oracle_and_rust_replay",
+            "reason": "Schema-aware diff requires accepted C oracle evidence before semantic acceptance."
+            if generated_replay_pass
+            else "Schema-aware diff requires accepted C oracle and Rust replay reports.",
         },
     )
     write_json(
