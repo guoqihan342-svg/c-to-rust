@@ -227,6 +227,7 @@ pub enum ClangUnaryOperator {
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangIncDecOperator {
+    Inc,
     Dec,
 }
 
@@ -870,7 +871,11 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
             })
         }
         Some("UnaryOperator") => {
-            if string_field(expr, "opcode").as_deref() == Some("--") {
+            let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
+                kind: "invalid_unary_operator".to_string(),
+                message: "UnaryOperator is missing opcode".to_string(),
+            })?;
+            if opcode == "++" || opcode == "--" {
                 if !expr
                     .get("isPostfix")
                     .and_then(Value::as_bool)
@@ -878,21 +883,26 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 {
                     return Ok(ClangExprSkeleton::Unsupported {
                         node: "UnaryOperator".to_string(),
-                        reason: "prefix opcode -- is outside the current skeleton".to_string(),
+                        reason: format!("prefix opcode {opcode} is outside the current skeleton"),
                     });
                 }
                 let target = inner(expr).first().ok_or_else(|| ClangFrontendError {
                     kind: "invalid_unary_operator".to_string(),
                     message: "UnaryOperator is missing operand".to_string(),
                 })?;
+                let op = if opcode == "++" {
+                    ClangIncDecOperator::Inc
+                } else {
+                    ClangIncDecOperator::Dec
+                };
                 return Ok(ClangExprSkeleton::IncDec {
                     target: Box::new(expr_skeleton_from_ast(target)?),
-                    op: ClangIncDecOperator::Dec,
+                    op,
                     prefix: false,
                     ty: expr_type(expr)?,
                 });
             }
-            if string_field(expr, "opcode").as_deref() == Some("*") {
+            if opcode == "*" {
                 let ptr = inner(expr).first().ok_or_else(|| ClangFrontendError {
                     kind: "invalid_unary_operator".to_string(),
                     message: "UnaryOperator is missing operand".to_string(),
@@ -903,18 +913,12 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 });
             }
 
-            let op = match string_field(expr, "opcode").as_deref() {
-                Some("~") => ClangUnaryOperator::BitNot,
-                Some(opcode) => {
+            let op = match opcode.as_str() {
+                "~" => ClangUnaryOperator::BitNot,
+                opcode => {
                     return Ok(ClangExprSkeleton::Unsupported {
                         node: "UnaryOperator".to_string(),
                         reason: format!("opcode {opcode} is outside the current skeleton"),
-                    });
-                }
-                None => {
-                    return Err(ClangFrontendError {
-                        kind: "invalid_unary_operator".to_string(),
-                        message: "UnaryOperator is missing opcode".to_string(),
                     });
                 }
             };
@@ -1269,6 +1273,7 @@ fn lower_unary_operator(op: &ClangUnaryOperator) -> IrUnOp {
 #[cfg(feature = "typed-ir")]
 fn lower_inc_dec_operator(op: &ClangIncDecOperator) -> IrIncDecOp {
     match op {
+        ClangIncDecOperator::Inc => IrIncDecOp::Inc,
         ClangIncDecOperator::Dec => IrIncDecOp::Dec,
     }
 }

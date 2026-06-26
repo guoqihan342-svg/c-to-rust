@@ -1447,6 +1447,83 @@ fn clang_lowering_skeleton_maps_pointer_deref_expr() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_postfix_increment_in_deref_expr() {
+    let uint8_ty = ClangTypeSkeleton {
+        spelled: "uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let const_uint8_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let const_uint8_ptr_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t *".to_string(),
+        canonical: "uint8_t *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_uint8_ty),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "read_byte_inc".to_string(),
+        return_type: uint8_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: const_uint8_ptr_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Deref {
+                ptr: Box::new(ClangExprSkeleton::IncDec {
+                    target: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "p".to_string(),
+                        ty: const_uint8_ptr_ty.clone(),
+                    }),
+                    op: ClangIncDecOperator::Inc,
+                    prefix: false,
+                    ty: const_uint8_ptr_ty,
+                }),
+                ty: uint8_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower postfix increment in deref skeleton");
+
+    let [IrStmt::Return {
+        value: Some(IrExpr::Deref { ptr, ty, .. }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected return deref, got {:?}", ir.body);
+    };
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ..
+    } = ptr.as_ref()
+    else {
+        panic!("expected postfix increment ptr, got {ptr:?}");
+    };
+    assert!(matches!(target.as_ref(), IrExpr::Var { name, .. } if name == "p"));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_array_subscript_expr() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -2109,6 +2186,58 @@ fn clang_ast_dump_lowers_pointer_deref_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-postfix-increment-deref");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_byte_inc.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint8_t read_byte_inc(const uint8_t *p) { return *p++; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_byte_inc");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Deref { ptr, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected deref return, got {:?}", function.body);
+    };
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ..
+    } = ptr.as_ref()
+    else {
+        panic!("expected postfix increment ptr, got {ptr:?}");
+    };
+    assert!(matches!(target.as_ref(), IrExpr::Var { name, .. } if name == "p"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -2164,6 +2293,77 @@ fn clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled() {
         panic!("expected bitxor lhs, got {lhs:?}");
     };
     assert!(matches!(rhs.as_ref(), IrExpr::Deref { .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-postfix-increment-deref-bitand-array-index");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_index_postinc.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nstatic const uint32_t table[256];\nuint32_t crc_index_postinc(uint32_t crc, const uint8_t *p) { return table[(crc ^ *p++) & 0xff]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_index_postinc");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Index { index, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected array subscript return, got {:?}", function.body);
+    };
+    let IrExpr::Binary {
+        op: IrBinOp::BitAnd,
+        lhs,
+        ..
+    } = index.as_ref()
+    else {
+        panic!("expected bitand index expression, got {index:?}");
+    };
+    let IrExpr::Binary {
+        op: IrBinOp::BitXor,
+        rhs,
+        ..
+    } = lhs.as_ref()
+    else {
+        panic!("expected bitxor lhs, got {lhs:?}");
+    };
+    let IrExpr::Deref { ptr, .. } = rhs.as_ref() else {
+        panic!("expected deref rhs, got {rhs:?}");
+    };
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ..
+    } = ptr.as_ref()
+    else {
+        panic!("expected postfix increment ptr, got {ptr:?}");
+    };
+    assert!(matches!(target.as_ref(), IrExpr::Var { name, .. } if name == "p"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -2577,6 +2777,56 @@ fn clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled() {
             .errors
             .first()
             .map(|error| error.message.contains("prefix opcode --"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-prefix-increment-deref");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_byte_prefix_inc.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint8_t read_byte_prefix_inc(const uint8_t *p) { return *++p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "read_byte_prefix_inc",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("prefix opcode ++"))
             .unwrap_or(false),
         "{:?}",
         report.errors

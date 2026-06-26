@@ -4395,3 +4395,89 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
    `IrExpr::IncDec { op: Inc, prefix: false }`。
 2. 同时保留 fail-closed：prefix `++`、复杂 lvalue 和 `++` 出现在非当前表达式形态时不要顺手放开。
 3. 用 real-fdb 临时 report 验证 blocker 推进；预期下一层可能落到 `BinaryOperator(">>")`。
+
+## 61. 2026-06-26 clang postfix increment lowering
+
+本轮承接第 60 节的真实 blocker：只为 clang AST lowering report 增加最小
+`UnaryOperator("++") isPostfix=true` 支持，映射到现有
+`IrExpr::IncDec { op: Inc, prefix: false }`；不支持 prefix `++`，不实现
+`BinaryOperator(">>")`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangIncDecOperator` 新增 `Inc`。
+  - `expr_skeleton_from_ast()` 将 `UnaryOperator("--")` 专用分支推广为
+    postfix `++` / `--` 共用分支；prefix `++` / `--` 继续返回
+    `Unsupported`。
+  - `lower_inc_dec_operator()` 新增 `Inc -> IrIncDecOp::Inc`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_postfix_increment_in_deref_expr`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled`。
+  - 新增真实 clang 组合 smoke：
+    `clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled`，
+    覆盖 `table[(crc ^ *p++) & 0xff]` 这条不含 `>>` 的子树。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_postfix_increment_in_deref_expr` 先失败在
+  `ClangIncDecOperator::Inc` 不存在。
+- 绿灯：补 clang `Inc` enum、postfix `++` parser 和 `IrIncDecOp::Inc`
+  映射后，skeleton、真实 `*p++` smoke、组合 `table[(crc ^ *p++) & 0xff]`
+  smoke 和 prefix `++` 负例均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 60 节末尾：
+  `unsupported_clang_expr: UnaryOperator: opcode ++ is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: BinaryOperator: opcode >> is outside the current skeleton`。
+- 这说明 clang AST lowering 已经跨过 `crc32_tab[(crc ^ *p++) & 0xff]`
+  的 table lookup、`&`、`^`、outer deref 和 postfix `p++`，当前真实 blocker
+  是外层 CRC 更新表达式右侧的 `crc >> 8`。
+
+本轮并行只读审查结论：
+- Maxwell：只补 postfix `++` 后，下一层 fail-closed 应落到
+  `BinaryOperator(">>")`；typed IR 不是立即 blocker，因为 `IrBinOp::Shr`
+  和 `IrIncDecOp::Inc` 已存在。
+- Halley：最小生产改动应只包含 `ClangIncDecOperator::Inc`、
+  `UnaryOperator` postfix `++` / `--` 分支和 `lower_inc_dec_operator()` 映射；
+  不要碰 `>>`、emitter 或 validation evidence。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_postfix_increment_in_deref_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused postfix increment skeleton test：`1 passed`。
+- 真实 clang postfix increment deref smoke：`1 passed`。
+- 真实 clang postfix increment deref + bitand array index smoke：`1 passed`。
+- 真实 clang prefix increment 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `82 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode >> is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳、全局 `uint32_t[256]` table 类型、`& 0xff`、
+  `*p++` 的 outer deref 和 postfix `p++`。
+- 当前真实 blocker 是 `BinaryOperator(">>")`。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动；下一轮应只为
+  `BinaryOperator(">>")` 写最小 skeleton/lowering，映射到现有 `IrBinOp::Shr`，
+  再用 real-fdb report 验证是否进入 emitter gate 对齐阶段。
