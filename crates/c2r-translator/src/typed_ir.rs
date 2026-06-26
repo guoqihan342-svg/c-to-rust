@@ -792,13 +792,90 @@ fn emit_expr(
         IrExpr::Index {
             base, index, ty, ..
         } => emit_index_expr(base, index, ty, symbols, context),
-        IrExpr::Call { callee, .. } => Err(format!("call expression {callee} is unsupported")),
+        IrExpr::Call {
+            callee, args, ty, ..
+        } => emit_call_expr(callee, args, ty, symbols, context),
         IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
         IrExpr::Deref { .. } => Err("deref expression is unsupported".to_string()),
         IrExpr::AddrOf { .. } => Err("address-of expression is unsupported".to_string()),
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported expression {node}: {reason}"))
         }
+    }
+}
+
+fn emit_call_expr(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let callee = emit_identifier(callee, "call callee")?;
+    if !is_void_type(ty) {
+        emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
+    }
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            validate_bounded_call_arg(arg)
+                .map_err(|detail| format!("call arg[{index}] {detail}"))?;
+            emit_expr(arg, symbols, context).map_err(|detail| format!("call arg[{index}] {detail}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(format!("{callee}({args})"))
+}
+
+fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
+    match expr {
+        IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
+            emit_scalar_type(ty)?;
+            Ok(())
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            validate_bounded_call_arg(lhs)?;
+            validate_bounded_call_arg(rhs)
+        }
+        IrExpr::Unary { operand, .. } | IrExpr::Cast { expr: operand, .. } => {
+            validate_bounded_call_arg(operand)
+        }
+        IrExpr::Index { base, index, .. } => {
+            validate_bounded_call_arg(base)?;
+            validate_bounded_call_arg(index)
+        }
+        IrExpr::Call { .. } => {
+            Err("nested call expressions are outside the bounded call subset".to_string())
+        }
+        IrExpr::IncDec { .. } => {
+            Err("call arguments cannot use increment/decrement value semantics".to_string())
+        }
+        IrExpr::Deref { .. } => {
+            Err("call arguments cannot use dereference value semantics".to_string())
+        }
+        IrExpr::AddrOf { .. } => {
+            Err("call arguments cannot use address-of value semantics".to_string())
+        }
+        IrExpr::Unsupported { node, reason, .. } => {
+            Err(format!("unsupported argument expression {node}: {reason}"))
+        }
+    }
+}
+
+fn find_call_callee(expr: &IrExpr) -> Option<&str> {
+    match expr {
+        IrExpr::Call { callee, .. } => Some(callee),
+        IrExpr::Binary { lhs, rhs, .. } => find_call_callee(lhs).or_else(|| find_call_callee(rhs)),
+        IrExpr::Unary { operand, .. } => find_call_callee(operand),
+        IrExpr::Cast { expr, .. } => find_call_callee(expr),
+        IrExpr::Index { base, index, .. } => {
+            find_call_callee(base).or_else(|| find_call_callee(index))
+        }
+        IrExpr::IncDec { target, .. } => find_call_callee(target),
+        IrExpr::Deref { ptr, .. } => find_call_callee(ptr),
+        IrExpr::AddrOf { operand, .. } => find_call_callee(operand),
+        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => None,
     }
 }
 
@@ -1304,6 +1381,9 @@ fn emit_condition_expr(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
+    if let Some(callee) = find_call_callee(expr) {
+        return Err(format!("call expression {callee} is unsupported"));
+    }
     if let IrExpr::Binary {
         op, lhs, rhs, ty, ..
     } = expr

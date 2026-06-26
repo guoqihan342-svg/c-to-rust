@@ -1268,6 +1268,174 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(profile["candidate_generation"]["typed_ir"]["candidate_route"]["route"], "GenericTypedIr")
             self.assertFalse(profile["generated_draft_semantic_pass"])
 
+    def test_generated_typed_ir_candidate_is_l1_route_signal(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-route-signal",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-route-signal"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["verification_profile"], "L1-dev")
+            self.assertIn("unsafe_ledger", profile["required_gates"])
+            self.assertIn("rust_tests", profile["required_gates"])
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
+    def test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-unsupported-route",
+            "source_commit": "1234567",
+            "function_name": "call_fn",
+            "c_source": "int call_fn(int value) { return helper(value); }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-unsupported-route"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "unsupported",
+                            "candidate_route": {
+                                "route_id": "unsupported",
+                                "route": "Unsupported",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": False,
+                            "semantic_pass": False,
+                            "unsupported_reason": "call expressions are not supported by typed IR emitter",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            self.assertEqual(route["level"], "L2")
+            self.assertEqual(route["verification_profile"], "L2-dev")
+            typed_ir = route["candidate_generation"]["typed_ir"]
+            self.assertEqual(typed_ir["status"], "unsupported")
+            self.assertEqual(
+                typed_ir["unsupported_reason"],
+                "call expressions are not supported by typed IR emitter",
+            )
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_unsupported",
+                    "reason": "call expressions are not supported by typed IR emitter",
+                    "weight": "repair_queue",
+                },
+                route["rationale"],
+            )
+            self.assertEqual(
+                profile["candidate_generation"]["typed_ir"]["unsupported_reason"],
+                "call expressions are not supported by typed IR emitter",
+            )
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
     def test_semantic_pass_requires_validation_profile_passed(self) -> None:
         auto_migrate = load_auto_migrate_module()
 

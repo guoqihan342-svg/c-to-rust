@@ -25,6 +25,7 @@ flowchart TD
     const pointer slices,
     readonly global const integer arrays,
     table index via slice param or global,
+    bounded direct calls,
     nested byte *p++ prelude,
     size_t while(size--)"]
     Validation --> Semantic["semantic_pass is decided only by validation"]
@@ -54,8 +55,12 @@ flowchart TD
   - The `clang-lowering-report` artifact now includes `typed_ir_candidate`, recording the `CandidateRouteDecision`, readonly globals summary, and the `semantic_pass=false` boundary.
   - The old string translator still keeps a crc32 byte-cursor template path in `is_crc32_byte_cursor_loop()` and the local `emit_crc32_byte_cursor_rust()`. It no longer bridges into typed IR and no longer records `typed-ir-crc32-emitter` provenance.
 - `validation/tools/auto_migrate.py`
-  - `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
-  - `validation_profile.candidate_generation` repeats the same binding while keeping `generated_draft_semantic_pass=false`.
+  - Newly generated `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
+  - Newly generated `validation_profile.candidate_generation` repeats the same binding while keeping `generated_draft_semantic_pass=false`.
+  - `typed_ir.status=generated` with route `GenericTypedIr` acts as an L1 route signal; `typed_ir.status=unsupported` preserves the reason and acts as an L2 repair/baseline route signal. Hard-refuse conditions still take priority.
+- `validation/auto-translation-template/*-schema.json`
+  - `candidate_generation` remains optional for older route/profile evidence so legacy fixtures stay compatible.
+  - Once `candidate_generation.typed_ir` is present, the schema allows only the `GenericTypedIr` / `Unsupported` typed IR routes and requires `semantic_pass=false`.
 - `validation/tools/validate_auto_translation_evidence.py`
   - Validates that typed IR candidate binding matches the clang-lowering-report artifact and rejects any candidate evidence claiming `semantic_pass=true`.
 - `crates/c2r-translator/tests/bounded_translation.rs`
@@ -72,7 +77,7 @@ The typed IR candidate generation layer now has two explicit outcomes:
 - `GenericTypedIr`: the generic typed IR emitter. Real FlashDB `fdb_calc_crc32` now reaches this route through clang lowering plus globals and passes rustc smoke.
 - `Unsupported`: no Rust candidate; the error carries route metadata and the fail-closed reason.
 
-The typed IR `CandidateRouteDecision` selects the candidate generation implementation only. It does not decide `semantic_pass`. It is now bound into `route_decision.candidate_generation.typed_ir` and `validation_profile.candidate_generation` as provenance; acceptance still belongs to validation profile gates such as C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
+The typed IR `CandidateRouteDecision` selects the candidate generation implementation only. It does not decide `semantic_pass`. New route/profile evidence binds it into `route_decision.candidate_generation.typed_ir` and `validation_profile.candidate_generation` as provenance; route decision may use it to distinguish the L1 generic typed IR path from the L2 typed IR unsupported repair path; existing route/profile evidence that does not yet carry the field remains accepted for legacy compatibility. Acceptance still belongs to validation profile gates such as C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
 
 Generic typed IR emission now covers:
 
@@ -85,6 +90,7 @@ Generic typed IR emission now covers:
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
 - nested byte cursor reads such as `(uint32_t)*p++` through prelude temporaries;
 - assignment RHS prelude, covering `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`;
+- bounded direct identifier calls: only direct function-name callees proven by clang `referencedDecl.kind=FunctionDecl`, covering call statements, declaration initializers, assignment RHS, and return values; nested calls, function-pointer callees, callees without `FunctionDecl` proof, calls anywhere inside condition expression trees, and inc/dec or dereference arguments still fail closed;
 - narrow `size_t` postfix-decrement while conditions, lowering `while (size--)` into a Rust `loop` that preserves postfix side effects.
 
 Still incomplete:

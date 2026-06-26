@@ -1308,13 +1308,14 @@ def validate_typed_ir_candidate_binding(
                 require_sha=True,
             )
 
-    if typed_ir.get("status") != "generated":
+    if not report_path.exists():
         return
-
     report = load_json(report_path)
     report_candidate = report.get("typed_ir_candidate")
     if not isinstance(report_candidate, dict):
-        raise SystemExit(f"typed IR candidate evidence missing from {report_path}")
+        if typed_ir.get("status") in {"generated", "unsupported"}:
+            raise SystemExit(f"typed IR candidate evidence missing from {report_path}")
+        return
     if report_candidate.get("semantic_pass") is not False:
         raise SystemExit(f"typed IR candidate report cannot claim semantic_pass in {report_path}")
 
@@ -1337,6 +1338,10 @@ def validate_typed_ir_candidate_binding(
         "rust_draft_generated": bool(report_candidate.get("rust_draft_generated", False)),
         "semantic_pass": False,
     }
+    if report_candidate.get("reason"):
+        expected["reason"] = report_candidate.get("reason")
+    if report_candidate.get("unsupported_reason"):
+        expected["unsupported_reason"] = report_candidate.get("unsupported_reason")
     actual = {
         "status": typed_ir.get("status"),
         "candidate_route": typed_ir.get("candidate_route"),
@@ -1345,6 +1350,10 @@ def validate_typed_ir_candidate_binding(
         "rust_draft_generated": bool(typed_ir.get("rust_draft_generated", False)),
         "semantic_pass": typed_ir.get("semantic_pass"),
     }
+    if typed_ir.get("reason"):
+        actual["reason"] = typed_ir.get("reason")
+    if typed_ir.get("unsupported_reason"):
+        actual["unsupported_reason"] = typed_ir.get("unsupported_reason")
     if actual != expected:
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
 

@@ -25,6 +25,7 @@ flowchart TD
     const pointer slices,
     readonly global const integer arrays,
     table index via slice param or global,
+    bounded direct calls,
     nested byte *p++ prelude,
     size_t while(size--)"]
     Validation --> Semantic["semantic_pass 只由验证流水线决定"]
@@ -54,8 +55,12 @@ flowchart TD
   - `clang-lowering-report` artifact 现在包含 `typed_ir_candidate`，记录 `CandidateRouteDecision`、readonly globals 摘要和 `semantic_pass=false` 边界。
   - 旧字符串 translator 仍保留一个 crc32 byte-cursor 模板路径，位置是 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它不再桥接 typed IR，也不再记录 `typed-ir-crc32-emitter` provenance。
 - `validation/tools/auto_migrate.py`
-  - `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
-  - `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
+  - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
+  - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
+  - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 L1 route signal；`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件仍优先。
+- `validation/auto-translation-template/*-schema.json`
+  - `candidate_generation` 对旧 route/profile evidence 保持可选，避免破坏 legacy fixtures。
+  - 一旦出现 `candidate_generation.typed_ir`，schema 只允许 `GenericTypedIr` / `Unsupported` 两条 typed IR route，并要求 `semantic_pass=false`。
 - `validation/tools/validate_auto_translation_evidence.py`
   - 校验 typed IR candidate binding 必须与 clang-lowering-report 一致，并拒绝任何 `semantic_pass=true` 的 candidate 证据。
 - `crates/c2r-translator/tests/bounded_translation.rs`
@@ -72,7 +77,7 @@ flowchart TD
 - `GenericTypedIr`：通用 typed IR emitter，当前真实 FlashDB `fdb_calc_crc32` 在 clang lowering + globals 路径下已经能走到这里并通过 rustc smoke。
 - `Unsupported`：没有 Rust candidate，错误中带 fail-closed reason 和 route metadata。
 
-注意：typed IR `CandidateRouteDecision` 只选择候选生成实现，不决定 `semantic_pass`。它现在会被绑定进 `validation/tools/auto_migrate.py` 的 `route_decision.candidate_generation.typed_ir` 和 `validation_profile.candidate_generation`，作为 provenance；真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。
+注意：typed IR `CandidateRouteDecision` 只选择候选生成实现，不决定 `semantic_pass`。新 route/profile evidence 会把它绑定进 `route_decision.candidate_generation.typed_ir` 和 `validation_profile.candidate_generation`，作为 provenance；route decision 可以用它区分 L1 generic typed IR 路径和 L2 typed IR unsupported repair 路径；存量 route/profile evidence 如果尚未带该字段，schema 仍按 legacy compatibility 接受。真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。
 
 generic typed IR emission 现在覆盖：
 
@@ -85,6 +90,7 @@ generic typed IR emission 现在覆盖：
 - 当已经证明存在 `const uint8_t *p` byte cursor 和 byte read 时，把 `const void *buf` 翻译成 `&[u8]`；
 - 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
 - assignment RHS prelude，覆盖 `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`；
+- bounded direct identifier call：只支持 clang `referencedDecl.kind=FunctionDecl` 的直接函数名 callee，覆盖 call statement、decl init、assignment RHS 和 return value；嵌套 call、函数指针 callee、缺少 `FunctionDecl` 证明的 callee、condition 表达式全树中的 call、inc/dec 或 deref 参数继续 fail closed；
 - 窄化的 `size_t` postfix-decrement while condition，把 `while (size--)` lowering 成保留 postfix side effect 的 Rust `loop`。
 
 仍未完成：

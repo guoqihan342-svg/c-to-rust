@@ -162,6 +162,9 @@ pub enum ClangStmtSkeleton {
     Return {
         value: Option<ClangExprSkeleton>,
     },
+    Expr {
+        expr: ClangExprSkeleton,
+    },
     Unsupported {
         reason: String,
     },
@@ -208,6 +211,11 @@ pub enum ClangExprSkeleton {
     Index {
         base: Box<ClangExprSkeleton>,
         index: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
+    Call {
+        callee: String,
+        args: Vec<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
     Unsupported {
@@ -794,6 +802,9 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         }
         Some("IfStmt") => if_stmt_skeleton_from_ast(stmt),
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
+        Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
+            expr: expr_skeleton_from_ast(stmt)?,
+        }),
         Some("ReturnStmt") => {
             let value = inner(stmt)
                 .first()
@@ -1082,6 +1093,7 @@ fn expr_skeleton_from_ast_with_options(
                 ty: expr_type(expr)?,
             })
         }
+        Some("CallExpr") => call_expr_skeleton_from_ast(expr, preserve_integral_casts),
         Some("UnaryOperator") => {
             let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
                 kind: "invalid_unary_operator".to_string(),
@@ -1191,6 +1203,120 @@ fn expr_skeleton_from_ast_with_options(
             kind: "invalid_clang_expr".to_string(),
             message: "clang expression node is missing kind".to_string(),
         }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn call_expr_skeleton_from_ast(
+    expr: &Value,
+    preserve_integral_casts: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let children = inner(expr);
+    let Some((callee_node, arg_nodes)) = children.split_first() else {
+        return Err(ClangFrontendError {
+            kind: "invalid_call_expr".to_string(),
+            message: "CallExpr is missing callee".to_string(),
+        });
+    };
+    let callee = match direct_call_callee_name(callee_node) {
+        Ok(callee) => callee,
+        Err(reason) => {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "CallExpr".to_string(),
+                reason,
+            });
+        }
+    };
+    let mut args = Vec::with_capacity(arg_nodes.len());
+    for (index, arg_node) in arg_nodes.iter().enumerate() {
+        let arg = expr_skeleton_from_ast_with_options(arg_node, preserve_integral_casts)?;
+        if let Some(reason) = bounded_call_arg_rejection_reason(&arg) {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "CallExpr".to_string(),
+                reason: format!("argument {index}: {reason}"),
+            });
+        }
+        args.push(arg);
+    }
+    Ok(ClangExprSkeleton::Call {
+        callee,
+        args,
+        ty: expr_type(expr)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
+    match string_field(callee, "kind").as_deref() {
+        Some("ImplicitCastExpr") => {
+            match string_field(callee, "castKind").as_deref() {
+                Some("FunctionToPointerDecay") | Some("NoOp") => {}
+                Some(cast_kind) => {
+                    return Err(format!(
+                        "callee castKind {cast_kind} is not a direct function identifier"
+                    ));
+                }
+                None => {
+                    return Err(
+                        "callee cast without castKind is not a direct function identifier"
+                            .to_string(),
+                    );
+                }
+            }
+            let operand = inner(callee).first().ok_or_else(|| {
+                "callee cast without operand is not a direct function identifier".to_string()
+            })?;
+            direct_call_callee_name(operand)
+        }
+        Some("ParenExpr") => {
+            let operand = inner(callee).first().ok_or_else(|| {
+                "parenthesized callee without operand is not a direct function identifier"
+                    .to_string()
+            })?;
+            direct_call_callee_name(operand)
+        }
+        Some("DeclRefExpr") => {
+            let referenced_decl = callee
+                .get("referencedDecl")
+                .ok_or_else(|| "callee is not a direct function identifier".to_string())?;
+            let name = string_field(referenced_decl, "name")
+                .ok_or_else(|| "callee is missing referenced function name".to_string())?;
+            match string_field(referenced_decl, "kind").as_deref() {
+                Some("FunctionDecl") => Ok(name),
+                _ => Err("callee is not a direct function identifier".to_string()),
+            }
+        }
+        Some(kind) => Err(format!(
+            "callee node {kind} is not a direct function identifier"
+        )),
+        None => Err("callee node without kind is not a direct function identifier".to_string()),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_call_arg_rejection_reason(expr: &ClangExprSkeleton) -> Option<String> {
+    match expr {
+        ClangExprSkeleton::DeclRef { .. } | ClangExprSkeleton::IntegerLiteral { .. } => None,
+        ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs)
+            .or_else(|| bounded_call_arg_rejection_reason(rhs)),
+        ClangExprSkeleton::Unary { operand, .. }
+        | ClangExprSkeleton::Cast { expr: operand, .. } => {
+            bounded_call_arg_rejection_reason(operand)
+        }
+        ClangExprSkeleton::Index { base, index, .. } => bounded_call_arg_rejection_reason(base)
+            .or_else(|| bounded_call_arg_rejection_reason(index)),
+        ClangExprSkeleton::Call { .. } => {
+            Some("nested call expressions are outside the bounded call subset".to_string())
+        }
+        ClangExprSkeleton::IncDec { .. } => {
+            Some("call arguments cannot use increment/decrement value semantics".to_string())
+        }
+        ClangExprSkeleton::Deref { .. } => {
+            Some("call arguments cannot use dereference value semantics".to_string())
+        }
+        ClangExprSkeleton::Unsupported { node, reason } => {
+            Some(format!("unsupported argument expression {node}: {reason}"))
+        }
     }
 }
 
@@ -1444,6 +1570,10 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             value: value.as_ref().map(lower_expr).transpose()?,
             source_span: None,
         }),
+        ClangStmtSkeleton::Expr { expr } => Ok(IrStmt::Expr {
+            expr: lower_expr(expr)?,
+            source_span: None,
+        }),
         ClangStmtSkeleton::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_stmt".to_string(),
             message: reason.clone(),
@@ -1512,6 +1642,15 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::Index { base, index, ty } => Ok(IrExpr::Index {
             base: Box::new(lower_expr(base)?),
             index: Box::new(lower_expr(index)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::Call { callee, args, ty } => Ok(IrExpr::Call {
+            callee: callee.clone(),
+            args: args
+                .iter()
+                .map(lower_expr)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             ty: lower_type(ty)?,
             source_span: None,
         }),
@@ -1686,6 +1825,209 @@ mod tests {
             };
             assert_eq!(op, expected);
         }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_direct_call_expr() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("direct call skeleton");
+        let ir = lower_expr(&skeleton).expect("lower direct call skeleton");
+
+        let IrExpr::Call {
+            callee, args, ty, ..
+        } = ir
+        else {
+            panic!("expected IR call, got {ir:?}");
+        };
+        assert_eq!(callee, "helper");
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            args.as_slice(),
+            [IrExpr::Var { name, .. }] if name == "value"
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_lowers_direct_call_expr_statement() {
+        let stmt = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "observe"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("direct call statement skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower direct call statement");
+
+        let IrStmt::Expr {
+            expr: IrExpr::Call { callee, args, .. },
+            ..
+        } = ir
+        else {
+            panic!("expected IR expr call statement, got {ir:?}");
+        };
+        assert_eq!(callee, "observe");
+        assert!(matches!(
+            args.as_slice(),
+            [IrExpr::Var { name, .. }] if name == "value"
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_function_pointer_call_expr() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (*)(int)" },
+                            "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "fp"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("function pointer call skeleton");
+        let error = lower_expr(&skeleton).expect_err("function pointer call must fail closed");
+
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error
+            .message
+            .contains("callee is not a direct function identifier"));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_call_expr_without_referenced_decl_kind() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("kindless call skeleton");
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::Unsupported { ref node, .. } if node == "CallExpr"
+        ));
+        let error = lower_expr(&skeleton).expect_err("kindless callee must fail closed");
+        assert!(error
+            .message
+            .contains("callee is not a direct function identifier"));
     }
 
     #[test]

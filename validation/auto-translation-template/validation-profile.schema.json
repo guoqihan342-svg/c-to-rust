@@ -26,6 +26,9 @@
     "profile": {"type": "string", "minLength": 1},
     "route_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
     "goal": {"type": "string", "minLength": 1},
+    "generated_draft_semantic_pass": {"const": false},
+    "accepted_evidence_authoritative": {"type": "boolean"},
+    "candidate_generation": {"$ref": "#/definitions/candidateGenerationEvidence"},
     "required_gates": {"type": "array", "minItems": 1, "items": {"type": "string"}},
     "optional_gates": {"type": "array", "items": {"type": "string"}},
     "skipped_gates": {
@@ -67,5 +70,137 @@
         }
       }
     }
-  ]
+  ],
+  "definitions": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "status"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidateGenerationEvidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["typed_ir"],
+      "properties": {
+        "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
+        "generated_draft_semantic_pass": {"const": false}
+      }
+    },
+    "typedIrCandidateEvidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "source_artifact",
+        "candidate_route",
+        "readonly_globals",
+        "readonly_globals_identity",
+        "rust_draft_generated",
+        "semantic_pass"
+      ],
+      "properties": {
+        "status": {"type": "string", "minLength": 1},
+        "source_artifact": {"$ref": "#/definitions/artifactRef"},
+        "candidate_route": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/definitions/typedIrCandidateRoute"}
+          ]
+        },
+        "readonly_globals": {"type": "array"},
+        "readonly_globals_identity": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["count", "names", "sha256"],
+          "properties": {
+            "count": {"type": "integer", "minimum": 0},
+            "names": {"type": "array", "items": {"type": "string"}},
+            "sha256": {"type": "string", "minLength": 1}
+          }
+        },
+        "rust_draft_generated": {"type": "boolean"},
+        "semantic_pass": {"const": false},
+        "reason": {"type": "string", "minLength": 1},
+        "unsupported_reason": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "generated"}}},
+          "then": {
+            "properties": {
+              "source_artifact": {"required": ["sha256"]},
+              "candidate_route": {
+                "allOf": [
+                  {"$ref": "#/definitions/typedIrCandidateRoute"},
+                  {"properties": {"route": {"const": "GenericTypedIr"}}}
+                ]
+              },
+              "rust_draft_generated": {"const": true}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "unsupported"}}},
+          "then": {
+            "properties": {
+              "candidate_route": {
+                "allOf": [
+                  {"$ref": "#/definitions/typedIrCandidateRoute"},
+                  {"properties": {"route": {"const": "Unsupported"}}}
+                ]
+              },
+              "rust_draft_generated": {"const": false}
+            }
+          }
+        }
+      ]
+    },
+    "typedIrCandidateRoute": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["route", "candidate_generator", "deprecated"],
+      "properties": {
+        "route_id": {"type": "string", "minLength": 1},
+        "route": {"enum": ["GenericTypedIr", "Unsupported"]},
+        "candidate_generator": {"enum": ["GenericTypedIrEmitter", "None"]},
+        "token_cost": {"type": "integer", "minimum": 0},
+        "deprecated": {"const": false},
+        "suggested_required_gates": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "fallback": {
+          "anyOf": [
+            {"type": "null"},
+            {"enum": ["GenericTypedIr", "Unsupported"]}
+          ]
+        },
+        "replacement": {
+          "anyOf": [
+            {"type": "null"},
+            {"enum": ["GenericTypedIr", "Unsupported"]}
+          ]
+        },
+        "delete_when": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"route": {"const": "GenericTypedIr"}}},
+          "then": {
+            "properties": {
+              "candidate_generator": {"const": "GenericTypedIrEmitter"}
+            }
+          }
+        }
+      ]
+    }
+  }
 }

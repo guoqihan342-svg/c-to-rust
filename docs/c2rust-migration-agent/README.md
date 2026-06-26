@@ -11,7 +11,7 @@
 - Rust 输出项目名：`flashDB_rust`
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
-- 核心翻译架构和证据状态：见 `core-translation-architecture.md` / `core-translation-architecture.en.md`；GenericTypedIr candidate generation 现在已绑定 evidence，但语义 acceptance 仍取决于 validation gates。
+- 核心翻译架构和证据状态：见 `core-translation-architecture.md` / `core-translation-architecture.en.md`；typed IR candidate generation 当前是 `GenericTypedIr` / `Unsupported` 两路线模型，新 evidence 可绑定 `candidate_generation.typed_ir`，但语义 acceptance 仍取决于 validation gates。
 
 ## 双语文档约定
 
@@ -28,7 +28,7 @@
 - `build-and-c2rust-baseline.md`：FlashDB build capture、C2Rust baseline 和 C oracle fallback。
 - `agent-contract.md`：OpenCode/Codex runtime contract、phase、IO、subagent、AI policy、async/thread policy。
 - `context-store-and-self-healing.md`：SQLite/JSONL schema、ContextPack、impact set、rustc repair loop、PatchPlan。
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 `clang_frontend -> typed IR + globals -> translation_route -> validation` 架构、核心代码地图、crc32 generic-emitter 进度和 typed IR legacy cleanup 边界。
+- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 `clang_frontend -> typed IR + globals -> translation_route -> validation` 架构、核心代码地图、两路线 typed IR candidate model、candidate_generation evidence schema 和 typed IR legacy cleanup 边界。
 - `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
 - `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档。

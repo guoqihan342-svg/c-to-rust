@@ -452,6 +452,89 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 )
             self.assertIn("semantic_pass", str(raised.exception))
 
+    def test_rejects_unsupported_typed_ir_candidate_reason_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-unsupported-typed-ir"
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            report_candidate = {
+                "status": "unsupported",
+                "candidate_route": {
+                    "route_id": "unsupported",
+                    "route": "Unsupported",
+                    "candidate_generator": "None",
+                    "reasons": [
+                        {
+                            "code": "unsupported",
+                            "detail": "call expressions are not supported by typed IR emitter",
+                        }
+                    ],
+                },
+                "readonly_globals": [],
+                "rust_draft_generated": False,
+                "semantic_pass": False,
+                "unsupported_reason": "call expressions are not supported by typed IR emitter",
+            }
+            self._write_json(report_path, {"status": "lowered", "typed_ir_candidate": report_candidate})
+            typed_ir = dict(report_candidate)
+            typed_ir["source_artifact"] = self._ref(report_path, "lowered")
+            typed_ir["readonly_globals_identity"] = {
+                "count": 0,
+                "names": [],
+                "sha256": hashlib.sha256(json.dumps([], sort_keys=True).encode("utf-8")).hexdigest(),
+            }
+            route = {
+                "source_artifacts": {"clang_lowering_report": self._ref(report_path, "lowered")},
+                "candidate_generation": {"typed_ir": typed_ir},
+            }
+            profile = {"candidate_generation": route["candidate_generation"]}
+
+            module.validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+
+            drifted = json.loads(json.dumps(route))
+            drifted["candidate_generation"]["typed_ir"].pop("unsupported_reason")
+            drifted_profile = {"candidate_generation": drifted["candidate_generation"]}
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(evidence_dir, prefix, drifted, drifted_profile)
+            self.assertIn("typed_ir", str(raised.exception))
+            self.assertIn("clang-lowering-report", str(raised.exception))
+
+    def test_rejects_unsupported_typed_ir_candidate_missing_from_report(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-unsupported-typed-ir"
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            self._write_json(report_path, {"status": "lowered"})
+            typed_ir = {
+                "status": "unsupported",
+                "source_artifact": self._ref(report_path, "lowered"),
+                "candidate_route": {
+                    "route_id": "unsupported",
+                    "route": "Unsupported",
+                    "candidate_generator": "None",
+                },
+                "readonly_globals": [],
+                "readonly_globals_identity": {
+                    "count": 0,
+                    "names": [],
+                    "sha256": hashlib.sha256(json.dumps([], sort_keys=True).encode("utf-8")).hexdigest(),
+                },
+                "rust_draft_generated": False,
+                "semantic_pass": False,
+                "unsupported_reason": "call expressions are not supported by typed IR emitter",
+            }
+            route = {
+                "source_artifacts": {"clang_lowering_report": self._ref(report_path, "lowered")},
+                "candidate_generation": {"typed_ir": typed_ir},
+            }
+            profile = {"candidate_generation": route["candidate_generation"]}
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+            self.assertIn("typed IR candidate evidence missing", str(raised.exception))
+
     def test_rejects_typed_ir_candidate_reference_boundary_gaps(self) -> None:
         module = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

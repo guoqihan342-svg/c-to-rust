@@ -2888,10 +2888,10 @@ def emit_route_decision(
     cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
     pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
     plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
-    level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan)
+    candidate_generation = candidate_generation_evidence(spec, evidence_dir)
+    level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan, candidate_generation)
     translator = route_translator(level)
     profile = validation_profile_name(level, "dev")
-    candidate_generation = candidate_generation_evidence(spec, evidence_dir)
     source_artifacts = {
         "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
         "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
@@ -2969,7 +2969,7 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
     readonly_globals = candidate.get("readonly_globals", [])
     if not isinstance(readonly_globals, list):
         readonly_globals = []
-    return {
+    binding = {
         "status": str(candidate.get("status", "unknown")),
         "source_artifact": evidence_ref(report_path, str(report.get("status", "recorded"))),
         "candidate_route": candidate.get("candidate_route"),
@@ -2978,6 +2978,11 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
         "rust_draft_generated": bool(candidate.get("rust_draft_generated", False)),
         "semantic_pass": False,
     }
+    if candidate.get("reason"):
+        binding["reason"] = str(candidate["reason"])
+    if candidate.get("unsupported_reason"):
+        binding["unsupported_reason"] = str(candidate["unsupported_reason"])
+    return binding
 
 
 def readonly_globals_identity(readonly_globals: list[Any]) -> dict[str, Any]:
@@ -3000,6 +3005,7 @@ def route_level(
     cfg: dict[str, Any],
     pointer: dict[str, Any],
     plan: dict[str, Any],
+    candidate_generation: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
     rationale: list[dict[str, Any]] = []
     blocked_statuses = {
@@ -3014,6 +3020,11 @@ def route_level(
     if cfg.get("unsupported_control_flow"):
         rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
         return "L4", rationale
+    typed_ir_signal = typed_ir_candidate_route_signal(candidate_generation or {})
+    if typed_ir_signal is not None:
+        level, typed_ir_rationale = typed_ir_signal
+        rationale.append(typed_ir_rationale)
+        return level, rationale
     pointer_nodes = pointer.get("pointer_nodes", [])
     if not pointer_nodes:
         rationale.append({"feature": "scalar_only", "weight": "low"})
@@ -3027,6 +3038,35 @@ def route_level(
         return "L2", rationale
     rationale.append({"feature": "bounded_pointer_surface", "weight": "low"})
     return "L1", rationale
+
+
+def typed_ir_candidate_route_signal(candidate_generation: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    typed_ir = candidate_generation.get("typed_ir")
+    if not isinstance(typed_ir, dict):
+        return None
+    status = str(typed_ir.get("status", ""))
+    candidate_route = typed_ir.get("candidate_route")
+    route = candidate_route.get("route") if isinstance(candidate_route, dict) else None
+    if status == "generated" and route == "GenericTypedIr" and typed_ir.get("rust_draft_generated") is True:
+        return (
+            "L1",
+            {
+                "feature": "typed_ir_candidate_generated",
+                "route": "GenericTypedIr",
+                "weight": "generic_typed_ir",
+            },
+        )
+    if status == "unsupported":
+        reason = str(typed_ir.get("unsupported_reason") or typed_ir.get("reason") or "typed_ir_candidate_unsupported")
+        return (
+            "L2",
+            {
+                "feature": "typed_ir_candidate_unsupported",
+                "reason": reason,
+                "weight": "repair_queue",
+            },
+        )
+    return None
 
 
 def route_translator(level: str) -> dict[str, Any]:

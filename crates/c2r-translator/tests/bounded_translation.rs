@@ -156,6 +156,18 @@ fn ir_i32() -> IrType {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_void() -> IrType {
+    IrType {
+        spelled: "void".to_string(),
+        canonical: "void".to_string(),
+        kind: IrTypeKind::Void,
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_var(name: &str, ty: IrType) -> IrExpr {
     IrExpr::Var {
         name: name.to_string(),
@@ -503,6 +515,168 @@ fn typed_ir_reports_generic_candidate_route_for_scalar_emit() {
     assert!(!emitted.route.deprecated);
     assert!(emitted.rust.contains("pub fn add_one_route"));
     assert!(!emitted.rust.contains("crc32_update_byte"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_direct_identifier_call_expressions() {
+    let i32_ty = ir_i32();
+    let helper_call = |arg: IrExpr| IrExpr::Call {
+        callee: "helper".to_string(),
+        args: vec![arg],
+        ty: i32_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "call_expression".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "first".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(helper_call(ir_var("value", i32_ty.clone()))),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: ir_var("value", i32_ty.clone()),
+                value: helper_call(ir_var("first", i32_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(helper_call(ir_var("value", i32_ty.clone()))),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit direct call expressions");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn call_expression(mut value: i32) -> i32"));
+    assert!(rust.contains("let mut first: i32 = helper(value);"));
+    assert!(rust.contains("value = helper(first);"));
+    assert!(rust.contains("return helper(value);"));
+    assert_rust_snippet_compiles(
+        "typed-ir-direct-call-expressions",
+        &format!("fn helper(value: i32) -> i32 {{ value }}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_direct_identifier_call_statement() {
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let ir = IrFunction {
+        name: "call_hook".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![ir_var("value", i32_ty)],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit direct call statement");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn call_hook(value: i32)"));
+    assert!(rust.contains("observe(value);"));
+    assert_rust_snippet_compiles(
+        "typed-ir-direct-call-statement",
+        &format!("fn observe(_: i32) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nested_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "nested_call_expression".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![IrExpr::Call {
+                    callee: "other".to_string(),
+                    args: vec![ir_var("value", i32_ty.clone())],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("nested call arg must fail closed");
+
+    assert!(error
+        .reason
+        .contains("nested call expressions are outside the bounded call subset"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_side_effect_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "side_effect_call_argument".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("side-effect call arg must fail closed");
+
+    assert!(error
+        .reason
+        .contains("call arguments cannot use increment/decrement value semantics"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2259,6 +2433,58 @@ fn typed_ir_rejects_if_with_unsupported_condition_expr() {
     };
 
     let error = emit_rust_from_ir(&ir).expect_err("if call condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_if_with_call_in_comparison_condition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_if_call_comparison".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    IrExpr::Call {
+                        callee: "helper".to_string(),
+                        args: vec![ir_var("value", i32_ty.clone())],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_lit(0, "0", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_var("value", i32_ty.clone()),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("if comparison call condition must fail closed");
 
     assert!(error
         .reason
@@ -6906,7 +7132,7 @@ fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_initialized_decl_with_call_expr_when_enabled() {
+fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -6919,7 +7145,7 @@ fn clang_ast_dump_rejects_initialized_decl_with_call_expr_when_enabled() {
         "clang path does not exist: {}",
         clang_path.display()
     );
-    let out_dir = unique_out_dir("clang-real-initialized-decl-call-reject");
+    let out_dir = unique_out_dir("clang-real-initialized-decl-call-lower");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("init_call.c");
     fs::write(
@@ -6934,19 +7160,32 @@ fn clang_ast_dump_rejects_initialized_decl_with_call_expr_when_enabled() {
 
     let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "init_call");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_expr")
-    );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| error.message.contains("CallExpr"))
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        name,
+        init: Some(IrExpr::Call { callee, args, .. }),
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected direct call initializer followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "value");
+    assert_eq!(callee, "helper");
+    assert!(args.is_empty());
+
+    let emitted =
+        emit_rust_from_ir(function).expect("emit initialized direct call from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn init_call() -> i32"));
+    assert!(rust.contains("let mut value: i32 = helper();"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-initialized-direct-call",
+        &format!("fn helper() -> i32 {{ 0 }}\n{rust}"),
     );
 }
 

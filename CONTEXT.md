@@ -5525,3 +5525,77 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 
 - 把 `typed_ir_candidate` 从 provenance 进一步接入 route signal：`generated` 进入 L1 typed IR route，`unsupported` 保留失败原因并进入后续 L2/L3 队列。
 - 保留当前原则：candidate route 只描述生成路径，不替代 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 80. 2026-06-27 typed IR route signal and bounded direct calls
+
+本轮承接第 79 节：`typed_ir_candidate` 不再只是 route/profile provenance，它现在也参与 route decision；同时 generic typed IR emitter 扩展了一个非项目专用的 bounded direct-call 子集。
+
+代码改动：
+
+- `validation/tools/auto_migrate.py`
+  - `emit_route_decision()` 先读取 `candidate_generation_evidence()`，再把它交给 `route_level()`。
+  - `route_level()` 在 hard-refuse 条件之后、旧 scalar/pointer heuristic 之前检查 typed IR signal。
+  - `typed_ir.status=generated`、route 为 `GenericTypedIr` 且 `rust_draft_generated=true` 时，route level 为 `L1`，rationale 写入 `typed_ir_candidate_generated`。
+  - `typed_ir.status=unsupported` 时，route level 为 `L2`，rationale 写入 `typed_ir_candidate_unsupported`，并保留 `unsupported_reason` 或 `reason`。
+  - `semantic_pass` 和 `generated_draft_semantic_pass` 仍保持 false；candidate route 不替代 validation gates。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_generated_typed_ir_candidate_is_l1_route_signal`。
+  - 新增 `test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2`。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 对存在 `typed_ir_candidate` 的 clang-lowering-report，不再只校验 `generated` 状态；`unsupported_reason` / `reason` 也会参与 route/profile 与 report 的漂移比较。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_rejects_unsupported_typed_ir_candidate_reason_drift`。
+  - 新增 `test_rejects_unsupported_typed_ir_candidate_missing_from_report`，拒绝 route/profile 声称 unsupported typed IR candidate、但 clang-lowering-report 不含 `typed_ir_candidate` 的伪绑定。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - clang `CallExpr` 可以 lowering 为 `ClangExprSkeleton::Call` 和 `IrExpr::Call`，前提是 callee 是带 `referencedDecl.kind=FunctionDecl` 的直接函数名。
+  - 函数指针或非直接 callee、缺少 `FunctionDecl` 证明的 callee、嵌套 call 参数、inc/dec 参数、deref/address-of 参数继续 fail closed。
+  - 审查后新增 `expr_skeleton_from_ast_rejects_call_expr_without_referenced_decl_kind`，避免仅凭 `qualType` 启发式放行。
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - generic emitter 支持 bounded direct identifier call。
+  - 覆盖 call statement、declaration initializer、assignment RHS 和 return value。
+  - calls in `if` / `while` condition 仍 unsupported，且现在递归检查 comparison lhs/rhs 等 condition 子树。
+  - 审查后新增 `typed_ir_rejects_if_with_call_in_comparison_condition`，避免 `if helper(x) == 0` 被误放行。
+
+- `validation/auto-translation-template/route-decision.schema.json`
+- `validation/auto-translation-template/validation-profile.schema.json`
+  - `candidate_generation` 对旧 evidence 保持可选。
+  - 一旦出现 `candidate_generation.typed_ir`，schema 限制 route 为 `GenericTypedIr` / `Unsupported`，并要求 `semantic_pass=false`。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - 已同步当前两路线 typed IR 模型、route signal、schema 兼容边界和 direct-call 覆盖。
+
+本轮已跑过的聚焦验证：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_unsupported_typed_ir_candidate_reason_drift
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_validates_typed_ir_candidate_binding_against_clang_lowering_report validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_unsupported_typed_ir_candidate_reason_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_typed_ir_candidate_reference_boundary_gaps
+python -m json.tool validation/auto-translation-template/route-decision.schema.json
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+待本轮最终提交前仍需跑：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+openspec validate --all --strict
+git diff --check -- <本轮目标文件>
+```
+
+下一步建议：
+
+- 在 route signal 已接入后，继续把真实 FlashDB crc32 的 oracle/diff/negative/unsafe/final verification 跑完整。
+- 继续扩展 generic typed IR 的常见 C 子集，例如更系统的 direct-call callee signature evidence、简单 struct field reads/writes、局部数组/指针边界，而不是恢复项目专用 fallback。
