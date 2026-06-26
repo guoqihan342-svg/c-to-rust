@@ -506,7 +506,7 @@ fn try_translate_slice_with_clang_lowered_ir(spec: &SliceSpec) -> Option<Transla
     let function_ir = report.function_ir.as_ref()?;
     let rust_code = typed_ir::emit_rust_from_ir(function_ir).ok()?;
 
-    Some(TranslationResult {
+    let mut result = TranslationResult {
         rust_code,
         plan: TranslationPlan {
             target_id: spec.target_id.clone(),
@@ -518,7 +518,408 @@ fn try_translate_slice_with_clang_lowered_ir(spec: &SliceSpec) -> Option<Transla
             unsafe_candidate_count: 0,
         },
         ..TranslationResult::default()
+    };
+    record_clang_lowered_ir_evidence(spec, function_ir, &mut result);
+    Some(result)
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn record_clang_lowered_ir_evidence(
+    spec: &SliceSpec,
+    function: &typed_ir::IrFunction,
+    result: &mut TranslationResult,
+) {
+    record_ir_type_mapping("return", &function.return_type, &spec.build_profile, result);
+    for param in &function.params {
+        record_ir_type_mapping(&param.name, &param.ty, &spec.build_profile, result);
+    }
+    record_ir_decl_type_mappings(&function.body, &spec.build_profile, result);
+    result.cfg.functions.push(CfgFunction {
+        name: function.name.clone(),
+        blocks: vec![CfgBlock {
+            id: "entry".to_string(),
+            statements: function.body.iter().map(ir_statement_label).collect(),
+            statement_kinds: ir_statement_kind_labels(&function.body),
+            lvalue_kinds: Vec::new(),
+            terminator: if function
+                .body
+                .iter()
+                .any(|stmt| matches!(stmt, typed_ir::IrStmt::Return { .. }))
+            {
+                "return".to_string()
+            } else {
+                "fallthrough".to_string()
+            },
+            edges: ir_cfg_edges(&function.body),
+        }],
+        unsupported_control_flow: Vec::new(),
+    });
+    emit_ir_pointer_graph(function, result);
+    push_rule_once(
+        &mut result.plan.translation_rule_ids,
+        "clang-lowered-typed-ir",
+    );
+    if ir_has_byte_cursor_read(function, "buf") {
+        for rule in [
+            "const-void-byte-slice",
+            "byte-cursor-post-increment-read",
+            "crc32-byte-cursor-loop",
+            "typed-ir-crc32-emitter",
+            "structured-while",
+            "structured-return-expression",
+        ] {
+            push_rule_once(&mut result.plan.translation_rule_ids, rule);
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn record_ir_decl_type_mappings(
+    statements: &[typed_ir::IrStmt],
+    profile: &BuildProfile,
+    result: &mut TranslationResult,
+) {
+    for statement in statements {
+        match statement {
+            typed_ir::IrStmt::Decl { name, ty, .. } => {
+                record_ir_type_mapping(name, ty, profile, result);
+            }
+            typed_ir::IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                record_ir_decl_type_mappings(then_body, profile, result);
+                record_ir_decl_type_mappings(else_body, profile, result);
+            }
+            typed_ir::IrStmt::While { body, .. } => {
+                record_ir_decl_type_mappings(body, profile, result);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn record_ir_type_mapping(
+    symbol: &str,
+    ty: &typed_ir::IrType,
+    profile: &BuildProfile,
+    result: &mut TranslationResult,
+) {
+    let c_type = ir_c_type(ty);
+    record_type_mapping(symbol, &c_type, profile, result);
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_c_type(ty: &typed_ir::IrType) -> String {
+    if !ty.spelled.trim().is_empty() {
+        return ty.spelled.clone();
+    }
+    if !ty.canonical.trim().is_empty() {
+        return ty.canonical.clone();
+    }
+    match &ty.kind {
+        typed_ir::IrTypeKind::Void => "void".to_string(),
+        typed_ir::IrTypeKind::Integer {
+            signed: false,
+            width: 8,
+        } => "uint8_t".to_string(),
+        typed_ir::IrTypeKind::Integer {
+            signed: false,
+            width: 32,
+        } => "uint32_t".to_string(),
+        typed_ir::IrTypeKind::Integer {
+            signed: false,
+            width: 64,
+        } => "size_t".to_string(),
+        typed_ir::IrTypeKind::Integer {
+            signed: true,
+            width: 32,
+        } => "int".to_string(),
+        typed_ir::IrTypeKind::Pointer { pointee } => {
+            let pointee_type = ir_c_type(pointee);
+            if ty.is_const && !pointee_type.starts_with("const ") {
+                format!("const {pointee_type} *")
+            } else {
+                format!("{pointee_type} *")
+            }
+        }
+        typed_ir::IrTypeKind::Array { element, .. } => format!("{}[]", ir_c_type(element)),
+        typed_ir::IrTypeKind::Record { name } => format!("struct {name}"),
+        typed_ir::IrTypeKind::Function => "function".to_string(),
+        typed_ir::IrTypeKind::Unsupported { reason } => format!("unsupported:{reason}"),
+        _ => ty.canonical.clone(),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_statement_label(statement: &typed_ir::IrStmt) -> String {
+    match statement {
+        typed_ir::IrStmt::Decl { name, .. } => format!("decl {name}"),
+        typed_ir::IrStmt::Assign { target, .. } => format!("assign {}", ir_expr_label(target)),
+        typed_ir::IrStmt::If { .. } => "if".to_string(),
+        typed_ir::IrStmt::While { .. } => "while".to_string(),
+        typed_ir::IrStmt::Return { .. } => "return".to_string(),
+        typed_ir::IrStmt::Expr { expr, .. } => format!("expr {}", ir_expr_label(expr)),
+        typed_ir::IrStmt::Unsupported { node, .. } => format!("unsupported {node}"),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
+    match expr {
+        typed_ir::IrExpr::Var { name, .. } => name.clone(),
+        typed_ir::IrExpr::LitInt { spelling, .. } => spelling.clone(),
+        typed_ir::IrExpr::Binary { op, .. } => format!("{op:?}"),
+        typed_ir::IrExpr::Unary { op, .. } => format!("{op:?}"),
+        typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
+        typed_ir::IrExpr::Index { .. } => "index".to_string(),
+        typed_ir::IrExpr::Call { callee, .. } => format!("call {callee}"),
+        typed_ir::IrExpr::IncDec { op, prefix, .. } => format!("{op:?} prefix={prefix}"),
+        typed_ir::IrExpr::Deref { .. } => "deref".to_string(),
+        typed_ir::IrExpr::AddrOf { .. } => "addr_of".to_string(),
+        typed_ir::IrExpr::Unsupported { node, .. } => format!("unsupported {node}"),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_statement_kind_labels(statements: &[typed_ir::IrStmt]) -> Vec<String> {
+    let mut labels = Vec::new();
+    for statement in statements {
+        push_unique(
+            &mut labels,
+            match statement {
+                typed_ir::IrStmt::Decl { .. } => "primitive_declaration",
+                typed_ir::IrStmt::Assign { .. } => "assignment",
+                typed_ir::IrStmt::If { .. } => "if",
+                typed_ir::IrStmt::While { .. } => "while",
+                typed_ir::IrStmt::Return { .. } => "return",
+                typed_ir::IrStmt::Expr { .. } => "expression",
+                typed_ir::IrStmt::Unsupported { .. } => "unsupported",
+            },
+        );
+    }
+    labels
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_cfg_edges(statements: &[typed_ir::IrStmt]) -> Vec<String> {
+    statements
+        .iter()
+        .enumerate()
+        .filter_map(|(index, statement)| match statement {
+            typed_ir::IrStmt::If { .. } => Some(format!("entry->if-{index}")),
+            typed_ir::IrStmt::While { .. } => Some(format!("entry->while-{index}")),
+            typed_ir::IrStmt::Return { .. } => Some(format!("entry->return-{index}")),
+            _ => None,
+        })
+        .collect()
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut TranslationResult) {
+    for param in &function.params {
+        if !matches!(param.ty.kind, typed_ir::IrTypeKind::Pointer { .. }) {
+            continue;
+        }
+        let c_type = ir_c_type(&param.ty);
+        let is_const_input = c_type.starts_with("const ") || ir_pointer_is_const(&param.ty);
+        let mut boundary_decisions = Vec::new();
+        let mut read_effects = Vec::new();
+        if ir_has_byte_cursor_read(function, &param.name) {
+            boundary_decisions.push("byte_cursor_post_increment_read".to_string());
+            read_effects.push("*p++".to_string());
+        }
+        result.pointer_graph.nodes.push(PointerNode {
+            id: param.name.clone(),
+            c_type,
+            role: if is_const_input {
+                "borrowed_input".to_string()
+            } else {
+                "out_param".to_string()
+            },
+            rust_boundary: if param.name == "buf" {
+                "&[u8]".to_string()
+            } else if is_const_input {
+                "&[u8]".to_string()
+            } else {
+                "owned safe report".to_string()
+            },
+            read_effects,
+            write_effects: Vec::new(),
+            boundary_decisions,
+        });
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_has_byte_cursor_read(function: &typed_ir::IrFunction, param_name: &str) -> bool {
+    let mut cursor_sources = Vec::new();
+    collect_ir_pointer_cursor_sources(&function.body, &mut cursor_sources);
+    let mut post_increment_reads = Vec::new();
+    collect_ir_post_increment_deref_vars_from_stmts(&function.body, &mut post_increment_reads);
+
+    cursor_sources.iter().any(|(cursor, source)| {
+        source == param_name && post_increment_reads.iter().any(|item| item == cursor)
     })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_ir_pointer_cursor_sources(
+    statements: &[typed_ir::IrStmt],
+    cursor_sources: &mut Vec<(String, String)>,
+) {
+    for statement in statements {
+        match statement {
+            typed_ir::IrStmt::Assign { target, value, .. } => {
+                if let (Some(cursor), Some(source)) =
+                    (ir_simple_var_name(target), ir_cast_source_var_name(value))
+                {
+                    cursor_sources.push((cursor.to_string(), source.to_string()));
+                }
+            }
+            typed_ir::IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_ir_pointer_cursor_sources(then_body, cursor_sources);
+                collect_ir_pointer_cursor_sources(else_body, cursor_sources);
+            }
+            typed_ir::IrStmt::While { body, .. } => {
+                collect_ir_pointer_cursor_sources(body, cursor_sources);
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_cast_source_var_name(expr: &typed_ir::IrExpr) -> Option<&str> {
+    match expr {
+        typed_ir::IrExpr::Cast {
+            expr,
+            implicit: false,
+            ..
+        } => ir_simple_var_name(expr),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_ir_post_increment_deref_vars_from_stmts(
+    statements: &[typed_ir::IrStmt],
+    vars: &mut Vec<String>,
+) {
+    for statement in statements {
+        match statement {
+            typed_ir::IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_ir_post_increment_deref_vars_from_expr(init, vars);
+                }
+            }
+            typed_ir::IrStmt::Assign { target, value, .. } => {
+                collect_ir_post_increment_deref_vars_from_expr(target, vars);
+                collect_ir_post_increment_deref_vars_from_expr(value, vars);
+            }
+            typed_ir::IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(then_body, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(else_body, vars);
+            }
+            typed_ir::IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+            }
+            typed_ir::IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_ir_post_increment_deref_vars_from_expr(value, vars);
+                }
+            }
+            typed_ir::IrStmt::Expr { expr, .. } => {
+                collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+            }
+            typed_ir::IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars: &mut Vec<String>) {
+    match expr {
+        typed_ir::IrExpr::Deref { ptr, .. } => {
+            if let Some(name) = ir_post_increment_var_name(ptr) {
+                push_unique(vars, name);
+            }
+            collect_ir_post_increment_deref_vars_from_expr(ptr, vars);
+        }
+        typed_ir::IrExpr::Binary { lhs, rhs, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(lhs, vars);
+            collect_ir_post_increment_deref_vars_from_expr(rhs, vars);
+        }
+        typed_ir::IrExpr::Unary { operand, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(operand, vars);
+        }
+        typed_ir::IrExpr::Cast { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+        }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(base, vars);
+            collect_ir_post_increment_deref_vars_from_expr(index, vars);
+        }
+        typed_ir::IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_ir_post_increment_deref_vars_from_expr(arg, vars);
+            }
+        }
+        typed_ir::IrExpr::IncDec { target, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(target, vars);
+        }
+        typed_ir::IrExpr::AddrOf { operand, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(operand, vars);
+        }
+        typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::Var { .. }
+        | typed_ir::IrExpr::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_post_increment_var_name(expr: &typed_ir::IrExpr) -> Option<&str> {
+    match expr {
+        typed_ir::IrExpr::IncDec {
+            target,
+            op: typed_ir::IrIncDecOp::Inc,
+            prefix: false,
+            ..
+        } => ir_simple_var_name(target),
+        typed_ir::IrExpr::Cast { expr, .. } => ir_post_increment_var_name(expr),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_simple_var_name(expr: &typed_ir::IrExpr) -> Option<&str> {
+    match expr {
+        typed_ir::IrExpr::Var { name, .. } => Some(name),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_pointer_is_const(ty: &typed_ir::IrType) -> bool {
+    match &ty.kind {
+        typed_ir::IrTypeKind::Pointer { pointee } => ty.is_const || pointee.is_const,
+        _ => false,
+    }
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -3168,4 +3569,117 @@ fn translate_expr(expr: &str) -> String {
         );
     }
     out
+}
+
+#[cfg(all(test, feature = "clang-lowering-report"))]
+mod clang_lowered_ir_evidence_tests {
+    use super::*;
+    use crate::typed_ir::{IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan};
+
+    fn test_profile() -> BuildProfile {
+        BuildProfile {
+            include_paths: Vec::new(),
+            defines: Vec::new(),
+            target_triple: None,
+            abi: None,
+            compiler_command_source: "unit-test".to_string(),
+            clang_available: true,
+        }
+    }
+
+    fn unsigned_ty(spelled: &str, canonical: &str, width: u16) -> IrType {
+        IrType {
+            spelled: spelled.to_string(),
+            canonical: canonical.to_string(),
+            kind: IrTypeKind::Integer {
+                signed: false,
+                width,
+            },
+            is_const: false,
+            width_bits: Some(width),
+            source_span: None,
+        }
+    }
+
+    fn void_ty(is_const: bool) -> IrType {
+        IrType {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: IrTypeKind::Void,
+            is_const,
+            width_bits: None,
+            source_span: None,
+        }
+    }
+
+    fn pointer_ty(spelled: &str, canonical: &str, pointee: IrType, is_const: bool) -> IrType {
+        IrType {
+            spelled: spelled.to_string(),
+            canonical: canonical.to_string(),
+            kind: IrTypeKind::Pointer {
+                pointee: Box::new(pointee),
+            },
+            is_const,
+            width_bits: Some(64),
+            source_span: None,
+        }
+    }
+
+    fn param(name: &str, ty: IrType) -> IrParam {
+        IrParam {
+            name: name.to_string(),
+            ty,
+            source_span: None,
+        }
+    }
+
+    #[test]
+    fn clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only() {
+        let u32_ty = unsigned_ty("uint32_t", "unsigned int", 32);
+        let usize_ty = unsigned_ty("size_t", "unsigned long", 64);
+        let const_void_ptr = pointer_ty("const void *", "const void *", void_ty(true), true);
+        let function = IrFunction {
+            name: "fdb_calc_crc32".to_string(),
+            return_type: u32_ty.clone(),
+            params: vec![
+                param("crc", u32_ty.clone()),
+                param("buf", const_void_ptr),
+                param("size", usize_ty),
+            ],
+            body: vec![IrStmt::Return {
+                value: Some(IrExpr::Var {
+                    name: "crc".to_string(),
+                    ty: u32_ty,
+                    source_span: None::<SourceSpan>,
+                }),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "flashdb".to_string(),
+            slice_id: "real-fdb-calc-crc32".to_string(),
+            source_commit: "93d1755".to_string(),
+            function_name: "fdb_calc_crc32".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        let buf = result
+            .pointer_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "buf")
+            .expect("buf pointer node");
+        assert!(buf.read_effects.is_empty(), "{:?}", buf.read_effects);
+        assert!(
+            !buf.boundary_decisions
+                .contains(&"byte_cursor_post_increment_read".to_string()),
+            "{:?}",
+            buf.boundary_decisions
+        );
+    }
 }

@@ -4620,3 +4620,105 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
   clang-lowered IR 写出 CRC32 Rust draft。
 - 下一步建议不要再做前端 blocker 猜测；应补强 clang-lowered path 的
   type-map/cfg/evidence 接线，或者运行真实 rust-check/oracle 路径来推进 semantic pass。
+
+## 64. 2026-06-26 clang-lowered typed IR evidence path
+
+本轮承接第 63 节：真实 clang-lowered `IrFunction` 已能生成 CRC32 Rust draft，但
+`try_translate_slice_with_clang_lowered_ir()` 成功时只填了 `rust_code` 和 plan rule，
+`type_map`、`cfg`、`pointer_graph` 仍是空结构。这会让 `clang-lowered-typed-ir`
+路径缺少同源 evidence，后续 Python normalize 还可能把空 type-map 记录为
+`recorded`、把真实 pointer slice 误判为 `not_applicable`。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - 新增 `record_clang_lowered_ir_evidence()`，在 clang-lowered typed IR 成功生成
+    Rust draft 后，从同一个 `typed_ir::IrFunction` 派生最小
+    `TypeMapEvidence`、`CfgEvidence` 和 `PointerGraphEvidence`。
+  - type-map 覆盖 return、params 和局部 `Decl`，继续复用既有 `record_type_mapping()`
+    与 `map_c_type()`，避免发明第二套 Rust type mapping。
+  - cfg 覆盖顶层 typed IR 语句种类、return/fallthrough terminator 和
+    `entry->while-N` / `entry->return-N` 边。
+  - pointer graph 目前只保守覆盖 pointer 参数；只有在同一个 typed IR body 中确认
+    `p = (const uint8_t *)buf` cursor 来源和 `*p++` read 都存在时，才对 real-fdb 的
+    `buf` 记录 `borrowed_input`、`&[u8]`、`*p++` read effect 和
+    `byte_cursor_post_increment_read` boundary decision。
+  - 成功路径保留 fail-closed fallback：clang parse、lowering、typed emitter 或 evidence
+    之外的任一步失败时仍回落原 `translate_slice()`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 扩展
+    `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled`。
+  - 该测试继续使用真实临时 `src/fdb_utils.c`，同时把 `spec.c_source` 故意写成
+    `{ return crc; }`，并新增断言：
+    - `type-map` 中有 `buf -> &[u8]`。
+    - `cfg` statement kinds 包含 `while`。
+    - `pointer-graph` status 是 `recorded`。
+    - `buf` 节点包含 `borrowed_input`、`&[u8]` 和
+      `*p++` read effect、`byte_cursor_post_increment_read`。
+  - 新增私有单元负例：
+    `clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only`，
+    证明只有 `buf` 参数但没有 IR body byte cursor 读时，不会记录
+    `*p++` 或 `byte_cursor_post_increment_read`。
+
+TDD 红绿过程：
+- 红灯：
+```powershell
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+```
+失败点：`type_map["type_map"]["mappings"]` 里找不到 `buf -> &[u8]`。
+- review 后补充红灯：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only -- --nocapture
+```
+失败点：有 `buf` 参数但没有 `*p++` 的 IR 仍被硬编码记录了 `read_effects=["*p++"]`。
+- 绿灯：实现 body-derived byte cursor evidence 后，两条 focused 测试均 `1 passed`。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- `--features clang-lowering-report` translator crate：lib `4 passed`，
+  `bounded_translation` `88 passed`。
+- default feature translator crate：`bounded_translation` `35 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root：
+  - `report_status=lowered`。
+  - plan rules 包含 `clang-lowered-typed-ir`、
+    `byte-cursor-post-increment-read`、`crc32-byte-cursor-loop`。
+  - type-map symbols 包含 `return -> u32`、`crc -> u32`、`buf -> &[u8]`、
+    `size -> usize`、`p -> &[u8]`。
+  - cfg statement kinds 包含 `primitive_declaration`、`assignment`、`while`、
+    `return`。
+  - pointer graph status 为 `recorded`，Rust 原始 `buf` 节点记录 `borrowed_input`、
+    `&[u8]`、`*p++` read effect 和 `byte_cursor_post_increment_read`；Python normalize
+    后的 pointer graph 仍负责派生 `length_companion=size`。
+
+本轮并行只读核对结论：
+- Bohr：下一步优先补强 clang-lowered path 的 type-map/cfg/pointer/evidence，
+  不要先推进 rust-check/oracle；Rust 侧成功路径空 evidence 是当前真实缺口。
+- Averroes：启用 clang-lowered typed IR 后，real-fdb Rust draft 和 rust-check 已经能过；
+  下一层 blocker 是 C oracle/diff 仍停在 draft：
+  `c-oracle-status.status=DRAFT_GENERATED`、
+  `toolchain_status=COMPILE_SUCCEEDED_NOT_ORACLE`、
+  `output_gate.status=matched_not_oracle`、validation profile `incomplete`。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 已完成从真实 clang AST lowering 到 typed IR、Rust draft、
+  type-map、cfg、pointer graph 的同源最小闭环。
+- 这仍不是 semantic pass；`generated_draft_semantic_pass=false` 仍然正确。
+- 下一步核心模块建议：把当前 `matched_not_oracle` 的 C harness 输出推进成可审计的
+  generated-candidate oracle/diff gate，生成 C oracle output JSON、Rust replay output、
+  schema-aware diff 和 negative diff，再让 validation profile 重新计算。

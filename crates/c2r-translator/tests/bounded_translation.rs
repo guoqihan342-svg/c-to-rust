@@ -4616,6 +4616,9 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
 
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
     let plan = json_file(out_dir.join("l3-real-fdb-calc-crc32-auto-translation-plan.json"));
+    let type_map = json_file(out_dir.join("l3-real-fdb-calc-crc32-type-map.json"));
+    let cfg = json_file(out_dir.join("l3-real-fdb-calc-crc32-cfg.json"));
+    let pointer_graph = json_file(out_dir.join("l3-real-fdb-calc-crc32-pointer-graph.json"));
     let rust = fs::read_to_string(out_dir.join("l3-real-fdb-calc-crc32-rust-draft.rs")).unwrap();
 
     assert_eq!(manifest.status, "generated");
@@ -4626,6 +4629,33 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("clang-lowered-typed-ir")));
+    assert!(type_map["type_map"]["mappings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|mapping| mapping["symbol"] == "buf" && mapping["rust_type"] == "&[u8]"));
+    assert!(cfg["cfg"]["functions"][0]["blocks"][0]["statement_kinds"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("while")));
+    assert_eq!(pointer_graph["status"], "recorded");
+    assert!(pointer_graph["pointer_graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|node| {
+            node["id"] == "buf"
+                && node["role"] == "borrowed_input"
+                && node["rust_boundary"] == "&[u8]"
+                && node["read_effects"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&serde_json::json!("*p++"))
+                && node["boundary_decisions"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&serde_json::json!("byte_cursor_post_increment_read"))
+        }));
 }
 
 #[cfg(feature = "clang-frontend")]
