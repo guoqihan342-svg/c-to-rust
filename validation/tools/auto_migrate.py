@@ -3413,6 +3413,62 @@ def bind_route_decision_to_generated_artifacts(
         write_json(path, payload)
 
 
+def c_oracle_output_gate_status(oracle: dict[str, Any]) -> str:
+    output_gate = c_oracle_output_gate_from_oracle(oracle)
+    return str(output_gate.get("status", "missing"))
+
+
+def c_oracle_output_gate_from_oracle(oracle: dict[str, Any]) -> dict[str, Any]:
+    compile_execution = oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        return {}
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        return {}
+    output_gate = harness_execution.get("output_gate")
+    return output_gate if isinstance(output_gate, dict) else {}
+
+
+def generated_candidate_diff_from_diagnostics(
+    spec: dict[str, Any],
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_report_status: str,
+) -> dict[str, Any] | None:
+    compile_execution = oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        return None
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        return None
+    output_gate = c_oracle_output_gate_from_oracle(oracle)
+    if not (
+        oracle.get("status") == "DRAFT_GENERATED"
+        and oracle.get("toolchain_status") == "COMPILE_SUCCEEDED_NOT_ORACLE"
+        and oracle.get("semantic_pass") is not True
+        and compile_execution.get("status") == "compile_succeeded_not_oracle"
+        and harness_execution.get("status") == "exited_zero_not_oracle"
+        and output_gate.get("status") == "matched_not_oracle"
+        and output_gate.get("semantic_pass") is not True
+        and replay.get("status") == "passed"
+        and replay.get("generated_draft_replay_pass") is True
+        and replay.get("generated_draft_semantic_pass") is not True
+        and rust_report_status == "passed"
+    ):
+        return None
+    return {
+        "schema_version": 1,
+        "status": "matched_not_oracle",
+        "semantic_pass": False,
+        "compared_fields": output_gate.get("compared_fields") or behavior_fields(spec),
+        "c_oracle_output_gate_status": output_gate.get("status"),
+        "rust_replay_status": replay.get("status"),
+        "matched_stdout_fragments": output_gate.get("matched_stdout_fragments", []),
+        "missing_stdout_fragments": output_gate.get("missing_stdout_fragments", []),
+        "boundary": "Generated candidate diff is diagnostic only until accepted oracle diff gates pass.",
+    }
+
+
 def write_l3_candidate_supporting_evidence(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -3434,6 +3490,8 @@ def write_l3_candidate_supporting_evidence(
     rust_report_status = "passed" if generated_replay_pass else "failed" if generated_replay_failed else "incomplete"
     rust_report_cases = generated_rust_report_cases(spec)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    candidate_diff = generated_candidate_diff_from_diagnostics(spec, oracle, replay, rust_report_status)
+    candidate_diff_pass = candidate_diff is not None and candidate_diff.get("status") == "matched_not_oracle"
     write_json(
         evidence_dir / f"{prefix}-slice-contract.json",
         {
@@ -3496,19 +3554,26 @@ def write_l3_candidate_supporting_evidence(
             "first_mismatch": None,
             "compared_fields": behavior_fields(spec),
             "accepted_diff_required": True,
-            "blocked_by": ["c_oracle", "rust_replay"],
+            "blocked_by": ["accepted_c_oracle"] if candidate_diff_pass else ["c_oracle", "rust_replay"],
             "required_inputs": {
                 "c_oracle_required_status": "C_ORACLE_GENERATED",
                 "rust_report_required_status": "passed",
                 "c_oracle_actual_status": oracle.get("status", "unknown"),
                 "c_oracle_actual_toolchain_status": oracle.get("toolchain_status", "unknown"),
+                "c_oracle_output_gate_actual_status": c_oracle_output_gate_status(oracle),
                 "rust_replay_actual_status": replay.get("status", "unknown"),
                 "rust_report_actual_status": rust_report_status,
             },
-            "reason_code": "missing_accepted_c_oracle"
+            "generated_candidate_diff_pass": candidate_diff_pass,
+            **({"candidate_diff": candidate_diff} if candidate_diff_pass else {}),
+            "reason_code": "candidate_matched_accepted_oracle_required"
+            if candidate_diff_pass
+            else "missing_accepted_c_oracle"
             if generated_replay_pass
             else "missing_accepted_c_oracle_and_rust_replay",
-            "reason": "Schema-aware diff requires accepted C oracle evidence before semantic acceptance."
+            "reason": "Generated candidate matched diagnostic C harness output and Rust replay fixtures; accepted C oracle diff remains required before semantic acceptance."
+            if candidate_diff_pass
+            else "Schema-aware diff requires accepted C oracle evidence before semantic acceptance."
             if generated_replay_pass
             else "Schema-aware diff requires accepted C oracle and Rust replay reports.",
         },

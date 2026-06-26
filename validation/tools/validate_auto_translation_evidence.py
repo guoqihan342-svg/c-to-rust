@@ -952,11 +952,19 @@ def validate_schema_diff_contract(evidence_dir: Path, prefix: str, slice_spec_pa
     negative_path = evidence_dir / f"{prefix}-negative-diff.json"
     schema_diff = load_json(diff_path)
     negative_diff = load_json(negative_path)
-    validate_draft_schema_diff_report(schema_diff, slice_spec, diff_path)
+    oracle = load_json(evidence_dir / f"{prefix}-c-oracle-status.json")
+    rust_report = load_json(evidence_dir / f"{prefix}-rust-report.json")
+    validate_draft_schema_diff_report(schema_diff, slice_spec, diff_path, oracle, rust_report)
     validate_draft_negative_diff_report(negative_diff, schema_diff, negative_path)
 
 
-def validate_draft_schema_diff_report(report: dict[str, Any], slice_spec: dict[str, Any], path: Path) -> None:
+def validate_draft_schema_diff_report(
+    report: dict[str, Any],
+    slice_spec: dict[str, Any],
+    path: Path,
+    oracle: dict[str, Any] | None = None,
+    rust_report: dict[str, Any] | None = None,
+) -> None:
     status = report.get("status")
     if status == "passed":
         return
@@ -970,8 +978,7 @@ def validate_draft_schema_diff_report(report: dict[str, Any], slice_spec: dict[s
         raise SystemExit(f"schema diff accepted_diff_required missing in {path}")
     if "accepted_diff" in report:
         raise SystemExit(f"schema diff draft cannot contain accepted_diff in {path}")
-    if report.get("blocked_by") != ["c_oracle", "rust_replay"]:
-        raise SystemExit(f"schema diff blocked_by drift in {path}")
+    validate_generated_candidate_diff_boundary(report, slice_spec, path, oracle, rust_report)
     required_inputs = report.get("required_inputs")
     if not isinstance(required_inputs, dict):
         raise SystemExit(f"schema diff required_inputs missing in {path}")
@@ -993,6 +1000,107 @@ def validate_draft_schema_diff_report(report: dict[str, Any], slice_spec: dict[s
         raise SystemExit(f"schema diff compared_fields missing behavior fields in {path}")
     if report.get("first_mismatch") is not None:
         raise SystemExit(f"schema diff draft cannot contain first_mismatch evidence in {path}")
+
+
+def validate_generated_candidate_diff_boundary(
+    report: dict[str, Any],
+    slice_spec: dict[str, Any],
+    path: Path,
+    oracle: dict[str, Any] | None = None,
+    rust_report: dict[str, Any] | None = None,
+) -> None:
+    candidate_pass = report.get("generated_candidate_diff_pass") is True
+    if not candidate_pass:
+        if "candidate_diff" in report:
+            raise SystemExit(f"schema diff candidate_diff present without generated_candidate_diff_pass in {path}")
+        if report.get("blocked_by") != ["c_oracle", "rust_replay"]:
+            raise SystemExit(f"schema diff blocked_by drift in {path}")
+        return
+
+    if report.get("blocked_by") != ["accepted_c_oracle"]:
+        raise SystemExit(f"schema diff candidate blocked_by drift in {path}")
+    candidate = report.get("candidate_diff")
+    if not isinstance(candidate, dict):
+        raise SystemExit(f"schema diff candidate_diff missing in {path}")
+    if not isinstance(oracle, dict):
+        raise SystemExit(f"schema diff candidate oracle report missing in {path}")
+    if not isinstance(rust_report, dict):
+        raise SystemExit(f"schema diff candidate rust report missing in {path}")
+    compile_execution = oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        raise SystemExit(f"schema diff candidate oracle compile_execution missing in {path}")
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        raise SystemExit(f"schema diff candidate oracle harness_execution missing in {path}")
+    output_gate = harness_execution.get("output_gate")
+    if not isinstance(output_gate, dict):
+        raise SystemExit(f"schema diff candidate oracle output_gate missing in {path}")
+    replay = rust_report.get("replay")
+    if not isinstance(replay, dict):
+        raise SystemExit(f"schema diff candidate rust report replay missing in {path}")
+    if candidate.get("status") != "matched_not_oracle":
+        raise SystemExit(f"schema diff candidate_diff status drift in {path}")
+    if candidate.get("semantic_pass") is not False:
+        raise SystemExit(f"schema diff candidate_diff cannot claim semantic_pass in {path}")
+    if oracle.get("status") != "DRAFT_GENERATED":
+        raise SystemExit(f"schema diff candidate oracle status drift in {path}")
+    if oracle.get("toolchain_status") != "COMPILE_SUCCEEDED_NOT_ORACLE":
+        raise SystemExit(f"schema diff candidate oracle toolchain status drift in {path}")
+    if oracle.get("semantic_pass") is True:
+        raise SystemExit(f"schema diff candidate oracle cannot claim semantic_pass in {path}")
+    if compile_execution.get("status") != "compile_succeeded_not_oracle":
+        raise SystemExit(f"schema diff candidate oracle compile status drift in {path}")
+    if harness_execution.get("status") != "exited_zero_not_oracle":
+        raise SystemExit(f"schema diff candidate oracle harness status drift in {path}")
+    if output_gate.get("status") != "matched_not_oracle":
+        raise SystemExit(f"schema diff candidate_diff output gate drift in {path}")
+    if output_gate.get("semantic_pass") is True:
+        raise SystemExit(f"schema diff candidate oracle output gate cannot claim semantic_pass in {path}")
+    if rust_report.get("status") != "passed":
+        raise SystemExit(f"schema diff candidate rust report status drift in {path}")
+    if rust_report.get("generated_draft_replay_pass") is not True:
+        raise SystemExit(f"schema diff candidate rust report replay pass drift in {path}")
+    if rust_report.get("generated_draft_semantic_pass") is True:
+        raise SystemExit(f"schema diff candidate rust report cannot claim generated_draft_semantic_pass in {path}")
+    if replay.get("status") != "passed":
+        raise SystemExit(f"schema diff candidate rust replay status drift in {path}")
+    if candidate.get("c_oracle_output_gate_status") != output_gate.get("status"):
+        raise SystemExit(f"schema diff candidate_diff output gate drift in {path}")
+    if candidate.get("rust_replay_status") != replay.get("status"):
+        raise SystemExit(f"schema diff candidate_diff rust replay drift in {path}")
+    if candidate.get("missing_stdout_fragments") != output_gate.get("missing_stdout_fragments"):
+        raise SystemExit(f"schema diff candidate_diff missing stdout fragments in {path}")
+    matched_fragments = candidate.get("matched_stdout_fragments")
+    if not isinstance(matched_fragments, list) or not matched_fragments:
+        raise SystemExit(f"schema diff candidate_diff matched stdout fragments missing in {path}")
+    if matched_fragments != output_gate.get("matched_stdout_fragments"):
+        raise SystemExit(f"schema diff candidate_diff matched stdout fragments drift in {path}")
+    compared_fields = require_string_list(
+        candidate.get("compared_fields"),
+        f"schema diff candidate_diff compared_fields drift in {path}",
+    )
+    output_gate_fields = require_string_list(
+        output_gate.get("compared_fields"),
+        f"schema diff candidate oracle output gate compared_fields drift in {path}",
+    )
+    if compared_fields != output_gate_fields:
+        raise SystemExit(f"schema diff candidate_diff compared_fields drift in {path}")
+    expected_fields = behavior_fields_from_spec(slice_spec)
+    if expected_fields and not set(expected_fields).issubset(set(compared_fields)):
+        raise SystemExit(f"schema diff candidate_diff compared_fields missing behavior fields in {path}")
+    required_inputs = report.get("required_inputs")
+    if not isinstance(required_inputs, dict):
+        raise SystemExit(f"schema diff candidate required_inputs missing in {path}")
+    if required_inputs.get("c_oracle_actual_status") != oracle.get("status"):
+        raise SystemExit(f"schema diff candidate required_inputs.c_oracle_actual_status drift in {path}")
+    if required_inputs.get("c_oracle_actual_toolchain_status") != oracle.get("toolchain_status"):
+        raise SystemExit(f"schema diff candidate required_inputs.c_oracle_actual_toolchain_status drift in {path}")
+    if required_inputs.get("c_oracle_output_gate_actual_status") != output_gate.get("status"):
+        raise SystemExit(f"schema diff candidate required_inputs.c_oracle_output_gate_actual_status drift in {path}")
+    if required_inputs.get("rust_replay_actual_status") != replay.get("status"):
+        raise SystemExit(f"schema diff candidate required_inputs.rust_replay_actual_status drift in {path}")
+    if required_inputs.get("rust_report_actual_status") != rust_report.get("status"):
+        raise SystemExit(f"schema diff candidate required_inputs.rust_report_actual_status drift in {path}")
 
 
 def validate_draft_negative_diff_report(

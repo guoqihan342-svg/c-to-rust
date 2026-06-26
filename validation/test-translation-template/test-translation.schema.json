@@ -42,7 +42,9 @@
         "recorded",
         "not_applicable",
         "stale",
-        "incomplete"
+        "incomplete",
+        "passed",
+        "failed"
       ]
     },
     "not_applicable_reason": {
@@ -193,7 +195,9 @@
             "enum": [
               "mapped",
               "not_applicable",
-              "gap"
+              "gap",
+              "passed",
+              "failed"
             ]
           },
           "evidence": {

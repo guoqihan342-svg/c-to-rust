@@ -23,6 +23,167 @@ def load_validator_module():
 
 
 class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
+    def test_generated_candidate_diff_boundary_remains_non_semantic(self) -> None:
+        module = load_validator_module()
+        slice_spec = {
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "behavior_fields": ["return_code"],
+            }
+        }
+        oracle = {
+            "status": "DRAFT_GENERATED",
+            "semantic_pass": False,
+            "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+            "compile_execution": {
+                "status": "compile_succeeded_not_oracle",
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "output_gate": {
+                        "status": "matched_not_oracle",
+                        "semantic_pass": False,
+                        "compared_fields": ["return_code"],
+                        "matched_stdout_fragments": ["fixture case case-zero return_code matched"],
+                        "missing_stdout_fragments": [],
+                    },
+                },
+            },
+        }
+        rust_report = {
+            "status": "passed",
+            "semantic_pass": False,
+            "generated_draft_replay_pass": True,
+            "generated_draft_semantic_pass": False,
+            "replay": {"status": "passed"},
+        }
+        report = {
+            "generated_candidate_diff_pass": True,
+            "blocked_by": ["accepted_c_oracle"],
+            "required_inputs": {
+                "c_oracle_actual_status": "DRAFT_GENERATED",
+                "c_oracle_actual_toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                "c_oracle_output_gate_actual_status": "matched_not_oracle",
+                "rust_replay_actual_status": "passed",
+                "rust_report_actual_status": "passed",
+            },
+            "candidate_diff": {
+                "status": "matched_not_oracle",
+                "semantic_pass": False,
+                "c_oracle_output_gate_status": "matched_not_oracle",
+                "rust_replay_status": "passed",
+                "missing_stdout_fragments": [],
+                "matched_stdout_fragments": ["fixture case case-zero return_code matched"],
+                "compared_fields": ["return_code"],
+            },
+        }
+
+        module.validate_generated_candidate_diff_boundary(report, slice_spec, Path("diff.json"), oracle, rust_report)
+
+        drifted = json.loads(json.dumps(report))
+        drifted["candidate_diff"]["semantic_pass"] = True
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_generated_candidate_diff_boundary(drifted, slice_spec, Path("diff.json"), oracle, rust_report)
+        self.assertIn("candidate_diff cannot claim semantic_pass", str(raised.exception))
+
+    def test_schema_diff_contract_rejects_candidate_diff_when_oracle_output_gate_drifts(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec_path = tmp_path / "slice-spec.json"
+            slice_spec_path.write_text(
+                json.dumps(
+                    {
+                        "fixture_contract": {
+                            "observable_outputs": ["return_code"],
+                            "behavior_fields": ["return_code"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            prefix = "l3-candidate-diff"
+            matched_fragment = "fixture case case-zero return_code matched"
+            diff = {
+                "status": "incomplete",
+                "semantic_pass": False,
+                "diff_gate": "schema_aware_c_rust_diff",
+                "accepted_diff_required": True,
+                "blocked_by": ["accepted_c_oracle"],
+                "first_mismatch": None,
+                "compared_fields": ["return_code"],
+                "generated_candidate_diff_pass": True,
+                "required_inputs": {
+                    "c_oracle_required_status": "C_ORACLE_GENERATED",
+                    "rust_report_required_status": "passed",
+                    "c_oracle_actual_status": "DRAFT_GENERATED",
+                    "c_oracle_actual_toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                    "c_oracle_output_gate_actual_status": "matched_not_oracle",
+                    "rust_replay_actual_status": "passed",
+                    "rust_report_actual_status": "passed",
+                },
+                "candidate_diff": {
+                    "status": "matched_not_oracle",
+                    "semantic_pass": False,
+                    "c_oracle_output_gate_status": "matched_not_oracle",
+                    "rust_replay_status": "passed",
+                    "missing_stdout_fragments": [],
+                    "matched_stdout_fragments": [matched_fragment],
+                    "compared_fields": ["return_code"],
+                },
+            }
+            negative = {
+                "status": "incomplete",
+                "semantic_pass": False,
+                "negative_diff_gate": "schema_aware_negative_diff",
+                "expected_failure": True,
+                "mutation_detected": False,
+                "accepted_negative_diff_required": True,
+                "blocked_by": ["schema_diff"],
+                "required_inputs": {
+                    "schema_diff_required_status": "passed",
+                    "schema_diff_actual_status": "incomplete",
+                },
+            }
+            oracle = {
+                "status": "DRAFT_GENERATED",
+                "semantic_pass": False,
+                "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                "compile_execution": {
+                    "status": "compile_succeeded_not_oracle",
+                    "harness_execution": {
+                        "status": "exited_zero_not_oracle",
+                        "output_gate": {
+                            "status": "matched_not_oracle",
+                            "semantic_pass": False,
+                            "compared_fields": ["return_code"],
+                            "matched_stdout_fragments": [matched_fragment],
+                            "missing_stdout_fragments": [],
+                        },
+                    },
+                },
+            }
+            rust_report = {
+                "status": "passed",
+                "semantic_pass": False,
+                "generated_draft_replay_pass": True,
+                "generated_draft_semantic_pass": False,
+                "replay": {"status": "passed"},
+            }
+            (evidence_dir / f"{prefix}-diff.json").write_text(json.dumps(diff), encoding="utf-8")
+            (evidence_dir / f"{prefix}-negative-diff.json").write_text(json.dumps(negative), encoding="utf-8")
+            (evidence_dir / f"{prefix}-c-oracle-status.json").write_text(json.dumps(oracle), encoding="utf-8")
+            (evidence_dir / f"{prefix}-rust-report.json").write_text(json.dumps(rust_report), encoding="utf-8")
+
+            module.validate_schema_diff_contract(evidence_dir, prefix, slice_spec_path)
+
+            oracle["compile_execution"]["harness_execution"]["output_gate"]["status"] = "mismatch_not_oracle"
+            (evidence_dir / f"{prefix}-c-oracle-status.json").write_text(json.dumps(oracle), encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_schema_diff_contract(evidence_dir, prefix, slice_spec_path)
+            self.assertIn("candidate_diff output gate drift", str(raised.exception))
+
     def test_rejects_missing_route_profile_reference_in_final_verification(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

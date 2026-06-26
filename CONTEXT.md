@@ -4722,3 +4722,56 @@ python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/f
 - 下一步核心模块建议：把当前 `matched_not_oracle` 的 C harness 输出推进成可审计的
   generated-candidate oracle/diff gate，生成 C oracle output JSON、Rust replay output、
   schema-aware diff 和 negative diff，再让 validation profile 重新计算。
+
+## 65. 2026-06-26 generated-candidate diff diagnostic gate
+
+本轮承接第 64 节：real-fdb `fdb_calc_crc32` 已能经真实 clang-lowered typed IR 生成 Rust draft、type-map、cfg、pointer graph，并且 generated Rust replay 可通过 fixture；当前 blocker 是 C oracle 仍是 `DRAFT_GENERATED`、`output_gate.status=matched_not_oracle`，不能提升为 accepted semantic pass。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `c_oracle_output_gate_from_oracle()` / `c_oracle_output_gate_status()`。
+  - 新增 `generated_candidate_diff_from_diagnostics()`，只在以下条件全部满足时返回诊断性 candidate diff：
+    `oracle.status=DRAFT_GENERATED`、`toolchain_status=COMPILE_SUCCEEDED_NOT_ORACLE`、`compile_execution.status=compile_succeeded_not_oracle`、`harness_execution.status=exited_zero_not_oracle`、`output_gate.status=matched_not_oracle`、generated Rust replay `status=passed` 且 `generated_draft_semantic_pass` 不是 true。
+  - `write_l3_candidate_supporting_evidence()` 在上述条件满足时，仍保持 `l3-*-diff.json` 顶层 `status=incomplete`、`semantic_pass=false`、`accepted_diff_required=true`，但新增 `generated_candidate_diff_pass=true`、`blocked_by=["accepted_c_oracle"]`、`candidate_diff.status=matched_not_oracle`、`candidate_diff.semantic_pass=false`、`candidate_diff.matched_stdout_fragments` 和 `reason_code=candidate_matched_accepted_oracle_required`。
+- `validation/test-translation-template/test-translation.schema.json`
+  - 允许 generated replay 执行后的 `status=passed|failed`。
+  - 允许 `translation_mappings[].status=passed|failed`。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 普通 validator 增加 `validate_generated_candidate_diff_boundary()`。
+  - 允许非语义 candidate diff 使用 `blocked_by=["accepted_c_oracle"]`。
+  - candidate diff 必须和同目录真实 `l3-*-c-oracle-status.json` / `l3-*-rust-report.json` 交叉一致；不能只靠 diff 文件自证。
+  - 继续拒绝 `candidate_diff.semantic_pass=true`，`--require-semantic-pass` 路径未放宽。
+- `validation/tools/test_auto_migrate.py`
+  - 新增候选 diff 正例：C output gate matched + generated replay passed 时写入 `candidate_diff`，但不声明 semantic pass。
+  - 新增 fail-closed 负例：`mismatch_not_oracle` 不会生成 candidate diff。
+  - real-fdb generated replay 测试增加普通 validator 断言。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 validator helper 边界测试：candidate diff 不能声明 `semantic_pass=true`。
+  - 新增跨文件负例：真实 oracle output gate 漂移为 `mismatch_not_oracle` 时，普通 validator 拒绝仍标记 `generated_candidate_diff_pass=true` 的 diff。
+
+已验证命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_matches_fixture_stdout_without_oracle_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_uses_raw_stdout_before_report_truncation validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_candidate_diff_records_matched_diagnostic_without_semantic_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_candidate_diff_requires_matched_oracle_output_gate validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_generated_candidate_diff_boundary_remains_non_semantic validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_schema_diff_contract_rejects_candidate_diff_when_oracle_output_gate_drifts
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --emit-clang-lowering-report
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root <temp>
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root <temp> --require-semantic-pass
+```
+
+验证结果：
+- focused auto-migrate 5 tests：`Ran 5 tests ... OK`。
+- real-fdb generated replay + normal validator：`Ran 1 test ... OK`。
+- validator helper/cross-file boundary：`Ran 2 tests ... OK`。
+- 临时 real-fdb 真实 C harness 路径：
+  - C harness 经 WSL `/usr/bin/cc` 编译成功，执行 stdout marker 全匹配。
+  - generated Rust replay `status=passed`。
+  - `l3-real-fdb-calc-crc32-diff.json` 顶层仍是 `status=incomplete`、`semantic_pass=false`。
+  - `candidate_diff.status=matched_not_oracle`、`generated_candidate_diff_pass=true`。
+  - 普通 validator：`schema_status=passed`、`semantic_pass=false`。
+  - `--require-semantic-pass` 仍失败，原因是 manifest/final/profile 没有 accepted semantic pass。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 已具备“真实 clang-lowered typed IR -> 可编译 Rust draft -> generated replay fixture passed -> C harness output matched -> candidate diff diagnostic recorded”的非语义闭环。
+- `generated_draft_semantic_pass=false` 仍是正确状态。
+- 下一步不要直接把 candidate diff 改成 semantic pass；应继续做 accepted oracle/diff/negative-diff 的正式绑定，或把 validation profile 的 candidate gate 单独建模为 diagnostic gate。

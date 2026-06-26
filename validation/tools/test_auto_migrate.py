@@ -919,6 +919,152 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(harness_execution["output_gate"]["status"], "matched_not_oracle")
             self.assertEqual(harness_execution["output_gate"]["matched_stdout_fragments"], [marker])
 
+    def test_generated_candidate_diff_records_matched_diagnostic_without_semantic_claim(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            fixture_path = tmp_path / "fixture.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "case-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "demo",
+                "slice_id": "candidate-diff",
+                "source_commit": "1234567",
+                "function_name": "candidate_diff",
+                "fixture_hash": "fixture",
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "case-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        }
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+            }
+            (evidence_dir / "l3-candidate-diff-rust-draft.rs").write_text(
+                "pub fn candidate_diff() -> i32 { 0 }\n",
+                encoding="utf-8",
+            )
+            (evidence_dir / "l3-candidate-diff-translator-input.json").write_text(
+                json.dumps({"slice_id": "candidate-diff"}),
+                encoding="utf-8",
+            )
+            fixture_binding = module.oracle_fixture_binding(spec)
+            output_gate = module.c_oracle_harness_output_gate(
+                spec,
+                fixture_binding,
+                {
+                    "status": "exited_zero_not_oracle",
+                    "returncode": 0,
+                    "stdout": "fixture case case-zero return_code matched\n",
+                },
+            )
+            module.write_l3_candidate_supporting_evidence(
+                spec,
+                evidence_dir,
+                oracle={
+                    "status": "DRAFT_GENERATED",
+                    "semantic_pass": False,
+                    "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                    "compile_execution": {
+                        "status": "compile_succeeded_not_oracle",
+                        "harness_execution": {
+                            "status": "exited_zero_not_oracle",
+                            "returncode": 0,
+                            "output_gate": output_gate,
+                        }
+                    },
+                },
+                replay={
+                    "status": "passed",
+                    "generated_draft_replay_pass": True,
+                    "generated_draft_semantic_pass": False,
+                    "replay_execution": {"status": "passed"},
+                },
+                rust_check={"status": "passed"},
+                cache={"status": "recorded"},
+                c2rust_baseline={"status": "generated"},
+                route_decision={"status": "candidate_generated", "level": "L3", "translator": {"kind": "tier1"}},
+                validation_profile={"status": "incomplete", "skipped_gates": []},
+            )
+
+            diff = json.loads((evidence_dir / "l3-candidate-diff-diff.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertFalse(diff["semantic_pass"])
+            self.assertEqual(diff["blocked_by"], ["accepted_c_oracle"])
+            self.assertTrue(diff["generated_candidate_diff_pass"])
+            self.assertEqual(diff["reason_code"], "candidate_matched_accepted_oracle_required")
+            self.assertEqual(
+                diff["candidate_diff"],
+                {
+                    "schema_version": 1,
+                    "status": "matched_not_oracle",
+                    "semantic_pass": False,
+                    "compared_fields": ["return_code"],
+                    "c_oracle_output_gate_status": "matched_not_oracle",
+                    "rust_replay_status": "passed",
+                    "matched_stdout_fragments": ["fixture case case-zero return_code matched"],
+                    "missing_stdout_fragments": [],
+                    "boundary": "Generated candidate diff is diagnostic only until accepted oracle diff gates pass.",
+                },
+            )
+
+    def test_generated_candidate_diff_requires_matched_oracle_output_gate(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "fixture_contract": {
+                "observable_outputs": ["return_code"],
+                "behavior_fields": ["return_code"],
+            }
+        }
+        replay = {
+            "status": "passed",
+            "generated_draft_replay_pass": True,
+            "generated_draft_semantic_pass": False,
+        }
+        oracle = {
+            "status": "DRAFT_GENERATED",
+            "semantic_pass": False,
+            "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
+            "compile_execution": {
+                "status": "compile_succeeded_not_oracle",
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "output_gate": {
+                        "status": "mismatch_not_oracle",
+                        "semantic_pass": False,
+                        "compared_fields": ["return_code"],
+                        "matched_stdout_fragments": [],
+                        "missing_stdout_fragments": ["fixture case case-zero return_code matched"],
+                    },
+                },
+            },
+        }
+
+        self.assertIsNone(module.generated_candidate_diff_from_diagnostics(spec, oracle, replay, "passed"))
+
     def test_route_baseline_and_validation_profile_evidence_are_emitted(self) -> None:
         spec = {
             "target_id": "demo",
@@ -3483,6 +3629,29 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(rust_report["cases"][1]["return_code"], 3421780262)
             self.assertEqual(diff["status"], "incomplete")
             self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "passed")
+
+            validation = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-calc-crc32",
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                validation.returncode,
+                0,
+                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+            )
 
     def test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
