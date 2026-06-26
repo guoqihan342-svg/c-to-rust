@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[cfg(feature = "typed-ir")]
-use crate::typed_ir::{IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind};
+use crate::typed_ir::{IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, IrUnOp};
 use crate::{SliceSpec, SourceSpanRef};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -162,6 +162,11 @@ pub enum ClangExprSkeleton {
         rhs: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    Unary {
+        op: ClangUnaryOperator,
+        operand: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     Cast {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
@@ -177,6 +182,13 @@ pub enum ClangExprSkeleton {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ClangBinaryOperator {
     Add,
+    BitXor,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClangUnaryOperator {
+    BitNot,
 }
 
 #[cfg(feature = "typed-ir")]
@@ -695,11 +707,14 @@ fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangF
 #[cfg(feature = "typed-ir")]
 fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
     match string_field(expr, "kind").as_deref() {
-        Some("ImplicitCastExpr") => inner(expr)
+        Some("ImplicitCastExpr") | Some("ParenExpr") => inner(expr)
             .first()
             .ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
-                message: "ImplicitCastExpr is missing operand".to_string(),
+                message: format!(
+                    "{} is missing operand",
+                    string_field(expr, "kind").unwrap_or_else(|| "clang expression".to_string())
+                ),
             })
             .and_then(expr_skeleton_from_ast),
         Some("DeclRefExpr") => {
@@ -734,6 +749,7 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
         Some("BinaryOperator") => {
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("+") => ClangBinaryOperator::Add,
+                Some("^") => ClangBinaryOperator::BitXor,
                 Some(opcode) => {
                     return Ok(ClangExprSkeleton::Unsupported {
                         node: "BinaryOperator".to_string(),
@@ -758,6 +774,32 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
                 op,
                 lhs: Box::new(expr_skeleton_from_ast(lhs)?),
                 rhs: Box::new(expr_skeleton_from_ast(rhs)?),
+                ty: expr_type(expr)?,
+            })
+        }
+        Some("UnaryOperator") => {
+            let op = match string_field(expr, "opcode").as_deref() {
+                Some("~") => ClangUnaryOperator::BitNot,
+                Some(opcode) => {
+                    return Ok(ClangExprSkeleton::Unsupported {
+                        node: "UnaryOperator".to_string(),
+                        reason: format!("opcode {opcode} is outside the current skeleton"),
+                    });
+                }
+                None => {
+                    return Err(ClangFrontendError {
+                        kind: "invalid_unary_operator".to_string(),
+                        message: "UnaryOperator is missing opcode".to_string(),
+                    });
+                }
+            };
+            let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                kind: "invalid_unary_operator".to_string(),
+                message: "UnaryOperator is missing operand".to_string(),
+            })?;
+            Ok(ClangExprSkeleton::Unary {
+                op,
+                operand: Box::new(expr_skeleton_from_ast(operand)?),
                 ty: expr_type(expr)?,
             })
         }
@@ -984,6 +1026,12 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             ty: lower_type(ty)?,
             source_span: None,
         }),
+        ClangExprSkeleton::Unary { op, operand, ty } => Ok(IrExpr::Unary {
+            op: lower_unary_operator(op),
+            operand: Box::new(lower_expr(operand)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
         ClangExprSkeleton::Cast {
             target,
             expr,
@@ -1005,6 +1053,14 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
 fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
     match op {
         ClangBinaryOperator::Add => IrBinOp::Add,
+        ClangBinaryOperator::BitXor => IrBinOp::BitXor,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_unary_operator(op: &ClangUnaryOperator) -> IrUnOp {
+    match op {
+        ClangUnaryOperator::BitNot => IrUnOp::BitNot,
     }
 }
 

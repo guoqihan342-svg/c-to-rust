@@ -3854,3 +3854,90 @@ python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_r
 2. 补对应 fail-closed 负例，避免一次性放开其他 cast/位运算/复杂表达式。
 3. 继续用 real-fdb 临时 out-root report 验证 blocker 推进，下一层预期是
    `WhileStmt` 或 loop condition 的 postfix decrement。
+
+## 55. 2026-06-26 clang bitxor/bitnot expression lowering
+
+本轮承接第 54 节的真实 blocker：只为 clang AST lowering report 增加最小
+`crc = crc ^ ~0U;` 表达式支持，并补一个轻量 `ParenExpr` 公差层；不改通用 typed IR
+emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Unary { op, operand, ty }`。
+  - `ClangBinaryOperator` 新增 `BitXor`，映射 clang `BinaryOperator opcode "^"`。
+  - 新增 `ClangUnaryOperator::BitNot`，映射 clang `UnaryOperator opcode "~"`。
+  - `expr_skeleton_from_ast()` 现在把 `ParenExpr` 和 `ImplicitCastExpr` 一样透明下钻。
+  - `lower_expr()` 现在能 lower `Unary` 到 `IrExpr::Unary`。
+  - `lower_binary_operator()` / `lower_unary_operator()` 分别映射到
+    `IrBinOp::BitXor` / `IrUnOp::BitNot`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_bitxor_bitnot_assignment`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_bitxor_bitnot_assignment` 先失败在
+  `ClangUnaryOperator`、`ClangBinaryOperator::BitXor`、`ClangExprSkeleton::Unary`
+  不存在。
+- 绿灯 1：补最小 skeleton 和 lower 映射后，skeleton 与真实 clang `crc = crc ^ ~0U;`
+  smoke 均通过。
+- 红灯 2：`clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled`
+  先失败为 `unsupported_clang_expr: ParenExpr ... outside ...`。
+- 绿灯 2：`ParenExpr` 在 `expr_skeleton_from_ast()` 中透明下钻后，该测试通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 54 节末尾：
+  `unsupported_clang_expr: BinaryOperator: opcode ^ is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_stmt: WhileStmt is outside the current clang lowering skeleton`。
+- 这对应 `fdb_utils.c` 中已经跨过 `crc = crc ^ ~0U;`，下一层进入循环语句。
+
+本轮并行只读审查结论：
+- Russell：真实 clang AST 中 `crc ^ ~0U` 的 RHS 是
+  `BinaryOperator("^") -> ImplicitCastExpr(DeclRefExpr crc) + UnaryOperator("~") -> IntegerLiteral("0")`；
+  `0U` 后缀不作为 literal spelling 保留，只能从 `type.qualType="unsigned int"` 看出；
+  括号版本会多一层 `ParenExpr`。本轮已支持这些最小形状。
+- Nash：typed IR 已有 `IrExpr::Binary` / `IrExpr::Unary`、`IrBinOp::BitXor`、
+  `IrUnOp::BitNot`，因此本轮不需要动 emitter；当前 emitter 仍只是 CRC32 byte cursor
+  特例，不是通用 typed IR -> Rust emitter。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_bitxor_bitnot_assignment -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused bitxor/bitnot skeleton test：`1 passed`。
+- 两条真实 clang bitxor/bitnot smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`64 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="WhileStmt is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`。
+- 当前真实 blocker 是 `WhileStmt`，下一步要面对 `while (size--)` 的 condition、
+  postfix decrement、循环体中的 `*p++`、`& 0xff`、`>> 8`、table lookup 和后续 `^`。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动；通用 recursive emitter
+  仍可后置。
+
+下一步建议：
+1. 为 `WhileStmt` 写最小 skeleton/真实 clang smoke，但只支持一个 condition + compound body
+   的外壳，先把 report 推进到 condition 内的 `UnaryOperator("--")`。
+2. 继续把 `ParenExpr`/`ImplicitCastExpr` 当作透明包装处理，避免真实 clang AST 的无害包装
+   让 report 提前 fail。
+3. 暂不扩展通用 emitter，等 CRC32 typed IR 形状能从 clang lowering 串起来后再决定。

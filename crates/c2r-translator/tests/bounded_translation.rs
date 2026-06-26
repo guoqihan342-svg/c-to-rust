@@ -11,7 +11,7 @@ use c2r_translator::clang_frontend::{
     lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
     lower_function_from_clang_parse_spec_report, lower_function_skeleton,
     lower_function_skeleton_report, ClangBinaryOperator, ClangExprSkeleton, ClangFunctionSkeleton,
-    ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton,
+    ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator,
 };
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
@@ -806,6 +806,89 @@ fn clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_bitxor_bitnot_assignment() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_xor_not".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "crc".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::Assign {
+                target: ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty.clone(),
+                },
+                value: ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::BitXor,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "crc".to_string(),
+                        ty: uint32_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::Unary {
+                        op: ClangUnaryOperator::BitNot,
+                        operand: Box::new(ClangExprSkeleton::IntegerLiteral {
+                            value: 0,
+                            spelling: "0".to_string(),
+                            ty: uint32_ty.clone(),
+                        }),
+                        ty: uint32_ty.clone(),
+                    }),
+                    ty: uint32_ty.clone(),
+                },
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower bitxor bitnot assignment");
+
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = ir.body.as_slice() else {
+        panic!(
+            "expected bitxor assignment followed by return, got {:?}",
+            ir.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "crc"));
+    let IrExpr::Binary {
+        op: IrBinOp::BitXor,
+        lhs,
+        rhs,
+        ..
+    } = value
+    else {
+        panic!("expected bitxor assignment value, got {value:?}");
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
+    let IrExpr::Unary {
+        op: IrUnOp::BitNot,
+        operand,
+        ..
+    } = rhs.as_ref()
+    else {
+        panic!("expected bitnot rhs, got {rhs:?}");
+    };
+    assert!(
+        matches!(operand.as_ref(), IrExpr::LitInt { value: 0, spelling, .. } if spelling == "0")
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -1524,6 +1607,116 @@ fn clang_ast_dump_lowers_pointer_cast_assignment_when_enabled() {
         }
         other => panic!("expected explicit cast value, got {other:?}"),
     }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-bitxor-bitnot-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_xor_not.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_xor_not(uint32_t crc) { crc = crc ^ ~0U; return crc; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_xor_not");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected bitxor assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "crc"));
+    let IrExpr::Binary {
+        op: IrBinOp::BitXor,
+        lhs,
+        rhs,
+        ..
+    } = value
+    else {
+        panic!("expected bitxor assignment value, got {value:?}");
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
+    let IrExpr::Unary {
+        op: IrUnOp::BitNot,
+        operand,
+        ..
+    } = rhs.as_ref()
+    else {
+        panic!("expected bitnot rhs, got {rhs:?}");
+    };
+    assert!(matches!(operand.as_ref(), IrExpr::LitInt { value: 0, .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-parenthesized-bitxor-bitnot-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("crc_xor_not_paren.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t crc_xor_not_paren(uint32_t crc) { crc = (crc ^ ~0U); return crc; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "crc_xor_not_paren");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { value, .. }, IrStmt::Return { .. }] = function.body.as_slice() else {
+        panic!(
+            "expected parenthesized bitxor assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(
+        value,
+        IrExpr::Binary {
+            op: IrBinOp::BitXor,
+            ..
+        }
+    ));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
