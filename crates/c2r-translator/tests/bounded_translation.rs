@@ -1196,6 +1196,269 @@ fn typed_ir_rejects_record_arrow_field_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_mutable_record_pointer_arrow_field_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty =
+        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "set_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: IrExpr::Member {
+                base: Box::new(ir_var("p", point_ptr_ty)),
+                field: "x".to_string(),
+                ty: i32_ty.clone(),
+                is_arrow: true,
+                source_span: None,
+            },
+            value: ir_var("value", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable record pointer field assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn set_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-mutable-record-pointer-field-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_multiple_pointer_params() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_aliased_set_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "q".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: IrExpr::Member {
+                base: Box::new(ir_var("p", point_ptr_ty)),
+                field: "x".to_string(),
+                ty: i32_ty.clone(),
+                is_arrow: true,
+                source_span: None,
+            },
+            value: ir_lit(1, "1", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer field assignment needs alias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("requires exactly one pointer param for alias proof"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_non_scalar_field_assignment() {
+    let i32_ty = ir_i32();
+    let child_ty = ir_record_with_fields("child", vec![("value", i32_ty.clone())]);
+    let point_ty = ir_record_with_fields("point", vec![("child", child_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_set_point_child".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Assign {
+            target: IrExpr::Member {
+                base: Box::new(ir_var("p", point_ptr_ty)),
+                field: "child".to_string(),
+                ty: child_ty.clone(),
+                is_arrow: true,
+                source_span: None,
+            },
+            value: ir_var("child", child_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer field assignment must require scalar field");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains(
+            "mutable record pointer arrow field child has record type child is unsupported"
+        ),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_mutable_record_pointer_arrow_field_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_nullable_set_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", point_ptr_ty.clone()),
+                    ir_null_ptr(point_ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: None,
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("nullable mutable record pointer field assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("comparison pointer operand")
+            || error
+                .reason
+                .contains("comparison lhs has pointer type struct point *")
+            || error
+                .reason
+                .contains("nullable pointer param p has unsupported type"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let field_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_mutable_add_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: field_target.clone(),
+            value: ir_binary(
+                IrBinOp::Add,
+                field_target,
+                ir_var("value", i32_ty.clone()),
+                i32_ty,
+            ),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer compound field assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("arrow member base p has unsupported type struct point *"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_record_arrow_field_compound_assignment_shape() {
     let point_ty = ir_record("point");
     let point_ptr_ty = ir_pointer(
@@ -18667,6 +18930,66 @@ fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-assignment", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-arrow-member-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_arrow_member_assignment.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nvoid set_point_x(struct point *p, int value) { p->x = value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "set_point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, .. }] = function.body.as_slice() else {
+        panic!(
+            "expected mutable arrow member assignment, got {:?}",
+            function.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member assignment target, got {target:?}"
+    );
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit mutable arrow member assignment from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn set_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-mutable-arrow-member-assignment", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

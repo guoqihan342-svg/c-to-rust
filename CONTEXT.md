@@ -9634,3 +9634,53 @@ English mirror summary:
 - The nullable pointer validator remains fail-closed for ordinary nullable pointer use; only proven-nonnull direct scalar arrow reads on readonly record pointers are allowed.
 - Added direct typed IR positive and negative tests, plus a real clang AST smoke test for the null-return guard shape.
 - Updated the Chinese and English MVP backlog to mark this narrow guarded-read path as supported while keeping pointer writes, alias-sensitive ownership, layout/ABI claims, and semantic acceptance out of scope.
+
+## 140. 2026-06-28 P1 narrow mutable record pointer field assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理独立比较了候选切片，结论一致：本轮优先做极窄 `struct T *p; p->scalar_field = scalar;`，因为它直接补上真实 C out-object/state-update 的常见形态；但必须写死为 candidate 生成，不声明 alias/noalias 已解决，也不放开 compound/update、nullable 或多 pointer 情况。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 新增 `mutable_record_pointer_write_params`，由 `collect_mutable_record_pointer_write_params()` 从 assignment target 中收集。
+  - 只在 assignment target 是直接 `IrExpr::Member { is_arrow: true, base: Var(p) }`、`p` 是 mutable record pointer 参数、字段结果是 scalar 时收集该参数。
+  - 若本函数出现 mutable record pointer field assignment，则要求函数参数列表中 pointer 参数总数恰好为 1；`struct T *p, struct T *q` 或混入 `int *out` / `const struct T *q` 仍 fail closed，错误为缺少 alias proof。
+  - `emit_param()` 对被上述 gate 选中的 `struct T *p` 发射 `mut p: &mut T`；integer mutable pointer 仍沿用 `&mut [T]`。
+  - `emit_assignment_target()` 的 arrow member target 改走 `emit_mutable_record_pointer_member_assignment_target()`；该 helper 只发射 direct scalar field target `p.field`。
+  - `emit_record_definitions()` 和 record field inventory 现在会从 mutable record pointer pointee 合并完整直接标量字段清单，避免只凭被写字段生成最小 shape。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_assignment`：`struct point *p; p->x = value;` 生成 `pub fn set_point_x(mut p: &mut Point, value: i32)` 和 `p.x = value;`。
+  - 新增 direct typed IR 负例覆盖多 pointer 参数 alias gate、nullable/null-check 形态、非标量字段、mutable arrow compound shape；原 const pointer arrow assignment 和 const arrow compound shape 仍拒绝。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled`：真实 C `void set_point_x(struct point *p, int value) { p->x = value; }` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注单 pointer 参数下 mutable `struct T *p` 的直接 `p->scalar_field = scalar` 已进入 typed IR candidate 子集；下一步仍是多 pointer alias/noalias proof、value-position/复杂 target/update field write 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_multiple_pointer_params
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_non_scalar_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_mutable_record_pointer_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_compound_assignment_shape
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR mutable record pointer field assignment 正例：1 passed，并通过 rustc snippet smoke。
+- alias gate、nullable/null-check、非标量字段、mutable arrow compound shape、const arrow assignment、const arrow compound shape 负例：均按预期 fail closed。
+- 真实 clang AST mutable arrow member assignment smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：单 pointer 参数下的直接 mutable record pointer scalar field assignment 已能从真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&mut T`。
+- 可以说：这是一个临时的 single-pointer alias gate，不是通用 alias/noalias proof。
+- 不应说：已支持多 pointer alias/noalias、nullable mutable record pointer、`p->field += value`、`p->field++`、`return p->field` 的 mutable pointer read、复杂 base（cast/nested/offset）、pointer arithmetic record access、non-scalar field write、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field-assignment candidate path: `struct T *p; p->scalar_field = scalar;` now emits `p: &mut T` and `p.scalar_field = scalar;` only when the function has exactly one pointer parameter.
+- The single-pointer gate is a conservative candidate precondition, not a general alias/noalias proof.
+- Preserved fail-closed behavior for multi-pointer functions, nullable/null-checked mutable pointers, const pointer writes, compound/update arrow writes, non-scalar fields, mutable arrow reads, complex bases, layout/ABI claims, and semantic acceptance.
+- Added direct typed IR positive/negative tests and a real clang AST smoke test for `void set_point_x(struct point *p, int value) { p->x = value; }`.
+- Updated the Chinese and English MVP backlog to mark this narrow write path as supported while keeping the broader pointer/alias-sensitive field-write work open.

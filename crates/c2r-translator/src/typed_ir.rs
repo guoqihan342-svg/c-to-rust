@@ -330,6 +330,7 @@ struct EmitContext {
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
     nullable_pointer_params: HashSet<String>,
+    mutable_record_pointer_write_params: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -414,6 +415,8 @@ impl EmitContext {
         }
         let nullable_pointer_params =
             collect_nullable_pointer_params(&function.body, &function.params)?;
+        let mutable_record_pointer_write_params =
+            collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let mut readonly_globals = HashMap::new();
         for global in globals {
             if readonly_globals
@@ -431,6 +434,7 @@ impl EmitContext {
             byte_slice_params,
             byte_cursor_sources,
             nullable_pointer_params,
+            mutable_record_pointer_write_params,
             readonly_globals,
         })
     }
@@ -449,6 +453,10 @@ impl EmitContext {
 
     fn is_nullable_pointer_param(&self, name: &str) -> bool {
         self.nullable_pointer_params.contains(name)
+    }
+
+    fn is_mutable_record_pointer_write_param(&self, name: &str) -> bool {
+        self.mutable_record_pointer_write_params.contains(name)
     }
 
     fn readonly_global(&self, name: &str) -> Option<&IrGlobal> {
@@ -567,6 +575,9 @@ fn emit_param(
     let ty = if context.is_nullable_pointer_param(&param.name) {
         emit_nullable_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if context.is_mutable_record_pointer_write_param(&param.name) {
+        emit_mutable_record_pointer_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
     } else if assigned_vars.contains(&param.name) {
@@ -626,6 +637,17 @@ fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
     ))
 }
 
+fn emit_mutable_record_pointer_param_type(ty: &IrType) -> Result<String, String> {
+    if let Some(pointee) = mutable_record_pointer_pointee_type(ty) {
+        let pointee = emit_value_type(pointee)?;
+        return Ok(format!("&mut {pointee}"));
+    }
+    Err(format!(
+        "mutable record pointer param type {} is unsupported",
+        type_label(ty)
+    ))
+}
+
 fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
     let mut records: Vec<(&str, Vec<RecordFieldUse<'_>>)> = Vec::new();
     add_record_type_inventory(&mut records, &function.return_type)?;
@@ -634,6 +656,12 @@ fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String>
             ensure_record_entry(&mut records, name);
         }
         if let Some(pointee) = readonly_record_pointer_pointee_type(&param.ty) {
+            add_record_type_inventory(&mut records, pointee)?;
+            if let IrTypeKind::Record { name, .. } = &pointee.kind {
+                ensure_record_entry(&mut records, name);
+            }
+        }
+        if let Some(pointee) = mutable_record_pointer_pointee_type(&param.ty) {
             add_record_type_inventory(&mut records, pointee)?;
             if let IrTypeKind::Record { name, .. } = &pointee.kind {
                 ensure_record_entry(&mut records, name);
@@ -814,7 +842,7 @@ fn collect_record_field_uses_from_expr<'a>(
                 return Err("member expression base must be a record variable".to_string());
             };
             let record_ty = if *is_arrow {
-                readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+                record_pointer_pointee_type(base_ty).ok_or_else(|| {
                     format!(
                         "arrow member expression base has unsupported type {}",
                         type_label(base_ty)
@@ -1466,8 +1494,10 @@ fn emit_assignment_target<'a>(
             ..
         } => {
             if *is_arrow {
-                return Err("arrow member assignment requires pointer/record ownership evidence"
-                    .to_string());
+                let target = emit_mutable_record_pointer_member_assignment_target(
+                    base, field, ty, symbols, context,
+                )?;
+                return Ok((target, ty));
             }
             let target = emit_member_expr(base, field, ty, *is_arrow, symbols, context)?;
             Ok((target, ty))
@@ -1477,6 +1507,44 @@ fn emit_assignment_target<'a>(
                 .to_string(),
         ),
     }
+}
+
+fn emit_mutable_record_pointer_member_assignment_target(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("arrow member assignment base must be a record pointer variable".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!(
+            "arrow member assignment base {base_name} is not declared"
+        ));
+    }
+    if !context.is_mutable_record_pointer_write_param(base_name) {
+        return Err(format!(
+            "arrow member assignment base {base_name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "arrow member assignment base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_scalar_type(ty)
+        .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
+    let base_name = emit_identifier(base_name, "arrow member assignment base")?;
+    let field = emit_identifier(field, "arrow member assignment field")?;
+    Ok(format!("{base_name}.{field}"))
 }
 
 fn emit_index_assignment_target(
@@ -4122,6 +4190,136 @@ fn collect_nullable_pointer_params_from_expr(
     }
 }
 
+fn collect_mutable_record_pointer_write_params(
+    body: &[IrStmt],
+    params: &[IrParam],
+) -> Result<HashSet<String>, String> {
+    let pointer_param_count = params
+        .iter()
+        .filter(|param| matches!(param.ty.kind, IrTypeKind::Pointer { .. }))
+        .count();
+    let mutable_record_pointer_params = params
+        .iter()
+        .filter(|param| mutable_record_pointer_pointee_type(&param.ty).is_some())
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect::<HashMap<_, _>>();
+    let mut write_params = HashSet::new();
+    collect_mutable_record_pointer_write_params_from_body(
+        body,
+        &mutable_record_pointer_params,
+        &mut write_params,
+    )?;
+    if !write_params.is_empty() && pointer_param_count != 1 {
+        return Err(
+            "mutable record pointer field assignment requires exactly one pointer param for alias proof"
+                .to_string(),
+        );
+    }
+    Ok(write_params)
+}
+
+fn collect_mutable_record_pointer_write_params_from_body(
+    body: &[IrStmt],
+    mutable_record_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, .. } => {
+                collect_mutable_record_pointer_write_param_from_target(
+                    target,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_mutable_record_pointer_write_params_from_body(
+                    then_body,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+                collect_mutable_record_pointer_write_params_from_body(
+                    else_body,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_mutable_record_pointer_write_params_from_body(
+                    body,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_mutable_record_pointer_write_params_from_body(
+                    init,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+                if let Some(step) = step {
+                    collect_mutable_record_pointer_write_params_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        mutable_record_pointer_params,
+                        write_params,
+                    )?;
+                }
+                collect_mutable_record_pointer_write_params_from_body(
+                    body,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::Decl { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_mutable_record_pointer_write_param_from_target(
+    target: &IrExpr,
+    mutable_record_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow: true,
+        ..
+    } = target
+    else {
+        return Ok(());
+    };
+    let IrExpr::Var {
+        name, ty: base_ty, ..
+    } = base.as_ref()
+    else {
+        return Ok(());
+    };
+    if !mutable_record_pointer_params
+        .get(name.as_str())
+        .is_some_and(|param_ty| *param_ty == base_ty)
+    {
+        return Ok(());
+    }
+    emit_scalar_type(ty)
+        .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
+    write_params.insert(name.clone());
+    Ok(())
+}
+
 fn validate_nullable_pointer_param_uses_in_body(
     body: &[IrStmt],
     nullable_params: &HashSet<String>,
@@ -4682,6 +4880,21 @@ fn readonly_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
         }
         _ => None,
     }
+}
+
+fn mutable_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee }
+            if !pointee.is_const && matches!(pointee.kind, IrTypeKind::Record { .. }) =>
+        {
+            Some(pointee.as_ref())
+        }
+        _ => None,
+    }
+}
+
+fn record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
+    readonly_record_pointer_pointee_type(ty).or_else(|| mutable_record_pointer_pointee_type(ty))
 }
 
 fn is_supported_nullable_pointer_type(ty: &IrType) -> bool {
