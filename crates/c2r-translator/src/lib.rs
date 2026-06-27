@@ -1,6 +1,6 @@
 #[cfg(feature = "clang-lowering-report")]
 use std::collections::BTreeMap;
-#[cfg(any(feature = "clang-frontend", feature = "clang-lowering-report"))]
+#[cfg(feature = "clang-lowering-report")]
 use std::path::PathBuf;
 use std::{error::Error, fs, path::Path};
 
@@ -22,6 +22,8 @@ pub use model::{
     TypeUncertainty,
 };
 
+#[cfg(feature = "clang-frontend")]
+use artifacts::write_clang_dry_run_artifact;
 use artifacts::{translation_events_jsonl, write_json_file, write_text_file};
 
 #[derive(Clone, Debug)]
@@ -1260,50 +1262,6 @@ fn readonly_global_summary(global: &typed_ir::IrGlobal) -> serde_json::Value {
         "init_kind": init_kind,
         "value_count": value_count,
     })
-}
-
-#[cfg(feature = "clang-frontend")]
-fn write_clang_dry_run_artifact(
-    spec: &SliceSpec,
-    out_dir: &Path,
-    prefix: &str,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
-        Ok(parse_spec) => json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "source_commit": spec.source_commit,
-            "frontend": "clang",
-            "status": "ready_without_libclang",
-            "dry_run": parse_spec.dry_run(),
-            "metadata": {
-                "source_file_hashes": parse_spec.source_file_hashes,
-                "function_source_span": parse_spec.function_source_span,
-            },
-            "errors": [],
-        }),
-        Err(error) => json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "source_commit": spec.source_commit,
-            "frontend": "clang",
-            "status": "blocked",
-            "dry_run": null,
-            "metadata": {
-                "source_file_hashes": spec.source_file_hashes,
-                "function_source_span": spec.function_source_span,
-            },
-            "errors": [
-                {
-                    "kind": error.kind,
-                    "message": error.message,
-                }
-            ],
-        }),
-    };
-    write_json_file(out_dir, &format!("{prefix}-clang-dry-run.json"), &value)
 }
 
 fn parse_function(source: &str, expected_name: &str) -> Result<ParsedFunction, TranslationError> {

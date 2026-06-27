@@ -9055,7 +9055,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-fro
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
-python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
 openspec validate --all --strict
 ```
 
@@ -9069,7 +9069,7 @@ openspec validate --all --strict
 - `typed-ir`：1 个 lib test + 220 个 bounded tests + doc tests 通过。
 - `typed-ir clang-frontend`：49 个 lib tests + 395 个 bounded tests + doc tests 通过。
 - `--all-features`：57 个 lib tests + 396 个 bounded tests + doc tests 通过。
-- Python `--emit-clang-dry-run` opt-in 定向测试：2/2 passed。
+- Python `--emit-clang-dry-run` opt-in 定向测试：3/3 passed。
 - `openspec validate --all --strict`：38/38 passed。
 
 边界：
@@ -9086,3 +9086,69 @@ English mirror summary:
 - Added a blocked JSONL regression test for `translation_events_jsonl`.
 - Updated the Chinese and English MVP backlog to mark the model schema split and artifact/IO leaf helper split as done, while keeping the broader P0 `lib.rs` split open.
 - Verified default, `clang-frontend`, `typed-ir`, `typed-ir clang-frontend`, and `--all-features` Rust test matrices, selected Python `--emit-clang-dry-run` opt-in tests, and `openspec validate --all --strict`.
+
+## 131. 2026-06-28 P0 clang dry-run artifact writer split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 边界，仍然是行为保持重构，不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API、artifact 文件名、manifest status、feature gate 或 Python `--emit-clang-dry-run` opt-in 语义。两个只读子智能体复核后建议一致：`write_clang_dry_run_artifact()` 可以作为轻量 feature-gated artifact writer 迁入 `artifacts.rs`；`write_translation_artifacts()` 和 `write_clang_lowering_report_artifact()` 仍应留在 `lib.rs`，因为前者是 public orchestration，后者会触发 clang lowering/report 语义路径。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `#[cfg(feature = "clang-frontend")] pub(crate) fn write_clang_dry_run_artifact(...)`。
+  - 保持原 JSON schema：`schema_version`、`target_id`、`slice_id`、`source_commit`、`frontend=clang`、`status`、`dry_run`、`metadata`、`errors`。
+  - metadata 完整时仍写 `status=ready_without_libclang`；metadata 缺失时仍写 `status=blocked` 且 `dry_run=null`。
+  - 新增模块内单测 `artifacts::clang_dry_run_artifact_tests::clang_dry_run_artifact_records_parse_spec_errors`，直接测试 helper 的 blocked JSON，不重复完整 manifest 流程。
+- `crates/c2r-translator/src/lib.rs`
+  - `#[cfg(feature = "clang-frontend")] use artifacts::write_clang_dry_run_artifact;`
+  - 删除本文件里的旧 `write_clang_dry_run_artifact()` 副本。
+  - `PathBuf` import 收窄为只在 `clang-lowering-report` feature 下使用。
+  - `write_translation_artifacts()` 调用逻辑保持不变：默认不写 dry-run；`clang-frontend` 下追加 `l3-{slice_id}-clang-dry-run.json`；`clang-lowering-report` 下仍追加 lowering report。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 仍未完成，只把已完成范围扩展到 feature-gated clang dry-run artifact writer split。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_artifact_records_parse_spec_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+openspec validate --all --strict
+```
+
+结果：
+
+- dry-run helper 红绿测试：初始失败于 `write_clang_dry_run_artifact` 不在 `artifacts.rs` 作用域；迁移后通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：2 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：1 个 lib test + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：50 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `--all-features`：58 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-dry-run` opt-in 定向测试：2/2 passed。
+- `openspec validate --all --strict`：38/38 passed。
+
+边界：
+
+- 可以说：feature-gated clang dry-run artifact writer 已从 `lib.rs` 拆到 `artifacts.rs`，并且默认/opt-in dry-run 行为、manifest 引用和 Python opt-in 路径保持兼容。
+- 不应说：P0 `lib.rs` 拆分完成、artifact orchestration 已完全拆出、clang lowering report writer 已拆出、或新增任何 C 语法翻译能力。
+- 后续建议：下一刀可以继续拆更明确的 writer/schema helper；`write_clang_lowering_report_artifact()` 要单独处理，因为它不仅写文件，还构造 lowering report、typed IR candidate evidence 和 readonly global summary。`write_translation_artifacts()` 继续留到更后面，等 translator/evidence/orchestration 边界更清楚再移动。
+
+English mirror summary:
+
+- Moved the feature-gated clang dry-run artifact writer into private `artifacts.rs`.
+- Kept `write_translation_artifacts` and the clang lowering report writer in `lib.rs`; the former remains public orchestration and the latter still builds lowering/report evidence.
+- Added a direct `clang-frontend` module test for the dry-run writer's blocked parse-spec JSON.
+- Preserved artifact filenames, manifest behavior, feature gates, and Python `--emit-clang-dry-run` opt-in semantics.
+- Updated the Chinese and English MVP backlog to include the dry-run writer split while keeping the broader P0 `lib.rs` split open.
