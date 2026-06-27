@@ -77,6 +77,32 @@ The system SHALL extract and persist context pack, type map, CFG, and pointer gr
 - **WHEN** the C slice contains input pointers, output pointers, pointer arithmetic, array decay, struct field address-taking, or returned pointers
 - **THEN** `l3-<slice>-pointer-graph.json` records pointer nodes, read/write effects, aliases known from the slice, promotions, raw pointer fallbacks, and unsupported alias edges before any safe wrapper is accepted
 
+### Requirement: Deterministic Candidate Route Is Not Acceptance
+The system SHALL allow scalar-only `GenericTypedIr` candidates with `token_cost=0` to be classified as `route_decision.level=L0` only for deterministic candidate routing and context-budget provenance.
+
+The route level SHALL NOT prove semantic equivalence, SHALL NOT set `semantic_pass`, and SHALL NOT bypass validation gates for the exact generated draft.
+
+系统可以把 scalar-only 且 `token_cost=0` 的 `GenericTypedIr` candidate 分类为 `route_decision.level=L0`，但该分类只表示 deterministic candidate routing 和上下文预算 provenance。
+
+该 route level 不得证明语义等价，不得设置 `semantic_pass`，也不得绕过 exact generated draft 的 validation gates。
+
+#### Scenario: Zero-token scalar candidate records L0 route
+- **WHEN** `auto_migrate` receives generated typed IR candidate evidence whose route is `GenericTypedIr`, whose candidate route records `token_cost=0`, and whose pointer graph has no pointer surface
+- **THEN** it may record `route_decision.level=L0`
+- **AND** the route rationale records deterministic typed IR candidate generation
+- **AND** `candidate_generation.typed_ir.semantic_pass` remains `false`
+- **AND** `validation_profile.generated_draft_semantic_pass` remains `false`
+
+#### Scenario: Risk floors override L0 deterministic routing
+- **WHEN** a generated `GenericTypedIr` candidate has pointer surface, blocked alias risk, requires-noalias risk, unknown alias risk, or unknown pointer ownership
+- **THEN** the route decision keeps the existing L1/L2/L3 risk floor instead of downgrading the slice to L0
+- **AND** the typed IR candidate provenance remains recorded in the rationale
+
+#### Scenario: Route L0 does not bypass acceptance gates
+- **WHEN** a generated Rust draft compiles and the route decision is L0
+- **THEN** semantic acceptance still requires the selected validation profile to pass with no skipped required gate
+- **AND** C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, cache/version binding, and final verification remain authoritative for semantic-pass claims
+
 ### Requirement: Rust Draft Generation
 The system SHALL generate a Rust draft only for the supported C subset and SHALL distinguish low-level raw pointer draft details from safe Rust public API boundaries.
 

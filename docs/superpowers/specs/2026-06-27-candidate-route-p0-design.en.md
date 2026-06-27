@@ -24,7 +24,7 @@ Successful state:
 
 ## Non-Goals
 
-- Do not implement the full L0/L1/L2/L3/L4 evidence router.
+- Do not implement the full L0/L1/L2/L3/L4 evidence router; this stage only allows scalar-only `GenericTypedIr` candidates with `token_cost=0` to act explicitly as an L0 deterministic route signal.
 - Do not let candidate route decide `validation_profile` or `semantic_pass`.
 - Do not connect LLM candidate generation.
 - Do not restore the old crc32 template as a typed IR fallback.
@@ -150,8 +150,10 @@ They must not be mixed:
 The current route-decision risk floor is intentionally small:
 
 - A generated `GenericTypedIr` candidate still records `candidate_generation.typed_ir` and a rationale entry.
-- If the pointer graph records `alias_contract.decision="blocked"`, the route stays L3 and is not downgraded to L1.
-- If the pointer graph records `requires_noalias_contract` or an `unknown_alias` risk, the route stays L2 and is not downgraded to L1.
+- If the pointer graph has no pointer surface and the `GenericTypedIr` candidate has `token_cost=0`, the route may record an L0 deterministic typed IR candidate; this is candidate-generation routing only, not semantic acceptance.
+- If the pointer graph has a non-scalar pointer surface, generated `GenericTypedIr` remains at least L1 and is not downgraded to L0.
+- If the pointer graph records `alias_contract.decision="blocked"`, the route stays L3 and is not downgraded to L1/L0.
+- If the pointer graph records `requires_noalias_contract` or an `unknown_alias` risk, the route stays L2 and is not downgraded to L1/L0.
 - If any pointer ownership role is still `unknown`, the route stays L2.
 
 ## Verification Strategy

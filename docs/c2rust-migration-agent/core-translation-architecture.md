@@ -64,7 +64,7 @@ flowchart TD
 - `validation/tools/auto_migrate.py`
   - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
   - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
-  - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 L1 route signal；`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件、`alias_blocked`、`requires_noalias_contract` 和未知 pointer ownership floor 仍优先；typed IR provenance 会保留在 rationale 中，但不能覆盖这些风险 floor。
+  - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 typed IR route signal；如果当前 slice 是 scalar-only 且 `token_cost=0`，它走 L0 deterministic candidate route；否则 generated typed IR 仍至少是 L1 signal。`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件、`alias_blocked`、`requires_noalias_contract` 和未知 pointer ownership floor 仍优先；typed IR provenance 会保留在 rationale 中，但不能覆盖这些风险 floor。
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` 对旧 route/profile evidence 保持可选，避免破坏 legacy fixtures。
   - 一旦出现 `candidate_generation.typed_ir`，schema 只允许 `GenericTypedIr` / `Unsupported` 两条 typed IR route，并要求 `semantic_pass=false`。
@@ -87,7 +87,7 @@ flowchart TD
 - `GenericTypedIr`：通用 typed IR emitter，当前真实 FlashDB `fdb_calc_crc32` 在 clang lowering + globals 路径下已经能走到这里并通过 rustc smoke。
 - `Unsupported`：没有 Rust candidate，错误中带 fail-closed reason 和 route metadata。
 
-注意：typed IR `CandidateRouteDecision` 只选择候选生成实现，不决定 `semantic_pass`。新 route/profile evidence 会把它绑定进 `route_decision.candidate_generation.typed_ir` 和 `validation_profile.candidate_generation`，作为 provenance；route decision 可以用它区分 L1 generic typed IR 路径和 L2 typed IR unsupported repair 路径；存量 route/profile evidence 如果尚未带该字段，schema 仍按 legacy compatibility 接受。真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。legacy compatibility 只覆盖可选字段，不覆盖 semantic-pass refs：`c2rust_baseline`、`route_decision`、`validation_profile`、schema-aware diff 和 negative-diff evidence 必须真实落盘并互相引用一致。
+注意：typed IR `CandidateRouteDecision` 只选择候选生成实现，不决定 `semantic_pass`。新 route/profile evidence 会把它绑定进 `route_decision.candidate_generation.typed_ir` 和 `validation_profile.candidate_generation`，作为 provenance；route decision 可以用它区分 scalar-only `token_cost=0` 的 L0 deterministic typed IR 路径、非 scalar 的 L1 generic typed IR 路径，以及 L2 typed IR unsupported repair 路径；存量 route/profile evidence 如果尚未带该字段，schema 仍按 legacy compatibility 接受。真正的接受结论仍由 validation profile、C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification 等 gates 决定。legacy compatibility 只覆盖可选字段，不覆盖 semantic-pass refs：`c2rust_baseline`、`route_decision`、`validation_profile`、schema-aware diff 和 negative-diff evidence 必须真实落盘并互相引用一致。
 
 generic typed IR emission 现在覆盖：
 
@@ -119,6 +119,6 @@ generic typed IR emission 现在覆盖：
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；当前更适合的后续切口是 cast/usual-conversion 分类和 L0 `token_cost=0` 路由规则，而不是把 short-circuit、pointer/null comparison 或完整 C shift 语义混进同一刀。后续仍要让 pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
+1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；当前更适合的后续切口是 cast/usual-conversion 分类，而不是把 short-circuit、pointer/null comparison 或完整 C shift 语义混进同一刀。后续仍要让 pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

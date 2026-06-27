@@ -155,3 +155,7 @@ Boundary:
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.
 
 Automatic translation capability claims require more than L1 target success or a hand-authored `c_source` string. A slice only counts as real-source automatic translation evidence when the slice spec is generated from real C source files with source span, source hash, build profile provenance, and completed L3 evidence for the named function.
+
+中文：catalog gate 的 `level:"L0"` 与 auto-translation `route_decision.level="L0"` 是两种不同证据。后者只表示 deterministic zero-token candidate routing，不是 catalog L0 pass、不是 L1/L2/L3 evidence，也不证明语义等价；C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 仍是 semantic acceptance 的来源。
+
+English: catalog `level:"L0"` and auto-translation `route_decision.level="L0"` are different evidence concepts. The latter means deterministic zero-token candidate routing only; it is not catalog L0 pass, not L1/L2/L3 evidence, and not proof of semantic equivalence. C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification remain the sources of semantic acceptance.

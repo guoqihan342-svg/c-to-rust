@@ -66,6 +66,10 @@ English: `auto_migrate.py` now emits three first-class evidence files for each a
 
 English: the route decision controls candidate generation path and context budget only; the validation profile controls the required gates for the run. Output from an Agent, C2Rust, deterministic rules, or Rust compilation can be bound as a semantic pass only when the selected validation profile passes with no skipped required gate.
 
+中文：`route_decision.level=L0` 是自动翻译内部的 deterministic zero-token candidate routing，只表示该候选不需要额外 AI/token 路线；它不是 catalog L0，不是 L1/L2/L3 evidence，也不证明 C/Rust 语义等价。`semantic_pass` 和 `generated_draft_semantic_pass` 在独立 validation gates 接受 exact draft 之前必须保持 `false`。
+
+English: `route_decision.level=L0` is internal deterministic zero-token candidate routing for automatic translation; it only means the candidate path does not need an additional AI/token route. It is not catalog L0, not L1/L2/L3 evidence, and not proof of C/Rust semantic equivalence. `semantic_pass` and `generated_draft_semantic_pass` must remain `false` until independent validation gates accept the exact draft.
+
 中文：历史 accepted auto-translation fixtures 若要被当前 `--require-semantic-pass` 直接验证，也必须持久化 baseline/route/profile refs，并补齐 schema-aware diff / negative-diff gate metadata。只在单元测试 helper 中临时补字段不是可提交的 pass evidence。
 
 English: legacy accepted auto-translation fixtures must persist baseline/route/profile refs and schema-aware diff / negative-diff gate metadata before they can pass the current `--require-semantic-pass` path. Helper-only backfill inside unit tests is not committed pass evidence.

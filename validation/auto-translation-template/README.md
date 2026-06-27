@@ -21,5 +21,7 @@ This directory defines evidence contracts for bounded automatic translation and 
 - Default repair retry limit is three rounds.
 - Repairs that edit oracle contracts, fixture expected behavior, accepted differences, public API outside the impact set, source slice boundaries, or unsafe budget policy must be blocked.
 - Final acceptance still requires C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, version/config binding, cache metadata, final verification, and OpenSpec validation.
+- A route may choose an L0 deterministic candidate path for scalar-only `GenericTypedIr` candidates whose `candidate_route.token_cost=0`, but that is route/cost/provenance classification only. The generated Rust draft remains candidate evidence until C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, and final verification accept the exact draft.
+- 中文：scalar-only 的 `GenericTypedIr` candidate 如果带有 `candidate_route.token_cost=0`，route 可以选择 L0 deterministic candidate path；这只表示 route/cost/provenance 分类。生成的 Rust draft 仍只是 candidate evidence，必须等 C oracle、Rust replay、schema-aware diff、negative diff、unsafe evidence 和 final verification 接受 exact draft 后才可进入最终接受结论。
 - Schema-aware diff and negative-diff reports must carry their gate metadata (`diff_gate`, `negative_diff_gate`, accepted-evidence refs, required inputs, and mutation evidence) when the evidence manifest claims `passed`.
 - 中文：C2Rust baseline 只是候选上下文或交叉检查；route 只选择候选路径；validation profile 才定义 required gates。三者缺失或 stale refs 漂移时，自动翻译产物不能 claim semantic pass。

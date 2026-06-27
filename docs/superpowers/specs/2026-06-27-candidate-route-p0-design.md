@@ -24,7 +24,7 @@ P0 的目标是让 `c2r-translator` 的 typed IR 候选生成显式返回 route 
 
 ## 非目标
 
-- 不实现完整 L0/L1/L2/L3/L4 evidence router。
+- 不实现完整 L0/L1/L2/L3/L4 evidence router；本阶段只允许 scalar-only 且 `token_cost=0` 的 `GenericTypedIr` candidate 显式作为 L0 deterministic route signal。
 - 不让 candidate route 决定 `validation_profile` 或 `semantic_pass`。
 - 不接 LLM candidate generation。
 - 不把旧 crc32 模板恢复为 typed IR fallback。
@@ -150,8 +150,10 @@ typed IR `CandidateRouteDecision` 只回答：
 当前 route decision 的最小风险 floor：
 
 - `GenericTypedIr` generated 仍会写入 `candidate_generation.typed_ir` 和 rationale。
-- 若 pointer graph 已记录 `alias_contract.decision="blocked"`，路线保持 L3，不降到 L1。
-- 若 pointer graph 已记录 `requires_noalias_contract` 或 `unknown_alias` risk，路线保持 L2，不降到 L1。
+- 若 pointer graph 无 pointer surface，且 `GenericTypedIr` candidate 的 `token_cost=0`，路线可记录为 L0 deterministic typed IR candidate；这只是 candidate generation 分层，不是 semantic acceptance。
+- 若 pointer graph 存在非 scalar pointer surface，`GenericTypedIr` generated 仍至少是 L1，不降到 L0。
+- 若 pointer graph 已记录 `alias_contract.decision="blocked"`，路线保持 L3，不降到 L1/L0。
+- 若 pointer graph 已记录 `requires_noalias_contract` 或 `unknown_alias` risk，路线保持 L2，不降到 L1/L0。
 - 若 pointer ownership role 仍为 `unknown`，路线保持 L2。
 
 ## 验证策略

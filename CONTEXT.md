@@ -6616,7 +6616,7 @@ cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-l
 - 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄化标量整数 `|` / `<<` 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
 - 可以说：这是候选生成能力，`semantic_pass` 仍必须保持 `false`，最终接受仍属于 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification。
 - 不应说：已经支持完整 C bitwise/shift semantics、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
-- 不应说：本轮实现了 L0 0-token deterministic route。子线程确认当前 `route_level()` 仍把 `GenericTypedIr` generated 视为 L1 signal；L0 `token_cost=0` 路由规则应作为单独切口实现。
+- 历史说明：本节写作时尚未实现 L0 0-token deterministic route；第 96 节已把 scalar-only `GenericTypedIr` candidate 的 `candidate_route.token_cost=0` 接入 L0 route signal，后续以第 96 节为准。
 - FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
 - 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
 - 本节更新当前能力状态；早期章节中“不要顺手实现 `<<`、`|`”的限制只针对当时 shift-right 切口，已经被本节的 TDD 切片 supersede。
@@ -6624,7 +6624,7 @@ cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-l
 下一步建议：
 
 - 完成本轮最终验证、白名单提交并推送。
-- 后续核心切口优先做 cast/usual-conversion 分类或 L0 `token_cost=0` 路由规则；不要把 short-circuit、pointer/null comparison 或完整 C shift 语义混入本轮。
+- 后续核心切口优先做 cast/usual-conversion 分类；L0 `token_cost=0` 路由规则已由第 96 节实现。不要把 short-circuit、pointer/null comparison 或完整 C shift 语义混入 bitwise/shift 切片。
 
 English mirror summary:
 
@@ -6633,5 +6633,74 @@ English mirror summary:
 - `ClangBinaryOperator::{BitOr, Shl}` map AST opcodes `"|"` and `"<<"` into typed IR.
 - This is candidate generation only and must keep `semantic_pass=false`.
 - It does not support full C bitwise/shift semantics, usual arithmetic conversions, invalid shift counts, signed shift/overflow UB parity, pointer arithmetic, or semantic acceptance.
-- The L0 `token_cost=0` deterministic route is still a separate future router slice; current `GenericTypedIr` generated output remains an L1 route signal.
+- Historical note: when this section was written, the L0 `token_cost=0` deterministic route was still a future router slice. Section 96 has since wired scalar-only `GenericTypedIr` candidates with `candidate_route.token_cost=0` into the L0 route signal.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 96. 2026-06-27 L0 zero-token deterministic typed IR route signal
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 L0/L1 router 现状、cast/usual-conversion 后续切口，以及文档/验证影响；主线程按 TDD 把 scalar-only `GenericTypedIr` + `token_cost=0` candidate 接入 L0 deterministic route signal。结论：这是 route/cost/provenance 分类，不是 semantic acceptance；第 95 节里“L0 `token_cost=0` 仍是 future”的说法被本节 supersede。
+
+核心改动：
+
+- `validation/tools/auto_migrate.py`
+  - `route_level()` 现在先读取 `pointer_nodes`，并把 `scalar_only=not pointer_nodes` 传给 `typed_ir_candidate_route_signal()`。
+  - `typed_ir_candidate_route_signal()` 只在 `status=generated`、`route=GenericTypedIr`、`rust_draft_generated=true`、`scalar_only=true` 且 `candidate_route.token_cost == 0` 时返回 L0。
+  - `token_cost` 缺失或非 0 的 `GenericTypedIr` 仍走 L1。
+  - 有 pointer surface 的 `GenericTypedIr` 仍至少是 L1。
+  - `alias_blocked`、`requires_noalias_contract`、`unknown_alias` 和 unknown pointer ownership floor 仍优先，分别保持 L3/L2，不会被 L0 route signal 覆盖。
+- `validation/tools/test_auto_migrate.py`
+  - 把原 `test_generated_typed_ir_candidate_is_l1_route_signal` 改为 `test_generated_zero_token_scalar_typed_ir_candidate_routes_l0`，先确认红灯：旧逻辑返回 L1。
+  - 新增 `test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1` 和 `test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1`，锁住缺失或非 0 token cost 不走 L0。
+  - 在 `test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence` 中确认 FlashDB 这类 pointer-bearing `GenericTypedIr + token_cost=0` 仍是 L1。
+  - 保留 alias risk / blocked alias / unsupported typed IR 测试，并新增 unknown pointer ownership 测试，分别证明 L2/L3/L2/L2 边界未被破坏。
+- 双语文档与 OpenSpec 已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `validation/README.md`
+  - `validation/gates.md`
+  - `validation/auto-translation-template/README.md`
+  - `openspec/specs/bounded-auto-translation-pipeline/spec.md`
+
+已确认红灯：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 -v
+```
+
+红灯表现：旧逻辑返回 `L1`，测试期望 `L0`，失败于 `AssertionError: 'L1' != 'L0'`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 -v
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_unknown_pointer_role_routes_l2_not_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 -v
+```
+
+聚焦结果：新增后 8 个 route boundary tests 均通过。
+
+当前边界：
+
+- 可以说：scalar-only、`GenericTypedIr`、`candidate_route.token_cost=0`、`rust_draft_generated=true` 的 deterministic candidate 现在能记录为 `route_decision.level=L0`。
+- 可以说：这是 candidate route / context budget / provenance classification，只影响候选路径和验证 profile 分层。
+- 不应说：L0 route 证明 semantic equivalence，或 rustc pass + token_cost=0 就 accepted。
+- 不应说：zero-token deterministic route 可以绕过 C oracle、Rust replay、schema-aware diff、negative diff、unsafe evidence、cache/version binding 或 final verification。
+- `semantic_pass=false` 和 `generated_draft_semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+- catalog validation 的 L0 和 auto-translation `route_decision.level=L0` 是不同概念，不能互相替代。
+
+下一步建议：
+
+- 完成本轮最终验证、白名单提交并推送。
+- 后续核心切口优先做 comparison operand integral cast 的窄化放开：当前 clang 已保留 `IntegralCast` / `IntegralPromotion`，但 comparison operand 上的 cast 仍 fail closed；这会影响真实 `uint32_t value; if (value > 0)` 形态。
+
+English mirror summary:
+
+- Scalar-only `GenericTypedIr` candidates with `candidate_route.token_cost=0` and a generated Rust draft now route as `route_decision.level=L0`.
+- This is deterministic candidate routing / context-budget provenance only. Generated Rust remains candidate evidence.
+- `semantic_pass=false` and `generated_draft_semantic_pass=false` remain until independent validation gates accept the exact draft.
+- Pointer-bearing `GenericTypedIr` candidates remain at least L1; alias blocked, requires-noalias, unknown alias, and unknown pointer ownership floors still override to L3/L2.
+- Catalog L0 and auto-translation `route_decision.level=L0` are different evidence concepts.
+- The next high-value core slice is narrow integral-cast support for comparison operands, not full usual arithmetic conversions.

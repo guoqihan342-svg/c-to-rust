@@ -1273,6 +1273,8 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(typed_ir["source_artifact"]["status"], "lowered")
             self.assertIn("sha256", typed_ir["source_artifact"])
             self.assertEqual(typed_ir["candidate_route"]["route"], "GenericTypedIr")
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["verification_profile"], "L1-dev")
             self.assertEqual(typed_ir["readonly_globals_identity"]["count"], 1)
             self.assertEqual(typed_ir["readonly_globals_identity"]["names"], ["crc32_table"])
             self.assertEqual(typed_ir["readonly_globals"][0]["name"], "crc32_table")
@@ -1282,7 +1284,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(profile["candidate_generation"]["typed_ir"]["candidate_route"]["route"], "GenericTypedIr")
             self.assertFalse(profile["generated_draft_semantic_pass"])
 
-    def test_generated_typed_ir_candidate_is_l1_route_signal(self) -> None:
+    def test_generated_zero_token_scalar_typed_ir_candidate_routes_l0(self) -> None:
         module = load_auto_migrate_module()
         spec = {
             "target_id": "demo",
@@ -1347,10 +1349,90 @@ class AutoMigrateTests(unittest.TestCase):
                 {"status": "passed"},
             )
 
+            self.assertEqual(route["level"], "L0")
+            self.assertEqual(route["verification_profile"], "L0-dev")
+            self.assertEqual(profile["route_level"], "L0")
+            self.assertNotIn("unsafe_ledger", profile["required_gates"])
+            self.assertNotIn("rust_tests", profile["required_gates"])
+            self.assertIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
+    def test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-missing-token-cost",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-missing-token-cost"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
             self.assertEqual(route["level"], "L1")
-            self.assertEqual(route["verification_profile"], "L1-dev")
-            self.assertIn("unsafe_ledger", profile["required_gates"])
-            self.assertIn("rust_tests", profile["required_gates"])
+            self.assertNotIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
             self.assertIn(
                 {
                     "feature": "typed_ir_candidate_generated",
@@ -1359,8 +1441,170 @@ class AutoMigrateTests(unittest.TestCase):
                 },
                 route["rationale"],
             )
-            self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
-            self.assertFalse(profile["generated_draft_semantic_pass"])
+
+    def test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-nonzero-token-cost",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-nonzero-token-cost"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 1,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            self.assertEqual(route["level"], "L1")
+            self.assertNotIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
+
+    def test_generated_typed_ir_candidate_with_unknown_pointer_role_routes_l2_not_l0(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-unknown-pointer-role",
+            "source_commit": "1234567",
+            "function_name": "first_i32",
+            "c_source": "int first_i32(const int* values) { return values[0]; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-unknown-pointer-role"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps(
+                    {
+                        "status": "recorded",
+                        "pointer_nodes": [
+                            {"name": "values", "ownership_role": "unknown"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            self.assertEqual(route["level"], "L2")
+            self.assertEqual(route["verification_profile"], "L2-dev")
+            self.assertIn({"feature": "unknown_pointer_role", "weight": "medium"}, route["rationale"])
+            self.assertNotIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
 
     def test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1(self) -> None:
         module = load_auto_migrate_module()

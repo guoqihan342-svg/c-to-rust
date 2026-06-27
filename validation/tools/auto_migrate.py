@@ -3020,8 +3020,8 @@ def route_level(
     if cfg.get("unsupported_control_flow"):
         rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
         return "L4", rationale
-    typed_ir_signal = typed_ir_candidate_route_signal(candidate_generation or {})
     pointer_nodes = pointer.get("pointer_nodes", [])
+    typed_ir_signal = typed_ir_candidate_route_signal(candidate_generation or {}, scalar_only=not pointer_nodes)
     alias_floor = alias_route_floor(pointer)
     if alias_floor is not None:
         level, alias_rationale = alias_floor
@@ -3074,14 +3074,27 @@ def alias_route_floor(pointer: dict[str, Any]) -> tuple[str, dict[str, Any]] | N
     return None
 
 
-def typed_ir_candidate_route_signal(candidate_generation: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+def typed_ir_candidate_route_signal(
+    candidate_generation: dict[str, Any], *, scalar_only: bool = False
+) -> tuple[str, dict[str, Any]] | None:
     typed_ir = candidate_generation.get("typed_ir")
     if not isinstance(typed_ir, dict):
         return None
     status = str(typed_ir.get("status", ""))
     candidate_route = typed_ir.get("candidate_route")
     route = candidate_route.get("route") if isinstance(candidate_route, dict) else None
+    token_cost = candidate_route.get("token_cost") if isinstance(candidate_route, dict) else None
     if status == "generated" and route == "GenericTypedIr" and typed_ir.get("rust_draft_generated") is True:
+        if scalar_only and token_cost == 0:
+            return (
+                "L0",
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+            )
         return (
             "L1",
             {
