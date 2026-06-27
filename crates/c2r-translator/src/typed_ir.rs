@@ -1469,7 +1469,7 @@ fn emit_assignment_target<'a>(
                 return Err("arrow member assignment requires pointer/record ownership evidence"
                     .to_string());
             }
-            let target = emit_member_expr(base, field, ty, *is_arrow, symbols)?;
+            let target = emit_member_expr(base, field, ty, *is_arrow, symbols, context)?;
             Ok((target, ty))
         }
         _ => Err(
@@ -1829,7 +1829,7 @@ fn emit_expr(
             ty,
             is_arrow,
             ..
-        } => emit_member_expr(base, field, ty, *is_arrow, symbols),
+        } => emit_member_expr(base, field, ty, *is_arrow, symbols, context),
         IrExpr::ArrayLiteral { .. } => Err(
             "array literal expression is only supported as a declaration initializer".to_string(),
         ),
@@ -1896,9 +1896,10 @@ fn emit_member_expr(
     ty: &IrType,
     is_arrow: bool,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     if is_arrow {
-        return emit_readonly_record_pointer_member_expr(base, field, ty, symbols);
+        return emit_readonly_record_pointer_member_expr(base, field, ty, symbols, context);
     }
     let IrExpr::Var {
         name: base_name,
@@ -1928,6 +1929,7 @@ fn emit_readonly_record_pointer_member_expr(
     field: &str,
     ty: &IrType,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let IrExpr::Var {
         name: base_name,
@@ -1949,6 +1951,9 @@ fn emit_readonly_record_pointer_member_expr(
     emit_scalar_type(ty).map_err(|detail| format!("arrow member field {field} has {detail}"))?;
     let base_name = emit_identifier(base_name, "arrow member base")?;
     let field = emit_identifier(field, "arrow member field")?;
+    if context.is_nullable_pointer_param(&base_name) {
+        return Ok(format!("{base_name}.unwrap().{field}"));
+    }
     Ok(format!("{base_name}.{field}"))
 }
 
@@ -3863,9 +3868,12 @@ fn collect_nullable_pointer_params(
         .collect::<HashMap<_, _>>();
     let mut nullable_params = HashSet::new();
     collect_nullable_pointer_params_from_body(body, &readonly_pointer_params, &mut nullable_params);
-    for stmt in body {
-        validate_nullable_pointer_param_uses_in_stmt(stmt, &nullable_params)?;
-    }
+    let mut proven_nonnull_params = HashSet::new();
+    validate_nullable_pointer_param_uses_in_body(
+        body,
+        &nullable_params,
+        &mut proven_nonnull_params,
+    )?;
     Ok(nullable_params)
 }
 
@@ -4114,9 +4122,24 @@ fn collect_nullable_pointer_params_from_expr(
     }
 }
 
+fn validate_nullable_pointer_param_uses_in_body(
+    body: &[IrStmt],
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params, proven_nonnull_params)?;
+        if let Some(param) = null_return_guard_proves_nonnull(stmt, nullable_params) {
+            proven_nonnull_params.insert(param.to_string());
+        }
+    }
+    Ok(())
+}
+
 fn validate_nullable_pointer_param_uses_in_stmt(
     stmt: &IrStmt,
     nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
 ) -> Result<(), String> {
     if nullable_params.is_empty() {
         return Ok(());
@@ -4124,12 +4147,24 @@ fn validate_nullable_pointer_param_uses_in_stmt(
     match stmt {
         IrStmt::Decl { init, .. } => {
             if let Some(init) = init {
-                validate_nullable_pointer_param_uses_in_expr(init, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_expr(
+                    init,
+                    nullable_params,
+                    proven_nonnull_params,
+                )?;
             }
         }
         IrStmt::Assign { target, value, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(target, nullable_params)?;
-            validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(
+                target,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                value,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
         }
         IrStmt::If {
             condition,
@@ -4137,29 +4172,62 @@ fn validate_nullable_pointer_param_uses_in_stmt(
             else_body,
             ..
         } => {
-            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
-            for stmt in then_body {
-                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(
+                condition,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            let mut then_nonnull_params = proven_nonnull_params.clone();
+            let mut else_nonnull_params = proven_nonnull_params.clone();
+            match null_comparison_nonnull_branch(condition, nullable_params) {
+                Some(NullComparisonNonnullBranch::Then { param }) => {
+                    then_nonnull_params.insert(param.to_string());
+                }
+                Some(NullComparisonNonnullBranch::Else { param }) => {
+                    else_nonnull_params.insert(param.to_string());
+                }
+                None => {}
             }
-            for stmt in else_body {
-                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
-            }
+            validate_nullable_pointer_param_uses_in_body(
+                then_body,
+                nullable_params,
+                &mut then_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_body(
+                else_body,
+                nullable_params,
+                &mut else_nonnull_params,
+            )?;
         }
         IrStmt::While {
             condition, body, ..
         } => {
-            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
-            for stmt in body {
-                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
-            }
+            validate_nullable_pointer_param_uses_in_expr(
+                condition,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            let mut loop_nonnull_params = proven_nonnull_params.clone();
+            validate_nullable_pointer_param_uses_in_body(
+                body,
+                nullable_params,
+                &mut loop_nonnull_params,
+            )?;
         }
         IrStmt::DoWhile {
             body, condition, ..
         } => {
-            for stmt in body {
-                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
-            }
-            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+            let mut loop_nonnull_params = proven_nonnull_params.clone();
+            validate_nullable_pointer_param_uses_in_body(
+                body,
+                nullable_params,
+                &mut loop_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                condition,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
         }
         IrStmt::For {
             init,
@@ -4168,28 +4236,49 @@ fn validate_nullable_pointer_param_uses_in_stmt(
             body,
             ..
         } => {
-            for (index, init) in init.iter().enumerate() {
-                validate_nullable_pointer_param_uses_in_stmt(init, nullable_params)
-                    .map_err(|detail| format!("for init[{index}] {detail}"))?;
-            }
+            let mut loop_nonnull_params = proven_nonnull_params.clone();
+            validate_nullable_pointer_param_uses_in_body(
+                init,
+                nullable_params,
+                &mut loop_nonnull_params,
+            )
+            .map_err(|detail| format!("for init {detail}"))?;
             if let Some(condition) = condition {
-                validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_expr(
+                    condition,
+                    nullable_params,
+                    &loop_nonnull_params,
+                )?;
             }
             if let Some(step) = step {
-                validate_nullable_pointer_param_uses_in_stmt(step, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_stmt(
+                    step,
+                    nullable_params,
+                    &loop_nonnull_params,
+                )?;
             }
-            for stmt in body {
-                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
-            }
+            validate_nullable_pointer_param_uses_in_body(
+                body,
+                nullable_params,
+                &mut loop_nonnull_params,
+            )?;
         }
         IrStmt::Return { value, .. } => {
             if let Some(value) = value {
-                validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_expr(
+                    value,
+                    nullable_params,
+                    proven_nonnull_params,
+                )?;
             }
         }
         IrStmt::Break { .. } | IrStmt::Continue { .. } => {}
         IrStmt::Expr { expr, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(expr, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(
+                expr,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
         }
         IrStmt::Unsupported { .. } => {}
     }
@@ -4199,6 +4288,7 @@ fn validate_nullable_pointer_param_uses_in_stmt(
 fn validate_nullable_pointer_param_uses_in_expr(
     expr: &IrExpr,
     nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
 ) -> Result<(), String> {
     if let IrExpr::Binary {
         op: IrBinOp::Eq | IrBinOp::Neq,
@@ -4213,59 +4303,198 @@ fn validate_nullable_pointer_param_uses_in_expr(
             return Ok(());
         }
     }
+    if nullable_record_pointer_arrow_read_is_proven_nonnull(
+        expr,
+        nullable_params,
+        proven_nonnull_params,
+    )? {
+        return Ok(());
+    }
     match expr {
         IrExpr::Var { name, .. } if nullable_params.contains(name) => Err(format!(
             "nullable pointer param {name} is only supported in null comparisons"
         )),
         IrExpr::Binary { lhs, rhs, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(lhs, nullable_params)?;
-            validate_nullable_pointer_param_uses_in_expr(rhs, nullable_params)
+            validate_nullable_pointer_param_uses_in_expr(
+                lhs,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                rhs,
+                nullable_params,
+                proven_nonnull_params,
+            )
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
-        | IrExpr::AddrOf { operand, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(operand, nullable_params)
-        }
+        | IrExpr::AddrOf { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
+            operand,
+            nullable_params,
+            proven_nonnull_params,
+        ),
         IrExpr::Conditional {
             condition,
             then_expr,
             else_expr,
             ..
         } => {
-            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
-            validate_nullable_pointer_param_uses_in_expr(then_expr, nullable_params)?;
-            validate_nullable_pointer_param_uses_in_expr(else_expr, nullable_params)
+            validate_nullable_pointer_param_uses_in_expr(
+                condition,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                then_expr,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                else_expr,
+                nullable_params,
+                proven_nonnull_params,
+            )
         }
         IrExpr::Index { base, index, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(base, nullable_params)?;
-            validate_nullable_pointer_param_uses_in_expr(index, nullable_params)
+            validate_nullable_pointer_param_uses_in_expr(
+                base,
+                nullable_params,
+                proven_nonnull_params,
+            )?;
+            validate_nullable_pointer_param_uses_in_expr(
+                index,
+                nullable_params,
+                proven_nonnull_params,
+            )
         }
-        IrExpr::Member { base, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(base, nullable_params)
-        }
+        IrExpr::Member { base, .. } => validate_nullable_pointer_param_uses_in_expr(
+            base,
+            nullable_params,
+            proven_nonnull_params,
+        ),
         IrExpr::ArrayLiteral { elements, .. } => {
             for element in elements {
-                validate_nullable_pointer_param_uses_in_expr(element, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_expr(
+                    element,
+                    nullable_params,
+                    proven_nonnull_params,
+                )?;
             }
             Ok(())
         }
         IrExpr::Call { args, .. } => {
             for arg in args {
-                validate_nullable_pointer_param_uses_in_expr(arg, nullable_params)?;
+                validate_nullable_pointer_param_uses_in_expr(
+                    arg,
+                    nullable_params,
+                    proven_nonnull_params,
+                )?;
             }
             Ok(())
         }
-        IrExpr::IncDec { target, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(target, nullable_params)
-        }
-        IrExpr::Deref { ptr, .. } => {
-            validate_nullable_pointer_param_uses_in_expr(ptr, nullable_params)
-        }
+        IrExpr::IncDec { target, .. } => validate_nullable_pointer_param_uses_in_expr(
+            target,
+            nullable_params,
+            proven_nonnull_params,
+        ),
+        IrExpr::Deref { ptr, .. } => validate_nullable_pointer_param_uses_in_expr(
+            ptr,
+            nullable_params,
+            proven_nonnull_params,
+        ),
         IrExpr::LitInt { .. }
         | IrExpr::NullPtr { .. }
         | IrExpr::Var { .. }
         | IrExpr::Unsupported { .. } => Ok(()),
     }
+}
+
+fn null_return_guard_proves_nonnull<'a>(
+    stmt: &'a IrStmt,
+    nullable_params: &HashSet<String>,
+) -> Option<&'a str> {
+    let IrStmt::If {
+        condition,
+        then_body,
+        else_body,
+        ..
+    } = stmt
+    else {
+        return None;
+    };
+    if !else_body.is_empty() || !matches!(then_body.as_slice(), [IrStmt::Return { .. }]) {
+        return None;
+    }
+    let IrExpr::Binary {
+        op: IrBinOp::Eq,
+        lhs,
+        rhs,
+        ..
+    } = condition
+    else {
+        return None;
+    };
+    let Some((name, _)) = null_pointer_comparison_var(lhs, rhs) else {
+        return None;
+    };
+    nullable_params.contains(name).then_some(name)
+}
+
+enum NullComparisonNonnullBranch<'a> {
+    Then { param: &'a str },
+    Else { param: &'a str },
+}
+
+fn null_comparison_nonnull_branch<'a>(
+    condition: &'a IrExpr,
+    nullable_params: &HashSet<String>,
+) -> Option<NullComparisonNonnullBranch<'a>> {
+    let IrExpr::Binary { op, lhs, rhs, .. } = condition else {
+        return None;
+    };
+    let Some((name, _)) = null_pointer_comparison_var(lhs, rhs) else {
+        return None;
+    };
+    if !nullable_params.contains(name) {
+        return None;
+    }
+    match op {
+        IrBinOp::Neq => Some(NullComparisonNonnullBranch::Then { param: name }),
+        IrBinOp::Eq => Some(NullComparisonNonnullBranch::Else { param: name }),
+        _ => None,
+    }
+}
+
+fn nullable_record_pointer_arrow_read_is_proven_nonnull(
+    expr: &IrExpr,
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
+) -> Result<bool, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty: member_ty,
+        is_arrow: true,
+        ..
+    } = expr
+    else {
+        return Ok(false);
+    };
+    let IrExpr::Var {
+        name, ty: base_ty, ..
+    } = base.as_ref()
+    else {
+        return Ok(false);
+    };
+    if !nullable_params.contains(name) || !proven_nonnull_params.contains(name) {
+        return Ok(false);
+    }
+    if readonly_record_pointer_pointee_type(base_ty).is_none() {
+        return Ok(false);
+    }
+    emit_scalar_type(member_ty)
+        .map_err(|detail| format!("nullable record pointer arrow field {field} has {detail}"))?;
+    Ok(true)
 }
 
 fn collect_param_symbols(params: &[IrParam]) -> Result<HashSet<String>, String> {

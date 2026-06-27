@@ -113,7 +113,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] 支持 libuv、zlib-ng 等项目的真实函数切片
 - [ ] 从 `validation/projects.json` 中选择 5+ 项目，每个项目至少推进一个 named function slice：项目级 L1 native baseline + slice 级 L2/L3 evidence
 - [ ] usual arithmetic conversions 的显式模型
-- [ ] 指针/alias-sensitive struct field write（有 alias/noalias 证明；readonly `const struct T *p` 的简单 `p->scalar_field` 读、`p == NULL`/`p != NULL` presence check 到 `Option<&T>`、非 pointer 的简单按值 `p.x = value` 和 standalone statement 位置 `p.x++` / `++p.x` / `p.x--` / `--p.x` 已进入 typed IR candidate 子集；`p->field = value` 等 pointer field write 仍拒绝）
+- [ ] 指针/alias-sensitive struct field write（有 alias/noalias 证明；readonly `const struct T *p` 的简单 `p->scalar_field` 读、`p == NULL`/`p != NULL` presence check 到 `Option<&T>`、flow-sensitive null-guarded `p->scalar_field` read、非 pointer 的简单按值 `p.x = value` 和 standalone statement 位置 `p.x++` / `++p.x` / `p.x--` / `--p.x` 已进入 typed IR candidate 子集；`p->field = value` 等 pointer field write 仍拒绝）
 - [ ] nested struct / anonymous struct
 - [ ] bitfield（至少支持 common patterns）
 - [ ] macro expansion tracking
@@ -143,7 +143,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P1: 扩大语法和内存模型覆盖
 
-- [ ] 继续扩 generic typed IR emitter，而不是恢复 crc32/FlashDB 特例：已初始化 record local copy、按值 record dot-field compound assignment、statement 位置按值 record dot-field inc/dec、唯一具名完整直接标量字段清单下的 whole-record return、readonly `const struct T *p` 的简单 `p->scalar_field` 读，以及 readonly record pointer `p == NULL`/`p != NULL` presence check 已进入候选子集；后续优先做 flow-sensitive null-guarded `p->scalar_field` read、value-position/复杂 target/pointer-alias-sensitive update field write，以及更强的 layout/ABI evidence 证明。
+- [ ] 继续扩 generic typed IR emitter，而不是恢复 crc32/FlashDB 特例：已初始化 record local copy、按值 record dot-field compound assignment、statement 位置按值 record dot-field inc/dec、唯一具名完整直接标量字段清单下的 whole-record return、readonly `const struct T *p` 的简单 `p->scalar_field` 读、readonly record pointer `p == NULL`/`p != NULL` presence check，以及 flow-sensitive null-guarded `p->scalar_field` read 已进入候选子集；后续优先做 value-position/复杂 target/pointer-alias-sensitive update field write、alias/noalias 证明，以及更强的 layout/ABI evidence 证明。
 - [ ] 设计 alias/noalias 与 pointer escape 模型：把 readonly slice、mutable out slice、nullable pointer、unknown alias、volatile/hardware register 分成可证明路径和 L4 拒绝路径。
 - [ ] 完成 integer conversion 纪律：所有 clang `ImplicitCastExpr`、integer promotion、usual arithmetic conversions、narrowing/truncation 都要在 IR 中显式可见。
 - [ ] 扩控制流：`switch`/`goto` 先进入 CFG 证据和 fail-closed classifier，再考虑 relooper 和 Rust candidate。

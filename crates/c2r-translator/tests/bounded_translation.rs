@@ -7171,6 +7171,367 @@ fn typed_ir_emits_comparison_condition_with_record_null_pointer_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_null_guarded_nullable_record_pointer_arrow_field_read() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "point_x_or_zero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit null-guarded nullable record pointer field read");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn point_x_or_zero(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("if p.is_none() {"), "{rust}");
+    assert!(rust.contains("return 0i32;"), "{rust}");
+    assert!(rust.contains("return p.unwrap().x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-null-guarded-record-pointer-field-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_nullable_record_pointer_arrow_field_read_in_nonnull_branch() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "point_x_if_present".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Neq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(IrExpr::Member {
+                        base: Box::new(ir_var("p", ptr_ty)),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit nullable record pointer field read in nonnull branch");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn point_x_if_present(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("if p.is_some() {"), "{rust}");
+    assert!(rust.contains("return p.unwrap().x;"), "{rust}");
+    assert!(rust.contains("return 0i32;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-nullable-record-pointer-nonnull-branch-field-read",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_record_pointer_arrow_field_read_without_null_guard() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "bad_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("nullable record pointer field read must need guard");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("nullable pointer param p is only supported in null comparisons"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_record_pointer_arrow_field_read_in_null_branch() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "bad_null_branch_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(IrExpr::Member {
+                        base: Box::new(ir_var("p", ptr_ty)),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                else_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("null branch must not allow nullable field read");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("nullable pointer param p is only supported in null comparisons"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_record_pointer_arrow_non_scalar_field_read_even_when_guarded() {
+    let i32_ty = ir_i32();
+    let child_ty = ir_record_with_fields("child", vec![("value", i32_ty.clone())]);
+    let point_ty = ir_record_with_fields("point", vec![("child", child_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "bad_guarded_point_child".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Member {
+                    base: Box::new(ir_var("p", ptr_ty)),
+                    field: "child".to_string(),
+                    ty: child_ty,
+                    is_arrow: true,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("guarded nullable record pointer read must still require scalar field");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains(
+        "nullable record pointer arrow field child has record type child is unsupported"
+    ));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_record_pointer_arrow_field_read_after_inverse_guard() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "bad_inverse_guard_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Neq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("inverse nullable record pointer guard must not prove nonnull");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("nullable pointer param p is only supported in null comparisons"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_nullable_pointer_use_after_null_check() {
     let i32_ty = ir_i32();
     let const_i32_ty = ir_const(i32_ty.clone());
@@ -18895,6 +19256,83 @@ fn clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled()
     assert!(rust.contains("pub fn point_x(p: &Point) -> i32"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-arrow-member-read", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-null-guarded-arrow-member-read");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("null_guarded_arrow_member_read.c");
+    fs::write(
+        &source_file,
+        "#define NULL ((void*)0)\nstruct point { int x; int y; };\nint point_x_or_zero(const struct point *p) { if (p == NULL) return 0; return p->x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "point_x_or_zero");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    assert!(
+        matches!(
+            function.body.as_slice(),
+            [
+                IrStmt::If { .. },
+                IrStmt::Return {
+                    value: Some(IrExpr::Member {
+                        base,
+                        field,
+                        is_arrow: true,
+                        ..
+                    }),
+                    ..
+                }
+            ] if field == "x"
+                && matches!(
+                    base.as_ref(),
+                    IrExpr::Var {
+                        name,
+                        ..
+                    } if name == "p"
+                )
+        ),
+        "{:?}",
+        function.body
+    );
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit null-guarded arrow member read from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn point_x_or_zero(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("if p.is_none() {"), "{rust}");
+    assert!(rust.contains("return 0i32;"), "{rust}");
+    assert!(rust.contains("return p.unwrap().x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-null-guarded-arrow-member-read", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

@@ -9583,3 +9583,54 @@ English mirror summary:
 - Preserved nullable pointer fail-closed behavior for all non-comparison uses, including nullable `p->field`, `*p`, `p[i]`, call-argument escape, and pointer writes.
 - Added direct typed IR tests for value and condition comparisons, plus a real clang AST smoke test for `struct point { int x; }; int has_point(const struct point *p) { return p != NULL; }`.
 - Updated Chinese and English MVP backlog to make flow-sensitive null-guarded record field reads the next explicit P1 target.
+
+## 139. 2026-06-28 P1 flow-sensitive nullable record pointer field read
+
+本轮继续按多智能体和 TDD 推进 P1 pointer-aware record access，不写 FlashDB/crc32 特例。上一节只把 readonly record pointer 的 null presence check 映射到 `Option<&T>`，并明确不支持 guarded `p->field` read；本节落地极窄的 flow-sensitive non-null 事实：只在直接 `p == NULL` / `p != NULL` guard 能证明当前路径非空时，允许 nullable readonly record pointer 的 direct `p->scalar_field` read。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `collect_nullable_pointer_params()` 改为顺序验证函数体，并携带 `proven_nonnull_params` flow state。
+  - `validate_nullable_pointer_param_uses_in_stmt()` 对 `if (p != NULL)` 的 then 分支、`if (p == NULL)` 的 else 分支注入 non-null 事实。
+  - 新增 `null_return_guard_proves_nonnull()`，仅识别 `if (p == NULL) return ...;` 且 else 为空、then body 恰好直接 return 的窄形态；该 if 之后才把 `p` 视为 non-null。
+  - `validate_nullable_pointer_param_uses_in_expr()` 仍默认拒绝 nullable pointer 的普通表达式用途，只额外允许已证明 non-null 的 `IrExpr::Member { is_arrow: true, base: Var(p) }`，且 `p` 必须是 readonly record pointer。
+  - 审查后进一步收紧：上述 nullable arrow read 的字段结果也必须是 scalar；即使 guard 已证明 non-null，`p->child_record` 这类非标量字段仍 fail closed。
+  - `emit_readonly_record_pointer_member_expr()` 在 nullable record pointer 参数上发射 `p.unwrap().field`；未 nullable 的 readonly record pointer 仍发射 `p.field`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_null_guarded_nullable_record_pointer_arrow_field_read`：`if (p == NULL) return 0; return p->x;` 生成 `Option<&Point>`、`p.is_none()` 和 `p.unwrap().x`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_nullable_record_pointer_arrow_field_read_in_nonnull_branch`：`if (p != NULL) return p->x; return 0;` 只在 then 分支允许 `p.unwrap().x`。
+  - 新增 direct typed IR 负例覆盖未支配 guard、null 分支读取、guard 后非标量字段读取、inverse guard 后读取，确保 nullable `p->x` 不会被泛化放开。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled`，验证真实 C `if (p == NULL) return 0; return p->x;` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 flow-sensitive null-guarded `p->scalar_field` read 已进入 typed IR candidate 子集；下一步改为 value-position/复杂 target/pointer-alias-sensitive update field write、alias/noalias proof 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_null_guarded_nullable_record_pointer_arrow_field_read
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_nullable_record_pointer_arrow_field_read_in_nonnull_branch
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_without_null_guard
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_in_null_branch
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_non_scalar_field_read_even_when_guarded
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_after_inverse_guard
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR null-return guard 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR `p != NULL` then 分支正例：1 passed，并通过 rustc snippet smoke。
+- 四个 direct typed IR 负例：均按预期 fail closed。
+- 真实 clang AST null-guarded arrow member read smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：readonly `const struct T *p` 在直接 null guard 后的窄 `p->scalar_field` read 现在能生成 `Option<&T>` + `.is_none()`/`.is_some()` + `unwrap().field` 的可编译 Rust candidate。
+- 可以说：当前 non-null 事实是 statement/branch 层面的窄 flow fact，不是通用 pointer analysis。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、nullable integer slice deref/index、`if (p)`, `p != NULL && p->x`, loop guard、非支配 guard、复杂 path condition、call-argument escape、pointer field writes、mutable/non-const record pointer read、pointer arithmetic record access、alias-sensitive ownership、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow flow-sensitive candidate path for nullable readonly record pointer field reads after direct null guards.
+- `if (p == NULL) return ...; return p->scalar_field;` and `if (p != NULL) return p->scalar_field; ...` now emit `Option<&T>` plus `.is_none()` / `.is_some()` and `p.unwrap().field`.
+- The nullable pointer validator remains fail-closed for ordinary nullable pointer use; only proven-nonnull direct scalar arrow reads on readonly record pointers are allowed.
+- Added direct typed IR positive and negative tests, plus a real clang AST smoke test for the null-return guard shape.
+- Updated the Chinese and English MVP backlog to mark this narrow guarded-read path as supported while keeping pointer writes, alias-sensitive ownership, layout/ABI claims, and semantic acceptance out of scope.
