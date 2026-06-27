@@ -64,7 +64,7 @@
 - auto draft、LLM candidate、C2Rust candidate、typed IR candidate 都只是 candidate。
 - candidate/draft ledger 只记录 provenance、diagnostic 和 replay scaffold；accepted/named-slice evidence ledger 才能承载 semantic claim。
 - `generated_draft_semantic_pass` 必须默认为 false，除非它明确引用已接受的语义证据；一般情况下不应由 draft 自己给出 true。
-- candidate/draft 证据中出现 `semantic_pass=true` 应视为非法或误导；若后续存在 promoted artifact，也必须在单独边界内声明。
+- candidate/draft 证据中出现 `semantic_pass=true` 应视为非法或误导；若后续某个 artifact 需要承载语义结论，必须由 accepted/named-slice evidence bundle 独立绑定该 exact artifact 并通过 required gates。
 - `semantic_pass=true` 必须绑定 named-slice 或更强验证证据，且证据中需要能追溯到原始 C oracle、Rust candidate、测试/差分输入、环境 profile、pinned source commit 和 manifest-ref hash/status。
 - 自动翻译 run 应保证同一个 slice spec hash 贯穿 context pack、type map、CFG、pointer graph、Rust draft、C oracle、Rust replay、cache metadata 和最终 L3 evidence。
 - final verification 可以汇总 accepted evidence，但 `final_verification.semantic_pass=true` 只表示 accepted/named-slice evidence bundle 通过；它不能被解读成 `generated_draft_semantic_pass=true`。
@@ -119,7 +119,7 @@
 - `config/competition-env/environment.json` 被明确标为默认比赛环境入口。
 - `future-vision-and-mvp.md` 继续保留 P0/P1/P2 待办，并把“真实 C 项目覆盖”与“curated function slice”区分清楚。
 - evidence 文档明确说明 draft/candidate 不是 correctness source。
-- final verification 相关文字明确附带 `generated_draft_semantic_pass=false; source=accepted_evidence_binding` 这一边界，不会把 draft 误读成 semantic pass。
+- final verification 相关文字明确说明绑定 `accepted_evidence_binding` 且保持 `generated_draft_semantic_pass=false` 这一边界，不会把 draft 误读成 semantic pass。
 - stale OpenSpec spec 被列出并给出处理策略，不能继续作为当前需求入口。
 - 本轮只改文档和必要的 validator/report 文字，不改 translator 行为，除非后续 implementation plan 明确包含并获得确认。
 

@@ -247,7 +247,7 @@ In `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md`, replace th
 In the `semantic_pass_for_run()` rules section, after the rule that says `generated_draft_semantic_pass` must be false, add:
 
 ```markdown
-6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须同时说明 `source=accepted_evidence_binding` 和 `generated_draft_semantic_pass=false`。
+6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须说明已绑定 `accepted_evidence_binding`，并保持 `generated_draft_semantic_pass=false`。
 ```
 
 - [ ] **Step 3: Mirror the wording in English routing doc**
@@ -261,7 +261,7 @@ In `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.en.md`, replace
 Then add this rule after the existing generated-draft rule:
 
 ```markdown
-6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must state `source=accepted_evidence_binding` and `generated_draft_semantic_pass=false`.
+6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must state that they bind `accepted_evidence_binding` and keep `generated_draft_semantic_pass=false`.
 ```
 
 - [ ] **Step 4: Add validation gate claim boundary**
@@ -269,7 +269,7 @@ Then add this rule after the existing generated-draft rule:
 In `validation/gates.md`, after the paragraph that starts with `Only L3 can support a limited semantic-equivalence claim`, add:
 
 ```markdown
-For auto-translation evidence, `final_verification.semantic_pass=true` is claimable only as an accepted or named-slice evidence-bundle result. It must not be read as `generated_draft_semantic_pass=true`; generated drafts, typed IR candidates, C2Rust candidates, and LLM candidates remain candidate/provenance artifacts unless a separate accepted evidence boundary explicitly promotes that exact artifact.
+For auto-translation evidence, `final_verification.semantic_pass=true` is claimable only as an accepted/named-slice evidence bundle result. It must not be read as `generated_draft_semantic_pass=true`; generated drafts, typed IR candidates, C2Rust candidates, and LLM candidates remain candidate/provenance artifacts unless the exact artifact is independently bound by an accepted/named-slice evidence bundle and passes required gates.
 ```
 
 - [ ] **Step 5: Verify wording**
