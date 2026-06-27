@@ -8535,3 +8535,67 @@ English mirror summary:
 - Cache metadata now carries `effect_graph_identity`, so changed effect or alias evidence invalidates generated candidates.
 - Legacy v1 pointer graph artifacts remain compatible when they omit `effect_graph`.
 - Focused and full auto-migrate, validator, template schema, JSON, OpenSpec, and whitespace checks pass.
+
+## 123. 2026-06-27 by-value record dot-field read support
+
+本轮继续按多智能体和红测优先推进 `c2r-translator` 的通用 typed IR 覆盖，不写 FlashDB 专用代码。第 122 节建议的下一刀是 struct/field access；本节先只打通最窄的按值 record dot-field 读取，例如 `struct point p; return p.x;`，不打开 pointer `->`、字段写入或 record layout/ABI 语义。
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangTypeKind` 新增 `Record { name }`，`type_from_qual_type()` 识别简单 `struct <identifier>`。
+  - `ClangExprSkeleton` 新增 `Member { base, field, ty, is_arrow }`。
+  - `expr_skeleton_from_ast_with_options()` 支持 clang `MemberExpr`，读取 base、field name、result type 和 `isArrow`。
+  - `lower_expr()` 将 skeleton member lowering 成 typed IR `IrExpr::Member`。
+  - bounded call argument guard 明确拒绝 member access call argument，避免扩大 call 子集。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrExpr` 新增 `Member`。
+  - `emit_record_definitions()` 根据 record 参数和实际访问到的字段生成最小 Rust struct definition。
+  - `emit_member_expr()` 只允许按值 record 变量的 dot-field read，并拒绝 `is_arrow=true`。
+  - 递归验证/收集路径补齐 `Member` 分支：definite assignment、nullable pointer usage、inc/dec/assignment/comma side-effect scan、post-increment byte read scan、call callee scan、expr type 等。
+  - `emit_param_type()` 可把按值 record 参数映射为 Rust PascalCase type name，例如 `struct point` -> `Point`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增无 clang direct typed IR 测试：
+    - `typed_ir_emits_record_value_field_read`
+    - `typed_ir_rejects_record_arrow_field_read`
+    - `typed_ir_rejects_record_param_without_modeled_field_use`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_struct_field_read_when_enabled`
+    - `clang_ast_dump_rejects_arrow_member_read_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+
+已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_value_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_param_without_modeled_field_use --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_field_read_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+
+- direct typed IR 正例 1 passed，负例 2 passed。
+- `bounded_translation` with `typed-ir clang-frontend`: 354 passed。
+- 真实 clang AST struct field read 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST arrow member read 负例：1 passed。
+
+边界：
+
+- 可以说：按值 record 参数的 dot-field read 已能从真实 clang AST 进入 typed IR，并生成可编译 Rust candidate。
+- 可以说：当前 Rust struct 是根据实际读取到的标量字段生成的最小候选结构，只用于 candidate generation。
+- 不应说：已支持 C record layout/ABI 等价、无字段使用的 record 参数、`p->x`、字段赋值、compound/update 字段写、nested/anonymous record、union、bitfield、非标量字段、record local/return、struct array、address-taken record、alias write、volatile field 或 semantic acceptance。
+- 后续建议：下一刀可以做 field assignment 或 pointer-aware record access，但必须先把 record layout/ownership/alias evidence 讲清楚，不能直接把 `->` lowering 成 Rust field access。
+
+English mirror summary:
+
+- Added narrow by-value record dot-field read support through clang skeleton, typed IR, and the generic emitter.
+- `struct point p; return p.x;` now emits a minimal Rust `Point` struct plus `return p.x;` as a candidate.
+- Pointer member access `p->x`, record params with no modeled field use, field writes, record layout/ABI claims, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
+- Direct typed IR, full bounded translation, and real clang AST positive/negative smoke tests pass.

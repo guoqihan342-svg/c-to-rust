@@ -4,7 +4,19 @@ Chinese original: `future-vision-and-mvp.md`.
 
 ## 1. Goal
 
-Build an end-to-end MVP pipeline: `input.c` → `c2rust-migrator` → `output.rs`. Phase 1 proof is complete (FlashDB crc32 can generate a compilable Rust candidate through real clang AST lowering + typed IR + generic emitter), but significant gaps remain before reaching an industrial-grade C→Rust translator.
+Build an end-to-end MVP pipeline: `input.c` → `c2rust-migrator` → `output.rs`. Phase 1 proof is complete (the FlashDB `real-fdb-calc-crc32` named slice can generate a compilable Rust candidate through real clang AST dump lowering + typed IR + generic emitter, and bind it to semantic gates through accepted evidence), but significant gaps remain before reaching an industrial-grade C→Rust translator.
+
+The boundary must stay explicit: `validation/evidence/*/l1-native-build.json` only proves the original C project builds or smoke-tests in a pinned environment. It does not prove Rust translation success. Current real auto-translation capability is still concentrated in curated function slices; the large-project evidence catalogue is an input pool and baseline, not proof that real large projects can already be translated.
+
+## 1.1. Todo Execution Rules
+
+From this document onward, core translation work defaults to the P0/P1/P2 backlog in this file. Unless a blocking bug appears, temporary demos or a single project should not reorder the main work.
+
+- **Expand translation capability before expanding ceremony**: before adding a schema, manifest, or gate, explain which concrete translation risk, validation false positive, or reproducibility gap it solves.
+- **FlashDB is only a use case**: FlashDB remains useful as a regression sample, but the project must not add FlashDB-specific recognizers, templates, or special-case routes.
+- **Candidate generation is not semantic acceptance**: typed IR, C2Rust, LLMs, and handwritten rules are only candidate sources. Semantic pass is owned by the C oracle, Rust replay, diff, negative diff, unsafe ledger, and final verification.
+- **Competition environment config is an adaptation reference and evidence profile**: `config/competition-env/environment.json` is the current default competition environment entrypoint. Development should follow its Ubuntu, Rust, Python, Node, gcc, mirror, and missing-tool constraints. The local machine does not need to replicate that environment exactly, but new default build, test, and validation paths must not violate it; `validation/environment-profiles/...` is compatibility-only.
+- **Docs must stay bilingual**: update this file and `future-vision-and-mvp.md` together.
 
 ## 2. IR Layering Design (Recommended Industrial Standard)
 
@@ -74,7 +86,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### Phase 1: Completed
 
-- [x] Real clang AST dump parsing (`clang_frontend.rs`)
+- [x] Real clang AST dump JSON parsing (`clang -Xclang -ast-dump=json` → `clang_frontend.rs`)
 - [x] typed IR data structures (`IrFunction` / `IrStmt` / `IrExpr` / `IrType`)
 - [x] Generic typed IR emitter (scalar + control flow + pointer slice subset)
 - [x] Readonly global const array support
@@ -82,7 +94,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [x] C oracle harness draft generation
 - [x] Rust replay execution and diff gate
 - [x] Legacy crc32 specialty code removed
-- [x] FlashDB crc32 passes accepted evidence semantic pass
+- [x] FlashDB `real-fdb-calc-crc32` named slice passes accepted evidence semantic pass
 
 ### Phase 2: Near-term (complete IR layering)
 
@@ -99,7 +111,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 - [ ] Push more FlashDB functions (`fdb_kv_set`, `fdb_tsl_iter`, etc.) to L3
 - [ ] Support real function slices from libuv, zlib-ng, and other projects
-- [ ] Select 5+ projects from `validation/projects.json` for full L1→L3
+- [ ] Select 5+ projects from `validation/projects.json`, pushing at least one named function slice per project: project-level L1 native baseline + slice-level L2/L3 evidence
 - [ ] Explicit model for usual arithmetic conversions
 - [ ] Struct field writes (with alias/noalias proof)
 - [ ] Nested structs / anonymous structs
@@ -116,7 +128,35 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] Automatic fuzz harness generation
 - [ ] MIRI validation (Rust UB detection, not as C UB proof)
 
-## 4. Current Core Principles
+## 4. P0/P1/P2 Backlog (Default Execution Order)
+
+### P0: Make the current MVP a credible, maintainable translator core
+
+- [ ] Split `crates/c2r-translator/src/lib.rs`: it is currently about 4k lines. Do a behavior-preserving split first, moving CLI/manifest handling, legacy string translator, typed IR routes, artifact writing, and unsafe/metadata accounting into focused submodules. The split commit must keep existing tests passing.
+- [ ] Normalize the clang frontend story: the active path is `clang -Xclang -ast-dump=json -fsyntax-only`; `LIBCLANG_PATH`/libclang dry-run skeleton may remain only as a diagnostic placeholder or be removed, but must not imply that real libclang parsing is active.
+- [ ] Add core translator + validation CI: cover `crates/c2r-translator` unit tests, typed-ir/clang-frontend feature combinations, core validation tool tests, and `git diff --check`; do not rely only on `flashDB Rust CI`.
+- [ ] Turn the unsafe budget into continuous monitoring: default coverage includes first-party non-test Rust crates (at least `crates/c2r-translator`, `flashDB_rust`, and `validation/l2_slices`), and the report must record scan scope, denominator, unsafe hits, ratio, and registration status; CI checks that the ratio stays below 10%, and every new unsafe use must register source, reason, and validation gates.
+- [ ] Narrow public claims: README, roadmap, and evidence summaries must distinguish L1 native-build baseline, candidate generation, and accepted semantic pass; native-build catalogues must not be described as completed real-project Rust translation.
+- [ ] Land L0-L4 route governance: distinguish catalogue/native baseline, translation route signals, and semantic acceptance; L0 only means a deterministic 0-token candidate signal, L1 includes native C baseline and may also be used by current route policy for non-scalar typed IR candidate signals, L2 means candidate compilation plus unsafe/diff evidence, L3 is the first level that can claim named-slice semantic pass, and L4 is refusal or an accepted-evidence-authoritative boundary.
+- [ ] Clarify out-pointer semantics: a safe API may map a single-value `out[0] = value` to return/report fields; typed IR generic candidates should prefer preserving it as `&mut [T]` writes; null, alias/noalias, multi-pointer, and inout-pointer cases must each have negative tests or fail-closed evidence.
+- [ ] Tag the first externally assessable Milestone: once CI and documentation boundaries stabilize, create a tag/release whose notes list the commit, verification commands, evidence manifest hash, competition profile hash, supported subset, non-goals, and known refusals, without generalizing named-slice conclusions to project-level translation.
+
+### P1: Expand syntax and memory-model coverage
+
+- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: prioritize record field writes, minimal record local/return modeling, pointer-aware record access design, and tests.
+- [ ] Design alias/noalias and pointer escape modeling: split readonly slices, mutable out slices, nullable pointers, unknown alias, and volatile/hardware registers into provable paths and L4 refusal paths.
+- [ ] Finish integer conversion discipline: every clang `ImplicitCastExpr`, integer promotion, usual arithmetic conversion, and narrowing/truncation must become explicit in the IR.
+- [ ] Expand control flow: send `switch`/`goto` through CFG evidence and a fail-closed classifier first, then consider relooper and Rust candidates.
+- [ ] Expand the real-slice pool: choose more non-toy functions from FlashDB, libuv, zlib-ng, and similar projects. Each slice needs a C oracle, Rust replay, diff, and negative diff.
+
+### P2: Agent/LLM and long-term research tracks
+
+- [ ] Use LLMs only as candidate sources, never fact sources: AI candidate manifests must record provider/model/version or equivalent labels, prompt scope, input artifact hashes, output hash, whether the candidate was applied, and accepting/rejecting gates.
+- [ ] Add model-change impact evaluation: maintain a small golden slice regression set, record candidate differences across model/version changes for identical inputs, and let validation gates judge acceptance; provider/model/prompt/input hash changes may only invalidate AI candidates/cache, never change the C oracle ground truth.
+- [ ] Keep the C2Rust baseline/repair route: use it as an L2 candidate source and comparator, but force its output through the same validation path and fail-closed policy.
+- [ ] Keep CFG/SSA/MIR/LLVM/self-hosting research in the long-term backlog; do not make it mainline before P0 CI, module split, and real-slice semantic pass rates are stable.
+
+## 5. Current Core Principles
 
 1. **C oracle is the sole ground truth**. typed IR, clang lowering, and Rust candidates are only descriptions and candidates.
 2. **Fail-closed**. When uncertain, refuse translation, record reasons, never pretend success.

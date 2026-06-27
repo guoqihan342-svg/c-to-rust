@@ -170,6 +170,20 @@ fn ir_void() -> IrType {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_record(name: &str) -> IrType {
+    IrType {
+        spelled: format!("struct {name}"),
+        canonical: format!("struct {name}"),
+        kind: IrTypeKind::Record {
+            name: name.to_string(),
+        },
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_var(name: &str, ty: IrType) -> IrExpr {
     IrExpr::Var {
         name: name.to_string(),
@@ -531,6 +545,103 @@ fn typed_ir_rejects_readonly_global_array_initializer_length_mismatch() {
     assert!(error
         .reason
         .contains("initializer length 2 does not match array length 4"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_record_value_field_read() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Member {
+                base: Box::new(ir_var("p", point_ty)),
+                field: "x".to_string(),
+                ty: i32_ty,
+                is_arrow: false,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit by-value record field read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("#[derive(Clone, Copy, Debug, Eq, PartialEq)]"));
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub x: i32"));
+    assert!(rust.contains("pub fn point_x(p: Point) -> i32"));
+    assert!(rust.contains("return p.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-value-field-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_arrow_field_read() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Member {
+                base: Box::new(ir_var("p", point_ty)),
+                field: "x".to_string(),
+                ty: i32_ty,
+                is_arrow: true,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("record pointer member must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("arrow member expressions"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_param_without_modeled_field_use() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "ignore_point".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(0, "0", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("record params need at least one modeled field use");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("record point has no modeled fields"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -16233,6 +16344,90 @@ fn clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled() {
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-mutable-pointer-add-deref-assignment",
         &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_struct_field_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-field-read");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_field_read.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint point_x(struct point p) { return p.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir(function).expect("emit struct field read from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub fn point_x(p: Point) -> i32"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-read", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_arrow_member_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-arrow-member-read");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("arrow_member_read.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint point_x(const struct point *p) { return p->x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("arrow member read must fail closed");
+    assert!(
+        error.reason.contains("arrow member expressions")
+            || error
+                .reason
+                .contains("pointer type const struct point * is unsupported"),
+        "{:?}",
+        error
     );
 }
 

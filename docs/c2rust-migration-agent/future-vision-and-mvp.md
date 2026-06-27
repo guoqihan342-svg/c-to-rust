@@ -4,7 +4,19 @@
 
 ## 1. 目标
 
-构建一个从 `input.c` → `c2rust-migrator` → `output.rs` 的端到端 MVP pipeline。当前已完成第一阶段证明（FlashDB crc32 能经真实 clang AST lowering + typed IR + generic emitter 生成可编译 Rust candidate），但离工业级 C→Rust 翻译器还有大量缺口。
+构建一个从 `input.c` → `c2rust-migrator` → `output.rs` 的端到端 MVP pipeline。当前已完成第一阶段证明（FlashDB `real-fdb-calc-crc32` named slice 能经真实 clang AST dump lowering + typed IR + generic emitter 生成可编译 Rust candidate，并通过 accepted evidence 绑定语义门禁），但离工业级 C→Rust 翻译器还有大量缺口。
+
+边界必须说清楚：`validation/evidence/*/l1-native-build.json` 只证明原始 C 项目在固定环境中可构建或可烟测，不证明 Rust 翻译成功。当前真实自动翻译能力仍主要集中在经过挑选的函数切片；大项目 evidence catalogue 是迁移输入池和基线，不是"已能翻译真实大项目"的证据。
+
+## 1.1. 待办执行规则
+
+从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。
+
+- **先扩翻译能力，再扩仪式**：新增 schema、manifest、gate 前，必须能说明它解决了具体翻译风险、验证误判或复现问题。
+- **FlashDB 只是用例**：可以继续用 FlashDB 做回归样本，但不能写 FlashDB 专用 recognizer、模板或特判路径。
+- **候选生成不等于语义接受**：typed IR、C2Rust、LLM 和手写规则都只是 candidate source；语义通过只由 C oracle、Rust replay、diff、negative diff、unsafe ledger 和 final verification 决定。
+- **比赛环境配置是适配参考和证据 profile**：`config/competition-env/environment.json` 是当前默认比赛环境配置入口；开发时参考其中的 Ubuntu、Rust、Python、Node、gcc、镜像源和缺失工具约束。本机不需要强行复刻该环境，但新增默认构建、测试和验证路径不能违反这些约束；`validation/environment-profiles/...` 只作为兼容入口。
+- **文档要双语同步**：本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
 
 ## 2. IR 分层设计（推荐工业标准）
 
@@ -74,7 +86,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### Phase 1: 当前已完成
 
-- [x] 真实 clang AST dump 解析（`clang_frontend.rs`）
+- [x] 真实 clang AST dump JSON 解析（`clang -Xclang -ast-dump=json` → `clang_frontend.rs`）
 - [x] typed IR 数据结构（`IrFunction` / `IrStmt` / `IrExpr` / `IrType`）
 - [x] generic typed IR emitter（标量 + 控制流 + pointer slice 子集）
 - [x] readonly global const array 支持
@@ -82,7 +94,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [x] C oracle harness 草稿生成
 - [x] Rust replay 执行和 diff gate
 - [x] 旧 crc32 特例代码已删除
-- [x] FlashDB crc32 通过 accepted evidence semantic pass
+- [x] FlashDB `real-fdb-calc-crc32` named slice 通过 accepted evidence semantic pass
 
 ### Phase 2: 近期（补齐 IR 分层）
 
@@ -99,7 +111,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 - [ ] 把 FlashDB 更多函数（`fdb_kv_set`、`fdb_tsl_iter` 等）推进到 L3
 - [ ] 支持 libuv、zlib-ng 等项目的真实函数切片
-- [ ] 从 `validation/projects.json` 中选择 5+ 项目跑完整 L1→L3
+- [ ] 从 `validation/projects.json` 中选择 5+ 项目，每个项目至少推进一个 named function slice：项目级 L1 native baseline + slice 级 L2/L3 evidence
 - [ ] usual arithmetic conversions 的显式模型
 - [ ] struct field write（有 alias/noalias 证明）
 - [ ] nested struct / anonymous struct
@@ -116,7 +128,35 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] fuzz harness 自动生成
 - [ ] MIRI validation（Rust UB 检测，不作为 C UB 证明）
 
-## 4. 当前核心原则
+## 4. P0/P1/P2 待办（默认执行顺序）
+
+### P0: 先把当前 MVP 变成可信、可维护的翻译器核心
+
+- [ ] 拆分 `crates/c2r-translator/src/lib.rs`：当前约 4k 行，先做行为保持拆分，把 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任拆到子模块；拆分提交必须保持现有测试通过。
+- [ ] 统一 clang 前端事实：当前主路径是 `clang -Xclang -ast-dump=json -fsyntax-only`，`LIBCLANG_PATH`/libclang dry-run skeleton 只能保留为诊断占位或删除，不能让读者误解为真实 libclang 解析路径。
+- [ ] 建立 translator + validation 的核心 CI：至少覆盖 `crates/c2r-translator` 单测、typed-ir/clang-frontend feature 组合、核心 validation 工具测试、`git diff --check`；不能只依赖 `flashDB Rust CI`。
+- [ ] 把 unsafe budget 做成持续监控：默认覆盖 first-party non-test Rust crate（至少 `crates/c2r-translator`、`flashDB_rust`、`validation/l2_slices`），报告写明扫描范围、分母、unsafe hit、比例和登记状态；CI 检查比例低于 10%，新增 unsafe 必须登记来源、理由和验证门禁。
+- [ ] 收窄公开叙述：README、路线图和 evidence summary 必须区分 L1 native-build baseline、candidate generation、accepted semantic pass；不能把 native-build catalogue 写成真实项目自动翻译完成。
+- [ ] 落地 L0-L4 路由治理：区分 catalogue/native baseline、translation route signal 和 semantic acceptance；L0 只代表 deterministic 0-token candidate signal，L1 包含 native C baseline，也可在当前 route policy 中表示非 scalar typed IR candidate signal，L2 代表候选编译 + unsafe/diff 证据，L3 才能声明 named slice 语义通过，L4 是拒绝或 accepted-evidence-authoritative 边界。
+- [ ] 明确 out pointer 语义边界：safe API 可以把单值 `out[0] = value` 映射成返回值/report 字段；typed IR generic candidate 优先保留为 `&mut [T]` 写入；null、alias/noalias、multi-pointer、inout pointer 必须分别有 negative test 或 fail-closed 证据。
+- [ ] 标记第一个外部可评估 Milestone：在上述 CI 和文档边界稳定后打 tag/release，release notes 写清 commit、验证命令、evidence manifest hash、competition profile hash、支持子集、non-goals 和已知拒绝项，不能把 named slice 结论扩大到项目级。
+
+### P1: 扩大语法和内存模型覆盖
+
+- [ ] 继续扩 generic typed IR emitter，而不是恢复 crc32/FlashDB 特例：优先做 record field write、record local/return 的最小模型、pointer-aware record access 设计和测试。
+- [ ] 设计 alias/noalias 与 pointer escape 模型：把 readonly slice、mutable out slice、nullable pointer、unknown alias、volatile/hardware register 分成可证明路径和 L4 拒绝路径。
+- [ ] 完成 integer conversion 纪律：所有 clang `ImplicitCastExpr`、integer promotion、usual arithmetic conversions、narrowing/truncation 都要在 IR 中显式可见。
+- [ ] 扩控制流：`switch`/`goto` 先进入 CFG 证据和 fail-closed classifier，再考虑 relooper 和 Rust candidate。
+- [ ] 扩真实切片池：从 FlashDB、libuv、zlib-ng 等项目挑选更多非玩具函数，要求每个切片都有 C oracle、Rust replay、diff 和 negative diff。
+
+### P2: Agent/LLM 与长期研究路线
+
+- [ ] LLM 只作为候选源，不作为事实源：AI candidate manifest 必须记录 provider/model/version 或等价标签、prompt scope、输入 artifact hash、输出 hash、是否应用、接受/拒绝 gate。
+- [ ] 增加模型变更影响评估：维护小型 golden slice 回归集，同一输入在不同模型/版本下的候选差异必须被记录，并由验证门禁裁决；provider/model/prompt/input hash 变化只能使 AI candidate/cache 失效，不能改变 C oracle ground truth。
+- [ ] 保留 C2Rust baseline/repair 路线：作为 L2 候选生成和对照来源，但输出必须经过相同验证，不允许绕过 fail-closed。
+- [ ] 把 CFG/SSA/MIR/LLVM/self-hosting 等研究路线放在长期 backlog；在 P0 CI、模块拆分、真实切片语义通过率稳定前，不把它们作为主线开发。
+
+## 5. 当前核心原则
 
 1. **C oracle 是唯一 ground truth**。typed IR、clang lowering、Rust candidate 都只是描述和候选。
 2. **Fail-closed**。不确定时拒绝翻译，记录原因，不假装成功。
