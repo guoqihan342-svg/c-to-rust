@@ -6860,3 +6860,70 @@ English mirror summary:
 - Nullable pointer parameters are allowed only in direct `== NULL` / `!= NULL` comparisons; use after the null check still fails closed.
 - This remains candidate generation only and keeps `semantic_pass=false`.
 - It is not arbitrary pointer comparison, pointer truthiness, flow-sensitive unwrap, nullable indexing, pointer arithmetic, alias semantics, or semantic acceptance.
+
+## 99. 2026-06-27 readonly pointer direct deref read candidate
+
+本轮继续按多智能体并行推进。只读子线程分别调查了 readonly pointer deref、typed IR compound assignment、`&&`/`||` 短路逻辑和路线文档一致性；主线程按 TDD 选择最小核心翻译切片：readonly integer pointer direct dereference read。结论：`*p` 现在可作为无副作用标量读进入 `GenericTypedIr` candidate，但这不是 `*(p+i)`、mutable pointer、pointer write、alias semantics 或 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_readonly_pointer_deref_expr()`。
+  - `IrExpr::Deref { ptr: Var(p), ty }` 在 `p` 是已声明 readonly integer pointer 时发射为 `p[0usize]`。
+  - `emit_expr_with_prelude()` 保留 `*p++` byte cursor 特例；只有非 `IncDec` deref 才走 direct readonly deref helper，避免削弱既有 post-increment fail-closed 诊断。
+  - nullable pointer param 仍不能 deref；`NULL` presence check 后继续 deref/index 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 helper `ir_deref()`。
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index`
+    - `typed_ir_emits_value_comparison_with_readonly_pointer_deref_operand_as_c_int`
+    - `typed_ir_emits_comparison_condition_with_readonly_pointer_deref_operand`
+    - `typed_ir_emits_logical_not_value_with_readonly_pointer_deref_operand`
+  - 新增真实 clang gated smoke：
+    - `clang_ast_dump_emits_pointer_deref_return_value_when_enabled`
+  - 旧 deref 负测仍保留 fail-closed，但现在锁定的是未声明/未建模 deref 仍拒绝，而不是所有 deref 都拒绝。
+- 文档同步：
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index -- --nocapture
+```
+
+红灯表现：旧 production 报 `stmt[0].return expr deref expression is unsupported`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_deref -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir deref -- --nocapture
+```
+
+聚焦结果：
+- direct readonly `*p` red/green 测试通过。
+- `pointer_deref` filter 下 4 条测试通过：clang skeleton lowering、真实 clang lowering、direct typed IR emit、真实 clang emit。
+- `deref` filter 下 7 条测试通过：direct read、comparison value-position、comparison condition、logical-not value-position 和三个 fail-closed 负测。
+
+当前边界：
+- 可以说：readonly integer pointer direct `*p` 现在发射为 Rust slice 0 下标，并可作为普通标量读参与 comparison/logical-not candidate generation。
+- 不应说：已经支持 `*(p+i)`、pointer arithmetic、nullable pointer deref、mutable pointer、pointer write、pointer truthiness、任意 pointer comparison、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、白名单提交并推送本切片。
+- 后续核心切片优先级：`*(p+i)` bounded pointer arithmetic read、typed IR first-class scalar compound assignment、condition-position `&&` / `||`、usual conversion 分类。
+
+English mirror summary:
+
+- Added narrow readonly pointer direct dereference read candidate generation.
+- `const uint8_t *p; return *p;` now emits as `pub fn read_byte(p: &[u8]) -> u8 { return p[0usize]; }`.
+- Direct readonly deref reads can also act as ordinary scalar operands in comparison/logical-not candidate generation, for example `*p == 0` and `!*p`.
+- `*p++` byte cursor behavior remains on its prelude path; nullable pointer deref, `*(p+i)`, mutable pointer, pointer writes, pointer truthiness, arbitrary pointer comparison, alias semantics, and semantic acceptance still fail closed.

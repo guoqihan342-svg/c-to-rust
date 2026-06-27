@@ -1008,12 +1008,54 @@ fn emit_expr(
             callee, args, ty, ..
         } => emit_call_expr(callee, args, ty, symbols, context),
         IrExpr::IncDec { .. } => Err("inc/dec expression is unsupported".to_string()),
-        IrExpr::Deref { .. } => Err("deref expression is unsupported".to_string()),
+        IrExpr::Deref { ptr, ty, .. } => {
+            emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
+        }
         IrExpr::AddrOf { .. } => Err("address-of expression is unsupported".to_string()),
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported expression {node}: {reason}"))
         }
     }
+}
+
+fn emit_readonly_pointer_deref_expr(
+    ptr: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: ptr_name,
+        ty: ptr_ty,
+        ..
+    } = ptr
+    else {
+        return Err("deref pointer must be Var".to_string());
+    };
+    if !symbols.contains(ptr_name) {
+        return Err(format!("deref pointer {ptr_name} is not declared"));
+    }
+    if context.is_nullable_pointer_param(ptr_name) {
+        return Err(format!(
+            "nullable pointer param {ptr_name} cannot be dereferenced in the bounded emitter"
+        ));
+    }
+    let element_ty = readonly_pointer_slice_element_type(ptr_ty).ok_or_else(|| {
+        format!(
+            "deref pointer {ptr_name} has unsupported type {}",
+            type_label(ptr_ty)
+        )
+    })?;
+    let element_ty =
+        emit_scalar_type(element_ty).map_err(|detail| format!("deref element has {detail}"))?;
+    let deref_ty = emit_scalar_type(ty).map_err(|detail| format!("deref result has {detail}"))?;
+    if deref_ty != element_ty {
+        return Err(format!(
+            "deref result type {deref_ty} does not match pointer element type {element_ty}"
+        ));
+    }
+    let ptr_name = emit_identifier(ptr_name, "deref pointer")?;
+    Ok(format!("{ptr_name}[0usize]"))
 }
 
 fn emit_call_expr(
@@ -1191,9 +1233,14 @@ fn emit_expr_with_prelude(
         IrExpr::ArrayLiteral { .. } => Err(format!(
             "{path} array literal expression is only supported as a declaration initializer"
         )),
-        IrExpr::Deref { ptr, ty, .. } => {
+        IrExpr::Deref { ptr, ty, .. } if matches!(ptr.as_ref(), IrExpr::IncDec { .. }) => {
             emit_post_increment_byte_read_expr(ptr, ty, symbols, context, indent_level, path)
         }
+        IrExpr::Deref { ptr, ty, .. } => Ok(EmittedExpr {
+            prelude: String::new(),
+            expr: emit_readonly_pointer_deref_expr(ptr, ty, symbols, context)
+                .map_err(|detail| format!("{path} {detail}"))?,
+        }),
         _ => Ok(EmittedExpr {
             prelude: String::new(),
             expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,
