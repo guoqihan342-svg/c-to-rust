@@ -15,10 +15,15 @@ Use this checklist before translating a pointer-bearing C slice or reporting L2/
 
 - [ ] C files, functions, structs, fields, globals, callbacks, and direct call edges are listed.
 - [ ] Pointer nodes include type, kind, mutability, nullability, ownership role, lifetime owner, and cross-file exposure.
+- [ ] Pointer nodes record read effects and write effects when the slice reads or writes through pointers.
 - [ ] Dependency edges include relationship type and evidence source.
 - [ ] Aliasing or ownership equivalence classes are recorded when known.
+- [ ] Alias-sensitive read/write combinations record `alias_contract`, `alias_risks`, `alias_sets`, and `safe_boundary_preconditions`.
+- [ ] `effect_graph` records structured effect nodes and data/control/alias relationships when pointer effects affect the Rust boundary.
 - [ ] External mutable state and side effects are recorded.
 - [ ] Unknown or unverified relationships are listed as assumptions or gaps.
+
+中文检查：如果 slice 同时有指针读和指针写，必须能看出 alias 风险、noalias 前置条件、读写 effect 和最终 gate decision；不能只在 `known_gaps` 里用自然语言带过。
 
 ## Rust Mapping
 

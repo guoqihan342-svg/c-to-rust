@@ -4,6 +4,8 @@
 - [ ] Type map, CFG, and pointer graph are recorded before Rust draft generation.
 - [ ] Unsupported type or control-flow nodes are recorded and block false success claims.
 - [ ] Auto-translation plan records generated artifacts, source spans, generated spans, translation rule ids, unsupported count, and unsafe candidate count.
+- [ ] Auto-translation plan records `translation_summary.alias_gate` for pointer-bearing or alias-sensitive slices.
+- [ ] Alias gate cache keys record the alias decision, risk count, aliasing proof status, and relevant pointer contract fields.
 - [ ] Auto-translation events JSONL records every major step, unsupported node, rustc failure, patch plan, patch application, verification rerun, and block.
 - [ ] C2Rust baseline manifest, route decision, and validation profile are persisted as files for semantic-pass fixtures.
 - [ ] Auto manifest, L3 evidence manifest, final verification, and cache metadata all reference the same baseline/route/profile files with matching `path`, `status`, and file `sha256`.
@@ -15,3 +17,4 @@
 - [ ] PatchPlan exists before applying any automatic patch.
 - [ ] Repair round is within the configured limit, default maximum three.
 - [ ] Forbidden changes are blocked: C oracle contract, fixture expected behavior, accepted metadata differences, public API outside impact set, source slice boundary, and unsafe budget policy.
+- [ ] 中文检查：alias gate 只能说明候选路径的风险状态，不能替代 C oracle、Rust replay、schema-aware diff、negative diff、unsafe ledger 和 final verification。

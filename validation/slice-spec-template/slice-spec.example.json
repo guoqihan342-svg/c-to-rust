@@ -4,26 +4,257 @@
   "slice_id": "ip4-addr",
   "level": "L3",
   "status": "ready",
-  "l1_evidence": {"path": "validation/evidence/libuv/l1-native-build.json", "status": "passed", "accepted": true, "sha256": "example-l1-hash"},
-  "source": {"source_root": "third_party/libuv", "source_commit": "0123456789abcdef", "repo_commit": "89abcdef01234567", "source_file_hashes": {"src/inet.c": "example-source-hash"}},
+  "l1_evidence": {
+    "path": "validation/evidence/libuv/l1-native-build.json",
+    "status": "passed",
+    "accepted": true,
+    "sha256": "example-l1-hash"
+  },
+  "source": {
+    "source_root": "third_party/libuv",
+    "source_commit": "0123456789abcdef",
+    "repo_commit": "89abcdef01234567",
+    "source_file_hashes": {
+      "src/inet.c": "example-source-hash"
+    }
+  },
   "c_boundary": {
-    "files": [{"path": "src/inet.c", "role": "source", "sha256": "example-source-hash"}, {"path": "include/uv.h", "role": "header", "sha256": "example-header-hash"}],
-    "functions": ["uv_ip4_addr"],
-    "signatures": [{"function": "uv_ip4_addr", "return_type": "int", "parameters": [{"name": "ip", "c_type": "const char *", "direction": "input"}, {"name": "port", "c_type": "int", "direction": "input"}, {"name": "addr", "c_type": "struct sockaddr_in *", "direction": "output"}]}],
-    "direct_dependencies": [{"kind": "callee", "name": "inet_pton", "source": "system libc"}]
+    "files": [
+      {
+        "path": "src/inet.c",
+        "role": "source",
+        "sha256": "example-source-hash"
+      },
+      {
+        "path": "include/uv.h",
+        "role": "header",
+        "sha256": "example-header-hash"
+      }
+    ],
+    "functions": [
+      "uv_ip4_addr"
+    ],
+    "signatures": [
+      {
+        "function": "uv_ip4_addr",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "ip",
+            "c_type": "const char *",
+            "direction": "input"
+          },
+          {
+            "name": "port",
+            "c_type": "int",
+            "direction": "input"
+          },
+          {
+            "name": "addr",
+            "c_type": "struct sockaddr_in *",
+            "direction": "output"
+          }
+        ]
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "callee",
+        "name": "inet_pton",
+        "source": "system libc"
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "ip",
+          "c_type": "const char *",
+          "length_companion": "nul_terminated",
+          "read_effects": [
+            "inet_pton reads ip string"
+          ],
+          "nullability": "non_null",
+          "ownership_role": "borrowed",
+          "mutability": "read_only",
+          "lifetime_owner": "caller",
+          "translation_rule_id": "bounded-input-buffer-read"
+        }
+      ],
+      "output_pointers": [
+        {
+          "name": "addr",
+          "c_type": "struct sockaddr_in *",
+          "length_companion": "sizeof(struct sockaddr_in)",
+          "write_effects": [
+            "uv_ip4_addr writes sockaddr_in output"
+          ],
+          "nullability": "non_null",
+          "ownership_role": "out_param",
+          "mutability": "write_only",
+          "lifetime_owner": "caller",
+          "translation_rule_id": "safe-wrapper-for-pointer-out-param"
+        }
+      ],
+      "inout_pointers": [],
+      "aliasing_proven": false,
+      "read_read_alias_allowed": [],
+      "noalias_required": [
+        [
+          "ip",
+          "addr"
+        ]
+      ]
+    }
   },
   "build_profile": {
     "profile_id": "libuv-linux-x86_64-clang",
     "compiler_command_source": "compile_commands.json",
-    "include_paths": ["include", "src"],
-    "defines": ["_GNU_SOURCE"],
-    "target": {"triple_or_abi": "x86_64-unknown-linux-gnu", "endianness": "little", "int_width": 32, "long_width": 64, "pointer_width": 64},
+    "include_paths": [
+      "include",
+      "src"
+    ],
+    "defines": [
+      "_GNU_SOURCE"
+    ],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
     "preprocessing_mode": "compile_commands",
-    "tool_versions": {"clang": "example-clang-version", "openspec": "example-openspec-version"},
-    "clang_type_extraction": {"available": true, "diagnostics": []}
+    "tool_versions": {
+      "clang": "example-clang-version",
+      "openspec": "example-openspec-version"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": []
+    }
   },
-  "fixture_contract": {"fixture_id": "libuv-ip4-addr-basic", "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json", "hash": "example-fixture-hash", "cases": [{"id": "localhost-80", "input_ref": "$.cases[0].input", "expected_ref": "$.cases[0].expected"}], "observable_outputs": ["return_code", "addr.sin_family", "addr.sin_port", "addr.sin_addr"]},
-  "rust_boundary": {"crate": "validation/l2_slices", "module": "libuv_ip4_addr", "public_api": [{"name": "ip4_addr", "visibility": "public", "boundary_kind": "safe_wrapper"}], "raw_pointer_policy": "internal_only", "unsafe_policy": {"max_first_party_non_test_ratio": 0.1, "ledger_required": true}},
-  "claim_boundary": {"accepted_metadata_differences": ["platform-specific errno text is metadata only"], "non_goals": ["does not claim general C99 translation", "does not claim whole-program alias safety"], "must_not_claim": ["Rust draft correctness before C oracle and diff pass", "AI candidate output as correctness evidence"]},
-  "cache_invalidation_keys": ["source_commit:0123456789abcdef", "fixture:example-fixture-hash", "build_profile:libuv-linux-x86_64-clang", "schema:slice-spec:1"]
+  "fixture_contract": {
+    "fixture_id": "libuv-ip4-addr-basic",
+    "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "hash": "example-fixture-hash",
+    "cases": [
+      {
+        "id": "localhost-80",
+        "input_ref": "$.cases[0].input",
+        "expected_ref": "$.cases[0].expected"
+      }
+    ],
+    "observable_outputs": [
+      "return_code",
+      "addr.sin_family",
+      "addr.sin_port",
+      "addr.sin_addr"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "libuv_ip4_addr",
+    "public_api": [
+      {
+        "name": "ip4_addr",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [
+      "platform-specific errno text is metadata only"
+    ],
+    "non_goals": [
+      "does not claim general C99 translation",
+      "does not claim whole-program alias safety"
+    ],
+    "must_not_claim": [
+      "Rust draft correctness before C oracle and diff pass",
+      "AI candidate output as correctness evidence"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit:0123456789abcdef",
+    "fixture:example-fixture-hash",
+    "build_profile:libuv-linux-x86_64-clang",
+    "schema:slice-spec:1",
+    "c_boundary.pointer_contract.aliasing_proven",
+    "c_boundary.pointer_contract.noalias_required"
+  ],
+  "memory_model": {
+    "alias_contract": {
+      "decision": "requires_noalias_contract",
+      "proven": false,
+      "requires_noalias": true,
+      "complete_alias_safety": false,
+      "source": "addr output storage must not overlap the ip input string for the safe Rust wrapper",
+      "evidence_refs": [
+        "c_boundary.signatures",
+        "fixture_contract.cases"
+      ]
+    },
+    "ownership_contract": {
+      "inputs": [
+        "ip is caller-owned const string"
+      ],
+      "outputs": [
+        "addr is caller-owned output storage"
+      ],
+      "borrow_model": "Rust wrapper borrows ip immutably and addr mutably for the call boundary.",
+      "unsafe_boundary": "Raw sockaddr_in pointer is internal to the generated wrapper."
+    },
+    "length_companions": [
+      {
+        "pointer": "ip",
+        "companion": "nul_terminated",
+        "contract": "ip must point to a valid NUL-terminated IPv4 string for the fixture cases."
+      },
+      {
+        "pointer": "addr",
+        "companion": "sizeof(struct sockaddr_in)",
+        "contract": "addr must provide writable storage for one sockaddr_in value."
+      }
+    ],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "read-ip",
+          "pointer_node": "ip",
+          "kind": "read",
+          "expression": "inet_pton reads ip string"
+        },
+        {
+          "id": "write-addr",
+          "pointer_node": "addr",
+          "kind": "write",
+          "expression": "uv_ip4_addr writes sockaddr_in output"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "read-ip",
+          "to_effect": "write-addr",
+          "relationship": "data_influences",
+          "evidence": "uv_ip4_addr parses ip and writes sockaddr_in output"
+        }
+      ],
+      "summary": {
+        "reads": [
+          "ip"
+        ],
+        "writes": [
+          "addr"
+        ],
+        "external_state": [],
+        "alias_sensitive": true
+      }
+    }
+  }
 }

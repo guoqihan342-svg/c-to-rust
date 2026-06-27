@@ -3,27 +3,840 @@
   "title": "Bounded Auto Translation Slice Spec",
   "type": "object",
   "additionalProperties": true,
-  "required": ["schema_version", "target_id", "slice_id", "level", "status", "l1_evidence", "source", "c_boundary", "build_profile", "fixture_contract", "rust_boundary", "claim_boundary", "cache_invalidation_keys"],
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "level",
+    "status",
+    "l1_evidence",
+    "source",
+    "c_boundary",
+    "build_profile",
+    "fixture_contract",
+    "rust_boundary",
+    "claim_boundary",
+    "cache_invalidation_keys"
+  ],
   "properties": {
-    "schema_version": {"type": "integer", "minimum": 1},
-    "target_id": {"type": "string", "minLength": 1},
-    "slice_id": {"type": "string", "minLength": 1},
-    "level": {"enum": ["L2", "L3"]},
-    "status": {"enum": ["ready", "blocked", "stale", "draft"]},
-    "l1_evidence": {"type": "object", "required": ["path", "status", "accepted"], "properties": {"path": {"type": "string"}, "status": {"type": "string"}, "accepted": {"type": "boolean"}, "sha256": {"type": "string"}}},
-    "source": {"type": "object", "required": ["source_root", "source_commit", "repo_commit"], "properties": {"source_root": {"type": "string"}, "source_commit": {"type": "string", "minLength": 7}, "repo_commit": {"type": "string", "minLength": 7}, "source_file_hashes": {"type": "object", "additionalProperties": {"type": "string"}}}},
-    "c_boundary": {"type": "object", "required": ["files", "functions", "signatures"], "properties": {"files": {"type": "array", "items": {"$ref": "#/definitions/sourceFile"}}, "functions": {"type": "array", "items": {"type": "string"}}, "signatures": {"type": "array", "items": {"$ref": "#/definitions/cSignature"}}, "direct_dependencies": {"type": "array", "items": {"$ref": "#/definitions/dependency"}}}},
-    "build_profile": {"type": "object", "required": ["profile_id", "compiler_command_source", "include_paths", "defines", "target", "preprocessing_mode", "tool_versions", "clang_type_extraction"], "properties": {"profile_id": {"type": "string"}, "compiler_command_source": {"type": "string"}, "include_paths": {"type": "array", "items": {"type": "string"}}, "defines": {"type": "array", "items": {"type": "string"}}, "target": {"type": "object", "required": ["triple_or_abi", "endianness", "int_width", "long_width", "pointer_width"], "properties": {"triple_or_abi": {"type": "string"}, "endianness": {"enum": ["little", "big", "unknown"]}, "int_width": {"type": "integer"}, "long_width": {"type": "integer"}, "pointer_width": {"type": "integer"}}}, "preprocessing_mode": {"enum": ["compile_commands", "manual_flags", "generated_stub", "unknown"]}, "tool_versions": {"type": "object", "additionalProperties": {"type": "string"}}, "clang_type_extraction": {"type": "object", "required": ["available"], "properties": {"available": {"type": "boolean"}, "diagnostics": {"type": "array", "items": {"type": "string"}}}}}},
-    "fixture_contract": {"type": "object", "required": ["fixture_id", "path", "hash", "cases", "observable_outputs"], "properties": {"fixture_id": {"type": "string"}, "path": {"type": "string"}, "hash": {"type": "string"}, "cases": {"type": "array", "items": {"$ref": "#/definitions/fixtureCase"}}, "observable_outputs": {"type": "array", "items": {"type": "string"}}}},
-    "rust_boundary": {"type": "object", "required": ["crate", "module", "public_api", "raw_pointer_policy", "unsafe_policy"], "properties": {"crate": {"type": "string"}, "module": {"type": "string"}, "public_api": {"type": "array", "items": {"$ref": "#/definitions/rustApi"}}, "raw_pointer_policy": {"enum": ["internal_only", "reviewed_exception", "blocked"]}, "unsafe_policy": {"type": "object", "required": ["max_first_party_non_test_ratio", "ledger_required"], "properties": {"max_first_party_non_test_ratio": {"type": "number", "minimum": 0, "maximum": 0.1}, "ledger_required": {"const": true}}}}},
-    "claim_boundary": {"type": "object", "required": ["accepted_metadata_differences", "non_goals", "must_not_claim"], "properties": {"accepted_metadata_differences": {"type": "array", "items": {"type": "string"}}, "non_goals": {"type": "array", "items": {"type": "string"}}, "must_not_claim": {"type": "array", "items": {"type": "string"}}}},
-    "cache_invalidation_keys": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slice_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "level": {
+      "enum": [
+        "L2",
+        "L3"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "blocked",
+        "stale",
+        "draft"
+      ]
+    },
+    "l1_evidence": {
+      "type": "object",
+      "required": [
+        "path",
+        "status",
+        "accepted"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "source_root",
+        "source_commit",
+        "repo_commit"
+      ],
+      "properties": {
+        "source_root": {
+          "type": "string"
+        },
+        "source_commit": {
+          "type": "string",
+          "minLength": 7
+        },
+        "repo_commit": {
+          "type": "string",
+          "minLength": 7
+        },
+        "source_file_hashes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "c_boundary": {
+      "type": "object",
+      "required": [
+        "files",
+        "functions",
+        "signatures"
+      ],
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sourceFile"
+          }
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/cSignature"
+          }
+        },
+        "direct_dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/dependency"
+          }
+        },
+        "pointer_contract": {
+          "$ref": "#/definitions/pointerContract"
+        }
+      }
+    },
+    "build_profile": {
+      "type": "object",
+      "required": [
+        "profile_id",
+        "compiler_command_source",
+        "include_paths",
+        "defines",
+        "target",
+        "preprocessing_mode",
+        "tool_versions",
+        "clang_type_extraction"
+      ],
+      "properties": {
+        "profile_id": {
+          "type": "string"
+        },
+        "compiler_command_source": {
+          "type": "string"
+        },
+        "include_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "triple_or_abi",
+            "endianness",
+            "int_width",
+            "long_width",
+            "pointer_width"
+          ],
+          "properties": {
+            "triple_or_abi": {
+              "type": "string"
+            },
+            "endianness": {
+              "enum": [
+                "little",
+                "big",
+                "unknown"
+              ]
+            },
+            "int_width": {
+              "type": "integer"
+            },
+            "long_width": {
+              "type": "integer"
+            },
+            "pointer_width": {
+              "type": "integer"
+            }
+          }
+        },
+        "preprocessing_mode": {
+          "enum": [
+            "compile_commands",
+            "manual_flags",
+            "generated_stub",
+            "unknown"
+          ]
+        },
+        "tool_versions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "clang_type_extraction": {
+          "type": "object",
+          "required": [
+            "available"
+          ],
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "fixture_contract": {
+      "type": "object",
+      "required": [
+        "fixture_id",
+        "path",
+        "hash",
+        "cases",
+        "observable_outputs"
+      ],
+      "properties": {
+        "fixture_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/fixtureCase"
+          }
+        },
+        "observable_outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rust_boundary": {
+      "type": "object",
+      "required": [
+        "crate",
+        "module",
+        "public_api",
+        "raw_pointer_policy",
+        "unsafe_policy"
+      ],
+      "properties": {
+        "crate": {
+          "type": "string"
+        },
+        "module": {
+          "type": "string"
+        },
+        "public_api": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rustApi"
+          }
+        },
+        "raw_pointer_policy": {
+          "enum": [
+            "internal_only",
+            "reviewed_exception",
+            "blocked"
+          ]
+        },
+        "unsafe_policy": {
+          "type": "object",
+          "required": [
+            "max_first_party_non_test_ratio",
+            "ledger_required"
+          ],
+          "properties": {
+            "max_first_party_non_test_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.1
+            },
+            "ledger_required": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "claim_boundary": {
+      "type": "object",
+      "required": [
+        "accepted_metadata_differences",
+        "non_goals",
+        "must_not_claim"
+      ],
+      "properties": {
+        "accepted_metadata_differences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "non_goals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "must_not_claim": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cache_invalidation_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "memory_model": {
+      "$ref": "#/definitions/memoryModel"
+    }
   },
   "definitions": {
-    "sourceFile": {"type": "object", "required": ["path", "role"], "properties": {"path": {"type": "string"}, "role": {"enum": ["source", "header", "fixture", "generated_stub"]}, "sha256": {"type": "string"}}},
-    "cSignature": {"type": "object", "required": ["function", "return_type", "parameters"], "properties": {"function": {"type": "string"}, "return_type": {"type": "string"}, "parameters": {"type": "array", "items": {"type": "object", "required": ["name", "c_type"], "properties": {"name": {"type": "string"}, "c_type": {"type": "string"}, "direction": {"enum": ["input", "output", "inout", "unknown"]}}}}}},
-    "dependency": {"type": "object", "required": ["kind", "name"], "properties": {"kind": {"enum": ["type", "macro", "global", "callee", "config"]}, "name": {"type": "string"}, "source": {"type": "string"}}},
-    "fixtureCase": {"type": "object", "required": ["id", "input_ref", "expected_ref"], "properties": {"id": {"type": "string"}, "input_ref": {"type": "string"}, "expected_ref": {"type": "string"}}},
-    "rustApi": {"type": "object", "required": ["name", "visibility", "boundary_kind"], "properties": {"name": {"type": "string"}, "visibility": {"enum": ["public", "crate", "private"]}, "boundary_kind": {"enum": ["safe_wrapper", "validated_buffer", "newtype", "internal_ffi", "reviewed_raw_pointer_exception"]}}}
+    "sourceFile": {
+      "type": "object",
+      "required": [
+        "path",
+        "role"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "source",
+            "header",
+            "fixture",
+            "generated_stub"
+          ]
+        },
+        "sha256": {
+          "type": "string"
+        }
+      }
+    },
+    "cSignature": {
+      "type": "object",
+      "required": [
+        "function",
+        "return_type",
+        "parameters"
+      ],
+      "properties": {
+        "function": {
+          "type": "string"
+        },
+        "return_type": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "c_type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "c_type": {
+                "type": "string"
+              },
+              "direction": {
+                "enum": [
+                  "input",
+                  "output",
+                  "inout",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "type",
+            "macro",
+            "global",
+            "callee",
+            "config"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "fixtureCase": {
+      "type": "object",
+      "required": [
+        "id",
+        "input_ref",
+        "expected_ref"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "input_ref": {
+          "type": "string"
+        },
+        "expected_ref": {
+          "type": "string"
+        }
+      }
+    },
+    "rustApi": {
+      "type": "object",
+      "required": [
+        "name",
+        "visibility",
+        "boundary_kind"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "crate",
+            "private"
+          ]
+        },
+        "boundary_kind": {
+          "enum": [
+            "safe_wrapper",
+            "validated_buffer",
+            "newtype",
+            "internal_ffi",
+            "reviewed_raw_pointer_exception"
+          ]
+        }
+      }
+    },
+    "memoryModel": {
+      "type": "object",
+      "required": [
+        "alias_contract",
+        "ownership_contract",
+        "length_companions",
+        "effect_graph"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "alias_contract": {
+          "$ref": "#/definitions/aliasContract"
+        },
+        "ownership_contract": {
+          "$ref": "#/definitions/ownershipContract"
+        },
+        "length_companions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/lengthCompanion"
+          }
+        },
+        "effect_graph": {
+          "$ref": "#/definitions/effectGraph"
+        }
+      }
+    },
+    "aliasContract": {
+      "type": "object",
+      "required": [
+        "decision",
+        "proven",
+        "requires_noalias",
+        "complete_alias_safety"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "requires_noalias_contract",
+            "candidate_only",
+            "blocked",
+            "not_applicable"
+          ]
+        },
+        "proven": {
+          "type": "boolean"
+        },
+        "requires_noalias": {
+          "type": "boolean"
+        },
+        "complete_alias_safety": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ownershipContract": {
+      "type": "object",
+      "required": [
+        "inputs",
+        "outputs",
+        "borrow_model"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "borrow_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unsafe_boundary": {
+          "type": "string"
+        }
+      }
+    },
+    "lengthCompanion": {
+      "type": "object",
+      "required": [
+        "pointer",
+        "companion",
+        "contract"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "pointer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "companion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "effectGraph": {
+      "type": "object",
+      "required": [
+        "effects",
+        "edges"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "pointer_node",
+              "kind",
+              "expression"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pointer_node": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "read",
+                  "write",
+                  "read_write",
+                  "compute",
+                  "call",
+                  "external_read",
+                  "external_write",
+                  "unknown"
+                ]
+              },
+              "expression": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "from_effect",
+              "to_effect",
+              "relationship"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "from_effect": {
+                "type": "string"
+              },
+              "to_effect": {
+                "type": "string"
+              },
+              "relationship": {
+                "enum": [
+                  "data_influences",
+                  "control_depends",
+                  "may_alias",
+                  "requires_noalias",
+                  "invalidates",
+                  "bounds_checked_by",
+                  "external_state"
+                ]
+              },
+              "evidence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "reads": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "writes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "external_state": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "alias_sensitive": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "pointerNameSet": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pointerAccess": {
+      "type": "object",
+      "required": [
+        "name",
+        "c_type"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "c_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "length_companion": {
+          "type": "string"
+        },
+        "read_effects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "write_effects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nullability": {
+          "enum": [
+            "nullable",
+            "non_null",
+            "unknown"
+          ]
+        },
+        "ownership_role": {
+          "enum": [
+            "owner",
+            "borrowed",
+            "observer",
+            "out_param",
+            "inout_param",
+            "global",
+            "unknown"
+          ]
+        },
+        "mutability": {
+          "enum": [
+            "read_only",
+            "write_only",
+            "read_write",
+            "unknown"
+          ]
+        },
+        "loop_bound": {
+          "type": "string"
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "lifetime_owner": {
+          "type": "string"
+        },
+        "translation_rule_id": {
+          "type": "string"
+        }
+      }
+    },
+    "pointerContract": {
+      "type": "object",
+      "required": [
+        "aliasing_proven"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "input_buffers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerAccess"
+          }
+        },
+        "output_pointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerAccess"
+          }
+        },
+        "inout_pointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerAccess"
+          }
+        },
+        "aliasing_proven": {
+          "type": "boolean"
+        },
+        "read_read_alias_allowed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerNameSet"
+          }
+        },
+        "noalias_required": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerNameSet"
+          }
+        }
+      }
+    }
   }
 }

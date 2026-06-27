@@ -13,6 +13,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] C config header path and hash are recorded.
 - [ ] C defines, feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend, and toolchain inputs are recorded.
 - [ ] Pointer dependency graph is recorded for pointer-bearing slices, or marked `not_applicable` with a reason for pure value slices.
+- [ ] Alias-sensitive pointer graphs have matching `claim_boundary.alias_gate` in the L3 evidence manifest.
 - [ ] Code-test translation manifest path and status are recorded.
 - [ ] Non-goals and accepted differences are written before the pass claim.
 
@@ -23,6 +24,7 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 - [ ] Impact set or equivalent boundary evidence exists.
 - [ ] Config profile exists or equivalent version/cache evidence records all required profile fields.
 - [ ] Pointer dependency graph exists for pointer-bearing slices or records a `not_applicable` reason.
+- [ ] Alias gate status is propagated from pointer graph to auto-translation plan, auto manifest, L3 evidence manifest, final verification, and cache metadata when applicable.
 - [ ] Code-test translation evidence exists and maps C tests, fixtures, or oracle expectations to Rust test files, test names, cargo commands, coverage categories, negative cases, and known gaps.
 - [ ] C oracle report exists and records generated status from a real C toolchain.
 - [ ] Rust replay report exists.
@@ -51,8 +53,10 @@ Use this checklist before reporting any L3 semantic-equivalence claim.
 
 - [ ] Graph applicability decision covers pointer parameters, pointer returns, pointer fields, buffers, callbacks, opaque handles, globals, manual allocation, and external mutable state.
 - [ ] Graph records pointer nodes, dependency edges, ownership/lifetime assumptions, external state, Rust mapping strategy, and known gaps.
+- [ ] Graph records read effects, write effects, alias risks, alias contract, and safe boundary preconditions for alias-sensitive read/write slices.
 - [ ] Graph changes invalidate ContextPack, PatchPlan, C oracle, Rust replay, schema diff, negative diff, unsafe ledger, performance smoke, cache metadata, and summary evidence.
 - [ ] Graph is described as dependency evidence, not complete alias safety proof.
+- [ ] 中文检查：L3 claim 可以说 alias 风险已被记录和门禁处理，但不能在没有独立证明时声称 whole-program alias safety。
 
 ## Code-Test Translation
 

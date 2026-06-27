@@ -8325,3 +8325,68 @@ English mirror summary:
 - The implementation reuses the existing `ForStmt` step inc/dec-to-Assign path through a shared helper.
 - Value-position inc/dec, inc/dec in conditions/call arguments/returns, complex targets, pointer/array/field targets, and full C increment-expression semantics still fail closed.
 - Focused tests pass for the new unit path, real clang AST smoke, and existing negative regressions.
+
+## 120. 2026-06-27 struct alias memory-model evidence templates
+
+本轮继续按多智能体推进 `add-struct-alias-memory-model-evidence`。三个只读子智能体分别审计了 pointer graph 模板、slice/plan/manifest 模板、validator 与测试；共同结论是：真实 `auto_migrate.py` 和 validator 已经在使用 `alias_contract`、`alias_risks`、`safe_boundary_preconditions`、`translation_summary.alias_gate`、`claim_boundary.alias_gate`，但通用 schema/example/docs 没有完整表达这些字段。
+
+核心改动：
+
+- 新增 `validation/tools/test_template_schema_contracts.py`，用 schema/example 自检固定 pointer graph、slice spec、auto-translation plan、L3 manifest 的 alias/memory-model 字段契约。
+- `validation/pointer-graph-template/pointer-graph.schema.json` 新增 `alias_contract`、`alias_risks`、`safe_boundary_preconditions`、`effect_graph`、`pointer_decisions`，并给 `pointer_nodes[]` 增加 `read_effects` / `write_effects` / length/boundary 字段。
+- `validation/pointer-graph-template/pointer-graph.example.json` 补 alias gate、effect graph 和 per-node read/write effect 示例。
+- `validation/slice-spec-template/slice-spec.schema.json` 新增 `c_boundary.pointer_contract` 和 `memory_model`，覆盖 input buffers、output pointers、inout pointers、length companions、read/write effects、aliasing proof、read-read alias allowance 和 noalias-required pairs。
+- `validation/slice-spec-template/slice-spec.example.json` 补 pointer contract 与 memory model 示例。
+- `validation/auto-translation-template/auto-translation-plan.schema.json` 和 example 新增 `translation_summary.alias_gate`。
+- `validation/l3-template/evidence-manifest.schema.json` 和 example 新增 `claim_boundary.alias_gate`，并修复 example 缺失的 `c2rust_baseline`、`route_decision`、`validation_profile` required refs。
+- pointer graph、slice spec、auto translation、L3 template 的 README/checklist 已补中英文说明，强调 FlashDB 只是用例，alias gate 是通用 pointer/struct/external-state 风险门禁，不是 whole-program alias proof。
+- 新增 OpenSpec change：`openspec/changes/add-struct-alias-memory-model-evidence/`。
+
+兼容策略：
+
+- 本次 schema 先保持 additive，不强制迁移所有历史 evidence。
+- 新模板能表达 alias/memory/effect 字段；运行时 validator 继续对新生成的 alias-sensitive evidence fail-closed。
+- `effect_graph` 已进入模板和 example，但暂不要求所有现有 generated evidence 必填；后续应先让 `auto_migrate.py` 生成 effect graph，再收紧条件 required。
+
+验证：
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_alias_sensitive_read_write_pointer_gate_flows_through_auto_migrate validation.tools.test_auto_migrate.AutoMigrateTests.test_output_only_pointer_write_does_not_trigger_input_output_alias_risk validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_tracks_alias_gate_inputs
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_read_write_pointer_graph_missing_alias_gate_fields validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_missing_alias_gate_in_manifest_and_final_verification validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_empty_alias_risk_and_noalias_precondition_for_unknown_alias
+python -m json.tool validation/pointer-graph-template/pointer-graph.schema.json > $null
+python -m json.tool validation/pointer-graph-template/pointer-graph.example.json > $null
+python -m json.tool validation/slice-spec-template/slice-spec.schema.json > $null
+python -m json.tool validation/slice-spec-template/slice-spec.example.json > $null
+python -m json.tool validation/auto-translation-template/auto-translation-plan.schema.json > $null
+python -m json.tool validation/auto-translation-template/auto-translation-plan.example.json > $null
+python -m json.tool validation/l3-template/evidence-manifest.schema.json > $null
+python -m json.tool validation/l3-template/evidence-manifest.example.json > $null
+openspec validate add-struct-alias-memory-model-evidence --strict
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `test_template_schema_contracts`: 3 passed。
+- alias auto-migrate focused tests: 3 passed。
+- alias validator focused tests: 3 passed。
+- 8 个修改 JSON 文件均可 parse。
+- OpenSpec change valid。
+- OpenSpec 全量 strict 校验 38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
+
+下一步建议：
+
+- 让 `auto_migrate.py` 生成真实 `effect_graph`，然后把 alias-sensitive pointer graph schema 从“能表达字段”收紧到“条件 required”。
+- 后续再扩 struct/field access emitter；在 effect graph 和 alias gate 没生成前，不要把 mutable pointer output write 扩张成完整 C pointer ownership 模型。
+
+English mirror summary:
+
+- Added the reusable alias/memory-model evidence contract for pointer-bearing and struct-ready bounded translation slices.
+- Pointer graph templates now expose alias contract, alias risks, safe boundary preconditions, effect graph, pointer decisions, and per-node read/write effects.
+- Slice spec templates now expose `c_boundary.pointer_contract` and `memory_model`.
+- Auto-translation plan and L3 manifest templates now expose alias-gate summaries.
+- Docs/checklists are bilingual and clarify that FlashDB is only a use case; the gate is generic evidence, not a whole-program alias proof.
+- Focused schema, auto-migrate, validator, JSON, OpenSpec, and whitespace checks pass.

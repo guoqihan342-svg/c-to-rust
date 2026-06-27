@@ -67,7 +67,15 @@
       "nullability": "non_null",
       "ownership_role": "inout_param",
       "lifetime_owner": "oracle runner setup/deinit",
-      "cross_file_exposure": true
+      "cross_file_exposure": true,
+      "read_effects": [
+        "fdb_kv_get reads visible KVDB state",
+        "fdb_kv_iterate reads entries"
+      ],
+      "write_effects": [
+        "fdb_kv_set mutates visible KVDB state",
+        "fdb_kv_del mutates visible KVDB state"
+      ]
     },
     {
       "id": "blob_value",
@@ -78,7 +86,13 @@
       "nullability": "non_null",
       "ownership_role": "borrowed",
       "lifetime_owner": "fixture step local buffer",
-      "cross_file_exposure": true
+      "cross_file_exposure": true,
+      "read_effects": [
+        "fdb_kv_set reads caller blob bytes"
+      ],
+      "write_effects": [
+        "fdb_kv_get writes returned value into caller blob"
+      ]
     },
     {
       "id": "iterator",
@@ -89,7 +103,13 @@
       "nullability": "non_null",
       "ownership_role": "inout_param",
       "lifetime_owner": "entries operation local scope",
-      "cross_file_exposure": true
+      "cross_file_exposure": true,
+      "read_effects": [
+        "fdb_kv_iterate reads iterator cursor and KVDB state"
+      ],
+      "write_effects": [
+        "fdb_kv_iterator_init initializes iterator cursor"
+      ]
     }
   ],
   "dependency_edges": [
@@ -176,7 +196,15 @@
       "No claim about native iterator mutation interleavings.",
       "No claim about byte-for-byte flash sector layout.",
       "No claim about power-loss recovery or capacity-pressure GC."
-    ]
+    ],
+    "alias_gate": {
+      "decision": "candidate_only",
+      "complete_alias_safety": false,
+      "requires_noalias": false,
+      "risk_count": 1,
+      "risk_level": "shared_mutable_state",
+      "evidence_source": "pointer graph template example"
+    }
   },
   "cache_invalidation_keys": [
     "source_commit",
@@ -188,6 +216,116 @@
     "rust_mapping",
     "fixture.hash",
     "config_profile.profile_id",
-    "schema_version"
-  ]
+    "schema_version",
+    "alias_contract",
+    "alias_risks",
+    "safe_boundary_preconditions",
+    "effect_graph"
+  ],
+  "alias_contract": {
+    "decision": "candidate_only",
+    "proven": false,
+    "requires_noalias": false,
+    "complete_alias_safety": false,
+    "source": "manual pointer graph template; iterator and KVDB state share mutable visibility",
+    "evidence_refs": [
+      "source_boundary.direct_call_edges",
+      "dependency_edges"
+    ]
+  },
+  "alias_risks": [
+    {
+      "id": "alias-risk-1",
+      "pointer_nodes": [
+        "kvdb_handle",
+        "iterator"
+      ],
+      "risk_level": "shared_mutable_state",
+      "evidence_source": "iterator reads live KVDB state while KVDB APIs can mutate visible state",
+      "gate_decision": "candidate_only",
+      "requires_noalias": false,
+      "read_effects": [
+        "iterator reads entries from kvdb_handle visible state"
+      ],
+      "write_effects": [
+        "fdb_kv_set and fdb_kv_del mutate kvdb_handle visible state"
+      ]
+    }
+  ],
+  "safe_boundary_preconditions": [
+    {
+      "id": "alias-precondition-1",
+      "kind": "exclusive_fixture_step",
+      "applies_to": [
+        "kvdb_handle",
+        "iterator"
+      ],
+      "required": true,
+      "reason": "The L3 fixture does not interleave iterator traversal with KVDB mutation."
+    }
+  ],
+  "effect_graph": {
+    "effects": [
+      {
+        "id": "read-kvdb",
+        "pointer_node": "kvdb_handle",
+        "kind": "read",
+        "expression": "fdb_kv_get reads visible KVDB state"
+      },
+      {
+        "id": "write-kvdb",
+        "pointer_node": "kvdb_handle",
+        "kind": "write",
+        "expression": "fdb_kv_set mutates visible KVDB state"
+      },
+      {
+        "id": "write-blob",
+        "pointer_node": "blob_value",
+        "kind": "write",
+        "expression": "fdb_kv_get writes returned value into caller blob"
+      },
+      {
+        "id": "read-iterator",
+        "pointer_node": "iterator",
+        "kind": "read",
+        "expression": "fdb_kv_iterate reads iterator cursor and KVDB state"
+      }
+    ],
+    "edges": [
+      {
+        "from_effect": "write-kvdb",
+        "to_effect": "read-kvdb",
+        "relationship": "data_influences",
+        "evidence": "fdb_kv_set updates state later read by fdb_kv_get"
+      },
+      {
+        "from_effect": "read-kvdb",
+        "to_effect": "write-blob",
+        "relationship": "data_influences",
+        "evidence": "fdb_kv_get copies visible value into caller blob"
+      },
+      {
+        "from_effect": "write-kvdb",
+        "to_effect": "read-iterator",
+        "relationship": "may_alias",
+        "evidence": "iterator traversal observes live KVDB state"
+      }
+    ],
+    "summary": {
+      "reads": [
+        "kvdb_handle",
+        "iterator",
+        "flash-image"
+      ],
+      "writes": [
+        "kvdb_handle",
+        "blob_value",
+        "flash-image"
+      ],
+      "external_state": [
+        "flash-image"
+      ],
+      "alias_sensitive": true
+    }
+  }
 }

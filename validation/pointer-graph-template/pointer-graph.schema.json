@@ -204,6 +204,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "alias_gate": {
+          "$ref": "#/definitions/aliasGateSummary"
         }
       }
     },
@@ -212,6 +215,30 @@
       "minItems": 1,
       "items": {
         "type": "string"
+      }
+    },
+    "alias_contract": {
+      "$ref": "#/definitions/aliasContract"
+    },
+    "alias_risks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/aliasRisk"
+      }
+    },
+    "safe_boundary_preconditions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/safeBoundaryPrecondition"
+      }
+    },
+    "effect_graph": {
+      "$ref": "#/definitions/effectGraph"
+    },
+    "pointer_decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/pointerDecision"
       }
     }
   },
@@ -326,6 +353,36 @@
         },
         "cross_file_exposure": {
           "type": "boolean"
+        },
+        "length_companion": {
+          "type": "string"
+        },
+        "buffer_role": {
+          "enum": [
+            "input",
+            "output",
+            "inout",
+            "internal",
+            "unknown"
+          ]
+        },
+        "boundary_decisions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "read_effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerEffect"
+          }
+        },
+        "write_effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerEffect"
+          }
         }
       }
     },
@@ -383,6 +440,19 @@
         },
         "risk": {
           "type": "string"
+        },
+        "relationship": {
+          "enum": [
+            "known_distinct",
+            "known_overlap",
+            "unknown_overlap",
+            "shared_mutable_state",
+            "borrow_equivalence",
+            "not_applicable"
+          ]
+        },
+        "evidence": {
+          "type": "string"
         }
       }
     },
@@ -438,6 +508,373 @@
         },
         "notes": {
           "type": "string"
+        }
+      }
+    },
+    "aliasGateSummary": {
+      "type": "object",
+      "required": [
+        "decision",
+        "complete_alias_safety",
+        "requires_noalias"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "requires_noalias_contract",
+            "candidate_only",
+            "blocked",
+            "not_applicable"
+          ]
+        },
+        "complete_alias_safety": {
+          "type": "boolean"
+        },
+        "requires_noalias": {
+          "type": "boolean"
+        },
+        "risk_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "risk_level": {
+          "type": "string"
+        },
+        "evidence_source": {
+          "type": "string"
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/safeBoundaryPrecondition"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "aliasContract": {
+      "type": "object",
+      "required": [
+        "decision",
+        "proven",
+        "requires_noalias",
+        "complete_alias_safety"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "requires_noalias_contract",
+            "candidate_only",
+            "blocked",
+            "not_applicable"
+          ]
+        },
+        "proven": {
+          "type": "boolean"
+        },
+        "requires_noalias": {
+          "type": "boolean"
+        },
+        "complete_alias_safety": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "aliasRisk": {
+      "type": "object",
+      "required": [
+        "id",
+        "pointer_nodes",
+        "risk_level",
+        "evidence_source",
+        "gate_decision",
+        "requires_noalias"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pointer_nodes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "risk_level": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gate_decision": {
+          "enum": [
+            "allow",
+            "requires_noalias_contract",
+            "candidate_only",
+            "blocked",
+            "not_applicable"
+          ]
+        },
+        "requires_noalias": {
+          "type": "boolean"
+        },
+        "read_effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerEffect"
+          }
+        },
+        "write_effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pointerEffect"
+          }
+        }
+      }
+    },
+    "safeBoundaryPrecondition": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "applies_to",
+        "required",
+        "reason"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "noalias",
+            "non_null",
+            "valid_length",
+            "bounds_checked",
+            "initialized",
+            "aligned",
+            "lifetime",
+            "external_state_stable",
+            "exclusive_fixture_step",
+            "single_threaded",
+            "external_state_frozen",
+            "other"
+          ]
+        },
+        "applies_to": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "pointerEffect": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "required": [
+            "access",
+            "expression"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "access": {
+              "enum": [
+                "read",
+                "write",
+                "read_write",
+                "unknown"
+              ]
+            },
+            "expression": {
+              "type": "string",
+              "minLength": 1
+            },
+            "pointer_node": {
+              "type": "string"
+            },
+            "field": {
+              "type": "string"
+            },
+            "condition": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "effectGraph": {
+      "type": "object",
+      "required": [
+        "effects",
+        "edges"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "pointer_node",
+              "kind",
+              "expression"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pointer_node": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "read",
+                  "write",
+                  "read_write",
+                  "compute",
+                  "call",
+                  "external_read",
+                  "external_write",
+                  "unknown"
+                ]
+              },
+              "expression": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "from_effect",
+              "to_effect",
+              "relationship"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "from_effect": {
+                "type": "string"
+              },
+              "to_effect": {
+                "type": "string"
+              },
+              "relationship": {
+                "enum": [
+                  "data_influences",
+                  "control_depends",
+                  "may_alias",
+                  "requires_noalias",
+                  "invalidates",
+                  "bounds_checked_by",
+                  "external_state"
+                ]
+              },
+              "evidence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "reads": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "writes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "external_state": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "alias_sensitive": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "pointerDecision": {
+      "type": "object",
+      "required": [
+        "id",
+        "pointer_node",
+        "decision",
+        "translation_rule_id",
+        "unsafe_expected"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "pointer_node": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "translation_rule_id": {
+          "type": "string"
+        },
+        "unsafe_expected": {
+          "type": "boolean"
         }
       }
     }

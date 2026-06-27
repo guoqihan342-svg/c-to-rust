@@ -20,6 +20,20 @@
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
       "status": "recorded"
     },
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c2rust-baseline-manifest.json",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-route-decision.json",
+      "status": "recorded",
+      "level": "L3"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-validation-profile.json",
+      "status": "passed",
+      "profile": "L3-accepted"
+    },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
       "status": "recorded"
@@ -118,6 +132,26 @@
       "power-loss recovery",
       "unrelated TSDB behavior",
       "runtime cache semantics"
-    ]
+    ],
+    "alias_gate": {
+      "decision": "candidate_only",
+      "complete_alias_safety": false,
+      "requires_noalias": false,
+      "risk_count": 1,
+      "risk_level": "shared_mutable_state",
+      "evidence_source": "validation/pointer-graph-template/pointer-graph.example.json",
+      "preconditions": [
+        {
+          "id": "alias-precondition-1",
+          "kind": "exclusive_fixture_step",
+          "applies_to": [
+            "kvdb_handle",
+            "iterator"
+          ],
+          "required": true,
+          "reason": "The fixture excludes mutation while iterator traversal is active."
+        }
+      ]
+    }
   }
 }

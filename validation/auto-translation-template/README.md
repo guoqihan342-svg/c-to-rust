@@ -14,6 +14,16 @@ This directory defines evidence contracts for bounded automatic translation and 
 - Auto-translation semantic-pass fixtures must also persist `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The manifest refs must carry `path`, `status`, and `sha256`, while cache identities use canonical JSON hashes rather than file-byte hashes.
 - 中文：自动翻译 fixture 如果要被当前 `--require-semantic-pass` 直接验证，必须把 `c2rust_baseline`、`route_decision`、`validation_profile` 三类证据落盘并写入 auto manifest、L3 evidence manifest、final verification 和 cache metadata。测试 helper 临时补字段不能作为可提交 evidence。
 
+## Alias Gate Summary
+
+English: `translation_summary.alias_gate` carries the translator's current alias decision for the generated candidate. It is derived from the slice spec pointer contract and the pointer graph. It does not prove correctness by itself; it only records whether the candidate is not applicable, allowed by evidence, candidate-only, blocked, or requires an explicit noalias contract.
+
+中文：`translation_summary.alias_gate` 记录生成候选代码时的 alias 决策，来源是 slice spec 的 pointer contract 和 pointer graph。它本身不证明正确性，只说明当前候选是 not applicable、已有证据允许、仅候选、被阻断，还是需要显式 noalias 契约。
+
+English: if the alias decision changes, cache metadata must invalidate the Rust draft, C oracle binding, Rust replay, diff, unsafe evidence, final verification, and summary.
+
+中文：如果 alias 决策变化，cache metadata 必须让 Rust draft、C oracle 绑定、Rust replay、diff、unsafe evidence、final verification 和 summary 失效或重新审核。
+
 ## Rules
 
 - Slice spec, type map, CFG, and pointer graph must be recorded before Rust draft generation.

@@ -47,6 +47,16 @@ The pointer graph is not an alias proof. It does not prove whole-program pointer
 
 中文：后续 L3 切片只要包含 C 指针参数、指针返回、struct 指针字段、buffer、opaque handle、callback、手动分配、外部可变状态或 alias-sensitive state，就必须提供 pointer dependency graph 证据。该图应在实现编辑前记录，确保 Rust ownership 与 unsafe 决策能看到跨文件指针上下文。它不是 alias 证明，只是依赖上下文、风险边界和缓存失效输入。
 
+## Alias Gate Claim Boundary
+
+English: automatic-translation L3 manifests must carry `claim_boundary.alias_gate` when the pointer graph records alias-sensitive read/write effects. The field mirrors the pointer graph and translation plan decision so the final claim can say exactly whether alias safety is proven, candidate-only, blocked, or dependent on explicit noalias preconditions.
+
+中文：当 pointer graph 记录了 alias-sensitive 的读写 effect 时，自动翻译的 L3 manifest 必须带 `claim_boundary.alias_gate`。该字段承接 pointer graph 和 translation plan 的决策，让最终声明能明确说明 alias safety 是已证明、仅候选、被阻断，还是依赖显式 noalias 前置条件。
+
+English: FlashDB is only one validation use case. The alias gate applies to any C project where pointer reads, pointer writes, struct fields, callbacks, or external mutable state affect the Rust boundary.
+
+中文：FlashDB 只是验证用例之一。只要 C 项目的指针读、指针写、结构体字段、callback 或外部可变状态会影响 Rust 边界，就应该使用 alias gate。
+
 ## Code-Test Translation Gate
 
 Code-test translation evidence is required for future L3 slices. It records how source-side tests, generated fixtures, or oracle expectations map to Rust tests and replay commands. A generated oracle fixture is a valid source mapping when no direct upstream C test name exists.

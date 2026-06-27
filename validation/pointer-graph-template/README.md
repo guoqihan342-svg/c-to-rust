@@ -26,6 +26,16 @@ Every pointer graph artifact should record:
 - tests, fixtures, or oracle evidence that cover the risk boundary.
 - cache invalidation keys.
 
+## Alias And Effect Gate
+
+English: pointer-bearing slices must distinguish pointer topology from memory effects. `pointer_nodes[*].read_effects` and `pointer_nodes[*].write_effects` record the local read/write surface. `effect_graph` records the structured effect nodes and data/control/alias relationships. When a slice has both read and write pointer effects and aliasing is not proven, the artifact must record `alias_contract`, `alias_risks`, `alias_sets`, and `safe_boundary_preconditions`.
+
+中文：含指针的 slice 不能只记录“有哪些指针”，还要记录“这些指针读写了什么”。`pointer_nodes[*].read_effects` 和 `pointer_nodes[*].write_effects` 描述局部读写面；`effect_graph` 描述结构化 effect 节点以及数据、控制、别名关系。当同一个 slice 同时存在指针读和指针写，并且无法证明 noalias 时，必须记录 `alias_contract`、`alias_risks`、`alias_sets` 和 `safe_boundary_preconditions`。
+
+English: this is still evidence, not a whole-program alias solver. `complete_alias_safety=false` is expected unless a later proof or gate can justify a stronger claim.
+
+中文：这些字段仍然是证据契约，不是全程序 alias 求解器。除非后续有更强证明或门禁，默认应保持 `complete_alias_safety=false`，不能声称完整 alias safety。
+
 ## Status Rules
 
 - `recorded`: graph evidence exists for a pointer-bearing slice.
