@@ -9152,3 +9152,67 @@ English mirror summary:
 - Added a direct `clang-frontend` module test for the dry-run writer's blocked parse-spec JSON.
 - Preserved artifact filenames, manifest behavior, feature gates, and Python `--emit-clang-dry-run` opt-in semantics.
 - Updated the Chinese and English MVP backlog to include the dry-run writer split while keeping the broader P0 `lib.rs` split open.
+
+## 132. 2026-06-28 P0 clang lowering report artifact writer split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 边界，仍然是行为保持重构：不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 文件名、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+两个只读子智能体并行复核后结论一致：
+
+- `write_clang_lowering_report_artifact()`、`typed_ir_candidate_evidence()`、`readonly_global_summary()` 是本轮最小完整迁移集合，可以进入 `artifacts.rs`。
+- 不迁移 clang-lowered IR 主翻译路径 helper，因为它们构造 `TranslationResult`、type-map、CFG、pointer graph，并依赖 `lib.rs` 内部翻译/evidence 逻辑。
+- `write_translation_artifacts()` 继续留在 `lib.rs`，它仍是 public orchestration，负责选择翻译路径、追加 artifact、组装 manifest status。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `#[cfg(feature = "clang-lowering-report")] pub(crate) fn write_clang_lowering_report_artifact(...)`。
+  - 同步迁入 `typed_ir_candidate_evidence()` 和 `readonly_global_summary()`。
+  - 保持 report JSON schema：`artifact_kind=clang-lowering-report`、`frontend=clang`、`claim_boundary.role=diagnostic_only`、`affects_manifest_status=false`、`affects_semantic_pass=false`、`authoritative_evidence=false`。
+  - `typed_ir_candidate.semantic_pass` 仍固定为 `false`，即使能生成 `GenericTypedIr` candidate，也不能把 diagnostic report 当成 semantic acceptance。
+  - 新增模块内单测 `artifacts::clang_lowering_report_artifact_tests::clang_lowering_report_artifact_records_parse_spec_errors`，直接覆盖 parse-spec blocked 分支，不把 manifest 责任塞进 writer 单测。
+- `crates/c2r-translator/src/lib.rs`
+  - 通过 `#[cfg(feature = "clang-lowering-report")] use artifacts::write_clang_lowering_report_artifact;` 调用迁出的 writer。
+  - 删除旧的 lowering report artifact writer cluster 副本。
+  - `write_translation_artifacts()` 的调用顺序和 manifest status 计算保持不变。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 总项仍保持未完成，只把 clang lowering report artifact writer cluster 标为已完成子项。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_artifact_records_parse_spec_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature
+```
+
+结果：
+
+- lowering report writer 红绿测试：初始失败于 `write_clang_lowering_report_artifact` 不在 `artifacts.rs` 作用域；迁移后通过。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：2 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：59 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features`：59 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-lowering-report` / dry-run non-opt-in 定向测试：4/4 passed。
+
+边界：
+
+- 可以说：clang lowering report artifact writer cluster 已从 `lib.rs` 拆到 `artifacts.rs`，writer 单测、feature 矩阵和 Python opt-in 路径都保持兼容。
+- 不应说：P0 `lib.rs` 拆分完成、`write_translation_artifacts()` 已拆出、artifact orchestration 已完全模块化、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀优先从不改变行为的边界继续拆，例如 CLI/manifest helper、unsafe/metadata statistics 或更明确的 evidence builder；翻译主路径和 public orchestration 仍要小步拆，保持每刀 feature matrix 通过。
+
+English mirror summary:
+
+- Moved the clang lowering report artifact writer cluster into private `artifacts.rs`.
+- Extracted `write_clang_lowering_report_artifact`, `typed_ir_candidate_evidence`, and `readonly_global_summary` while keeping `write_translation_artifacts` in `lib.rs`.
+- Preserved artifact filenames, JSON schema, diagnostic-only claim boundary, manifest status behavior, feature gates, and Python `--emit-clang-lowering-report` opt-in semantics.
+- Added a direct module test for the parse-spec blocked report branch.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.

@@ -1,7 +1,5 @@
 #[cfg(feature = "clang-lowering-report")]
 use std::collections::BTreeMap;
-#[cfg(feature = "clang-lowering-report")]
-use std::path::PathBuf;
 use std::{error::Error, fs, path::Path};
 
 use serde_json::json;
@@ -24,6 +22,8 @@ pub use model::{
 
 #[cfg(feature = "clang-frontend")]
 use artifacts::write_clang_dry_run_artifact;
+#[cfg(feature = "clang-lowering-report")]
+use artifacts::write_clang_lowering_report_artifact;
 use artifacts::{translation_events_jsonl, write_json_file, write_text_file};
 
 #[derive(Clone, Debug)]
@@ -1106,162 +1106,6 @@ fn ir_pointer_is_const(ty: &typed_ir::IrType) -> bool {
         typed_ir::IrTypeKind::Pointer { pointee } => ty.is_const || pointee.is_const,
         _ => false,
     }
-}
-
-#[cfg(feature = "clang-lowering-report")]
-fn write_clang_lowering_report_artifact(
-    spec: &SliceSpec,
-    out_dir: &Path,
-    prefix: &str,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
-        Ok(parse_spec) => {
-            let source_file = parse_spec.source_root.join(&parse_spec.source_file);
-            let environment = std::env::vars().collect::<BTreeMap<_, _>>();
-            let report = clang_frontend::lower_function_from_clang_parse_spec_report(
-                &environment,
-                &parse_spec,
-            );
-            let typed_ir_candidate =
-                typed_ir_candidate_evidence(report.function_ir.as_ref(), &report.globals);
-            json!({
-                "schema_version": 1,
-                "artifact_kind": "clang-lowering-report",
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "fixture_hash": spec.fixture_hash,
-                "frontend": "clang",
-                "status": report.status,
-                "source_file": source_file.to_string_lossy().replace('\\', "/"),
-                "function_name": parse_spec.function_name,
-                "claim_boundary": {
-                    "role": "diagnostic_only",
-                    "affects_manifest_status": false,
-                    "affects_semantic_pass": false,
-                    "authoritative_evidence": false,
-                },
-                "diagnostics": report.diagnostics,
-                "errors": report.errors,
-                "typed_ir_candidate": typed_ir_candidate,
-                "lowering_report": report,
-                "metadata": {
-                    "source_root": parse_spec.source_root,
-                    "logical_source_file": parse_spec.source_file,
-                    "compile_commands": parse_spec.compile_commands,
-                    "source_file_hashes": parse_spec.source_file_hashes,
-                    "function_source_span": parse_spec.function_source_span,
-                },
-            })
-        }
-        Err(error) => json!({
-            "schema_version": 1,
-            "artifact_kind": "clang-lowering-report",
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "source_commit": spec.source_commit,
-            "fixture_hash": spec.fixture_hash,
-            "frontend": "clang",
-            "status": "blocked",
-            "source_file": spec.source_file,
-            "function_name": spec.function_name,
-            "claim_boundary": {
-                "role": "diagnostic_only",
-                "affects_manifest_status": false,
-                "affects_semantic_pass": false,
-                "authoritative_evidence": false,
-            },
-            "diagnostics": [
-                error.message,
-            ],
-            "typed_ir_candidate": {
-                "status": "not_available",
-                "candidate_route": null,
-                "readonly_globals": [],
-                "rust_draft_generated": false,
-                "semantic_pass": false,
-                "reason": "clang_parse_spec_error",
-            },
-            "lowering_report": null,
-            "metadata": {
-                "source_root": spec.source_root,
-                "logical_source_file": spec.source_file,
-                "compile_commands": spec.compile_commands,
-                "source_file_hashes": spec.source_file_hashes,
-                "function_source_span": spec.function_source_span,
-            },
-            "errors": [
-                {
-                    "kind": error.kind,
-                    "message": error.message,
-                }
-            ],
-        }),
-    };
-    write_json_file(
-        out_dir,
-        &format!("{prefix}-clang-lowering-report.json"),
-        &value,
-    )
-}
-
-#[cfg(feature = "clang-lowering-report")]
-fn typed_ir_candidate_evidence(
-    function_ir: Option<&typed_ir::IrFunction>,
-    globals: &[typed_ir::IrGlobal],
-) -> serde_json::Value {
-    let readonly_globals = globals
-        .iter()
-        .map(readonly_global_summary)
-        .collect::<Vec<_>>();
-    let Some(function_ir) = function_ir else {
-        return json!({
-            "status": "not_available",
-            "candidate_route": null,
-            "readonly_globals": readonly_globals,
-            "rust_draft_generated": false,
-            "semantic_pass": false,
-            "reason": "function_ir_missing",
-        });
-    };
-
-    match typed_ir::emit_rust_from_ir_with_globals(function_ir, globals) {
-        Ok(emitted) => json!({
-            "status": "generated",
-            "candidate_route": emitted.route,
-            "readonly_globals": readonly_globals,
-            "rust_draft_generated": true,
-            "semantic_pass": false,
-        }),
-        Err(error) => json!({
-            "status": "unsupported",
-            "candidate_route": error.route,
-            "readonly_globals": readonly_globals,
-            "rust_draft_generated": false,
-            "semantic_pass": false,
-            "unsupported_reason": error.reason,
-        }),
-    }
-}
-
-#[cfg(feature = "clang-lowering-report")]
-fn readonly_global_summary(global: &typed_ir::IrGlobal) -> serde_json::Value {
-    let array_len = match &global.ty.kind {
-        typed_ir::IrTypeKind::Array { len, .. } => *len,
-        _ => None,
-    };
-    let (init_kind, value_count) = match &global.init {
-        typed_ir::IrGlobalInit::Zeroed => ("zeroed", array_len.unwrap_or(0)),
-        typed_ir::IrGlobalInit::IntegerArray(values) => ("integer_array", values.len()),
-    };
-    json!({
-        "name": global.name,
-        "spelled_type": global.ty.spelled,
-        "canonical_type": global.ty.canonical,
-        "array_len": array_len,
-        "init_kind": init_kind,
-        "value_count": value_count,
-    })
 }
 
 fn parse_function(source: &str, expected_name: &str) -> Result<ParsedFunction, TranslationError> {
