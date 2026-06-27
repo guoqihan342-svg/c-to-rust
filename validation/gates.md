@@ -157,7 +157,7 @@ Boundary:
 
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.
 
-For auto-translation evidence, `final_verification.semantic_pass=true` is claimable only as an accepted or named-slice evidence-bundle result. It must not be read as `generated_draft_semantic_pass=true`; generated drafts, typed IR candidates, C2Rust candidates, and LLM candidates remain candidate/provenance artifacts unless a separate accepted evidence boundary explicitly promotes that exact artifact.
+For auto-translation evidence, `final_verification.semantic_pass=true` is claimable only as an accepted/named-slice evidence bundle result. It must not be read as `generated_draft_semantic_pass=true`; generated drafts, typed IR candidates, C2Rust candidates, and LLM candidates remain candidate/provenance artifacts unless that exact artifact is independently bound by the accepted/named-slice evidence bundle and passes the required gates.
 
 Automatic translation capability claims require more than L1 target success or a hand-authored `c_source` string. A slice only counts as real-source automatic translation evidence when the slice spec is generated from real C source files with source span, source hash, build profile provenance, and completed L3 evidence for the named function.
 

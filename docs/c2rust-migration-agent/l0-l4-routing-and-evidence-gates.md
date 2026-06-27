@@ -127,7 +127,7 @@ Validation profile 决定本次运行必须通过的 gates。核心字段：
 3. 顶层 `status=passed`
 4. L4/refused 默认不通过，除非 slice spec 声明 `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` 必须是 false（generated draft 本身不直接 claim 语义）
-6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须同时说明 `source=accepted_evidence_binding` 和 `generated_draft_semantic_pass=false`。
+6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须绑定 `accepted_evidence_binding`，并保持 `generated_draft_semantic_pass=false`。
 
 ### 4.3 Profile 与 Route 的关系
 

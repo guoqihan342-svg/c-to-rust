@@ -127,7 +127,7 @@ Validation profile determines which gates must pass for this run. Key fields:
 3. Top-level `status=passed`
 4. L4/refused defaults to not-passed, unless slice spec declares `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` must be false (generated draft does not claim semantics directly)
-6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must state `source=accepted_evidence_binding` and `generated_draft_semantic_pass=false`.
+6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must bind `accepted_evidence_binding` and keep `generated_draft_semantic_pass=false`.
 
 ### 4.3 Profile-Route Relationship
 
