@@ -1,7 +1,7 @@
 # pointer-arithmetic-output-write-l3-demo-slice Specification
 
 ## Purpose
-TBD - created by archiving change add-bounded-pointer-arithmetic-output-write. Update Purpose after archive.
+This spec defines the `copy_i32_ptr_arith` L3 demonstration slice for bounded pointer-arithmetic output writes. It verifies that `*(out + i) = expr` is accepted only when the pointer graph and loop bound prove safe mutable-slice output behavior, while C oracle, Rust replay, schema-aware diff, negative diff, and unsafe evidence remain authoritative.
 ## Requirements
 ### Requirement: Copy I32 Pointer Arithmetic Output Write Demo
 The system SHALL provide a `copy_i32_ptr_arith` L3 demo slice that validates bounded pointer-arithmetic output writes against a C oracle and Rust replay.

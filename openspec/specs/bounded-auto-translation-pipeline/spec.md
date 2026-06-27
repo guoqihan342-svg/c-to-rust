@@ -1,7 +1,7 @@
 # bounded-auto-translation-pipeline Specification
 
 ## Purpose
-TBD - created by archiving change add-bounded-auto-translation-pipeline. Update Purpose after archive.
+This spec defines the fail-closed automatic translation pipeline for real C source slices. It requires generated slice-spec provenance, context/type/CFG/pointer evidence, candidate-only Rust draft generation, C oracle/Rust replay/diff/negative/unsafe/version gates, and cache invalidation before any named-slice L3 semantic claim is accepted.
 ## Requirements
 ### Requirement: Machine-Generated Slice Spec And Build Profile Input
 The system SHALL start every automatic translation run from a machine-generated slice spec whose C target has passed L1 native validation and whose build profile is sufficient to reproduce preprocessing, type, ABI, and fixture boundaries.
