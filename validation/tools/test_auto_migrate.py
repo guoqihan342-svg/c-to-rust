@@ -1140,6 +1140,14 @@ class AutoMigrateTests(unittest.TestCase):
             negative = json.loads((evidence_dir / "l3-route-profile-negative-diff.json").read_text(encoding="utf-8"))
             replay_draft = (evidence_dir / "l3-route-profile-rust-replay-test-draft.rs").read_text(encoding="utf-8")
 
+            self.assertEqual(profile["competition_environment"]["profile_id"], "huawei-competition-ubuntu-24.04")
+            self.assertEqual(profile["competition_environment"]["path"], "config/competition-env/environment.json")
+            self.assertRegex(profile["competition_environment"]["sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(
+                cache["competition_environment_identity"],
+                profile["competition_environment"],
+            )
+            self.assertIn("competition_environment_identity", cache["cache_input_fields"])
             self.assertIn(baseline["status"], {"generated", "skipped", "blocked"})
             self.assertEqual(baseline["correctness_role"], "candidate_context_only")
             self.assertEqual(route["level"], "L0")

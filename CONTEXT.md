@@ -8390,3 +8390,78 @@ English mirror summary:
 - Auto-translation plan and L3 manifest templates now expose alias-gate summaries.
 - Docs/checklists are bilingual and clarify that FlashDB is only a use case; the gate is generic evidence, not a whole-program alias proof.
 - Focused schema, auto-migrate, validator, JSON, OpenSpec, and whitespace checks pass.
+
+## 121. 2026-06-27 competition environment binding for auto translation
+
+本轮按用户补充的比赛环境配置做适配收口。仓库已有独立入口 `config/competition-env/`，但自动翻译 evidence 还没有把该 profile 作为一等 cache/provenance 输入；机器可读 `environment.json` 里 C++ 编译器字段也写成了 `gpp`，与真实命令和文档的 `g++` 不一致。
+
+核心改动：
+
+- 新增 `validation/tools/test_competition_environment_profile.py`，锁定比赛环境基线：
+  - Ubuntu 24.04.4 LTS / Noble、kernel `5.10.0-182.0.0.95.r194_123.hce2.x86_64`。
+  - Huawei APT/PyPI/npm/Cargo mirror。
+  - Python 3.12.3、pip 24.0、Node v24.13.0、npm 11.6.2、OpenJDK 21.0.10 (`bisheng_jdk_enterprise`)、Maven 3.9.11、`MAVEN_HOME=/usr/local/maven3`、Rust/Cargo 1.96.0、gcc/g++ 13.3.0、GNU Make 4.3。
+  - Go 未安装、CMake 未找到。
+  - `config/competition-env/` 与兼容目录 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 的关键配置文件保持 SHA256 同步。
+- `config/competition-env/environment.json` 和兼容拷贝把 `toolchain.gpp` 修为 `toolchain["g++"]`。
+- `auto_migrate.py` 新增 `competition_environment_identity()`，默认读取 `config/competition-env/environment.json`，把 `profile_id`、相对路径和文件 SHA256 写入：
+  - `l3-<slice>-validation-profile.json` 的 `competition_environment`。
+  - `l3-<slice>-auto-cache-metadata.json` 的 `competition_environment_identity`。
+  - `cache_input_fields`，使比赛 profile 变化自动触发候选/CFG/pointer graph/Rust draft/oracle/diff/unsafe/final/summary 等 artifact 失效。
+- `validation/auto-translation-template/validation-profile.schema.json` 显式增加 `competition_environment` schema。
+- `validate_auto_translation_evidence.py` 增加条件校验：如果 validation profile 绑定了 `competition_environment`，cache metadata 必须带一致的 `competition_environment_identity`，且该 key 必须在 `cache_input_fields` 中。
+- 中英文文档同步：
+  - `validation/README.md`
+  - `validation/auto-translation-template/README.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.en.md`
+
+红灯已观察：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -m unittest validation.tools.test_competition_environment_profile
+python -m unittest validation.tools.test_template_schema_contracts.TemplateSchemaContractTests.test_validation_profile_template_exposes_competition_environment_contract
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_competition_environment_identity_when_profile_binds_it
+```
+
+旧实现分别失败于：
+
+- `KeyError: 'competition_environment'`
+- `KeyError: 'g++'`
+- validation profile schema 缺 `competition_environment`
+- validator 放过缺失 `competition_environment_identity` 的 cache metadata。
+
+已验证：
+
+```powershell
+python -m unittest validation.tools.test_competition_environment_profile validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_drift_invalidates_reusable_translation_artifacts validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_tracks_alias_gate_inputs validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_competition_environment_identity_when_profile_binds_it validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_route_baseline_profile_identity_sha_drift
+python -m json.tool config/competition-env/environment.json > $null
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json > $null
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json > $null
+python -m unittest validation.tools.test_auto_migrate
+python -m unittest validation.tools.test_validate_auto_translation_evidence
+```
+
+结果：
+
+- competition environment + template schema tests: 6 passed。
+- focused cache/profile/validator tests: 6 passed。
+- 3 个 JSON 文件 parse 通过。
+- `test_auto_migrate`: 64 passed。
+- `test_validate_auto_translation_evidence`: 67 passed。
+- 注意：曾并行运行 `test_auto_migrate` 和 `test_validate_auto_translation_evidence`，validator 中 4 个 helper 调 `auto_migrate.py` 出现瞬态 `CalledProcessError`；同一失败测试单独复现通过，随后 validator 全量单独通过。后续宽测试不要并发跑这两个大量启动 `auto_migrate.py` 的 test module。
+
+下一步建议：
+
+- 回到 section 120 的主线：让 `auto_migrate.py` 为 alias-sensitive pointer graph 生成真实 `effect_graph`，再把 validator/schema 从“字段可表达”收紧到“新生成 alias-sensitive evidence 条件必填”。
+- `validation/tools/run_wave2_l1.py` 后续可加 competition profile guard：默认比赛环境下把 CMake/Go 项目标为 non-default environment required，而不是误当默认 gate。
+
+English mirror summary:
+
+- Bound generated auto-translation validation profiles and cache metadata to the standalone competition environment profile at `config/competition-env/environment.json`.
+- Fixed the machine-readable C++ compiler key from `gpp` to `g++` in both the default and compatibility profile copies.
+- Added tests for the exact competition baseline and profile-directory synchronization.
+- Added schema and validator checks for `competition_environment` and `competition_environment_identity`.
+- Updated bilingual docs and recorded the next step: generate real `effect_graph` for alias-sensitive pointer evidence.

@@ -252,6 +252,7 @@ Pop-Location
 Agent 只有在以下证据都存在且新鲜时才能报告自动翻译 slice 完成：
 
 - slice spec、build profile、cache metadata 和 version manifest 绑定同一输入。
+- validation profile 绑定 `config/competition-env/environment.json` 的 `profile_id`、路径和 SHA256，cache metadata 的 `competition_environment_identity` 与其一致。
 - context pack、type map、CFG、pointer graph 在 Rust draft 前生成。
 - unsupported constructs 或 blocked repairs 已显式记录。
 - C oracle、Rust replay、schema-aware diff、negative diff、rust check、unsafe scan、unsafe ledger、final verification 都在 L3 evidence manifest 中引用。

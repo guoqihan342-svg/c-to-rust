@@ -13,6 +13,8 @@ This directory defines evidence contracts for bounded automatic translation and 
 - `blocked-repairs.schema.json`: blocked repair records for semantic or safety boundary violations.
 - Auto-translation semantic-pass fixtures must also persist `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The manifest refs must carry `path`, `status`, and `sha256`, while cache identities use canonical JSON hashes rather than file-byte hashes.
 - 中文：自动翻译 fixture 如果要被当前 `--require-semantic-pass` 直接验证，必须把 `c2rust_baseline`、`route_decision`、`validation_profile` 三类证据落盘并写入 auto manifest、L3 evidence manifest、final verification 和 cache metadata。测试 helper 临时补字段不能作为可提交 evidence。
+- Generated validation profiles must bind the default competition environment profile through `competition_environment.profile_id`, `path`, and `sha256`; cache metadata must carry the matching `competition_environment_identity` in `cache_input_fields`.
+- 中文：新生成的 validation profile 必须通过 `competition_environment.profile_id`、`path` 和 `sha256` 绑定默认比赛环境 profile；cache metadata 必须在 `cache_input_fields` 中写入一致的 `competition_environment_identity`。
 
 ## Alias Gate Summary
 
@@ -31,6 +33,8 @@ English: if the alias decision changes, cache metadata must invalidate the Rust 
 - Default repair retry limit is three rounds.
 - Repairs that edit oracle contracts, fixture expected behavior, accepted differences, public API outside the impact set, source slice boundaries, or unsafe budget policy must be blocked.
 - Final acceptance still requires C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, version/config binding, cache metadata, final verification, and OpenSpec validation.
+- A change to `config/competition-env/environment.json` invalidates generated translation cache identity until the affected artifacts are regenerated or explicitly reviewed as non-competition evidence.
+- 中文：`config/competition-env/environment.json` 变化会让已生成翻译缓存身份失效；受影响 artifacts 必须重新生成，或显式标注为非比赛环境 evidence 并单独审核。
 - A route may choose an L0 deterministic candidate path for scalar-only `GenericTypedIr` candidates whose `candidate_route.token_cost=0`, but that is route/cost/provenance classification only. The generated Rust draft remains candidate evidence until C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, and final verification accept the exact draft.
 - 中文：scalar-only 的 `GenericTypedIr` candidate 如果带有 `candidate_route.token_cost=0`，route 可以选择 L0 deterministic candidate path；这只表示 route/cost/provenance 分类。生成的 Rust draft 仍只是 candidate evidence，必须等 C oracle、Rust replay、schema-aware diff、negative diff、unsafe evidence 和 final verification 接受 exact draft 后才可进入最终接受结论。
 - Schema-aware diff and negative-diff reports must carry their gate metadata (`diff_gate`, `negative_diff_gate`, accepted-evidence refs, required inputs, and mutation evidence) when the evidence manifest claims `passed`.

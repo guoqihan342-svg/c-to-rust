@@ -40,6 +40,10 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The compatibility profile under `validation/environment-profiles/huawei-competition-ubuntu-24.04/` is kept for older evidence references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
 
+中文：默认比赛环境 profile 是 `config/competition-env/environment.json`。新生成的自动翻译 `validation-profile` 必须记录 `profile_id`、路径和 SHA256，`auto-cache-metadata` 必须把同一份信息写入 `competition_environment_identity` 和 `cache_input_fields`。旧的 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 只作为历史兼容入口。
+
+English: newly generated auto-translation validation profiles must record the competition `profile_id`, path, and SHA256 from `config/competition-env/environment.json`; auto-cache metadata must carry the same value as `competition_environment_identity` and include it in `cache_input_fields`. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is compatibility-only.
+
 ## Real Source Slice Extraction
 
 中文：真实源码函数必须先由 `validation/tools/extract_source_slice.py` 生成 slice spec，再交给 `validation/tools/auto_migrate.py`。手写 `c_source` 只能作为 demo 或临时 fixture，不能作为真实自动翻译能力证据。

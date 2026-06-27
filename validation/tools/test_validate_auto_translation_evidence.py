@@ -662,6 +662,63 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("route_decision_identity", result.stderr + result.stdout)
 
+    def test_rejects_cache_missing_competition_environment_identity_when_profile_binds_it(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "zlib-ng" / "auto-translation" / "adler32-step"
+            profile = json.loads(
+                (evidence_dir / "l3-adler32-step-validation-profile.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("competition_environment", profile)
+
+            cache_path = evidence_dir / "l3-adler32-step-auto-cache-metadata.json"
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            cache.pop("competition_environment_identity", None)
+            cache["cache_input_fields"] = [
+                field for field in cache.get("cache_input_fields", []) if field != "competition_environment_identity"
+            ]
+            cache_path.write_text(json.dumps(cache), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "zlib-ng",
+                    "--slice-id",
+                    "adler32-step",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("competition_environment_identity", result.stderr + result.stdout)
+
     def test_rejects_cache_route_baseline_profile_identity_sha_drift(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

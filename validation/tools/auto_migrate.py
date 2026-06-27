@@ -19,12 +19,14 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
+COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"
 CACHE_INPUT_FIELDS = [
     "source_commit",
     "source_file_hashes",
     "slice_spec_sha256",
     "fixture_hash",
     "build_profile_hash",
+    "competition_environment_identity",
     "cargo_lock_hash",
     "tool_versions",
     "schema_versions",
@@ -3173,6 +3175,7 @@ def emit_validation_profile(
         "profile": profile,
         "route_level": level,
         "goal": goal,
+        "competition_environment": competition_environment_identity(),
         "required_gates": required,
         "optional_gates": optional_gates_for_profile(level, goal),
         "skipped_gates": skipped,
@@ -4785,6 +4788,7 @@ def cache_identity(
         "slice_spec_sha256": sha256(slice_spec_path),
         "fixture_hash": fixture_hash(spec),
         "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "competition_environment_identity": competition_environment_identity(),
         "cargo_lock_hash": sha256(TRANSLATOR_LOCK) if TRANSLATOR_LOCK.exists() else "missing",
         "tool_versions": tool_versions(),
         "schema_versions": {
@@ -4818,6 +4822,15 @@ def cache_identity(
             environment=environment,
         )
     return identity
+
+
+def competition_environment_identity() -> dict[str, str]:
+    profile = read_json(COMPETITION_ENVIRONMENT_PROFILE)
+    return {
+        "profile_id": str(profile.get("profile_id", "unknown")),
+        "path": rel(COMPETITION_ENVIRONMENT_PROFILE),
+        "sha256": sha256(COMPETITION_ENVIRONMENT_PROFILE),
+    }
 
 
 def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dict[str, Any]:

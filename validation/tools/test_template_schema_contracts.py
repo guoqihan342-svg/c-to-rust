@@ -121,6 +121,22 @@ class TemplateSchemaContractTests(unittest.TestCase):
         self.assertIn("alias_gate", manifest_example["claim_boundary"])
         jsonschema.validate(manifest_example, manifest_schema)
 
+    def test_validation_profile_template_exposes_competition_environment_contract(self) -> None:
+        schema_path = (
+            REPO_ROOT
+            / "validation"
+            / "auto-translation-template"
+            / "validation-profile.schema.json"
+        )
+        schema = load_json(schema_path)
+
+        self.assertIn("competition_environment", schema["properties"])
+        self.assertIn("competitionEnvironment", schema["definitions"])
+        environment_schema = resolve_schema_ref(schema, schema["properties"]["competition_environment"])
+        for field in ["profile_id", "path", "sha256"]:
+            self.assertIn(field, environment_schema["required"])
+            self.assertIn(field, environment_schema["properties"])
+
 
 if __name__ == "__main__":
     unittest.main()

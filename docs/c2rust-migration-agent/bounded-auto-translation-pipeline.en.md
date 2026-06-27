@@ -252,6 +252,7 @@ Pop-Location
 An agent may report an auto-translated slice complete only when all evidence is present and fresh:
 
 - Slice spec, build profile, cache metadata, and version manifest bind to the same inputs.
+- Validation profile binds the `profile_id`, path, and SHA256 of `config/competition-env/environment.json`, and cache metadata carries the same `competition_environment_identity`.
 - Context pack, type map, CFG, and pointer graph were generated before the Rust draft.
 - Unsupported constructs or blocked repairs are explicitly recorded.
 - C oracle, Rust replay, schema-aware diff, negative diff, rust check, unsafe scan, unsafe ledger, and final verification are referenced from the L3 evidence manifest.

@@ -277,6 +277,8 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
         "route_decision_identity": artifact_cache_identity(route),
         "validation_profile_identity": artifact_cache_identity(profile),
     }
+    if "competition_environment" in profile:
+        required_identities["competition_environment_identity"] = profile["competition_environment"]
     for key, expected_identity in required_identities.items():
         if key not in cache:
             raise SystemExit(f"cache metadata missing {key} in {cache_path}")

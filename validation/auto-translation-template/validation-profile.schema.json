@@ -26,6 +26,7 @@
     "profile": {"type": "string", "minLength": 1},
     "route_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
     "goal": {"type": "string", "minLength": 1},
+    "competition_environment": {"$ref": "#/definitions/competitionEnvironment"},
     "generated_draft_semantic_pass": {"const": false},
     "accepted_evidence_authoritative": {"type": "boolean"},
     "candidate_generation": {"$ref": "#/definitions/candidateGenerationEvidence"},
@@ -80,6 +81,16 @@
         "path": {"type": "string", "minLength": 1},
         "status": {"type": "string", "minLength": 1},
         "sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "competitionEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "path", "sha256"],
+      "properties": {
+        "profile_id": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
     },
     "candidateGenerationEvidence": {
