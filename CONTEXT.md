@@ -9347,3 +9347,66 @@ English mirror summary:
 - Reused the existing type-map logic through `pub(crate) record_type_mapping` and kept evidence helpers private to the new module.
 - Preserved artifact ordering, manifest status behavior, feature gates, Python opt-in behavior, and diagnostic-only semantic claim boundaries.
 - Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 135. 2026-06-28 P0 legacy string translator module split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，选择 legacy string translator 作为下一刀。两个只读子智能体对比后结论一致：generic typed IR route 的核心已经在 `typed_ir.rs` / `translation_route.rs`，继续动它会牵动更宽 feature matrix；legacy 字符串 parser/evidence/emitter 仍集中在 `lib.rs`，更适合做一次行为保持拆分。
+
+核心改动：
+- 新增 `crates/c2r-translator/src/legacy_translation.rs`。
+  - 迁入 `translate_slice()`、`ParsedFunction` / `ParsedStatement` / `StatementKind` / `LValue` 等私有模型、legacy 字符串 parser、CFG/type-map/pointer-graph/call evidence builder、bounded pointer/string translator emitter 和相关 helper。
+  - `translate_slice()` 继续通过 crate root `pub use legacy_translation::translate_slice` 暴露，外部 API 不变。
+  - `record_type_mapping()` 继续以 `pub(crate)` 通过 crate root re-export 给 `clang_lowered_translation.rs` 复用，避免重复 type-map 逻辑。
+- `crates/c2r-translator/src/lib.rs`
+  - 当前约 125 行，只保留 module declarations、public model re-export、`translate_slice` re-export、`write_translation_artifacts()` public facade、clang-lowered fallback wrapper 和模块边界测试。
+  - `write_translation_artifacts()` 仍负责建目录、选择默认/clang-lowered translation result、追加 optional clang artifacts，并返回 `ArtifactManifest`。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 125 行，并把 `legacy_translation.rs` 私有模块拆分列为已完成子项；P0 总项仍保持未完成。
+
+TDD 证据：
+- 新增 `legacy_translation_module_tests::legacy_translation_module_exposes_translate_slice_entrypoint`。
+- 红测先失败于 `could not find legacy_translation in the crate root`。
+- 迁移后同一测试通过，并验证 crate root 内部模块入口可以生成 `pub fn identity(value: i32) -> i32`。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml legacy_translation_module_exposes_translate_slice_entrypoint
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+结果：
+- legacy module boundary 红绿测试通过。
+- 默认 feature：3 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- `clang-frontend`：4 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：3 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：52 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：62 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：62 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/clang-lowering-report route/profile/cache opt-in 定向测试：6/6 passed。
+
+边界：
+- 可以说：legacy 字符串 translator 私有实现已从 `lib.rs` 拆到 `legacy_translation.rs`，crate root public API 保持兼容。
+- 可以说：`lib.rs` 现在主要是 public facade，不再承载 legacy parser/evidence/emitter 细节。
+- 不应说：P0 拆分全部完成、CLI/manifest orchestration 已完全模块化、generic typed IR route 已拆完、新增任何 C 语法翻译能力、或任何 candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Extracted the private legacy string translator implementation cluster into `legacy_translation.rs`.
+- Kept `translate_slice` available from the crate root through `pub use legacy_translation::translate_slice`.
+- Kept `write_translation_artifacts` in `lib.rs` as the public artifact facade and preserved feature-gated clang optional artifact behavior.
+- Preserved generated Rust behavior, type-map/CFG/pointer-graph evidence behavior, manifest behavior, feature gates, and semantic claim boundaries.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
