@@ -8974,3 +8974,50 @@ English mirror summary:
 - Clang statement lowering now accepts simple integer variables and direct by-value record dot-field integer targets; arrow members, nested bases, complex targets, and record-field `ForStmt` steps still fail closed.
 - Real clang smoke covers positive statement lowering, arrow-member rejection, value-position return rejection, record-field `ForStmt` step rejection, and nested-base rejection.
 - This remains candidate generation only. `p->x++`, value-position field inc/dec, pointer/alias-sensitive field writes, C record layout/ABI claims, and semantic acceptance still fail closed.
+
+## 129. 2026-06-28 P0 lib.rs public model split
+
+本轮继续按 P0 “拆分 `crates/c2r-translator/src/lib.rs`”推进维护性工作，不新增翻译语法，也不改变公开行为。两个只读子智能体先复核了 `lib.rs` 职责边界和外部 API：最小风险第一刀是把纯公开 DTO/schema 搬出 `lib.rs`，保留 crate root re-export；暂不碰 parser、emitter、artifact writer 或 `clang-lowering-report` 逻辑，因为这些区域互调密集、feature gate 交叉更多。
+
+核心改动：
+
+- 新增 `crates/c2r-translator/src/model.rs`：
+  - 承载 `BuildProfile`、`SliceSpec`、`SourceFileRef`、`SourceSpanRef`、`TranslationResult`、`TranslationError`、`TypeMapEvidence`、`TypeMapping`、`TypeUncertainty`、`CfgEvidence`、`CfgFunction`、`CfgBlock`、`PointerGraphEvidence`、`PointerNode`、`PointerEdge`、`TranslationPlan`、`CallExpressionEvidence`、`ArtifactManifest`。
+  - 原有 `serde` derive、`Default` derive 和 `#[serde(default)]` 字段保持不变，避免破坏 JSON schema/CLI 输入契约。
+- `crates/c2r-translator/src/lib.rs`：
+  - 新增私有 `mod model;`。
+  - 用显式 `pub use model::{...};` 保持原 root API，例如 `c2r_translator::SliceSpec`、`c2r_translator::BuildProfile`、`c2r_translator::ArtifactManifest`。
+  - `BTreeMap` 改成只在 `clang-lowering-report` feature 下导入，避免默认 feature warning。
+  - 运行 rustfmt 后顺手收敛了两个既有测试断言格式差异；行为不变。
+
+当前已验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+openspec validate --all --strict
+```
+
+结果：
+
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature 测试：35 个 bounded tests 通过。
+- `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `openspec validate --all --strict`：38/38 passed。
+- `lib.rs` 当前约 4066 行；公开 model schema 被移到 149 行的 `model.rs`。这只是 P0 拆分第一刀，尚未完成 P0 对 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任的后续拆分要求。
+
+边界：
+
+- 可以说：公开 DTO/schema 已从 `lib.rs` 拆出，crate root API 和 serde schema 保持兼容。
+- 不应说：`lib.rs` 拆分 P0 已完成、translator 架构已模块化完成、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀优先拆 artifact writer / translation event JSONL / clang dry-run artifact writer 这类 IO 边界；再逐步拆 parser、legacy string translator、evidence builder 和 emitter。每一刀都要保持 root API、feature matrix 和现有测试通过。
+
+English mirror summary:
+
+- Started the P0 `lib.rs` split with a behavior-preserving public model extraction.
+- Public DTO/schema types moved into private `model.rs`, while root-level re-exports keep `c2r_translator::SliceSpec`, `BuildProfile`, `TranslationResult`, `ArtifactManifest`, and related types compatible.
+- Serde derives/default fields were preserved; no translation behavior or C syntax coverage changed.
+- This is only the first P0 split step. CLI/manifest, legacy string translator, typed IR route, artifact writing, unsafe/metadata statistics, parser, evidence builder, and emitter responsibilities still need later splits.
