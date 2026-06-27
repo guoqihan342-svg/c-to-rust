@@ -1891,6 +1891,46 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 width: 32,
             },
         }),
+        "int8_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "int8_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 8,
+            },
+        }),
+        "int16_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "int16_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 16,
+            },
+        }),
+        "int32_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "int32_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 32,
+            },
+        }),
+        "int64_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "int64_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 64,
+            },
+        }),
+        "uint16_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "uint16_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 16,
+            },
+        }),
         "unsigned int" | "uint32_t" => Ok(ClangTypeSkeleton {
             spelled: qual_type.trim().to_string(),
             canonical: "uint32_t".to_string(),
@@ -1907,6 +1947,14 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 width: 8,
             },
         }),
+        "uint64_t" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "uint64_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 64,
+            },
+        }),
         "size_t" => Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: "size_t".to_string(),
@@ -1915,7 +1963,7 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 width: 64,
             },
         }),
-        "unsigned long" | "unsigned long long" => Ok(ClangTypeSkeleton {
+        "unsigned long" => Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: trimmed.to_string(),
             kind: ClangTypeKind::Integer {
@@ -4107,6 +4155,45 @@ mod tests {
             body.as_slice(),
             [ClangStmtSkeleton::Assign { .. }]
         ));
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_fixed_width_integer_scalars() {
+        let cases = [
+            ("int8_t", "int8_t", true, 8),
+            ("int16_t", "int16_t", true, 16),
+            ("uint16_t", "uint16_t", false, 16),
+            ("int32_t", "int32_t", true, 32),
+            ("int64_t", "int64_t", true, 64),
+            ("uint64_t", "uint64_t", false, 64),
+        ];
+
+        for (spelling, expected_canonical, expected_signed, expected_width) in cases {
+            let ty = type_from_qual_type(spelling).expect("fixed-width integer type");
+
+            assert_eq!(ty.spelled, spelling);
+            assert_eq!(ty.canonical, expected_canonical);
+            assert!(matches!(
+                &ty.kind,
+                ClangTypeKind::Integer { signed, width }
+                    if *signed == expected_signed && *width == expected_width
+            ));
+        }
+    }
+
+    #[test]
+    fn type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported() {
+        for spelling in [
+            "signed char",
+            "short",
+            "unsigned short",
+            "long long",
+            "unsigned long long",
+        ] {
+            let ty = type_from_qual_type(spelling).expect("type skeleton");
+
+            assert!(matches!(ty.kind, ClangTypeKind::Unsupported { .. }));
+        }
     }
 
     #[test]

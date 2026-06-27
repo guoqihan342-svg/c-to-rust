@@ -14482,6 +14482,74 @@ fn clang_ast_dump_emits_integral_c_style_cast_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_fixed_width_integer_types_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-fixed-width-integers");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("fixed_width.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\n\
+int8_t id_i8(int8_t value) { return value; }\n\
+int16_t id_i16(int16_t value) { return value; }\n\
+int32_t id_i32(int32_t value) { return value; }\n\
+uint16_t id_u16(uint16_t value) { return value; }\n\
+int64_t id_i64(int64_t value) { return value; }\n\
+uint64_t id_u64(uint64_t value) { return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+    let cases = [
+        ("id_i8", "pub fn id_i8(value: i8) -> i8"),
+        ("id_i16", "pub fn id_i16(value: i16) -> i16"),
+        ("id_i32", "pub fn id_i32(value: i32) -> i32"),
+        ("id_u16", "pub fn id_u16(value: u16) -> u16"),
+        ("id_i64", "pub fn id_i64(value: i64) -> i64"),
+        ("id_u64", "pub fn id_u64(value: u64) -> u64"),
+    ];
+
+    for (function_name, expected_signature) in cases {
+        let report =
+            lower_function_from_clang_ast_dump_report(&environment, &source_file, function_name);
+
+        assert_eq!(report.status, "lowered", "{:?}", report.errors);
+        let function = report.function_ir.as_ref().expect("function ir");
+        let [IrStmt::Return {
+            value: Some(IrExpr::Var { name, .. }),
+            ..
+        }] = function.body.as_slice()
+        else {
+            panic!(
+                "expected fixed-width identity return for {function_name}, got {:?}",
+                function.body
+            );
+        };
+        assert_eq!(name, "value");
+
+        let rust = emit_rust_from_ir(function)
+            .unwrap_or_else(|error| panic!("emit fixed-width integer {function_name}: {error:?}"));
+        assert!(rust.contains(expected_signature), "{rust:?}");
+        assert!(rust.contains("return value;"), "{rust:?}");
+        assert_rust_snippet_compiles(&format!("typed-ir-real-clang-{function_name}"), &rust);
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");

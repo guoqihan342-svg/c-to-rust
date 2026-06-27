@@ -25,6 +25,7 @@ flowchart TD
     (candidate generation only),
     clang-lowered scalar compound assignment family,
     clang-preserved value-position integer casts,
+    fixed-width integer aliases,
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     condition + narrow value-position short-circuit && ||,
@@ -48,6 +49,7 @@ flowchart TD
   - Reads real clang AST dump JSON.
   - Lowers supported C AST nodes into a compact clang skeleton.
   - Converts skeleton nodes into typed IR.
+  - It now supports fixed-width integer typedef aliases through `type_from_qual_type()`: `int8_t`, `int16_t`, `int32_t`, `int64_t`, `uint8_t`, `uint16_t`, `uint32_t`, and `uint64_t`. This slice does not treat raw target-dependent spellings such as `signed char` / `short` / `long long` as fixed-width typedefs.
   - Also collects top-level `static const` fixed-length integer array initializers as `ClangLoweringReport.globals: Vec<IrGlobal>`.
   - It also lowers local fixed-length integer-array `InitListExpr` nodes into `IrExpr::ArrayLiteral`, limited to one-dimensional integer arrays whose initializer element count exactly matches the array length and whose elements are pure integer literals or integer casts around integer literals.
   - It lowers clang `NullToPointer` casts around integer zero into a typed IR null pointer literal for narrow pointer-parameter presence checks.
@@ -109,6 +111,7 @@ The typed IR `CandidateRouteDecision` selects the candidate generation implement
 Generic typed IR emission now covers:
 
 - scalar declarations, assignment, return, `if`, and `while`;
+- clang-lowered fixed-width integer scalar aliases: `int8_t` / `int16_t` / `int32_t` / `int64_t` / `uint8_t` / `uint16_t` / `uint32_t` / `uint64_t` can now enter typed IR as parameter, local, and return types, and emit Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`;
 - scalar integer binary expressions `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, and `>>`;
 - signed scalar integer unary minus `-value`;
 - clang-lowered simple scalar compound assignment family: `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, and `>>=` desugar to `x = x op rhs` for standalone statements and simple `ForStmt` steps with a simple scalar variable target. When clang proves target/result are the same supported integer type and compute lhs/result are the same supported integer type, compute type may differ from the target type and is lowered through explicit casts such as `value = (((value as i32) + 1i32) as u8);`;
@@ -134,6 +137,7 @@ Generic typed IR emission now covers:
 Still incomplete:
 
 - The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
+- Fixed-width integer alias coverage is only clang type skeleton / typed IR candidate generation. Raw target-dependent spellings such as `signed char` / `short` / `long long`, plain `char`, plain `long`, target-ABI width inference, complete integer promotion/usual scalar conversions, and semantic acceptance remain unmodeled.
 - `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 - Bitwise OR / left shift are narrow scalar-integer candidate generation only. Current `|` requires both operands and the result to share one scalar integer type, and `<<` follows the shift rule requiring lhs/result type agreement; this does not claim full C bitwise/shift semantics, usual arithmetic conversions, invalid shift counts, signed shift/overflow UB parity, pointer arithmetic, or semantic acceptance.
 - Signed unary minus is also narrow candidate generation only. It requires the operand and result to be the same signed integer scalar type; unsigned or wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, and literal edge cases such as `-2147483648` remain outside this subset until modeled explicitly.
@@ -148,6 +152,6 @@ Still incomplete:
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR coverage with red tests first. Good next cuts are systematic usual-conversion classification, or wider control-flow semantics for `break` / `continue` / `do-while` / `switch` / `goto` after the scoped `ForStmt` MVP. Condition/value-position `&&` / `||`, the simple scalar compound assignment family including narrow clang-proven promotion/truncation, value-position integer implicit cast preservation, pure integer value-position `ConditionalOperator` / `?:`, and narrow scoped `ForStmt` now have direct/skeleton/real-clang smoke coverage. The bounded readonly `*(p+i)` read, lazy `?:` branch semantics, short-circuit lazy evaluation, and for-loop scope boundary should stay covered by real-clang and fail-closed boundary tests, while arbitrary pointer arithmetic, arbitrary pointer comparison, floating-point comparison, unmodeled mixed-width conversions, side-effect operands, and semantic acceptance must continue to fail closed.
+1. Keep extending generic typed IR coverage with red tests first. Good next cuts are systematic usual-conversion classification, or wider control-flow semantics for `break` / `continue` / `do-while` / `switch` / `goto` after the scoped `ForStmt` MVP. Fixed-width integer aliases, condition/value-position `&&` / `||`, the simple scalar compound assignment family including narrow clang-proven promotion/truncation, value-position integer implicit cast preservation, pure integer value-position `ConditionalOperator` / `?:`, and narrow scoped `ForStmt` now have direct/skeleton/real-clang smoke coverage. The bounded readonly `*(p+i)` read, lazy `?:` branch semantics, short-circuit lazy evaluation, and for-loop scope boundary should stay covered by real-clang and fail-closed boundary tests, while arbitrary pointer arithmetic, arbitrary pointer comparison, floating-point comparison, unmodeled mixed-width conversions, side-effect operands, and semantic acceptance must continue to fail closed.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

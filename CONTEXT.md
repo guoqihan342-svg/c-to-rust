@@ -7503,3 +7503,60 @@ English mirror summary:
 - `uint8_t value; value += 1;` now emits `value = (((value as i32) + 1i32) as u8);`.
 - Direct typed IR, clang skeleton, real clang AST smoke, and compound-assignment regression filters pass.
 - Full usual scalar conversions, non-simple targets, value-position compound assignment, pointer arithmetic, floating-point, volatile, complex RHS side effects, and semantic acceptance still fail closed.
+
+## 109. 2026-06-27 fixed-width integer type coverage
+
+本轮继续拓展 `c2r-translator` 核心 clang-lowered typed IR 翻译能力，不写 FlashDB 专用分支。切片目标是把真实 clang AST 中的固定宽度整数 typedef aliases 接到现有 typed IR 整数类型和 generic emitter 上。结论：当前 fixed-width alias 全集 `int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t` 能进入 typed IR 并生成可编译 Rust；本轮新增的是 signed aliases 和 `uint16_t` / `uint64_t`。这不是完整 usual scalar conversions，也不是 raw C integer spelling 或 target ABI 类型推断，更不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `type_from_qual_type()` 新增固定宽度整数标量映射：
+    - `int8_t` -> signed 8-bit canonical `int8_t`。
+    - `int16_t` -> signed 16-bit canonical `int16_t`。
+    - `int32_t` -> signed 32-bit canonical `int32_t`，plain `int` 映射保持不变。
+    - `int64_t` -> signed 64-bit canonical `int64_t`。
+    - `uint16_t` -> unsigned 16-bit canonical `uint16_t`。
+    - `uint64_t` -> unsigned 64-bit canonical `uint64_t`。
+  - raw `signed char`、`short`、`unsigned short`、`long long`、`unsigned long long` 保持 unsupported；plain `char` 和 plain `long` 仍未放开；既有 `unsigned char` / `unsigned int` / `unsigned long` 行为保持原样，避免把本轮变成 target ABI integer model 重构。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang smoke：`clang_ast_dump_emits_fixed_width_integer_types_when_enabled`。
+  - smoke source 使用 `<stdint.h>` identity 函数覆盖 `int8_t` / `int16_t` / `int32_t` / `uint16_t` / `int64_t` / `uint64_t`，并逐个经过 clang AST lowering、`emit_rust_from_ir()` 和 rustc snippet 编译。
+  - 新增负测：`type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported`，证明 raw target-dependent spelling 没有被这轮放开。
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-fixed-width-integer-type-coverage.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir fixed_width_integer -- --nocapture
+```
+
+旧代码在 `type_from_qual_type_maps_fixed_width_integer_scalars` 中失败，因为 `int8_t` / `int16_t` / `uint16_t` / `int64_t` / `uint64_t` 等 fixed-width aliases 仍不能全部映射到目标 typed IR 整数类型。审查后新增的 raw spelling 负测先失败于当前实现错误放行 `signed char` / `short` / `long long` 等 target-dependent spelling。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir fixed_width_integer -- --nocapture
+```
+
+边界：
+- 可以说：固定宽度整数 typedef aliases 现在可进入 typed IR，并发射 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`。
+- 不应说：已支持 raw `signed char` / `short` / `long long` 这类 target-dependent spelling、plain `char`、plain `long`、target-dependent ABI 宽度推断、完整 integer promotion/usual scalar conversions、跨目标 C integer model 或 semantic acceptance。
+
+下一步建议：
+- 优先做多 `VarDecl` declaration statement expansion，例如 `int a = 1, b = 2;`，这是 clang skeleton 常见形态，和 fixed-width 类型覆盖互补且写入面清晰。
+- 另一个方向是继续 usual conversions 分类，但仍按 clang/type-map 已证明的小切片推进。
+
+English mirror summary:
+
+- Added fixed-width integer typedef alias coverage in the clang frontend type skeleton.
+- The current fixed-width alias set `int8_t`, `int16_t`, `int32_t`, `int64_t`, `uint8_t`, `uint16_t`, `uint32_t`, and `uint64_t` lowers through typed IR and emits Rust `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, and `u64`; this slice newly adds the signed aliases plus `uint16_t` / `uint64_t`.
+- Raw target-dependent spellings such as `signed char`, `short`, `long long`, `unsigned short`, and `unsigned long long` are not normalized to fixed-width canonical types in this slice.
+- Plain `char`, plain `long`, target-ABI width inference, complete usual scalar conversions, and semantic acceptance still fail closed.
+- Direct type unit coverage and real clang AST smoke coverage pass for this slice.

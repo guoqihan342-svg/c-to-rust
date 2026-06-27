@@ -25,6 +25,7 @@ flowchart TD
     (candidate generation only),
     clang-lowered scalar compound assignment family,
     clang-preserved value-position integer casts,
+    fixed-width integer aliases,
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     condition + narrow value-position short-circuit && ||,
@@ -48,6 +49,7 @@ flowchart TD
   - 读取真实 clang AST dump JSON。
   - 把支持的 C AST 节点 lowering 成紧凑的 clang skeleton。
   - 把 skeleton 节点转换成 typed IR。
+  - 现在通过 `type_from_qual_type()` 支持固定宽度整数 typedef aliases：`int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t`。本轮不把 raw `signed char` / `short` / `long long` 这类目标相关 spelling 当作 fixed-width typedef。
   - 现在还会收集顶层 `static const` 固定长度整数数组 initializer，输出为 `ClangLoweringReport.globals: Vec<IrGlobal>`。
   - 现在也会把局部固定长度整数数组 `InitListExpr` lowering 成 `IrExpr::ArrayLiteral`，但只接受元素数量等于数组长度、且元素为纯整数字面量或整型 cast 包裹整数字面量的一维整数数组。
   - 现在也会把 clang `NullToPointer` cast 包裹的整数零 lowering 成 typed IR null pointer literal，用于窄化的指针参数 presence check。
@@ -109,6 +111,7 @@ flowchart TD
 generic typed IR emission 现在覆盖：
 
 - scalar declaration、assignment、return、`if`、`while`；
+- clang-lowered fixed-width integer scalar aliases：`int8_t` / `int16_t` / `int32_t` / `int64_t` / `uint8_t` / `uint16_t` / `uint32_t` / `uint64_t` 现在能作为参数、局部变量和 return 类型进入 typed IR，并发射为 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`；
 - 标量整数二元表达式 `+`、`-`、`*`、`/`、`%`、`&`、`|`、`^`、`<<`、`>>`；
 - signed 标量整数 unary minus `-value`；
 - clang-lowered simple scalar compound assignment family：`+=`、`-=`、`*=`、`/=`、`%=`、`&=`、`|=`、`^=`、`<<=`、`>>=` 覆盖 standalone statement 和 simple `ForStmt` step 中的 simple scalar variable target；当 clang 证明 target/result 是同一个受支持整数类型、compute lhs/result 是同一个受支持整数类型时，compute type 可以不同于 target type，并通过显式 cast lowering，例如 `value = (((value as i32) + 1i32) as u8);`；
@@ -134,6 +137,7 @@ generic typed IR emission 现在覆盖：
 仍未完成：
 
 - 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；raw string crc32 byte-cursor 输入现在保持 fail-closed。真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
+- fixed-width integer alias coverage 只是 clang type skeleton / typed IR candidate generation。raw `signed char` / `short` / `long long` 这类目标相关 spelling、plain `char`、plain `long`、target ABI 宽度推断、完整 integer promotion/usual scalar conversions、以及 semantic acceptance 仍未建模。
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
 - bitwise OR / left shift 只表示窄化标量整数 candidate generation。当前 `|` 要求左右 operand 和 result 是同一个标量整数类型，`<<` 沿用 shift 规则要求 lhs/result 类型一致；它不声明完整 C 位运算/位移语义、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
 - signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
@@ -148,6 +152,6 @@ generic typed IR emission 现在覆盖：
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是更系统的 usual-conversion 分类，或在 scoped `ForStmt` MVP 之后继续设计 `break` / `continue` / `do-while` / `switch` / `goto` 的控制流语义。condition/value-position `&&` / `||`、包含窄化 clang-proven promotion/truncation 的 simple scalar compound assignment family、value-position integer implicit cast preservation、纯整数 value-position `ConditionalOperator` / `?:` 和窄化 scoped `ForStmt` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read、lazy `?:` 分支语义、short-circuit lazy 求值和 for-loop scope 边界要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
+1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是更系统的 usual-conversion 分类，或在 scoped `ForStmt` MVP 之后继续设计 `break` / `continue` / `do-while` / `switch` / `goto` 的控制流语义。fixed-width integer aliases、condition/value-position `&&` / `||`、包含窄化 clang-proven promotion/truncation 的 simple scalar compound assignment family、value-position integer implicit cast preservation、纯整数 value-position `ConditionalOperator` / `?:` 和窄化 scoped `ForStmt` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read、lazy `?:` 分支语义、short-circuit lazy 求值和 for-loop scope 边界要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

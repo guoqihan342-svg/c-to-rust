@@ -16,6 +16,7 @@ Some earlier wording is now stale. The branch no longer needs to "first install 
 - Readonly pointer `NULL` presence checks emitted as `Option<&[T]>` plus `.is_none()` / `.is_some()`.
 - Direct readonly pointer dereference reads emitted as slice index zero, for example `return *p; -> return p[0usize];`.
 - Narrow readonly pointer offset-dereference reads emitted as slice indexes, for example `return *(p+i); -> return p[i as usize];`, also covering `*(i+p)` and literal offsets.
+- The clang frontend now supports fixed-width integer scalar typedef aliases: `int8_t`, `int16_t`, `int32_t`, `int64_t`, `uint8_t`, `uint16_t`, `uint32_t`, and `uint64_t`.
 
 These are still **candidate generation** results. They do not mean the real FlashDB slice has `semantic_pass=true`.
 
@@ -49,6 +50,7 @@ Important supported increments:
 - Pure integer value-position `ConditionalOperator` / `?:` with lazy `IrExpr::Conditional`.
 - Narrow `ForStmt` with an explicit typed IR scope, covering simple scalar init, condition, step, and body, emitted as a Rust block plus `while` candidate.
 - Readonly pointer slice parameters, direct `NULL` presence checks, direct readonly `*p` reads, and narrow readonly `*(p+i)` / `*(i+p)` reads.
+- Fixed-width integer scalar typedef aliases lowered into typed IR and emitted as Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`.
 - Readonly global const integer arrays and local fixed-length integer array reads/writes.
 - Bounded direct identifier calls.
 - Narrow byte cursor `*p++` prelude support.
@@ -67,6 +69,7 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 - Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
 - `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt` or assignment, condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
 - `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
+- `type_from_qual_type()` now recognizes fixed-width integer typedef aliases, while raw target-dependent spellings such as `signed char` / `short` / `long long`, plain `char`, plain `long`, and complete usual scalar conversions remain closed.
 - Structs/records, field access, switch/goto/do-while, and memory semantics are still outside the safe emitter.
 
 ## Recommended Route
@@ -82,6 +85,7 @@ The right next path is not returning to FlashDB-specific templates. Continue ext
 These should still fail closed:
 
 - Arbitrary pointer comparison, pointer truthiness, and nullable pointer index/deref after a null check.
+- Raw target-dependent spellings such as `signed char` / `short` / `long long`, plain `char`, plain `long`, target-ABI width inference, and complete integer promotion/usual scalar conversions.
 - Pointer arithmetic other than the narrow readonly integer pointer plus side-effect-free integer index `*(p+i)` read.
 - Condition-position `?:`, expression-statement `?:`, GNU omitted-middle `a ?: b`, and conditional branches with call/inc/dec/post-increment/assignment/comma side effects.
 - Short-circuit operands containing calls/inc/dec/side effects, pointer truthiness, floating-point truthiness, unsupported types, or cases requiring full usual scalar conversions.

@@ -16,6 +16,7 @@
 - readonly pointer `NULL` presence check 可发射为 `Option<&[T]>` 加 `.is_none()` / `.is_some()`。
 - 普通 readonly pointer direct deref read 已可发射为 slice 0 下标，例如 `return *p; -> return p[0usize];`。
 - 窄化 readonly pointer offset-deref read 已可发射为 slice 下标，例如 `return *(p+i); -> return p[i as usize];`，也覆盖 `*(i+p)` 和 literal offset。
+- clang 前端已支持固定宽度整数标量 typedef aliases：`int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t`。
 
 这些都是 **candidate generation**。它们不等于真实 FlashDB slice 已经 `semantic_pass=true`。
 
@@ -49,6 +50,7 @@
 - 纯整数 value-position `ConditionalOperator` / `?:`，通过 lazy `IrExpr::Conditional` 发射。
 - 带显式 typed IR scope 的窄化 `ForStmt`，覆盖 simple scalar init、condition、step 和 body，并发射为 Rust block + `while` candidate。
 - readonly pointer slice 参数、直接 `NULL` presence check、直接 readonly `*p` read、窄化 readonly `*(p+i)` / `*(i+p)` read。
+- 固定宽度整数标量 typedef aliases lowering 到 typed IR，并发射 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`。
 - readonly global const integer array、局部固定长度整数数组读写。
 - bounded direct identifier calls。
 - byte cursor `*p++` 的窄化 prelude 路径。
@@ -67,6 +69,7 @@
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
 - `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt` 或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集；`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
 - `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
+- `type_from_qual_type()` 已能识别 fixed-width integer typedef aliases；raw `signed char` / `short` / `long long` 这类目标相关 spelling、plain `char`、plain `long` 和完整 usual scalar conversions 仍不放开。
 - struct/record、field access、switch/goto/do-while 仍未进入安全 emitter。
 
 ## 四、路线建议
@@ -82,6 +85,7 @@
 仍应 fail closed：
 
 - 任意 pointer comparison、pointer truthiness、nullable pointer null check 后继续 index/deref。
+- raw `signed char` / `short` / `long long` 这类目标相关 spelling、plain `char`、plain `long`、target ABI 宽度推断、完整 integer promotion/usual scalar conversions。
 - 除 readonly integer pointer + 无副作用整数 index 的窄化 `*(p+i)` read 外，其他 pointer arithmetic 仍 fail closed。
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
