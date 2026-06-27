@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "profile_id": "huawei-competition-ubuntu-24.04",
+  "status": "required",
+  "os": {
+    "name": "Ubuntu",
+    "version": "24.04.4 LTS",
+    "codename": "noble",
+    "marketing_name": "Noble Numbat",
+    "kernel": "5.10.0-182.0.0.95.r194_123.hce2.x86_64"
+  },
+  "package_mirrors": {
+    "apt": "http://mirrors.tools.huawei.com/ubuntu",
+    "pypi": "https://mirrors.tools.huawei.com/pypi/simple",
+    "npm": "https://mirrors.tools.huawei.com/npm/",
+    "cargo_crates_io": "sparse+http://rust.inhuawei.com/crates.io-index/"
+  },
+  "toolchain": {
+    "python": "3.12.3",
+    "pip": "24.0",
+    "node": "v24.13.0",
+    "npm": "11.6.2",
+    "java": {
+      "distribution": "OpenJDK",
+      "version": "21.0.10",
+      "vendor": "bisheng_jdk_enterprise"
+    },
+    "maven": {
+      "version": "3.9.11",
+      "maven_home": "/usr/local/maven3"
+    },
+    "rustc": "1.96.0",
+    "cargo": "1.96.0",
+    "gcc": "13.3.0",
+    "gpp": "13.3.0",
+    "make": "4.3"
+  },
+  "unavailable_tools": {
+    "go": "not_installed",
+    "cmake": "not_found"
+  },
+  "adaptation_policy": [
+    "Do not require Go for build, test, validation, or migration gates.",
+    "Do not require CMake in default competition gates; use Cargo, Python, gcc/g++, and GNU Make paths.",
+    "Keep Rust code compatible with stable Rust 1.96.0 and avoid nightly-only features.",
+    "Use Python 3.12-compatible scripts and avoid dependencies that require a newer Python runtime.",
+    "Use the configured Huawei mirrors for package-manager access in competition jobs.",
+    "Record this profile id and environment.json hash in generated validation evidence when a run is performed in the competition environment."
+  ]
+}

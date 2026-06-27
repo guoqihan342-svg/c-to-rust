@@ -183,6 +183,7 @@ pub enum ClangStmtSkeleton {
         value: Option<ClangExprSkeleton>,
     },
     Break,
+    Continue,
     Expr {
         expr: ClangExprSkeleton,
     },
@@ -859,6 +860,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
             Ok(ClangStmtSkeleton::Return { value })
         }
         Some("BreakStmt") => Ok(ClangStmtSkeleton::Break),
+        Some("ContinueStmt") => Ok(ClangStmtSkeleton::Continue),
         Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
             reason: unsupported_stmt_reason(stmt, kind),
         }),
@@ -2133,6 +2135,7 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             source_span: None,
         }),
         ClangStmtSkeleton::Break => Ok(IrStmt::Break { source_span: None }),
+        ClangStmtSkeleton::Continue => Ok(IrStmt::Continue { source_span: None }),
         ClangStmtSkeleton::Expr { expr } => Ok(IrStmt::Expr {
             expr: lower_expr(expr)?,
             source_span: None,

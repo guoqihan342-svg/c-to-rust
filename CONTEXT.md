@@ -7859,3 +7859,63 @@ English mirror summary:
 - Added exact `signed char` type support as signed 8-bit integer, enabling clang-proven ordinary binary promotion such as `signed_char_add_one(signed char value) { return value + 1; }`.
 - This remains candidate generation only. `continue`, `goto`, `switch`, `do-while`, full C for-loop control-flow semantics, plain `char`, plain `long`, `short` / `long long` ABI width inference, complete usual scalar conversions, side-effect-heavy operands, and semantic acceptance still fail closed.
 - The full `clang-frontend,typed-ir,clang-lowering-report` gate passes: 43 lib tests, 325 bounded translation tests, and 0 doc-tests.
+
+## 114. 2026-06-27 loop-body continue and competition environment profile
+
+本轮继续按多智能体推进 `c2r-translator` 核心语法面，并补入比赛环境硬约束。两个只读子智能体先复核 `continue` 的实现风险和文档缺口；后续只读子智能体复核比赛环境 profile 应接入的验证位置。第 113 节中“`continue` 仍 fail closed / 下一步设计 continue for-step 语义”的表述已被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::Continue`。
+  - `emit_stmt()` 的 loop 参数从 `bool` 升级为 `LoopContext`：`None`、`While`、`For { step }`。
+  - `while` body 中的 `continue` 直接发射 Rust `continue;`。
+  - scoped `ForStmt` body 中的 `continue` 会先发射当前简单 step，再发射 Rust `continue;`，避免当前 `ForStmt -> block + while + body + step` lowering 跳过 C for-step。
+  - 嵌套循环会覆盖 loop context，所以内层 `while` 的 `continue` 不会执行外层 `ForStmt` step。
+  - 顶层或非 loop 上下文的 `continue` 继续 fail closed。
+  - definite-assignment、post-increment byte read、nullable pointer use 等只读遍历补上 `Continue` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::Continue`。
+  - `ContinueStmt` skeleton lowering 到 `ClangStmtSkeleton::Continue`，再 lowering 到 `IrStmt::Continue`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `Continue`：call evidence 跳过，statement label/kind 记录为 `continue`，post-increment evidence 跳过。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正/负测：`typed_ir_emits_continue_in_scalar_while_body`、`typed_ir_for_emits_continue_after_step_in_body`、`typed_ir_for_nested_while_continue_does_not_emit_outer_step`、`typed_ir_rejects_continue_outside_loop`。
+  - 新增/转换真实 clang smoke：`clang_ast_dump_emits_typed_ir_for_continue_when_enabled`、`clang_ast_dump_emits_typed_ir_while_continue_when_enabled`。
+
+比赛环境配置：
+- 新增 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 作为单一环境 profile。
+- `environment.json` 记录 Ubuntu 24.04.4 LTS、kernel `5.10.0-182.0.0.95.r194_123.hce2.x86_64`、华为 APT/PyPI/npm/Cargo mirror、Python 3.12.3、pip 24.0、Node v24.13.0、npm 11.6.2、OpenJDK 21.0.10 Bisheng、Maven 3.9.11、`MAVEN_HOME=/usr/local/maven3`、Rust/Cargo 1.96.0、gcc/g++ 13.3.0、GNU Make 4.3，并显式记录 Go 未安装、CMake 未找到。
+- 附带 `apt/sources.list`、`pip/pip.conf`、`npm/.npmrc`、`cargo/config.toml`、`rust/rust-toolchain.toml`、`env.sh` 和 `toolchain-check.sh`。
+- `validation/gates.md` 要求 L1/L3 在比赛/evaluation host 上记录 environment profile path/hash。
+- `validation/l3-template/config-profile.schema.json` 新增可选 `environment_profile` 绑定；example 加入 placeholder。
+- `scripts/run-full-regression.ps1` 新增 `-EnvironmentProfile` 参数，默认指向该 profile；`events.jsonl` 和 `summary.json` 会写出 `profile_id/path/sha256`。脚本内部 PowerShell 子调用改为复用当前 PowerShell 可执行文件路径，避免 Ubuntu 上硬编码 `powershell`。
+- `validation/README.md`、`docs/c2rust-migration-agent/README*.md`、`build-and-c2rust-baseline.md`、`full-regression-runner.md` 已同步说明比赛环境边界：默认 gate 不依赖 Go/CMake，优先 Cargo/Python/gcc/g++/GNU Make。
+
+验证已通过：
+```powershell
+cargo fmt --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+python -m json.tool validation/l3-template/config-profile.schema.json
+python -m json.tool validation/l3-template/config-profile.example.json
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -StartRound 2 -SkipLongStress -SkipClippy -EvidenceRoot target/full-regression-syntax -RunId env-profile-smoke
+```
+
+结果：`src/lib.rs` 43 passed，`bounded_translation.rs` 330 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。`run-full-regression.ps1` 零步 smoke 成功写出 environment profile `profile_id/path/sha256`。
+
+边界：
+- 可以说：`while` / scoped `ForStmt` body 中的窄化 `continue` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：同一层 `ForStmt` body 的 `continue` 会先执行 step；嵌套循环的 `continue` 不会误执行外层 step。
+- 可以说：比赛环境 profile 已有单一配置目录和可追溯 profile hash 绑定入口。
+- 不应说：已支持 `goto`、`switch`、`do-while`、condition variable slot、空 condition/step、复杂 init/step、prefix inc-dec step、完整 C for-loop control-flow semantics、完整 semantic acceptance，或默认比赛环境支持 Go/CMake。
+
+English mirror summary:
+
+- Added narrow loop-body `continue` support through clang skeleton, typed IR, and the generic emitter.
+- `ContinueStmt` lowers to `IrStmt::Continue`; `while` emits Rust `continue;`; scoped `ForStmt` emits the current step before Rust `continue;`; nested-loop `continue` targets only the inner loop.
+- Added direct typed IR and real clang smoke coverage for while continue, for continue step ordering, nested-loop targeting, and non-loop fail-closed behavior.
+- Added `validation/environment-profiles/huawei-competition-ubuntu-24.04/` as the single competition environment profile, including mirrors, tool versions, Go/CMake absence, and shell self-checks.
+- Full translator gate passes with real clang enabled: 43 lib tests, 330 bounded translation tests, and 0 doc-tests.

@@ -35,7 +35,15 @@ cd FlashDB/tests
 bear -- make clean all
 ```
 
-If CMake is introduced later, use:
+Competition environment profile:
+
+- Profile: `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`
+- Ubuntu 24.04.4, gcc/g++ 13.3.0, GNU Make 4.3.
+- Go is not installed.
+- CMake is not found, so default competition build capture and C oracle paths must not require CMake.
+- Package-manager access should use the Huawei mirrors recorded in the profile.
+
+If CMake is introduced later, treat it as a non-default path outside the current competition profile:
 
 ```bash
 cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON

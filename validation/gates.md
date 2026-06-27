@@ -34,6 +34,7 @@ Pass criteria:
 
 - Commit is pinned.
 - Build dependencies and versions are recorded.
+- Environment profile path and hash are recorded when the run targets the competition/evaluation host, for example `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`.
 - Native C build command exits 0.
 - Native smoke test command exits 0.
 - Evidence includes stdout/stderr paths, command exit codes, tool versions, and elapsed time.
@@ -79,7 +80,7 @@ Pass criteria:
 
 - C oracle or golden fixture is generated from the same input sequence.
 - Pointer dependency graph evidence is recorded for pointer-bearing slices or explicitly marked `not_applicable` for pure value slices.
-- Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, and cache invalidation keys.
+- Config profile records the C config header hash, macro/feature matrix, compile/include profile, Rust Cargo features, Rust feature environment, backend profile, fixture hash, toolchain versions, environment profile path/hash when applicable, and cache invalidation keys.
 - Code-test translation evidence maps the source fixtures, C tests, or oracle expectations to Rust tests, main/error path coverage, negative cases, evidence links, and cache invalidation keys.
 - Automatic migration evidence records C2Rust baseline availability, route decision, and validation profile as first-class evidence. C2Rust output is candidate context only and cannot replace the original C oracle, Rust replay, diff, unsafe, or final-verification gates.
 - Legacy accepted auto-translation fixtures that are validated by the current semantic-pass path also persist these baseline/route/profile refs and schema-aware diff / negative-diff gate metadata. Compatibility for older optional fields does not permit missing semantic-pass refs.
@@ -101,6 +102,8 @@ Evidence:
 Config profile is a traceability and invalidation gate, not a full macro solver. A profile change invalidates affected C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless those artifacts are regenerated or explicitly invalidated.
 
 中文：config profile 是追溯与缓存失效门禁，不是完整宏求解器。profile 变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
+
+Competition environment profile is a toolchain and mirror provenance gate. A change to `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`, or a run performed under a different host/toolchain profile, invalidates build, oracle, replay, cache, performance, and summary claims unless those artifacts are regenerated or explicitly marked as non-competition evidence.
 
 Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
 

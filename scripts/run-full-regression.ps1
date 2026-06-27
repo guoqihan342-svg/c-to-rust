@@ -14,13 +14,18 @@ param(
     [switch] $SkipClippy,
     [switch] $SkipLongStress,
     [switch] $RequireCleanEvidence,
-    [switch] $ProbeRemoteCatalog
+    [switch] $ProbeRemoteCatalog,
+    [string] $EnvironmentProfile = "validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"
 )
 
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $RepoRoot
+$PowerShellExecutable = (Get-Process -Id $PID).Path
+if ([string]::IsNullOrWhiteSpace($PowerShellExecutable)) {
+    $PowerShellExecutable = "pwsh"
+}
 
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -30,6 +35,31 @@ $RunRoot = Join-Path $RepoRoot (Join-Path $EvidenceRoot $RunId)
 $EventsPath = Join-Path $RunRoot "events.jsonl"
 $SummaryPath = Join-Path $RunRoot "summary.json"
 New-Item -ItemType Directory -Force -Path $RunRoot | Out-Null
+
+function Get-EnvironmentProfileRef {
+    param([string] $ProfilePath)
+
+    if ([string]::IsNullOrWhiteSpace($ProfilePath)) {
+        return $null
+    }
+    $resolvedProfilePath = if ([System.IO.Path]::IsPathRooted($ProfilePath)) {
+        $ProfilePath
+    } else {
+        Join-Path $RepoRoot $ProfilePath
+    }
+    if (-not (Test-Path -LiteralPath $resolvedProfilePath -PathType Leaf)) {
+        throw "environment profile not found: $resolvedProfilePath"
+    }
+    $profileContent = Get-Content -LiteralPath $resolvedProfilePath -Raw -Encoding UTF8
+    $profileJson = $profileContent | ConvertFrom-Json
+    return [ordered]@{
+        profile_id = $profileJson.profile_id
+        path = $resolvedProfilePath
+        sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedProfilePath).Hash.ToLowerInvariant()
+    }
+}
+
+$EnvironmentProfileRef = Get-EnvironmentProfileRef -ProfilePath $EnvironmentProfile
 
 function ConvertTo-SafeFileName {
     param([Parameter(Mandatory = $true)][string] $Value)
@@ -222,6 +252,7 @@ function Invoke-RegressionStep {
         working_directory = $resolvedWorkingDirectory
         command = $Step.command
         log = Resolve-Path -LiteralPath $logPath | ForEach-Object { $_.Path }
+        environment_profile = $EnvironmentProfileRef
     }
     Add-JsonLine $event
     return $event
@@ -249,7 +280,7 @@ function Get-RoundSteps {
 
     $steps = New-Object System.Collections.Generic.List[object]
     $catalogCommand = @(
-        "powershell",
+        $PowerShellExecutable,
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
@@ -303,7 +334,7 @@ function Get-RoundSteps {
     $steps.Add((New-Step "flashdb-evidence-search" "log_traceability" "flashDB_rust" @("cargo", "run", "--", "evidence-search", "--evidence-dir", $RoundDir, "--query", "passed", "--limit", "50", "--report", $flashSearchReport)))
     if ($RequireCleanEvidence) {
         $steps.Add((New-Step "evidence-cleanliness-check" "evidence_cleanliness" "." @(
-            "powershell",
+            $PowerShellExecutable,
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
@@ -332,6 +363,7 @@ Add-JsonLine ([ordered]@{
     require_clean_evidence = [bool]$RequireCleanEvidence
     continue_on_failure = [bool]$ContinueOnFailure
     evidence_root = $RunRoot
+    environment_profile = $EnvironmentProfileRef
     production_data_boundary = "Default coverage uses committed fixtures plus deterministic production-like stress; pass real/de-identified fixtures through the replay/diff gates before claiming production-data equivalence."
     started_utc = $runStarted.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 })
@@ -384,6 +416,7 @@ $summary = [ordered]@{
     step_count = $results.Count
     evidence_root = $RunRoot
     events = $EventsPath
+    environment_profile = $EnvironmentProfileRef
     failed_step = $failed
     coverage_boundary = [ordered]@{
         production_data = "Committed fixtures and deterministic production-like stress by default; real production data must be supplied as sanitized replay/diff fixtures before this can claim production-data equivalence."

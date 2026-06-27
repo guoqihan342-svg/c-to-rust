@@ -195,6 +195,9 @@ pub enum IrStmt {
     Break {
         source_span: Option<SourceSpan>,
     },
+    Continue {
+        source_span: Option<SourceSpan>,
+    },
     Expr {
         expr: IrExpr,
         source_span: Option<SourceSpan>,
@@ -462,7 +465,7 @@ fn emit_scalar_rust_from_ir_with_globals(
             1,
             &mut symbols,
             &context,
-            false,
+            LoopContext::None,
         )
         .map_err(|detail| format!("stmt[{index}].{detail}"))?;
         rust.push_str(&line);
@@ -643,13 +646,20 @@ fn emit_array_literal(
     Ok(format!("[{emitted}]"))
 }
 
+#[derive(Clone, Copy, Debug)]
+enum LoopContext<'a> {
+    None,
+    While,
+    For { step: &'a IrStmt },
+}
+
 fn emit_stmt(
     stmt: &IrStmt,
     return_type: &IrType,
     indent_level: usize,
     symbols: &mut HashSet<String>,
     context: &EmitContext,
-    in_loop: bool,
+    loop_context: LoopContext<'_>,
 ) -> Result<String, String> {
     let indent = "    ".repeat(indent_level);
     match stmt {
@@ -761,12 +771,29 @@ fn emit_stmt(
             None => Err("return without value in non-void function".to_string()),
         },
         IrStmt::Break { .. } => {
-            if in_loop {
-                Ok(format!("{indent}break;\n"))
-            } else {
-                Err("break outside loop".to_string())
+            if matches!(loop_context, LoopContext::None) {
+                return Err("break outside loop".to_string());
             }
+            Ok(format!("{indent}break;\n"))
         }
+        IrStmt::Continue { .. } => match loop_context {
+            LoopContext::None => Err("continue outside loop".to_string()),
+            LoopContext::While => Ok(format!("{indent}continue;\n")),
+            LoopContext::For { step } => {
+                validate_for_step_stmt(step)?;
+                let mut step_symbols = symbols.clone();
+                let step_line = emit_stmt(
+                    step,
+                    return_type,
+                    indent_level,
+                    &mut step_symbols,
+                    context,
+                    LoopContext::None,
+                )
+                .map_err(|detail| format!("continue step {detail}"))?;
+                Ok(format!("{step_line}{indent}continue;\n"))
+            }
+        },
         IrStmt::Expr { expr, .. } => {
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
@@ -790,7 +817,7 @@ fn emit_stmt(
                     indent_level + 1,
                     &mut then_symbols,
                     context,
-                    in_loop,
+                    loop_context,
                 )
                 .map_err(|detail| format!("if then[{index}].{detail}"))?;
                 block.push_str(&line);
@@ -807,7 +834,7 @@ fn emit_stmt(
                         indent_level + 1,
                         &mut else_symbols,
                         context,
-                        in_loop,
+                        loop_context,
                     )
                     .map_err(|detail| format!("if else[{index}].{detail}"))?;
                     block.push_str(&line);
@@ -841,7 +868,7 @@ fn emit_stmt(
                     indent_level + 1,
                     &mut loop_symbols,
                     context,
-                    true,
+                    LoopContext::While,
                 )
                 .map_err(|detail| format!("while body[{index}].{detail}"))?;
                 block.push_str(&line);
@@ -895,7 +922,7 @@ fn emit_for_stmt(
             indent_level + 1,
             &mut loop_symbols,
             context,
-            false,
+            LoopContext::None,
         )
         .map_err(|detail| format!("for init[{index}] {detail}"))?;
         block.push_str(&line);
@@ -909,6 +936,9 @@ fn emit_for_stmt(
     block.push_str(&format!("{inner_indent}while {condition} {{\n"));
 
     let mut body_symbols = loop_symbols.clone();
+    let body_loop_context = step
+        .map(|step| LoopContext::For { step })
+        .unwrap_or(LoopContext::While);
     for (index, stmt) in body.iter().enumerate() {
         let line = emit_stmt(
             stmt,
@@ -916,7 +946,7 @@ fn emit_for_stmt(
             indent_level + 2,
             &mut body_symbols,
             context,
-            true,
+            body_loop_context,
         )
         .map_err(|detail| format!("for body[{index}].{detail}"))?;
         block.push_str(&line);
@@ -930,7 +960,7 @@ fn emit_for_stmt(
             indent_level + 2,
             &mut loop_symbols,
             context,
-            false,
+            LoopContext::None,
         )
         .map_err(|detail| format!("for step {detail}"))?;
         block.push_str(&line);
@@ -1107,7 +1137,7 @@ fn emit_postfix_decrement_while_loop(
             indent_level + 1,
             &mut loop_symbols,
             context,
-            true,
+            LoopContext::While,
         )
         .map_err(|detail| format!("while body[{index}].{detail}"))?;
         block.push_str(&line);
@@ -2587,7 +2617,7 @@ fn validate_definite_assignment_stmt(
             }
             Ok(())
         }
-        IrStmt::Break { .. } => Ok(()),
+        IrStmt::Break { .. } | IrStmt::Continue { .. } => Ok(()),
         IrStmt::Expr { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("expr {detail}")),
         IrStmt::If {
@@ -2917,7 +2947,7 @@ fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
         IrStmt::Return { value, .. } => value
             .as_ref()
             .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor)),
-        IrStmt::Break { .. } => false,
+        IrStmt::Break { .. } | IrStmt::Continue { .. } => false,
         IrStmt::Expr { expr, .. } => expr_has_post_increment_byte_read(expr, cursor),
         IrStmt::If {
             condition,
@@ -3150,7 +3180,7 @@ fn collect_nullable_pointer_params_from_body(
                     );
                 }
             }
-            IrStmt::Break { .. } => {}
+            IrStmt::Break { .. } | IrStmt::Continue { .. } => {}
             IrStmt::Expr { expr, .. } => {
                 collect_nullable_pointer_params_from_expr(
                     expr,
@@ -3336,7 +3366,7 @@ fn validate_nullable_pointer_param_uses_in_stmt(
                 validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
             }
         }
-        IrStmt::Break { .. } => {}
+        IrStmt::Break { .. } | IrStmt::Continue { .. } => {}
         IrStmt::Expr { expr, .. } => {
             validate_nullable_pointer_param_uses_in_expr(expr, nullable_params)?;
         }

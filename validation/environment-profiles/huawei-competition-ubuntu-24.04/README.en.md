@@ -1,0 +1,61 @@
+# Huawei Competition Environment Profile
+
+This directory is the single source of truth for the competition/evaluation environment. Code, scripts, and validation gates should be adapted to these constraints; do not treat the local Windows toolchain or older evidence versions as the competition baseline.
+
+## Baseline
+
+- OS: Ubuntu 24.04.4 LTS (Noble Numbat)
+- Kernel: `5.10.0-182.0.0.95.r194_123.hce2.x86_64`
+- APT mirror: `http://mirrors.tools.huawei.com/ubuntu`
+- Python: `3.12.3`
+- pip: `24.0`
+- PyPI mirror: `https://mirrors.tools.huawei.com/pypi/simple`
+- Node.js: `v24.13.0`
+- npm: `11.6.2`
+- npm registry: `https://mirrors.tools.huawei.com/npm/`
+- Java: OpenJDK `21.0.10` (`bisheng_jdk_enterprise`)
+- Maven: `3.9.11`
+- `MAVEN_HOME`: `/usr/local/maven3`
+- Rust: `1.96.0`
+- Cargo: `1.96.0`
+- Cargo registry: `sparse+http://rust.inhuawei.com/crates.io-index/`
+- Go: not installed
+- gcc: `13.3.0`
+- g++: `13.3.0`
+- GNU Make: `4.3`
+- CMake: not found
+
+## Files
+
+- `environment.json`: machine-readable baseline and adaptation policy.
+- `apt/sources.list`: Ubuntu Noble APT mirror configuration.
+- `pip/pip.conf`: pip mirror configuration.
+- `npm/.npmrc`: npm registry configuration.
+- `cargo/config.toml`: Cargo crates.io mirror configuration.
+- `rust/rust-toolchain.toml`: Rust `1.96.0` toolchain declaration; it is not active at the repository root by default.
+- `env.sh`: shell environment entrypoint for the competition host.
+- `toolchain-check.sh`: competition host self-check script.
+
+## Adaptation Rules
+
+- Default build and validation paths must not require Go.
+- Default build and validation paths must not require CMake; C/C++ oracle paths should prefer `gcc` / `g++` / `make`.
+- Rust code must remain compatible with stable Rust `1.96.0` and must not use nightly-only features.
+- Python scripts should target Python `3.12.3` / pip `24.0`.
+- Node/npm scripts should target Node `v24.13.0` / npm `11.6.2`.
+- Newly generated validation evidence should record `profile_id=huawei-competition-ubuntu-24.04` plus the `environment.json` hash.
+
+## Usage
+
+On the competition host:
+
+```bash
+source validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh
+bash validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+```
+
+If package-manager configuration needs to be installed into the user profile, sync the matching files from this directory to each tool's default location. This repository does not mutate global user configuration automatically.
+
+## Relation To Current Code
+
+The current `c2r-translator` and FlashDB Rust validation paths should prefer Cargo, Python, gcc/g++, and GNU Make. Any new script that needs `cmake`, Go, a newer Rust version, a newer Python version, or a non-Huawei mirror must be marked as a non-default competition path and recorded as such in evidence.

@@ -12,6 +12,15 @@ Run one full round with a 10000-loop FlashDB release stress pass:
 powershell -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -StressLoops 10000
 ```
 
+On Ubuntu, run the same script with the current PowerShell executable, usually `pwsh`, and bind the competition environment profile:
+
+```bash
+pwsh -File ./scripts/run-full-regression.ps1 \
+  -Rounds 1 \
+  -StressLoops 10000 \
+  -EnvironmentProfile validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+```
+
 This runs:
 
 - L0 catalog validation.
@@ -51,7 +60,7 @@ By default the runner stops at the first failed step. Use `-ContinueOnFailure` o
 Each run emits:
 
 - `events.jsonl`: one machine-readable event per step.
-- `summary.json`: final status, failed step when present, coverage boundary, and evidence root.
+- `summary.json`: final status, failed step when present, coverage boundary, environment profile path/hash, and evidence root.
 - `round-00001/*.log`: command output per step.
 - round-local JSON reports for smoke, fixture replay/diff, version manifest, evidence search, catalog validation, and release stress.
 

@@ -65,6 +65,12 @@
     "host_os": "windows",
     "c_oracle_host": "wsl-or-ci-required-for-pass"
   },
+  "environment_profile": {
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "path": "validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json",
+    "sha256": "fill-with-current-profile-hash-when-running-on-competition-host",
+    "notes": "Example profile binding; do not reuse this placeholder hash as evidence."
+  },
   "cache_invalidation_keys": [
     "source_commit",
     "repo_commit",
@@ -83,7 +89,8 @@
     "rust_profile.cargo_lock_sha256",
     "toolchain.rustc_version",
     "toolchain.cargo_version",
-    "toolchain.openspec_version"
+    "toolchain.openspec_version",
+    "environment_profile.sha256"
   ],
   "invalidates": [
     "C oracle report",
