@@ -3791,6 +3791,16 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(manifest["status"], "accepted_evidence_bound")
             self.assertTrue(manifest["semantic_pass"])
             self.assertTrue(manifest["claim_boundary"]["accepted_evidence_authoritative"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            claim_scope = manifest["claim_boundary"]["scope"]
+            self.assertIn("accepted_evidence_binding", claim_scope)
+            self.assertIn("generated_draft_semantic_pass remains false", claim_scope)
+            self.assertTrue(
+                "generated Rust draft remains candidate/provenance" in claim_scope
+                or "generated Rust draft remains a candidate/provenance" in claim_scope
+            )
+            self.assertNotIn("unless", claim_scope)
+            self.assertNotIn("generated_draft_semantic_pass is true", claim_scope)
             self.assertEqual(route["level"], "L4")
             self.assertEqual(route["status"], "refused")
             self.assertTrue(route["policy"]["accepted_evidence_authoritative"])

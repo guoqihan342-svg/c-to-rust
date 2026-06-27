@@ -3393,10 +3393,10 @@ def auto_manifest_status(semantic_pass: bool, route_decision: dict[str, Any]) ->
 
 def auto_manifest_claim_scope(semantic_pass: bool, route_decision: dict[str, Any]) -> str:
     if semantic_pass:
-        return "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true"
+        return "auto-translation run bound to accepted_evidence_binding; final_verification.semantic_pass=true is sourced from accepted/named-slice evidence; generated_draft_semantic_pass remains false; generated Rust draft remains candidate/provenance"
     if route_refuses_candidate_generation(route_decision):
-        return "route-refused auto-translation run; generated draft artifacts, if present, are blocked diagnostics and not candidate evidence"
-    return "auto-translation candidate evidence only"
+        return "refused translation route; no generated candidate can claim semantics"
+    return "generated Rust candidate only; semantic acceptance requires independent L3 gates"
 
 
 def accepted_evidence_authoritative_requested(spec: dict[str, Any], accepted: dict[str, Any] | None) -> bool:

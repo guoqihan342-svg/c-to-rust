@@ -89,7 +89,12 @@ def main() -> int:
     semantic = (
         validate_semantic_pass(evidence_dir, prefix, slice_spec)
         if args.require_semantic_pass
-        else {"semantic_pass": False, "status": "not_required"}
+        else {
+            "semantic_pass": False,
+            "semantic_claim_source": "not_evaluated",
+            "generated_draft_semantic_pass": False,
+            "status": "not_required",
+        }
     )
 
     print(
@@ -98,6 +103,8 @@ def main() -> int:
                 "status": "passed",
                 "schema_status": "passed",
                 "semantic_pass": bool(semantic.get("semantic_pass")),
+                "semantic_claim_source": semantic.get("semantic_claim_source"),
+                "generated_draft_semantic_pass": bool(semantic.get("generated_draft_semantic_pass")),
                 "semantic": semantic,
                 "target_id": args.target_id,
                 "slice_id": args.slice_id,
@@ -1783,6 +1790,8 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
     return {
         "status": "passed",
         "semantic_pass": True,
+        "semantic_claim_source": "accepted_evidence_binding",
+        "generated_draft_semantic_pass": False,
         "manifest": rel(manifest_path),
         "source_commit": expected_commit,
         "fixture_path": fixture_path,

@@ -2405,6 +2405,14 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
             payload = json.loads(result.stdout)
             self.assertTrue(payload["semantic_pass"])
+            self.assertIn("semantic_claim_source", payload)
+            self.assertIn("generated_draft_semantic_pass", payload)
+            self.assertIn("semantic_claim_source", payload["semantic"])
+            self.assertIn("generated_draft_semantic_pass", payload["semantic"])
+            self.assertEqual(payload["semantic_claim_source"], "accepted_evidence_binding")
+            self.assertIs(payload["generated_draft_semantic_pass"], False)
+            self.assertEqual(payload["semantic"]["semantic_claim_source"], "accepted_evidence_binding")
+            self.assertIs(payload["semantic"]["generated_draft_semantic_pass"], False)
 
     def test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
