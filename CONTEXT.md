@@ -9287,3 +9287,63 @@ English mirror summary:
 - Preserved artifact filenames, ordering, JSON/JSONL schema, manifest status behavior, feature gates, and Python default/route-profile/cache identity behavior.
 - Added a direct module test for the stable core artifact file set and blocked repairs JSON, and moved the JSONL test into the artifacts module.
 - Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 134. 2026-06-28 P0 clang-lowered translation module split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，目标是把上一节明确的下一刀落地：将 clang-lowered translation/evidence 私有实现簇移动到单独模块。该提交仍然是行为保持重构，不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+核心改动：
+- 新增 `crates/c2r-translator/src/clang_lowered_translation.rs`。
+  - 迁入 `try_translate_slice_with_clang_lowered_ir()`、`record_clang_lowered_ir_evidence()`、`record_ir_*`、`ir_*`、pointer graph helper 和原 clang-lowered evidence 白盒测试。
+  - `try_translate_slice_with_clang_lowered_ir()` 仅以 `pub(crate)` 暴露给 crate root wrapper；其余 evidence helper 继续保持模块私有。
+  - 模块整体挂在 `#[cfg(feature = "clang-lowering-report")]` 下，继续依赖该 feature 同时启用的 `clang-frontend` 与 `typed-ir`。
+- `crates/c2r-translator/src/lib.rs`
+  - 保留 `translate_slice_with_optional_clang_lowered_ir()` wrapper、`translate_slice()` legacy fallback 和 `write_translation_artifacts()` public facade。
+  - `record_type_mapping()` 改为 `pub(crate)`，供新模块复用既有 type-map 逻辑。
+  - 删除 clang-lowered translation/evidence helper 副本和不再需要的 root `BTreeMap` import。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 2.6k 行，并把 `clang_lowered_translation.rs` 私有模块拆分列为已完成子项；P0 总项仍保持未完成。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_translation_module_exposes_fallback_candidate_entrypoint
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_ir_evidence_tests
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+结果：
+- clang-lowered module entrypoint 红绿测试通过。
+- moved evidence 白盒测试通过：8 passed。
+- manifest/claim-boundary 集成测试通过。
+- `cargo check --all-targets --all-features` exit 0。
+- 默认 feature：2 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：3 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：2 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：51 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：61 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：61 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python clang lowering report route/profile/cache opt-in 定向测试：3/3 passed。
+
+边界：
+- 可以说：clang-lowered translation/evidence 私有实现已从 `lib.rs` 拆到 `clang_lowered_translation.rs`，crate root 只保留薄 wrapper 和 public artifact facade。
+- 可以说：这是维护性拆分，降低 `lib.rs` 体积和职责耦合，为后续继续拆 CLI/manifest、generic typed IR route、legacy translator、metadata/evidence builder 做准备。
+- 不应说：P0 `lib.rs` 拆分完成、translator 架构已完全模块化、支持了新的 C 语法、或任何 generated candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Extracted the private clang-lowered translation/evidence implementation cluster into `clang_lowered_translation.rs`.
+- Kept `write_translation_artifacts` and `translate_slice_with_optional_clang_lowered_ir` in `lib.rs` as the public/facade boundary.
+- Reused the existing type-map logic through `pub(crate) record_type_mapping` and kept evidence helpers private to the new module.
+- Preserved artifact ordering, manifest status behavior, feature gates, Python opt-in behavior, and diagnostic-only semantic claim boundaries.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
