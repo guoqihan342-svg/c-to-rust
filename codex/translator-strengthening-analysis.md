@@ -41,7 +41,7 @@
 已经支持的关键增量：
 
 - 标量声明、赋值、return、`if`、`while`。
-- 普通 compound body 中多 `VarDecl` declaration statement 展开，例如 `int a = 1, b = 2;`。
+- 普通 compound body 和 scoped `ForStmt` init 中多 `VarDecl` declaration statement 展开，例如 `int a = 1, b = 2;` 和 `for (int i = 0, j = 0; i < limit; i++)`。
 - 每次读取前都能证明已有赋值的无初始化标量局部声明，例如 `int tmp; tmp = 7; return tmp;`。
 - 标量整数 `+ - * / % & | ^ << >>`、signed unary `-`。
 - clang-lowered simple scalar compound assignment family，包含 simple variable target 上 clang-proven integer promotion/truncation 的窄化路径。
@@ -50,7 +50,7 @@
 - logical not 条件位置和窄 value-position C `int` 0/1 materialization。
 - condition-position 和窄 value-position short-circuit `&&` / `||`，value-position 会 materialize 成 C `int` 0/1。
 - 纯整数 value-position `ConditionalOperator` / `?:`，通过 lazy `IrExpr::Conditional` 发射。
-- 带显式 typed IR scope 的窄化 `ForStmt`，覆盖 simple scalar init、condition、step 和 body，并发射为 Rust block + `while` candidate。
+- 带显式 typed IR scope 的窄化 `ForStmt`，覆盖 simple scalar declaration/assignment init（含多个简单 `VarDecl` declarator）、condition、step 和 body，并发射为 Rust block + `while` candidate。
 - readonly pointer slice 参数、直接 `NULL` presence check、直接 readonly `*p` read、窄化 readonly `*(p+i)` / `*(i+p)` read。
 - 固定宽度整数标量 typedef aliases lowering 到 typed IR，并发射 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`。
 - readonly global const integer array、局部固定长度整数数组读写。
@@ -68,10 +68,10 @@
 
 - `CompoundAssignOperator` 已支持 standalone simple scalar variable target；当 target/result 一致、compute lhs/result 一致且所有相关类型都是受支持整数时，也支持 clang-proven integer promotion/truncation。
 - `&&` / `||` 已支持 condition-position 和窄 value-position；value-position 的 return value、assignment RHS 和 declaration initializer 已覆盖。
-- 普通 compound body 中的 `DeclStmt` 已能把多个简单 `VarDecl` 按源码顺序展开；`ForStmt` init 多声明仍 fail closed。
+- 普通 compound body 和 `ForStmt` init 中的 `DeclStmt` 已能把多个简单 `VarDecl` 按源码顺序展开。
 - 无 initializer 的标量局部声明现在可在 generic typed IR route 中发射，但前提是保守 assignment-before-read guard 能证明每次读取前都已初始化。
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
-- `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt` 或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集；`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
+- `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt`（含多个简单 `VarDecl` declarator）或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集；`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
 - `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
 - `type_from_qual_type()` 已能识别 fixed-width integer typedef aliases；raw `signed char` / `short` / `long long` 这类目标相关 spelling、plain `char`、plain `long` 和完整 usual scalar conversions 仍不放开。
 - struct/record、field access、switch/goto/do-while 仍未进入安全 emitter。
@@ -94,8 +94,8 @@
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
 - 非简单 target、value-position 使用、unsupported compute/result 类型组合、pointer arithmetic、floating-point、volatile 或复杂 RHS side effect 的 compound assignment 仍 fail closed。
-- `ForStmt` 中的 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、非 simple scalar init/step 或 step 里的 prefix inc-dec 仍 fail closed。
-- `ForStmt` init 中的多 `VarDecl`、任一 declarator 的 unsupported type/initializer、VLA/incomplete array、重复符号仍 fail closed。
+- `ForStmt` 中的 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、复杂 init/step、非 simple scalar init/step 或 step 里的 prefix inc-dec 仍 fail closed。
+- `ForStmt` init 任一 declarator 的 unsupported type/initializer、VLA/incomplete array、重复符号仍 fail closed。
 - 无初始化局部变量在赋值前读取、首次赋值读取自身、只在单侧分支或循环体中赋值、address-taken initialization、间接写入和 alias write 仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。
 - function pointer callee、复杂 call side effects、nested calls in conditions。

@@ -174,7 +174,7 @@ pub enum ClangStmtSkeleton {
         body: Vec<ClangStmtSkeleton>,
     },
     For {
-        init: Option<Box<ClangStmtSkeleton>>,
+        init: Vec<ClangStmtSkeleton>,
         condition: Option<ClangExprSkeleton>,
         step: Option<Box<ClangStmtSkeleton>>,
         body: Vec<ClangStmtSkeleton>,
@@ -884,9 +884,9 @@ fn for_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFr
         });
     }
     let init = if is_empty_ast_slot(init) {
-        None
+        Vec::new()
     } else {
-        Some(Box::new(for_init_stmt_skeleton_from_ast(init)?))
+        for_init_stmt_skeletons_from_ast(init)?
     };
     if is_empty_ast_slot(condition) {
         return Ok(ClangStmtSkeleton::Unsupported {
@@ -914,15 +914,17 @@ fn is_empty_ast_slot(value: &Value) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
-fn for_init_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+fn for_init_stmt_skeletons_from_ast(
+    stmt: &Value,
+) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
     match string_field(stmt, "kind").as_deref() {
-        Some("DeclStmt") => decl_stmt_skeleton_from_ast(stmt),
+        Some("DeclStmt") => body_stmt_skeletons_from_ast(stmt),
         Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
-            assign_stmt_skeleton_from_ast(stmt)
+            Ok(vec![assign_stmt_skeleton_from_ast(stmt)?])
         }
-        Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
+        Some(kind) => Ok(vec![ClangStmtSkeleton::Unsupported {
             reason: format!("ForStmt init {kind} is outside the current clang lowering skeleton"),
-        }),
+        }]),
         None => Err(ClangFrontendError {
             kind: "invalid_for_stmt".to_string(),
             message: "ForStmt init slot is missing kind".to_string(),
@@ -2104,7 +2106,10 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             step,
             body,
         } => Ok(IrStmt::For {
-            init: init.as_deref().map(lower_stmt).transpose()?.map(Box::new),
+            init: init
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             condition: condition.as_ref().map(lower_expr).transpose()?,
             step: step.as_deref().map(lower_stmt).transpose()?.map(Box::new),
             body: body

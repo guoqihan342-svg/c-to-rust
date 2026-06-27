@@ -182,7 +182,7 @@ pub enum IrStmt {
         source_span: Option<SourceSpan>,
     },
     For {
-        init: Option<Box<IrStmt>>,
+        init: Vec<IrStmt>,
         condition: Option<IrExpr>,
         step: Option<Box<IrStmt>>,
         body: Vec<IrStmt>,
@@ -835,7 +835,7 @@ fn emit_stmt(
             body,
             ..
         } => emit_for_stmt(
-            init.as_deref(),
+            init,
             condition.as_ref(),
             step.as_deref(),
             body,
@@ -851,7 +851,7 @@ fn emit_stmt(
 }
 
 fn emit_for_stmt(
-    init: Option<&IrStmt>,
+    init: &[IrStmt],
     condition: Option<&IrExpr>,
     step: Option<&IrStmt>,
     body: &[IrStmt],
@@ -866,7 +866,7 @@ fn emit_for_stmt(
     let mut block = String::new();
     block.push_str(&format!("{indent}{{\n"));
 
-    if let Some(init) = init {
+    for (index, init) in init.iter().enumerate() {
         validate_for_init_stmt(init)?;
         let line = emit_stmt(
             init,
@@ -875,7 +875,7 @@ fn emit_for_stmt(
             &mut loop_symbols,
             context,
         )
-        .map_err(|detail| format!("for init {detail}"))?;
+        .map_err(|detail| format!("for init[{index}] {detail}"))?;
         block.push_str(&line);
     }
 
@@ -2607,9 +2607,9 @@ fn validate_definite_assignment_stmt(
             ..
         } => {
             let mut loop_state = state.clone();
-            if let Some(init) = init {
+            for (index, init) in init.iter().enumerate() {
                 validate_definite_assignment_stmt(init, &mut loop_state)
-                    .map_err(|detail| format!("for init {detail}"))?;
+                    .map_err(|detail| format!("for init[{index}] {detail}"))?;
             }
             if let Some(condition) = condition {
                 validate_definite_assignment_expr(condition, &loop_state)
@@ -2824,12 +2824,7 @@ fn collect_byte_cursor_sources_from_body(
             IrStmt::For {
                 init, step, body, ..
             } => {
-                if let Some(init) = init {
-                    collect_byte_cursor_sources_from_body(
-                        std::slice::from_ref(init.as_ref()),
-                        cursor_sources,
-                    );
-                }
+                collect_byte_cursor_sources_from_body(init, cursor_sources);
                 if let Some(step) = step {
                     collect_byte_cursor_sources_from_body(
                         std::slice::from_ref(step.as_ref()),
@@ -2920,8 +2915,7 @@ fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
             body,
             ..
         } => {
-            init.as_ref()
-                .is_some_and(|stmt| stmt_has_post_increment_byte_read(stmt, cursor))
+            body_has_post_increment_byte_read(init, cursor)
                 || condition
                     .as_ref()
                     .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor))
@@ -3095,13 +3089,11 @@ fn collect_nullable_pointer_params_from_body(
                 body,
                 ..
             } => {
-                if let Some(init) = init {
-                    collect_nullable_pointer_params_from_body(
-                        std::slice::from_ref(init.as_ref()),
-                        readonly_pointer_params,
-                        nullable_params,
-                    );
-                }
+                collect_nullable_pointer_params_from_body(
+                    init,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
                 if let Some(condition) = condition {
                     collect_nullable_pointer_params_from_expr(
                         condition,
@@ -3297,8 +3289,9 @@ fn validate_nullable_pointer_param_uses_in_stmt(
             body,
             ..
         } => {
-            if let Some(init) = init {
-                validate_nullable_pointer_param_uses_in_stmt(init, nullable_params)?;
+            for (index, init) in init.iter().enumerate() {
+                validate_nullable_pointer_param_uses_in_stmt(init, nullable_params)
+                    .map_err(|detail| format!("for init[{index}] {detail}"))?;
             }
             if let Some(condition) = condition {
                 validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
@@ -3440,12 +3433,7 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
             IrStmt::For {
                 init, step, body, ..
             } => {
-                if let Some(init) = init {
-                    collect_assigned_vars_from_body(
-                        std::slice::from_ref(init.as_ref()),
-                        assigned_vars,
-                    );
-                }
+                collect_assigned_vars_from_body(init, assigned_vars);
                 if let Some(step) = step {
                     collect_assigned_vars_from_body(
                         std::slice::from_ref(step.as_ref()),

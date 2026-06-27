@@ -41,7 +41,7 @@ Typed IR currently has only two routes:
 Important supported increments:
 
 - Scalar declarations, assignments, returns, `if`, and `while`.
-- Multi-`VarDecl` declaration statements in ordinary compound bodies, for example `int a = 1, b = 2;`.
+- Multi-`VarDecl` declaration statements in ordinary compound bodies and scoped `ForStmt` init slots, for example `int a = 1, b = 2;` and `for (int i = 0, j = 0; i < limit; i++)`.
 - Uninitialized scalar local declarations when every later read is proven to occur after assignment, for example `int tmp; tmp = 7; return tmp;`.
 - Scalar integer `+ - * / % & | ^ << >>` and signed unary `-`.
 - Clang-lowered simple scalar compound assignment family, including narrow clang-proven integer promotion/truncation for simple variable targets.
@@ -50,7 +50,7 @@ Important supported increments:
 - Logical not in conditions and narrow value-position C `int` 0/1 materialization.
 - Short-circuit `&&` / `||` in conditions plus narrow value-position C `int` 0/1 materialization.
 - Pure integer value-position `ConditionalOperator` / `?:` with lazy `IrExpr::Conditional`.
-- Narrow `ForStmt` with an explicit typed IR scope, covering simple scalar init, condition, step, and body, emitted as a Rust block plus `while` candidate.
+- Narrow `ForStmt` with an explicit typed IR scope, covering simple scalar declaration/assignment init, including multiple simple `VarDecl` declarators, condition, step, and body, emitted as a Rust block plus `while` candidate.
 - Readonly pointer slice parameters, direct `NULL` presence checks, direct readonly `*p` reads, and narrow readonly `*(p+i)` / `*(i+p)` reads.
 - Fixed-width integer scalar typedef aliases lowered into typed IR and emitted as Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`.
 - Readonly global const integer arrays and local fixed-length integer array reads/writes.
@@ -68,10 +68,10 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 - `CompoundAssignOperator` now lowers for standalone simple scalar variable targets, including clang-proven integer promotion/truncation when target/result match, compute lhs/result match, and all involved types are supported integers.
 - `&&` / `||` now lower for condition positions and narrow value positions; return values, assignment RHS, and declaration initializers are covered.
-- `DeclStmt` nodes in ordinary compound bodies now expand multiple simple `VarDecl` children in source order. Multi-declaration `ForStmt` init remains fail-closed.
+- `DeclStmt` nodes in ordinary compound bodies and `ForStmt` init slots now expand multiple simple `VarDecl` children in source order.
 - Scalar local declarations without initializers now emit through the generic typed IR route when the conservative assignment-before-read guard proves every read is initialized.
 - Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
-- `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt` or assignment, condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
+- `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt`, including multiple simple `VarDecl` declarators, or assignment; condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
 - `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
 - `type_from_qual_type()` now recognizes fixed-width integer typedef aliases, while raw target-dependent spellings such as `signed char` / `short` / `long long`, plain `char`, plain `long`, and complete usual scalar conversions remain closed.
 - Structs/records, field access, switch/goto/do-while, and memory semantics are still outside the safe emitter.
@@ -94,8 +94,8 @@ These should still fail closed:
 - Condition-position `?:`, expression-statement `?:`, GNU omitted-middle `a ?: b`, and conditional branches with call/inc/dec/post-increment/assignment/comma side effects.
 - Short-circuit operands containing calls/inc/dec/side effects, pointer truthiness, floating-point truthiness, unsupported types, or cases requiring full usual scalar conversions.
 - Compound assignments with non-simple targets, value-position use, unsupported compute/result type combinations, pointer arithmetic, floating-point, volatile, or complex RHS side effects.
-- `ForStmt` with `continue` / `break` / `goto` / `switch`, a condition variable slot, empty condition/step, calls/inc/dec/side effects in the condition, non-simple-scalar init/step, or prefix inc-dec in the step.
-- Multi-`VarDecl` `ForStmt` init, unsupported type/initializer in any declarator, VLA/incomplete arrays, and duplicate symbols.
+- `ForStmt` with `continue` / `break` / `goto` / `switch`, a condition variable slot, empty condition/step, calls/inc/dec/side effects in the condition, complex init/step, non-simple-scalar init/step, or prefix inc-dec in the step.
+- Unsupported type/initializer in any `ForStmt` init declarator, VLA/incomplete arrays, and duplicate symbols.
 - Uninitialized local reads before assignment, first assignments that read the same variable, initialization through only one branch or only a loop body, address-taken initialization, indirect writes, and alias writes.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.

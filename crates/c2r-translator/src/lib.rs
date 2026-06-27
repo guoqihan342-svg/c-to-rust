@@ -594,9 +594,7 @@ fn record_ir_decl_type_mappings(
             typed_ir::IrStmt::For {
                 init, step, body, ..
             } => {
-                if let Some(init) = init.as_deref() {
-                    record_ir_decl_type_mappings(std::slice::from_ref(init), profile, result);
-                }
+                record_ir_decl_type_mappings(init, profile, result);
                 record_ir_decl_type_mappings(body, profile, result);
                 if let Some(step) = step.as_deref() {
                     record_ir_decl_type_mappings(std::slice::from_ref(step), profile, result);
@@ -637,9 +635,7 @@ fn record_ir_call_expression_evidence(
             typed_ir::IrStmt::For {
                 init, step, body, ..
             } => {
-                if let Some(init) = init.as_deref() {
-                    record_ir_call_expression_evidence(std::slice::from_ref(init), result);
-                }
+                record_ir_call_expression_evidence(init, result);
                 record_ir_call_expression_evidence(body, result);
                 if let Some(step) = step.as_deref() {
                     record_ir_call_expression_evidence(std::slice::from_ref(step), result);
@@ -1034,9 +1030,7 @@ fn collect_ir_pointer_cursor_sources(
             typed_ir::IrStmt::For {
                 init, step, body, ..
             } => {
-                if let Some(init) = init.as_deref() {
-                    collect_ir_pointer_cursor_sources(std::slice::from_ref(init), cursor_sources);
-                }
+                collect_ir_pointer_cursor_sources(init, cursor_sources);
                 collect_ir_pointer_cursor_sources(body, cursor_sources);
                 if let Some(step) = step.as_deref() {
                     collect_ir_pointer_cursor_sources(std::slice::from_ref(step), cursor_sources);
@@ -1098,12 +1092,7 @@ fn collect_ir_post_increment_deref_vars_from_stmts(
                 body,
                 ..
             } => {
-                if let Some(init) = init.as_deref() {
-                    collect_ir_post_increment_deref_vars_from_stmts(
-                        std::slice::from_ref(init),
-                        vars,
-                    );
-                }
+                collect_ir_post_increment_deref_vars_from_stmts(init, vars);
                 if let Some(condition) = condition {
                     collect_ir_post_increment_deref_vars_from_expr(condition, vars);
                 }
@@ -4075,12 +4064,12 @@ mod clang_lowered_ir_evidence_tests {
                     source_span: None,
                 },
                 IrStmt::For {
-                    init: Some(Box::new(IrStmt::Decl {
+                    init: vec![IrStmt::Decl {
                         name: "i".to_string(),
                         ty: i32_ty.clone(),
                         init: Some(var("limit", i32_ty.clone())),
                         source_span: None,
-                    })),
+                    }],
                     condition: Some(IrExpr::Binary {
                         op: IrBinOp::Lt,
                         lhs: Box::new(var("i", i32_ty.clone())),

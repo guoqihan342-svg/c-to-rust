@@ -5661,12 +5661,12 @@ fn typed_ir_for_emits_scoped_loop_with_decl_init_and_step_assignment() {
                 source_span: None,
             },
             IrStmt::For {
-                init: Some(Box::new(IrStmt::Decl {
+                init: vec![IrStmt::Decl {
                     name: "i".to_string(),
                     ty: i32_ty.clone(),
                     init: Some(ir_lit(0, "0", i32_ty.clone())),
                     source_span: None,
-                })),
+                }],
                 condition: Some(ir_binary(
                     IrBinOp::Lt,
                     ir_var("i", i32_ty.clone()),
@@ -5716,6 +5716,92 @@ fn typed_ir_for_emits_scoped_loop_with_decl_init_and_step_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_for_emits_scoped_loop_with_multi_decl_init() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "sum_pair_loop".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "limit".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "total".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::For {
+                init: vec![
+                    IrStmt::Decl {
+                        name: "i".to_string(),
+                        ty: i32_ty.clone(),
+                        init: Some(ir_lit(0, "0", i32_ty.clone())),
+                        source_span: None,
+                    },
+                    IrStmt::Decl {
+                        name: "j".to_string(),
+                        ty: i32_ty.clone(),
+                        init: Some(ir_lit(1, "1", i32_ty.clone())),
+                        source_span: None,
+                    },
+                ],
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("total", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_binary(
+                            IrBinOp::Add,
+                            ir_var("total", i32_ty.clone()),
+                            ir_var("i", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        ir_var("j", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("total", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scoped for loop with multi decl init");
+
+    assert!(rust.contains("pub fn sum_pair_loop(limit: i32) -> i32"));
+    assert!(rust.contains(
+        "{\n        let mut i: i32 = 0i32;\n        let mut j: i32 = 1i32;\n        while (i < limit) {"
+    ));
+    assert!(rust.contains("total = ((total + i) + j);"));
+    assert!(rust.contains("i = (i + 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-for-multi-decl-init", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_for_rejects_loop_init_decl_scope_leak() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -5724,12 +5810,12 @@ fn typed_ir_for_rejects_loop_init_decl_scope_leak() {
         params: vec![],
         body: vec![
             IrStmt::For {
-                init: Some(Box::new(IrStmt::Decl {
+                init: vec![IrStmt::Decl {
                     name: "i".to_string(),
                     ty: i32_ty.clone(),
                     init: Some(ir_lit(0, "0", i32_ty.clone())),
                     source_span: None,
-                })),
+                }],
                 condition: Some(ir_binary(
                     IrBinOp::Lt,
                     ir_var("i", i32_ty.clone()),
@@ -5780,7 +5866,7 @@ fn typed_ir_for_rejects_body_decl_scope_leak_into_step() {
         }],
         body: vec![
             IrStmt::For {
-                init: None,
+                init: vec![],
                 condition: Some(ir_var("keep_going", i32_ty.clone())),
                 step: Some(Box::new(IrStmt::Assign {
                     target: ir_var("tmp", i32_ty.clone()),
@@ -5827,7 +5913,7 @@ fn typed_ir_for_rejects_decl_step() {
         params: vec![],
         body: vec![
             IrStmt::For {
-                init: None,
+                init: vec![],
                 condition: None,
                 step: Some(Box::new(IrStmt::Decl {
                     name: "i".to_string(),
@@ -5871,7 +5957,7 @@ fn typed_ir_for_rejects_non_c_int_condition_result() {
         }],
         body: vec![
             IrStmt::For {
-                init: None,
+                init: vec![],
                 condition: Some(ir_binary(
                     IrBinOp::LogAnd,
                     ir_var("value", i32_ty.clone()),
@@ -9257,7 +9343,7 @@ fn clang_lowering_skeleton_maps_typed_ir_for_loop() {
                 }),
             },
             ClangStmtSkeleton::For {
-                init: Some(Box::new(ClangStmtSkeleton::Decl {
+                init: vec![ClangStmtSkeleton::Decl {
                     name: "i".to_string(),
                     ty: int_ty.clone(),
                     init: Some(ClangExprSkeleton::IntegerLiteral {
@@ -9265,7 +9351,7 @@ fn clang_lowering_skeleton_maps_typed_ir_for_loop() {
                         spelling: "0".to_string(),
                         ty: int_ty.clone(),
                     }),
-                })),
+                }],
                 condition: Some(ClangExprSkeleton::Binary {
                     op: ClangBinaryOperator::Lt,
                     lhs: Box::new(ClangExprSkeleton::DeclRef {
@@ -9333,7 +9419,7 @@ fn clang_lowering_skeleton_maps_typed_ir_for_loop() {
         panic!("expected decl, for, return, got {:?}", ir.body);
     };
     assert_eq!(name, "total");
-    assert!(matches!(init.as_deref(), Some(IrStmt::Decl { name, .. }) if name == "i"));
+    assert!(matches!(init.as_slice(), [IrStmt::Decl { name, .. }] if name == "i"));
     assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
     assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
 
@@ -12337,7 +12423,7 @@ fn clang_ast_dump_emits_typed_ir_for_loop_when_enabled() {
         panic!("expected decl, for, return, got {:?}", function.body);
     };
     assert_eq!(name, "total");
-    assert!(matches!(init.as_deref(), Some(IrStmt::Decl { name, .. }) if name == "i"));
+    assert!(matches!(init.as_slice(), [IrStmt::Decl { name, .. }] if name == "i"));
     assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
     assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
 
@@ -12483,7 +12569,7 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled() {
+fn clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -12498,10 +12584,10 @@ fn clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled() {
     );
     let out_dir = unique_out_dir("clang-real-typed-ir-for-multi-var-decl-init");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_for_multi_decl_init.c");
+    let source_file = out_dir.join("sum_pair_for.c");
     fs::write(
         &source_file,
-        "int bad_for_multi_decl_init(int limit) { int total = 0; for (int i = 0, j = 0; i < limit; i++) { total = total + i + j; } return total; }\n",
+        "int sum_pair_for(int limit) { int total = 0; for (int i = 0, j = 0; i < limit; i++) { total = total + i + j; } return total; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -12509,21 +12595,47 @@ fn clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled() {
         clang_path.to_string_lossy().into_owned(),
     )]);
 
-    let report = lower_function_from_clang_ast_dump_report(
-        &environment,
-        &source_file,
-        "bad_for_multi_decl_init",
-    );
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "sum_pair_for");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { name, .. }, IrStmt::For {
+        init, step, body, ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected total declaration, for loop, and return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(name, "total");
     assert!(
-        report
-            .errors
-            .iter()
-            .any(|error| error.message.contains("DeclStmt with 2 VarDecl children")),
-        "{:?}",
-        report.errors
+        matches!(
+            init.as_slice(),
+            [IrStmt::Decl { name: first, .. }, IrStmt::Decl { name: second, .. }]
+                if first == "i" && second == "j"
+        ),
+        "expected for init declarations i and j, got {init:?}"
     );
+    assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
+    assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit for loop with multi declaration initializer from real clang AST");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn sum_pair_for(limit: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("let mut total: i32 = 0i32;"), "{rust}");
+    assert!(rust.contains("let mut i: i32 = 0i32;"), "{rust}");
+    assert!(rust.contains("let mut j: i32 = 0i32;"), "{rust}");
+    assert!(rust.contains("while (i < limit) {"), "{rust}");
+    assert!(rust.contains("total = ((total + i) + j);"), "{rust}");
+    assert!(rust.contains("i = (i + 1i32);"), "{rust}");
+    assert!(rust.contains("return total;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-for-multi-var-decl-init", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

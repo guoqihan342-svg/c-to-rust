@@ -7720,3 +7720,88 @@ English mirror summary:
 - The pre-emission guard tracks only scalar types that the generic emitter can emit, so pointer/array/unsupported-type cases keep their existing fail-closed reasons.
 - Reads before assignment still fail closed; this is not default zero initialization and not full C definite-assignment analysis.
 - Focused real-clang smoke coverage and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
+
+## 112. 2026-06-27 scoped ForStmt init multi VarDecl expansion
+
+本轮继续按多智能体并行推进 `c2r-translator` 的真实 C 语法面，不写 FlashDB 专用路径。切片目标是把真实 clang AST 中常见的 `ForStmt` init 多声明从 fail-closed 推进到 generic typed IR candidate generation，例如：
+
+```c
+int sum_pair_for(int limit) {
+    int total = 0;
+    for (int i = 0, j = 0; i < limit; i++) {
+        total = total + i + j;
+    }
+    return total;
+}
+```
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrStmt::For.init` 从 `Option<Box<IrStmt>>` 改成 `Vec<IrStmt>`。
+  - `emit_for_stmt()` 在现有 Rust block + `while` 形态里按源码顺序发射每条 init statement。
+  - definite-assignment、byte-cursor source、post-increment byte read、nullable pointer、assigned-var 等递归 helper 现在遍历 `init: &[IrStmt]`。
+  - `step` 仍保持单语句 `Option<Box<IrStmt>>`，避免把这刀扩大成完整 C for-loop 语义。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::For.init` 从 singular optional stmt 改成 `Vec<ClangStmtSkeleton>`。
+  - 新 `for_init_stmt_skeletons_from_ast()` 对 `DeclStmt` 复用普通 compound body 的 multi-`VarDecl` 展开 helper；assignment init 仍包成一元素 vec；其他 init kind 继续 fail closed。
+  - `lower_stmt()` 把 skeleton init vec 逐条 lowering 成 typed IR init vec，任何 unsupported declarator 都会让整个 For lowering fail closed。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report 的 type mapping、call expression evidence、pointer cursor source、post-increment deref evidence 递归遍历 For init vec。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将真实 clang multi-`VarDecl` For init smoke 从 reject 改为 positive：
+    `clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled`。
+  - 新增 direct typed IR 正测：
+    `typed_ir_for_emits_scoped_loop_with_multi_decl_init`。
+  - 既有 direct/skeleton/real-clang For 测试改为 `init: vec![...]` / `init.as_slice()` 断言。
+  - 真实 clang positive 现在断言 top-level body 为 `[Decl(total), For { init: [Decl(i), Decl(j)], step: Assign, body: [Assign] }, Return]`，并验证生成 Rust 可编译。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-for-init-multi-var-decl.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+```
+
+旧实现中 positive smoke 失败为 `report.status == "unsupported"`，reason 为 `DeclStmt with 2 VarDecl children is outside the current clang lowering skeleton`。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_for_emits_scoped_loop_with_multi_decl_init -- --nocapture
+```
+
+完整验证已通过：
+
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：聚焦真实 clang smoke 1 passed；完整 feature gate 中 `src/lib.rs` 42 passed，`bounded_translation.rs` 320 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：普通 compound body 和 scoped `ForStmt` init 中多个简单 `VarDecl` 现在都能按源码顺序展开为连续 typed IR `Decl`，并可由 generic emitter 生成可编译 Rust candidate。
+- 可以说：`ForStmt` init 多声明的 scope 由一等 `IrStmt::For { init: Vec<IrStmt>, ... }` 保住，init 声明不泄漏到 loop block 外，body-local 声明不泄漏到 step。
+- 不应说：已支持复杂 init/step、`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、prefix inc/dec step、任意 declaration statement、unsupported type/initializer、VLA/incomplete array、重复符号恢复、完整 C for-loop control-flow semantics 或 semantic acceptance。
+
+下一步建议：
+- 继续扩大普通 C 语法面时，优先候选是更系统的 usual scalar conversion 分类，或在已有 scoped `ForStmt` 上单独设计 `break` / `continue` 的 step 语义、CFG evidence 和 validation gate。
+- 第 110/111 节里“for init 多声明 scoped model”作为下一步建议已被本节 supersede。
+
+English mirror summary:
+
+- Added scoped `ForStmt` init multi-`VarDecl` expansion through generic typed IR.
+- `IrStmt::For.init` and `ClangStmtSkeleton::For.init` are now ordered vectors; `step` remains singular.
+- `for (int i = 0, j = 0; i < limit; i++)` lowers from real clang AST to `For { init: [Decl(i), Decl(j)], ... }` and emits compilable Rust in source order inside the loop block.
+- Unsupported declarator types/initializers, VLA/incomplete arrays, duplicate symbols, complex init/step, missing condition/step, condition variable slots, `continue` / `break`, full C for-loop control-flow semantics, and semantic acceptance remain out of scope.
+- Focused red/green coverage, direct typed IR coverage, real clang AST smoke coverage, and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
