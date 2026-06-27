@@ -2933,6 +2933,9 @@ fn attach_record_inventory_to_function(
     inventory: &BTreeMap<String, Vec<IrRecordField>>,
 ) {
     attach_record_inventory_to_type(&mut function.return_type, inventory);
+    for param in &mut function.params {
+        attach_record_inventory_to_type(&mut param.ty, inventory);
+    }
     for stmt in &mut function.body {
         attach_record_inventory_to_stmt(stmt, inventory);
     }
@@ -3082,7 +3085,8 @@ fn attach_record_inventory_to_type(
     inventory: &BTreeMap<String, Vec<IrRecordField>>,
 ) {
     match &mut ty.kind {
-        IrTypeKind::Pointer { .. } | IrTypeKind::Array { .. } => {}
+        IrTypeKind::Pointer { pointee } => attach_record_inventory_to_type(pointee, inventory),
+        IrTypeKind::Array { element, .. } => attach_record_inventory_to_type(element, inventory),
         IrTypeKind::Record { name, fields } => {
             if fields.is_none() {
                 if let Some(record_fields) = inventory.get(name) {

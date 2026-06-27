@@ -598,6 +598,9 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         let element_ty = emit_scalar_type(element_ty)?;
         return Ok(format!("&[{element_ty}]"));
     }
+    if let Some(pointee) = readonly_record_pointer_pointee_type(ty) {
+        return emit_value_type(pointee).map(|ty| format!("&{ty}"));
+    }
     emit_value_type(ty)
 }
 
@@ -625,6 +628,12 @@ fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String>
     for param in &function.params {
         if let IrTypeKind::Record { name, .. } = &param.ty.kind {
             ensure_record_entry(&mut records, name);
+        }
+        if let Some(pointee) = readonly_record_pointer_pointee_type(&param.ty) {
+            add_record_type_inventory(&mut records, pointee)?;
+            if let IrTypeKind::Record { name, .. } = &pointee.kind {
+                ensure_record_entry(&mut records, name);
+            }
         }
     }
     for stmt in &function.body {
@@ -672,7 +681,7 @@ fn add_record_field_use<'a>(
         return Err(format!("record {record_name} was not registered"));
     };
     if let Some(existing) = fields.iter().find(|field| field.name == field_name) {
-        if existing.ty == field_ty {
+        if record_field_types_match(existing.ty, field_ty) {
             return Ok(());
         }
         return Err(format!(
@@ -686,6 +695,15 @@ fn add_record_field_use<'a>(
         ty: field_ty,
     });
     Ok(())
+}
+
+fn record_field_types_match(lhs: &IrType, rhs: &IrType) -> bool {
+    lhs == rhs
+        || (is_integer_type(lhs)
+            && is_integer_type(rhs)
+            && lhs.canonical == rhs.canonical
+            && lhs.kind == rhs.kind
+            && lhs.width_bits == rhs.width_bits)
 }
 
 fn emit_record_definition(name: &str, fields: &[RecordFieldUse<'_>]) -> Result<String, String> {
@@ -788,18 +806,23 @@ fn collect_record_field_uses_from_expr<'a>(
             is_arrow,
             ..
         } => {
-            if *is_arrow {
-                return Err(
-                    "arrow member expressions are outside the typed IR record subset".to_string(),
-                );
-            }
             let IrExpr::Var { ty: base_ty, .. } = base.as_ref() else {
                 return Err("member expression base must be a record variable".to_string());
             };
-            let IrTypeKind::Record { name, .. } = &base_ty.kind else {
+            let record_ty = if *is_arrow {
+                readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+                    format!(
+                        "arrow member expression base has unsupported type {}",
+                        type_label(base_ty)
+                    )
+                })?
+            } else {
+                base_ty
+            };
+            let IrTypeKind::Record { name, .. } = &record_ty.kind else {
                 return Err(format!(
                     "member expression base has unsupported type {}",
-                    type_label(base_ty)
+                    type_label(record_ty)
                 ));
             };
             add_record_field_use(records, name, field, ty)?;
@@ -1438,6 +1461,10 @@ fn emit_assignment_target<'a>(
             is_arrow,
             ..
         } => {
+            if *is_arrow {
+                return Err("arrow member assignment requires pointer/record ownership evidence"
+                    .to_string());
+            }
             let target = emit_member_expr(base, field, ty, *is_arrow, symbols)?;
             Ok((target, ty))
         }
@@ -1867,7 +1894,7 @@ fn emit_member_expr(
     symbols: &HashSet<String>,
 ) -> Result<String, String> {
     if is_arrow {
-        return Err("arrow member expressions are outside the typed IR record subset".to_string());
+        return emit_readonly_record_pointer_member_expr(base, field, ty, symbols);
     }
     let IrExpr::Var {
         name: base_name,
@@ -1889,6 +1916,35 @@ fn emit_member_expr(
     emit_scalar_type(ty).map_err(|detail| format!("member field {field} has {detail}"))?;
     let base_name = emit_identifier(base_name, "member base")?;
     let field = emit_identifier(field, "member field")?;
+    Ok(format!("{base_name}.{field}"))
+}
+
+fn emit_readonly_record_pointer_member_expr(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("arrow member expression base must be a record pointer variable".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!("arrow member base {base_name} is not declared"));
+    }
+    readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "arrow member base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_scalar_type(ty).map_err(|detail| format!("arrow member field {field} has {detail}"))?;
+    let base_name = emit_identifier(base_name, "arrow member base")?;
+    let field = emit_identifier(field, "arrow member field")?;
     Ok(format!("{base_name}.{field}"))
 }
 
@@ -4383,6 +4439,17 @@ fn is_integer_type(ty: &IrType) -> bool {
 fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
     match &ty.kind {
         IrTypeKind::Pointer { pointee } if pointee.is_const && is_integer_type(pointee) => {
+            Some(pointee.as_ref())
+        }
+        _ => None,
+    }
+}
+
+fn readonly_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee }
+            if pointee.is_const && matches!(pointee.kind, IrTypeKind::Record { .. }) =>
+        {
             Some(pointee.as_ref())
         }
         _ => None,

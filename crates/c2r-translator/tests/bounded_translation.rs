@@ -1101,20 +1101,26 @@ fn typed_ir_rejects_record_return_value_with_mismatched_field_inventory() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_record_arrow_field_read() {
+fn typed_ir_emits_readonly_record_pointer_arrow_field_read() {
     let point_ty = ir_record("point");
+    let point_ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty.clone()),
+        false,
+    );
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "point_x".to_string(),
         return_type: i32_ty.clone(),
         params: vec![IrParam {
             name: "p".to_string(),
-            ty: point_ty.clone(),
+            ty: point_ptr_ty.clone(),
             source_span: None,
         }],
         body: vec![IrStmt::Return {
             value: Some(IrExpr::Member {
-                base: Box::new(ir_var("p", point_ty)),
+                base: Box::new(ir_var("p", point_ptr_ty)),
                 field: "x".to_string(),
                 ty: i32_ty,
                 is_arrow: true,
@@ -1125,16 +1131,27 @@ fn typed_ir_rejects_record_arrow_field_read() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("record pointer member must fail closed");
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly record pointer field read");
+    let rust = &emitted.rust;
 
-    assert_eq!(error.route.route, CandidateRoute::Unsupported);
-    assert!(error.reason.contains("arrow member expressions"));
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub fn point_x(p: &Point) -> i32"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-readonly-record-pointer-arrow-field-read", rust);
 }
 
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_record_arrow_field_assignment() {
     let point_ty = ir_record("point");
+    let point_ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "set_point_x".to_string(),
@@ -1142,7 +1159,7 @@ fn typed_ir_rejects_record_arrow_field_assignment() {
         params: vec![
             IrParam {
                 name: "p".to_string(),
-                ty: point_ty.clone(),
+                ty: point_ptr_ty.clone(),
                 source_span: None,
             },
             IrParam {
@@ -1154,7 +1171,7 @@ fn typed_ir_rejects_record_arrow_field_assignment() {
         body: vec![
             IrStmt::Assign {
                 target: IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ty)),
+                    base: Box::new(ir_var("p", point_ptr_ty)),
                     field: "x".to_string(),
                     ty: i32_ty.clone(),
                     is_arrow: true,
@@ -1174,7 +1191,108 @@ fn typed_ir_rejects_record_arrow_field_assignment() {
     let error = emit_rust_from_ir(&ir).expect_err("record pointer member write must fail closed");
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
-    assert!(error.reason.contains("arrow member expressions"));
+    assert!(error.reason.contains("arrow member assignment"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_arrow_field_compound_assignment_shape() {
+    let point_ty = ir_record("point");
+    let point_ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let field_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "add_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: field_target.clone(),
+                value: ir_binary(
+                    IrBinOp::Add,
+                    field_target,
+                    ir_var("value", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("record pointer compound member write must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("arrow member assignment"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_read() {
+    let point_ty = ir_record("point");
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Member {
+                base: Box::new(ir_var("p", point_ptr_ty)),
+                field: "x".to_string(),
+                ty: i32_ty,
+                is_arrow: true,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("mutable record pointer read must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("param p has pointer type struct point * is unsupported")
+            || error
+                .reason
+                .contains("arrow member expression base has unsupported type struct point *"),
+        "{:?}",
+        error
+    );
 }
 
 #[cfg(feature = "typed-ir")]
@@ -18539,7 +18657,7 @@ fn clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabl
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_arrow_member_read_when_enabled() {
+fn clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -18569,15 +18687,40 @@ fn clang_ast_dump_rejects_arrow_member_read_when_enabled() {
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let error = emit_rust_from_ir(function).expect_err("arrow member read must fail closed");
     assert!(
-        error.reason.contains("arrow member expressions")
-            || error
-                .reason
-                .contains("pointer type const struct point * is unsupported"),
+        matches!(
+            function.body.as_slice(),
+            [IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base,
+                    field,
+                    is_arrow: true,
+                    ..
+                }),
+                ..
+            }] if field == "x"
+                && matches!(
+                    base.as_ref(),
+                    IrExpr::Var {
+                        name,
+                        ..
+                    } if name == "p"
+                )
+        ),
         "{:?}",
-        error
+        function.body
     );
+    let emitted =
+        emit_rust_from_ir(function).expect("emit readonly arrow member read from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(rust.contains("pub fn point_x(p: &Point) -> i32"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-arrow-member-read", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

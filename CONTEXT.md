@@ -9476,3 +9476,68 @@ English mirror summary:
 - Preserved default artifacts, optional clang artifacts, manifest status behavior, feature gates, Python opt-in behavior, and semantic claim boundaries.
 - Added a module-boundary red/green test proving the orchestration now lives in the artifacts module.
 - Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
+
+## 137. 2026-06-28 P1 readonly record pointer arrow field read
+
+本轮继续按多智能体推进 P1 record/pointer 子集，不写 FlashDB/crc32 特例。三个只读代理共同审查了 typed IR emitter、clang lowering 和当前 diff；结论是：`const struct T *p` 的简单 `p->scalar_field` 可以作为窄的 readonly single-object candidate 进入 generic typed IR，但它必须映射为 `&T` 而不是 slice，并且不能顺手放开 pointer field writes、compound/update writes、nullable pointer、pointer arithmetic 或 alias-sensitive ownership 语义。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_param_type()` 现在把 readonly record pointer pointee（`Pointer` to `const Record`）映射为 `&RecordName`，与 readonly integer pointer 的 `&[T]` slice 路径分开。
+  - `emit_member_expr()` 对 `is_arrow=true` 增加窄路径 `emit_readonly_record_pointer_member_expr()`：base 必须是已声明变量，类型必须是 readonly record pointer，字段结果必须是 scalar，最终发射 `p.x`。
+  - `emit_assignment_target()` 对 `is_arrow=true` 的 member target 显式 fail closed，错误为缺少 pointer/record ownership evidence；所以 `p->x = value` 和 compound write shape 不会因为 read 路径放开而通过。
+  - `emit_record_definitions()` 会从 readonly record pointer pointee 和字段访问合并 record field inventory。
+  - `add_record_field_use()` 允许同一整数字段声明类型与 const record 读取表达式类型之间仅有顶层 const 差异，例如 `int` 与 `const int`，但仍拒绝真正不同的 field 类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `attach_record_inventory_to_function()` 现在处理函数参数。
+  - `attach_record_inventory_to_type()` 递归进入 pointer pointee 和 array element，使真实 clang AST 中 `const struct point *p` 的 pointee 能拿到完整 `RecordDecl`/`FieldDecl` 清单。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_emits_readonly_record_pointer_arrow_field_read`：手写 typed IR 正例，生成 `pub fn point_x(p: &Point) -> i32` 和 `return p.x;`。
+  - `typed_ir_rejects_record_arrow_field_assignment`：readonly record pointer 的 `p->x = value` 仍拒绝。
+  - `typed_ir_rejects_record_arrow_field_compound_assignment_shape`：`p->x += value` 的 typed IR compound shape 仍拒绝。
+  - `typed_ir_rejects_mutable_record_pointer_arrow_field_read`：非 const `struct point *` 的 arrow read 仍拒绝。
+  - `clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled`：真实 clang AST smoke 断言 IR shape 是 `Return(Member { is_arrow: true, base: Var("p"), field: "x" })`，并验证 Rust candidate 包含完整字段 `x` 和 `y`，再通过 rustc snippet smoke。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 readonly `const struct T *p` 的简单 `p->scalar_field` 读已进入 typed IR candidate 子集，同时明确 pointer field writes 仍拒绝。
+
+已验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- `typed-ir`：4 lib tests + 222 bounded tests 通过。
+- `typed-ir clang-frontend`：53 lib tests + 397 bounded tests 通过。
+- `clang-lowering-report`：63 lib tests + 398 bounded tests 通过。
+- `--all-features`：63 lib tests + 398 bounded tests 通过。
+- 默认 feature：4 lib tests + 35 bounded tests 通过。
+- `clang-frontend`：5 lib tests + 44 bounded tests 通过。
+- 真实 clang AST arrow member read smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+- 可以说：readonly `const struct T *p` 的简单 `p->scalar_field` read 已能经真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&T`。
+- 可以说：真实 clang `RecordDecl` 的完整直接标量字段清单现在能递归附着到 pointer pointee，`Point { x, y }` 不再退化成只含被读取字段的最小 shape。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、nullable record pointer、mutable/non-const record pointer read、`p->field = value`、`p->field += value`、`p->field++`、pointer arithmetic record access、alias-sensitive writes、volatile/packed/bitfield/union/nested/anonymous record、非标量字段或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow generic typed IR candidate path for simple readonly record pointer field reads: `const struct T *p; return p->scalar_field;` now emits `pub fn f(p: &T) -> Scalar { return p.scalar_field; }`.
+- Kept arrow member assignment and compound/update write shapes fail-closed with pointer/record ownership evidence errors.
+- Made clang record inventory attach to function params and recursively into pointer pointees/array elements, so real clang record pointer candidates can use complete direct scalar field inventories.
+- Treated declaration `int` and const-read expression `const int` as compatible for the same integer record field while preserving real type mismatch failures.
+- Updated the Chinese and English MVP backlog to mark this narrow readonly pointer field read candidate as supported while keeping pointer field writes and alias-sensitive ownership out of scope.
