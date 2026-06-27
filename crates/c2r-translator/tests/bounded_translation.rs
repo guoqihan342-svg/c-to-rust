@@ -235,6 +235,17 @@ fn ir_binary(op: IrBinOp, lhs: IrExpr, rhs: IrExpr, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_conditional(condition: IrExpr, then_expr: IrExpr, else_expr: IrExpr, ty: IrType) -> IrExpr {
+    IrExpr::Conditional {
+        condition: Box::new(condition),
+        then_expr: Box::new(then_expr),
+        else_expr: Box::new(else_expr),
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_deref(ptr: IrExpr, ty: IrType) -> IrExpr {
     IrExpr::Deref {
         ptr: Box::new(ptr),
@@ -4482,6 +4493,389 @@ fn typed_ir_rejects_value_comparison_with_post_increment_byte_read_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_conditional_return_value() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "select_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_conditional(
+                ir_var("flag", i32_ty.clone()),
+                ir_var("left", i32_ty.clone()),
+                ir_var("right", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit conditional return value");
+
+    assert!(rust.contains("pub fn select_value(flag: i32, left: i32, right: i32) -> i32"));
+    assert!(rust.contains("return (if flag != 0i32 { left } else { right });"));
+    assert_rust_snippet_compiles("typed-ir-conditional-return-value", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_conditional_assignment_value() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "select_into_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "fallback".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("value", i32_ty.clone()),
+                value: ir_conditional(
+                    ir_var("flag", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("fallback", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit conditional assignment value");
+
+    assert!(
+        rust.contains("pub fn select_into_value(flag: i32, mut value: i32, fallback: i32) -> i32")
+    );
+    assert!(rust.contains("value = (if flag != 0i32 { value } else { fallback });"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-conditional-assignment-value", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_conditional_decl_initializer() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "select_init".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "out".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_conditional(
+                    ir_var("flag", i32_ty.clone()),
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("out", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit conditional decl initializer");
+
+    assert!(rust.contains("pub fn select_init(flag: i32, left: i32, right: i32) -> i32"));
+    assert!(rust.contains("let mut out: i32 = (if flag != 0i32 { left } else { right });"));
+    assert!(rust.contains("return out;"));
+    assert_rust_snippet_compiles("typed-ir-conditional-decl-initializer", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_conditional_value_with_mismatched_arm_types() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_conditional_arm_types".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "flag".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_conditional(
+                ir_var("flag", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                ir_lit(2, "2U", u32_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("mismatched conditional arms must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("conditional else expression type u32 does not match expected type i32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_conditional_value_with_call_arm() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_conditional_call_arm".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "flag".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_conditional(
+                ir_var("flag", i32_ty.clone()),
+                IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("conditional call arm must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("conditional then expression call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_conditional_value_with_post_increment_byte_read_arm() {
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = ir_deref(
+        IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        },
+        u8_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_conditional_byte_read_arm".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_conditional(
+                ir_var("flag", i32_ty.clone()),
+                IrExpr::Cast {
+                    target: i32_ty.clone(),
+                    expr: Box::new(byte_read),
+                    implicit: true,
+                    source_span: None,
+                },
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("conditional post-increment byte read arm must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("conditional then expression cannot use increment/decrement value semantics"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_conditional_value_with_assignment_arm() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_conditional_assignment_arm".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_conditional(
+                ir_var("flag", i32_ty.clone()),
+                ir_binary(
+                    IrBinOp::Assign,
+                    ir_var("value", i32_ty.clone()),
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("conditional assignment arm must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("conditional then expression cannot use assignment or comma operators"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_conditional_in_if_condition_position() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_conditional_if_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "flag".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_conditional(
+                    ir_var("flag", i32_ty.clone()),
+                    ir_lit(1, "1", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("condition-position conditional must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("if condition"));
+    assert!(error
+        .reason
+        .contains("conditional expression is unsupported in condition positions"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_comparison_condition_with_mismatched_operand_types() {
     let i32_ty = ir_i32();
     let u32_ty = ir_u32();
@@ -7525,6 +7919,86 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
     assert!(rust.contains("value = (value << 1i32);"));
     assert!(rust.contains("value = (value >> 1i32);"));
     assert_rust_snippet_compiles("typed-ir-clang-compound-family", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_integer_conditional_return_value() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "pick".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "flag".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "left".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "right".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Conditional {
+                condition: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "flag".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                then_expr: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "left".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                else_expr: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "right".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower conditional return skeleton");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Conditional {
+                condition,
+                then_expr,
+                else_expr,
+                ty,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected conditional return, got {:?}", ir.body);
+    };
+    assert!(matches!(condition.as_ref(), IrExpr::Var { name, .. } if name == "flag"));
+    assert!(matches!(then_expr.as_ref(), IrExpr::Var { name, .. } if name == "left"));
+    assert!(matches!(else_expr.as_ref(), IrExpr::Var { name, .. } if name == "right"));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit conditional return from lowered skeleton");
+    assert!(rust.contains("pub fn pick(flag: i32, left: i32, right: i32) -> i32"));
+    assert!(rust.contains("return (if flag != 0i32 { left } else { right });"));
+    assert_rust_snippet_compiles("typed-ir-clang-conditional-return", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -11774,6 +12248,260 @@ fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
     assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
     assert!(rust.contains("return left;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-assign-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_conditional_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-conditional-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("pick.c");
+    fs::write(
+        &source_file,
+        "int pick(int flag, int left, int right) { return flag ? left : right; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "pick");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Conditional { .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected conditional return, got {:?}", function.body);
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit conditional return from real clang AST");
+    assert!(rust.contains("pub fn pick(flag: i32, left: i32, right: i32) -> i32"));
+    assert!(rust.contains("return (if flag != 0i32 { left } else { right });"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-conditional-return", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_conditional_decl_initializer_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-conditional-decl");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("pick_init.c");
+    fs::write(
+        &source_file,
+        "int pick_init(int flag, int left, int right) { int out = flag ? left : right; return out; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "pick_init");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        init: Some(IrExpr::Conditional { .. }),
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected conditional decl initializer followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit conditional decl initializer from real clang AST");
+    assert!(rust.contains("pub fn pick_init(flag: i32, left: i32, right: i32) -> i32"));
+    assert!(rust.contains("let mut out: i32 = (if flag != 0i32 { left } else { right });"));
+    assert!(rust.contains("return out;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-conditional-decl", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_conditional_assignment_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-conditional-assign");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("pick_assign.c");
+    fs::write(
+        &source_file,
+        "int pick_assign(int flag, int value, int fallback) { value = flag ? value : fallback; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "pick_assign");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign {
+        value: IrExpr::Conditional { .. },
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected conditional assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit conditional assignment from real clang AST");
+    assert!(rust.contains("pub fn pick_assign(flag: i32, mut value: i32, fallback: i32) -> i32"));
+    assert!(rust.contains("value = (if flag != 0i32 { value } else { fallback });"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-conditional-assign", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_unsigned_conditional_branch_integral_cast_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-unsigned-conditional-cast");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("choose_u32.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t choose_u32(uint32_t flag, uint32_t value) { return flag ? value : 2; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "choose_u32");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Conditional { else_expr, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected unsigned conditional return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(
+        else_expr.as_ref(),
+        IrExpr::Cast { implicit: true, .. }
+    ));
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit unsigned conditional return from real clang AST");
+    assert!(rust.contains("pub fn choose_u32(flag: u32, value: u32) -> u32"));
+    assert!(rust.contains("return (if flag != 0u32 { value } else { (2i32 as u32) });"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-unsigned-conditional-cast", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_binary_conditional_operator_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-binary-conditional");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_gnu_conditional.c");
+    fs::write(
+        &source_file,
+        "int bad_gnu_conditional(int value, int fallback) { return value ?: fallback; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_gnu_conditional",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("BinaryConditionalOperator"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

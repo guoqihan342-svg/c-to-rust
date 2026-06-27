@@ -666,6 +666,16 @@ fn record_ir_call_expression_evidence_for_expr(
         typed_ir::IrExpr::Unary { operand, .. } => {
             record_ir_call_expression_evidence_for_expr(operand, statement_context, result);
         }
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            record_ir_call_expression_evidence_for_expr(condition, statement_context, result);
+            record_ir_call_expression_evidence_for_expr(then_expr, statement_context, result);
+            record_ir_call_expression_evidence_for_expr(else_expr, statement_context, result);
+        }
         typed_ir::IrExpr::Cast { expr, .. } => {
             record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
         }
@@ -709,6 +719,17 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::Unary { op, operand, .. } => {
             format!("({}{})", ir_un_op_source(op), ir_expr_source_text(operand))
         }
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => format!(
+            "({} ? {} : {})",
+            ir_expr_source_text(condition),
+            ir_expr_source_text(then_expr),
+            ir_expr_source_text(else_expr)
+        ),
         typed_ir::IrExpr::Cast { target, expr, .. } => {
             format!("({} as {})", ir_expr_source_text(expr), ir_c_type(target))
         }
@@ -868,6 +889,7 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::NullPtr { .. } => "null_ptr".to_string(),
         typed_ir::IrExpr::Binary { op, .. } => format!("{op:?}"),
         typed_ir::IrExpr::Unary { op, .. } => format!("{op:?}"),
+        typed_ir::IrExpr::Conditional { .. } => "conditional".to_string(),
         typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
         typed_ir::IrExpr::Index { .. } => "index".to_string(),
         typed_ir::IrExpr::ArrayLiteral { .. } => "array_literal".to_string(),
@@ -1061,6 +1083,16 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
         }
         typed_ir::IrExpr::Unary { operand, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(operand, vars);
+        }
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+            collect_ir_post_increment_deref_vars_from_expr(then_expr, vars);
+            collect_ir_post_increment_deref_vars_from_expr(else_expr, vars);
         }
         typed_ir::IrExpr::Cast { expr, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(expr, vars);

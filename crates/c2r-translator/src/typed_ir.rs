@@ -103,6 +103,13 @@ pub enum IrExpr {
         ty: IrType,
         source_span: Option<SourceSpan>,
     },
+    Conditional {
+        condition: Box<IrExpr>,
+        then_expr: Box<IrExpr>,
+        else_expr: Box<IrExpr>,
+        ty: IrType,
+        source_span: Option<SourceSpan>,
+    },
     Cast {
         target: IrType,
         expr: Box<IrExpr>,
@@ -980,6 +987,13 @@ fn emit_expr(
                 Ok(format!("!{operand}"))
             }
         },
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+            ..
+        } => emit_conditional_value_expr(condition, then_expr, else_expr, ty, symbols, context),
         IrExpr::Cast { target, expr, .. } => {
             if !is_integer_type(target) {
                 return Err(format!("cast target {} is unsupported", type_label(target)));
@@ -1158,6 +1172,9 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
         IrExpr::Call { callee, .. } => Err(format!(
             "deref pointer add index call expression {callee} is unsupported"
         )),
+        IrExpr::Conditional { .. } => {
+            Err("deref pointer add index cannot use conditional expression".to_string())
+        }
         IrExpr::IncDec { .. } => {
             Err("deref pointer add index cannot use increment/decrement".to_string())
         }
@@ -1245,6 +1262,9 @@ fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
         IrExpr::Unary { operand, .. } | IrExpr::Cast { expr: operand, .. } => {
             validate_bounded_call_arg(operand)
         }
+        IrExpr::Conditional { .. } => {
+            Err("conditional call arguments are outside the bounded call subset".to_string())
+        }
         IrExpr::Index { base, index, .. } => {
             validate_bounded_call_arg(base)?;
             validate_bounded_call_arg(index)
@@ -1275,6 +1295,14 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         IrExpr::Call { callee, .. } => Some(callee),
         IrExpr::Binary { lhs, rhs, .. } => find_call_callee(lhs).or_else(|| find_call_callee(rhs)),
         IrExpr::Unary { operand, .. } => find_call_callee(operand),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => find_call_callee(condition)
+            .or_else(|| find_call_callee(then_expr))
+            .or_else(|| find_call_callee(else_expr)),
         IrExpr::Cast { expr, .. } => find_call_callee(expr),
         IrExpr::Index { base, index, .. } => {
             find_call_callee(base).or_else(|| find_call_callee(index))
@@ -1360,6 +1388,19 @@ fn emit_expr_with_prelude(
                 expr: format!("({} as {target})", emitted.expr),
             })
         }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+            ..
+        } => Ok(EmittedExpr {
+            prelude: String::new(),
+            expr: emit_conditional_value_expr(
+                condition, then_expr, else_expr, ty, symbols, context,
+            )
+            .map_err(|detail| format!("{path} {detail}"))?,
+        }),
         IrExpr::Index {
             base, index, ty, ..
         } => {
@@ -1869,6 +1910,9 @@ fn emit_condition_expr(
     if let Some(callee) = find_call_callee(expr) {
         return Err(format!("call expression {callee} is unsupported"));
     }
+    if matches!(expr, IrExpr::Conditional { .. }) {
+        return Err("conditional expression is unsupported in condition positions".to_string());
+    }
     if let IrExpr::Unary {
         op: IrUnOp::Not,
         operand,
@@ -1986,6 +2030,127 @@ fn emit_comparison_value_expr(
     Ok(Some(format!(
         "(if {condition} {{ {one} }} else {{ {zero} }})"
     )))
+}
+
+fn emit_conditional_value_expr(
+    condition: &IrExpr,
+    then_expr: &IrExpr,
+    else_expr: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    emit_scalar_type(result_ty)
+        .map_err(|detail| format!("conditional result type has {detail}"))?;
+    if !is_integer_type(result_ty) {
+        return Err(format!(
+            "conditional result type {} is unsupported",
+            type_label(result_ty)
+        ));
+    }
+    validate_conditional_arm_expr(then_expr, result_ty, "then")?;
+    validate_conditional_arm_expr(else_expr, result_ty, "else")?;
+    let condition = emit_condition_expr(condition, symbols, context)
+        .map_err(|detail| format!("conditional condition {detail}"))?;
+    let then_expr = emit_expr(then_expr, symbols, context)
+        .map_err(|detail| format!("conditional then expression {detail}"))?;
+    let else_expr = emit_expr(else_expr, symbols, context)
+        .map_err(|detail| format!("conditional else expression {detail}"))?;
+    Ok(format!(
+        "(if {condition} {{ {then_expr} }} else {{ {else_expr} }})"
+    ))
+}
+
+fn validate_conditional_arm_expr(
+    expr: &IrExpr,
+    expected_ty: &IrType,
+    side: &str,
+) -> Result<(), String> {
+    if let Some(callee) = find_call_callee(expr) {
+        return Err(format!(
+            "conditional {side} expression call expression {callee} is unsupported"
+        ));
+    }
+    if expr_has_inc_dec(expr) {
+        return Err(format!(
+            "conditional {side} expression cannot use increment/decrement value semantics"
+        ));
+    }
+    if count_post_increment_byte_reads(expr) > 0 {
+        return Err(format!(
+            "conditional {side} expression cannot use post-increment byte reads"
+        ));
+    }
+    if expr_has_assign_or_comma(expr) {
+        return Err(format!(
+            "conditional {side} expression cannot use assignment or comma operators"
+        ));
+    }
+    validate_expr_matches_type(expr, expected_ty, &format!("conditional {side} expression"))
+}
+
+fn expr_has_inc_dec(expr: &IrExpr) -> bool {
+    match expr {
+        IrExpr::IncDec { .. } => true,
+        IrExpr::Binary { lhs, rhs, .. } => expr_has_inc_dec(lhs) || expr_has_inc_dec(rhs),
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => expr_has_inc_dec(operand),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            expr_has_inc_dec(condition)
+                || expr_has_inc_dec(then_expr)
+                || expr_has_inc_dec(else_expr)
+        }
+        IrExpr::Index { base, index, .. } => expr_has_inc_dec(base) || expr_has_inc_dec(index),
+        IrExpr::ArrayLiteral { elements, .. } => elements.iter().any(expr_has_inc_dec),
+        IrExpr::Call { args, .. } => args.iter().any(expr_has_inc_dec),
+        IrExpr::Deref { ptr, .. } => expr_has_inc_dec(ptr),
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => false,
+    }
+}
+
+fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
+    match expr {
+        IrExpr::Binary {
+            op: IrBinOp::Assign | IrBinOp::Comma,
+            ..
+        } => true,
+        IrExpr::Binary { lhs, rhs, .. } => {
+            expr_has_assign_or_comma(lhs) || expr_has_assign_or_comma(rhs)
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => expr_has_assign_or_comma(operand),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            expr_has_assign_or_comma(condition)
+                || expr_has_assign_or_comma(then_expr)
+                || expr_has_assign_or_comma(else_expr)
+        }
+        IrExpr::Index { base, index, .. } => {
+            expr_has_assign_or_comma(base) || expr_has_assign_or_comma(index)
+        }
+        IrExpr::ArrayLiteral { elements, .. } => elements.iter().any(expr_has_assign_or_comma),
+        IrExpr::Call { args, .. } => args.iter().any(expr_has_assign_or_comma),
+        IrExpr::IncDec { target, .. } => expr_has_assign_or_comma(target),
+        IrExpr::Deref { ptr, .. } => expr_has_assign_or_comma(ptr),
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => false,
+    }
 }
 
 fn emit_logical_not_condition_expr(
@@ -2345,6 +2510,16 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            expr_has_post_increment_byte_read(condition, cursor)
+                || expr_has_post_increment_byte_read(then_expr, cursor)
+                || expr_has_post_increment_byte_read(else_expr, cursor)
+        }
         IrExpr::ArrayLiteral { elements, .. } => elements
             .iter()
             .any(|element| expr_has_post_increment_byte_read(element, cursor)),
@@ -2373,6 +2548,16 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            count_post_increment_byte_reads(condition)
+                + count_post_increment_byte_reads(then_expr)
+                + count_post_increment_byte_reads(else_expr)
+        }
         IrExpr::ArrayLiteral { elements, .. } => {
             elements.iter().map(count_post_increment_byte_reads).sum()
         }
@@ -2531,6 +2716,28 @@ fn collect_nullable_pointer_params_from_expr(
             readonly_pointer_params,
             nullable_params,
         ),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_nullable_pointer_params_from_expr(
+                condition,
+                readonly_pointer_params,
+                nullable_params,
+            );
+            collect_nullable_pointer_params_from_expr(
+                then_expr,
+                readonly_pointer_params,
+                nullable_params,
+            );
+            collect_nullable_pointer_params_from_expr(
+                else_expr,
+                readonly_pointer_params,
+                nullable_params,
+            );
+        }
         IrExpr::Index { base, index, .. } => {
             collect_nullable_pointer_params_from_expr(
                 base,
@@ -2658,6 +2865,16 @@ fn validate_nullable_pointer_param_uses_in_expr(
         | IrExpr::AddrOf { operand, .. } => {
             validate_nullable_pointer_param_uses_in_expr(operand, nullable_params)
         }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(then_expr, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(else_expr, nullable_params)
+        }
         IrExpr::Index { base, index, .. } => {
             validate_nullable_pointer_param_uses_in_expr(base, nullable_params)?;
             validate_nullable_pointer_param_uses_in_expr(index, nullable_params)
@@ -2755,6 +2972,7 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::Var { ty, .. }
         | IrExpr::Binary { ty, .. }
         | IrExpr::Unary { ty, .. }
+        | IrExpr::Conditional { ty, .. }
         | IrExpr::Index { ty, .. }
         | IrExpr::ArrayLiteral { ty, .. }
         | IrExpr::Call { ty, .. }

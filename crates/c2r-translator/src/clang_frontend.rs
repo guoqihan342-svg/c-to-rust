@@ -207,6 +207,12 @@ pub enum ClangExprSkeleton {
         operand: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    Conditional {
+        condition: Box<ClangExprSkeleton>,
+        then_expr: Box<ClangExprSkeleton>,
+        else_expr: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     IncDec {
         target: Box<ClangExprSkeleton>,
         op: ClangIncDecOperator,
@@ -1178,6 +1184,27 @@ fn expr_skeleton_from_ast_with_options(
                 ty: expr_type(expr)?,
             })
         }
+        Some("ConditionalOperator") => {
+            let children = inner(expr);
+            let [condition, then_expr, else_expr] = children else {
+                return Err(ClangFrontendError {
+                    kind: "invalid_conditional_operator".to_string(),
+                    message: "ConditionalOperator must have condition, then, and else operands"
+                        .to_string(),
+                });
+            };
+            Ok(ClangExprSkeleton::Conditional {
+                condition: Box::new(expr_skeleton_from_ast_with_options(condition, false)?),
+                then_expr: Box::new(expr_skeleton_from_ast_with_options(then_expr, true)?),
+                else_expr: Box::new(expr_skeleton_from_ast_with_options(else_expr, true)?),
+                ty: expr_type(expr)?,
+            })
+        }
+        Some("BinaryConditionalOperator") => Ok(ClangExprSkeleton::Unsupported {
+            node: "BinaryConditionalOperator".to_string(),
+            reason: "GNU omitted-middle conditional operator is outside the current skeleton"
+                .to_string(),
+        }),
         Some("ArraySubscriptExpr") => {
             let children = inner(expr);
             let [base, index] = children else {
@@ -1525,6 +1552,9 @@ fn bounded_call_arg_rejection_reason(expr: &ClangExprSkeleton) -> Option<String>
         ClangExprSkeleton::Unary { operand, .. }
         | ClangExprSkeleton::Cast { expr: operand, .. } => {
             bounded_call_arg_rejection_reason(operand)
+        }
+        ClangExprSkeleton::Conditional { .. } => {
+            Some("conditional call arguments are outside the bounded call subset".to_string())
         }
         ClangExprSkeleton::Index { base, index, .. } => bounded_call_arg_rejection_reason(base)
             .or_else(|| bounded_call_arg_rejection_reason(index)),
@@ -1883,6 +1913,18 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::Unary { op, operand, ty } => Ok(IrExpr::Unary {
             op: lower_unary_operator(op),
             operand: Box::new(lower_expr(operand)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+        } => Ok(IrExpr::Conditional {
+            condition: Box::new(lower_expr(condition)?),
+            then_expr: Box::new(lower_expr(then_expr)?),
+            else_expr: Box::new(lower_expr(else_expr)?),
             ty: lower_type(ty)?,
             source_span: None,
         }),
@@ -2865,6 +2907,186 @@ mod tests {
         assert!(error
             .message
             .contains("callee is not a direct function identifier"));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_maps_integer_conditional_operator() {
+        let expr = serde_json::json!({
+            "kind": "ConditionalOperator",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "flag" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "left" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "right" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("conditional skeleton");
+        let ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+        } = skeleton
+        else {
+            panic!("expected conditional skeleton, got {skeleton:?}");
+        };
+        assert!(
+            matches!(condition.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "flag")
+        );
+        assert!(
+            matches!(then_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "left")
+        );
+        assert!(
+            matches!(else_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "right")
+        );
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+
+        let ir = lower_expr(&ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+        })
+        .expect("lower conditional skeleton");
+        assert!(matches!(
+            ir,
+            IrExpr::Conditional {
+                ty: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: true,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_conditional_branch_integral_casts() {
+        let expr = serde_json::json!({
+            "kind": "ConditionalOperator",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "uint32_t" },
+                            "referencedDecl": { "name": "flag" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "uint32_t" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "2"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = value_expr_skeleton_from_ast(&expr).expect("conditional skeleton");
+        let ClangExprSkeleton::Conditional { else_expr, .. } = skeleton else {
+            panic!("expected conditional skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            else_expr.as_ref(),
+            ClangExprSkeleton::Cast {
+                implicit: true,
+                target: ClangTypeSkeleton {
+                    kind: ClangTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_binary_conditional_operator() {
+        let expr = serde_json::json!({
+            "kind": "BinaryConditionalOperator",
+            "type": { "qualType": "int" },
+            "inner": []
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("binary conditional skeleton");
+
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::Unsupported { ref node, ref reason }
+                if node == "BinaryConditionalOperator"
+                    && reason.contains("omitted-middle conditional")
+        ));
+        let error = lower_expr(&skeleton).expect_err("binary conditional must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("BinaryConditionalOperator"));
     }
 
     #[test]

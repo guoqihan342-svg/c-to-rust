@@ -41,8 +41,12 @@ Important supported increments:
 
 - Scalar declarations, assignments, returns, `if`, and `while`.
 - Scalar integer `+ - * / % & | ^ << >>` and signed unary `-`.
+- Clang-lowered simple scalar compound assignment family.
+- Clang-preserved value-position integer implicit casts in declaration initializers, assignment RHS, and return values.
 - Comparisons in conditions and narrow value-position C `int` 0/1 materialization.
 - Logical not in conditions and narrow value-position C `int` 0/1 materialization.
+- Condition-position short-circuit `&&` / `||`.
+- Pure integer value-position `ConditionalOperator` / `?:` with lazy `IrExpr::Conditional`.
 - Readonly pointer slice parameters, direct `NULL` presence checks, direct readonly `*p` reads, and narrow readonly `*(p+i)` / `*(i+p)` reads.
 - Readonly global const integer arrays and local fixed-length integer array reads/writes.
 - Bounded direct identifier calls.
@@ -50,8 +54,8 @@ Important supported increments:
 
 Remaining P0 gaps:
 
-- First-class typed IR compound assignment such as `x += y`.
-- Short-circuit `&&` / `||`.
+- `ForStmt` with a scope model that does not break init scope or `continue` semantics.
+- Value-position short-circuit `&&` / `||` materialization, if it can preserve lazy semantics without hoisting side effects.
 - Complete usual scalar conversion classification.
 - Pointer writes, aliasing, and ownership modeling.
 
@@ -59,8 +63,9 @@ Remaining P0 gaps:
 
 Real clang smoke tests pass, so the issue is no longer clang installation. The issue is the supported clang skeleton / typed IR subset:
 
-- `CompoundAssignOperator` is not yet modeled as typed IR.
-- `&&` / `||` are not yet mapped into typed IR.
+- `CompoundAssignOperator` now lowers for standalone simple scalar variable targets only.
+- `&&` / `||` now lower for condition-position use only.
+- Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
 - `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
 - Structs/records, field access, switch/goto/do-while, and memory semantics are still outside the safe emitter.
 
@@ -68,11 +73,10 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 The right next path is not returning to FlashDB-specific templates. Continue extending typed IR through small verifiable slices:
 
-1. **Bounded readonly offset-deref hardening**: `*p -> p[0usize]` and narrow `*(p+i)` / `*(i+p) -> p[i as usize]` now work; the next step is keeping real-clang, documentation, and fail-closed boundary coverage in place.
-2. **Scalar compound assignment**: add a first-class typed IR statement, initially only for scalar `Var` targets, rejecting indexed or side-effecting lvalues.
-3. **Condition-position `&&` / `||`**: only allow side-effect-free comparison/logical-not operands and preserve short-circuit behavior. Value-position 0/1 materialization should be separate.
-4. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
-5. **Struct / memory model design**: flat structs, field access, pointer writes, aliasing, and ownership need a separate design plus validation gates.
+1. **Scoped `ForStmt`**: add an explicit scope/block model first, or keep a deliberately narrower fail-closed rule, so init scope and `continue` behavior do not drift.
+2. **Value-position short-circuit**: materialize C `int` 0/1 only if lazy `&&` / `||` branch evaluation can be preserved without prelude hoisting.
+3. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
+4. **Struct / memory model design**: flat structs, field access, pointer writes, aliasing, and ownership need a separate design plus validation gates.
 
 ## Boundaries
 
@@ -80,6 +84,7 @@ These should still fail closed:
 
 - Arbitrary pointer comparison, pointer truthiness, and nullable pointer index/deref after a null check.
 - Pointer arithmetic other than the narrow readonly integer pointer plus side-effect-free integer index `*(p+i)` read.
+- Condition-position `?:`, expression-statement `?:`, GNU omitted-middle `a ?: b`, and conditional branches with call/inc/dec/post-increment/assignment/comma side effects.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.
 - Volatile, hardware registers, cross-thread, and interrupt semantics.

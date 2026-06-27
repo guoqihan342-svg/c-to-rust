@@ -7232,3 +7232,61 @@ English mirror summary:
 - The implementation reuses existing `ClangExprSkeleton::Cast` / `IrExpr::Cast`; no new IR structure was added.
 - Real clang cases such as `uint32_t value = 1; value = 2; return 3;` now emit Rust integer casts such as `(1i32 as u32)`.
 - This is candidate generation only. Full usual scalar conversions, function-pointer decay, pointer casts, floating-point casts, hidden side-effect conversions, semantic acceptance, and validation `semantic_pass` still fail closed.
+
+## 105. 2026-06-27 pure integer value-position ConditionalOperator / ?:
+
+本轮继续按多智能体并行推进核心语法面扩展。只读子智能体分别复核了 typed IR `Conditional` 递归点、clang AST `ConditionalOperator` / `BinaryConditionalOperator` 形态，以及 fail-closed 文档边界；主线程按 TDD 落地最小安全切片：只支持纯整数 value-position `?:`，覆盖 return value、assignment RHS 和 declaration initializer。结论：普通 clang `ConditionalOperator` 现在可以 lowering 到一等 lazy `IrExpr::Conditional`，并由 generic typed IR emitter 发射 Rust `if cond { then } else { else }` 表达式；这不是完整 C `?:`，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrExpr` 新增 `Conditional { condition, then_expr, else_expr, ty }`。
+  - `emit_expr()` / `emit_expr_with_prelude()` 新增 conditional value-position 发射，condition 复用 `emit_condition_expr()`，then/else 直接用 `emit_expr()`，不把分支 prelude 提前到 `if` 外。
+  - 新增 fail-closed guard：then/else 分支含 call、inc/dec、post-increment byte read、assignment/comma 或类型不匹配时拒绝。
+  - `emit_condition_expr()` 显式拒绝 condition-position conditional；`validate_bounded_call_arg()` 和 `validate_readonly_pointer_add_index_expr()` 也继续拒绝 conditional。
+  - 所有需要递归扫描 `IrExpr` 的 call evidence、post-increment、nullable pointer 和类型 helper 已覆盖 `condition/then_expr/else_expr`。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Conditional`。
+  - `expr_skeleton_from_ast_with_options()` 支持普通 `ConditionalOperator`，then/else 分支强制保留 value-position integer casts。
+  - `BinaryConditionalOperator` / GNU `a ?: b` 显式转成 unsupported，避免破坏 lhs 单求值语义。
+  - `lower_expr()` 把 skeleton lowering 成 `IrExpr::Conditional`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang lowering report 的 call evidence、source text、label 和 post-increment scan 已支持 `Conditional`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：return value、assignment RHS、declaration initializer。
+  - 新增 direct typed IR 负测：arm 类型不匹配、arm call、arm post-increment byte read、arm assignment、condition-position conditional。
+  - 新增 clang skeleton 正测和真实 clang AST smoke：return value、assignment RHS、declaration initializer、unsigned branch integral cast。
+  - 新增真实 clang AST fail-closed：GNU `value ?: fallback` / `BinaryConditionalOperator`。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+已跑过的聚焦绿灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir conditional_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir conditional_ -- --nocapture
+```
+
+聚焦结果：
+- `conditional_` filter 在 `clang-frontend,typed-ir` 下 14 条通过。
+- 打开真实 clang AST gate 后同 14 条实际运行并通过，覆盖普通 `ConditionalOperator` 与 GNU `BinaryConditionalOperator` 拒绝。
+
+当前边界：
+- 可以说：纯整数 value-position `?:` 现在能从真实 clang AST 进入 `GenericTypedIr`，生成可编译 Rust candidate。
+- 可以说：`uint32_t choose(uint32_t flag, uint32_t value) { return flag ? value : 2; }` 会保留 else arm 的 clang integral cast 并发射 `(2i32 as u32)`。
+- 不应说：已支持 condition-position `?:`、expression-statement `?:`、GNU `a ?: b`、pointer/float/aggregate result、arm 内 call/inc/dec/post-increment/assignment/comma 副作用、完整 usual scalar conversions 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续核心语法优先级：scoped `ForStmt`、value-position short-circuit materialization、usual conversion 分类、struct/field/memory model 设计。
+
+English mirror summary:
+
+- Added pure integer value-position `ConditionalOperator` / `?:` candidate generation.
+- Ordinary clang `ConditionalOperator` lowers to first-class lazy `IrExpr::Conditional` and emits Rust `if cond { then } else { else }` expressions.
+- Return values, assignment RHS, declaration initializers, and clang-preserved integer casts in branches are covered by direct, skeleton, and real clang smoke tests.
+- GNU omitted-middle `a ?: b`, condition-position `?:`, expression-statement `?:`, side-effecting branches, pointer/float/aggregate results, full usual conversions, and semantic acceptance still fail closed.
