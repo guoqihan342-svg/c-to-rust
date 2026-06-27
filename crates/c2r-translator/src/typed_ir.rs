@@ -1149,6 +1149,17 @@ fn emit_stmt(
                 );
             }
             validate_expr_matches_type(value, target_ty, "assign value")?;
+            if let Some(compound_value) =
+                emit_mutable_record_pointer_member_compound_assignment_value(
+                    target,
+                    value,
+                    &target_name,
+                    symbols,
+                    context,
+                )?
+            {
+                return Ok(format!("{indent}{target_name} = {compound_value};\n"));
+            }
             let emitted =
                 emit_expr_with_prelude(value, symbols, context, indent_level, "assign value")?;
             Ok(format!(
@@ -1545,6 +1556,120 @@ fn emit_mutable_record_pointer_member_assignment_target(
     let base_name = emit_identifier(base_name, "arrow member assignment base")?;
     let field = emit_identifier(field, "arrow member assignment field")?;
     Ok(format!("{base_name}.{field}"))
+}
+
+fn emit_mutable_record_pointer_member_compound_assignment_value(
+    target: &IrExpr,
+    value: &IrExpr,
+    emitted_target: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = value
+    else {
+        return Ok(None);
+    };
+    if !same_direct_mutable_record_pointer_member(lhs, target, context)? {
+        return Ok(None);
+    }
+    if let Some(reason) = mutable_record_pointer_field_compound_rhs_rejection_reason(rhs) {
+        return Err(reason);
+    }
+    let op = emit_binary_op(op)?;
+    validate_binary_operand_types(op, lhs, rhs, ty)?;
+    let rhs = emit_expr(rhs, symbols, context).map_err(|detail| {
+        format!("mutable record pointer field compound assignment RHS {detail}")
+    })?;
+    Ok(Some(format!("({emitted_target} {op} {rhs})")))
+}
+
+fn same_direct_mutable_record_pointer_member(
+    lhs: &IrExpr,
+    target: &IrExpr,
+    context: &EmitContext,
+) -> Result<bool, String> {
+    let Some((target_base, target_base_ty, target_field, target_ty)) =
+        direct_mutable_record_pointer_member_parts(target, context)?
+    else {
+        return Ok(false);
+    };
+    let Some((lhs_base, lhs_base_ty, lhs_field, lhs_ty)) =
+        direct_mutable_record_pointer_member_parts(lhs, context)?
+    else {
+        return Ok(false);
+    };
+    Ok(target_base == lhs_base
+        && target_base_ty == lhs_base_ty
+        && target_field == lhs_field
+        && target_ty == lhs_ty)
+}
+
+fn direct_mutable_record_pointer_member_parts<'a>(
+    expr: &'a IrExpr,
+    context: &EmitContext,
+) -> Result<Option<(&'a str, &'a IrType, &'a str, &'a IrType)>, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow: true,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name, ty: base_ty, ..
+    } = base.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !context.is_mutable_record_pointer_write_param(name) {
+        return Ok(None);
+    }
+    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "mutable record pointer field compound assignment base {name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_scalar_type(ty).map_err(|detail| {
+        format!("mutable record pointer field compound assignment field {field} has {detail}")
+    })?;
+    Ok(Some((name.as_str(), base_ty, field.as_str(), ty)))
+}
+
+fn mutable_record_pointer_field_compound_rhs_rejection_reason(value: &IrExpr) -> Option<String> {
+    match value {
+        IrExpr::Var { ty, .. } | IrExpr::LitInt { ty, .. } => {
+            if is_integer_type(ty) {
+                None
+            } else {
+                Some(format!(
+                    "mutable record pointer field compound assignment RHS must be a simple integer variable, literal, or integral cast; got {}",
+                    type_label(ty)
+                ))
+            }
+        }
+        IrExpr::Cast { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Some(format!(
+                    "mutable record pointer field compound assignment RHS cast target must be an integer; got {}",
+                    type_label(target)
+                ));
+            }
+            mutable_record_pointer_field_compound_rhs_rejection_reason(expr)
+        }
+        IrExpr::Unsupported { node, reason, .. } => Some(format!(
+            "mutable record pointer field compound assignment RHS uses unsupported expression {node}: {reason}"
+        )),
+        _ => Some(
+            "mutable record pointer field compound assignment RHS must be a simple integer variable, literal, or integral cast"
+                .to_string(),
+        ),
+    }
 }
 
 fn emit_index_assignment_target(

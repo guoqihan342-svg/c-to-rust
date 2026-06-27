@@ -1211,7 +1211,7 @@ fn compound_assign_stmt_skeleton_from_ast(
     }
     let preserve_integral_casts = preserves_integral_operand_casts(&op);
     let value = expr_skeleton_from_ast_with_options(value, preserve_integral_casts)?;
-    if compound_assignment_target_is_by_value_record_field(&target) {
+    if compound_assignment_target_is_direct_record_field(&target) {
         if let Some(reason) = record_field_compound_assignment_value_rejection_reason(&value) {
             return Ok(ClangStmtSkeleton::Unsupported { reason });
         }
@@ -1233,10 +1233,26 @@ fn compound_assignment_target_type(
 ) -> Result<&ClangTypeSkeleton, String> {
     match target {
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ty),
-        ClangExprSkeleton::Member { is_arrow: true, .. } => Err(
-            "compound assignment arrow member targets require pointer/record ownership evidence"
-                .to_string(),
-        ),
+        ClangExprSkeleton::Member {
+            base,
+            ty,
+            is_arrow: true,
+            ..
+        } => match base.as_ref() {
+            ClangExprSkeleton::DeclRef { ty: base_ty, .. }
+                if clang_type_is_mutable_record_pointer(base_ty) =>
+            {
+                Ok(ty)
+            }
+            ClangExprSkeleton::DeclRef { .. } => Err(
+                "compound assignment arrow member target base must be a non-const record pointer variable"
+                    .to_string(),
+            ),
+            _ => Err(
+                "compound assignment arrow member target must have a direct record pointer variable base"
+                    .to_string(),
+            ),
+        },
         ClangExprSkeleton::Member {
             base,
             ty,
@@ -1258,10 +1274,16 @@ fn compound_assignment_target_type(
             ),
         },
         _ => Err(
-            "compound assignment target must be a simple variable or by-value record field"
+            "compound assignment target must be a simple variable or by-value record field, or direct mutable record pointer field"
                 .to_string(),
         ),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_target_is_direct_record_field(target: &ClangExprSkeleton) -> bool {
+    compound_assignment_target_is_by_value_record_field(target)
+        || compound_assignment_target_is_mutable_record_pointer_field(target)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1282,6 +1304,34 @@ fn compound_assignment_target_is_by_value_record_field(target: &ClangExprSkeleto
                 ..
             }
         )
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_target_is_mutable_record_pointer_field(target: &ClangExprSkeleton) -> bool {
+    matches!(
+        target,
+        ClangExprSkeleton::Member {
+            base,
+            is_arrow: true,
+            ..
+        } if matches!(
+            base.as_ref(),
+            ClangExprSkeleton::DeclRef {
+                ty,
+                ..
+            } if clang_type_is_mutable_record_pointer(ty)
+        )
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_mutable_record_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee }
+            if !clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Record { .. })
     )
 }
 
@@ -2493,7 +2543,7 @@ fn lower_compound_assign_stmt(
             ),
         });
     }
-    if compound_assignment_target_is_by_value_record_field(target) {
+    if compound_assignment_target_is_direct_record_field(target) {
         if let Some(reason) = record_field_compound_assignment_value_rejection_reason(value) {
             return Err(ClangFrontendError {
                 kind: "unsupported_compound_assignment_value".to_string(),

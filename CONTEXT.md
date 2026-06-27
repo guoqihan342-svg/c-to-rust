@@ -9684,3 +9684,56 @@ English mirror summary:
 - Preserved fail-closed behavior for multi-pointer functions, nullable/null-checked mutable pointers, const pointer writes, compound/update arrow writes, non-scalar fields, mutable arrow reads, complex bases, layout/ABI claims, and semantic acceptance.
 - Added direct typed IR positive/negative tests and a real clang AST smoke test for `void set_point_x(struct point *p, int value) { p->x = value; }`.
 - Updated the Chinese and English MVP backlog to mark this narrow write path as supported while keeping the broader pointer/alias-sensitive field-write work open.
+
+## 141. 2026-06-28 P1 narrow mutable record pointer field compound assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理给出不同优先级建议：一个认为 B（写后一般 `return p->field` 读）更像基础对象模型，另一个建议先做 A（`p->field += value`）且保持极窄。主线选择更保守的 A：只支持 standalone、直接 target、简单 RHS 的 mutable record pointer field compound assignment，不打开一般 mutable arrow read。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrStmt::Assign` 在普通 `emit_expr_with_prelude()` 前增加专用 helper：只识别 `target = Binary(same_direct_arrow_member_target, op, simple_rhs)`。
+  - 复用上一节的 single-pointer mutable record pointer write gate：只有函数 pointer 参数总数恰好为 1，且 target 是直接 `IrExpr::Member { is_arrow: true, base: Var(p) }` 的 scalar field 时，`struct T *p` 才会发射为 `mut p: &mut T`。
+  - 专用 helper 发射 `p.field = (p.field + rhs);`，因此 `p->field += value` 形态可通过，但 `return p->field`、普通 RHS 里的 `p->field`、复杂 base/cast/offset 仍走原有 fail-closed 路径。
+  - RHS guard 只允许 integer variable、integer literal、integral cast 包裹的简单值；`value + 1`、call、member/index/deref、inc/dec 等复杂 RHS 仍拒绝。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `compound_assignment_target_type()` 对 direct mutable record pointer arrow field 返回 field type，但仍拒绝 const pointer、复杂 base 和非 record pointer。
+  - 将已有 record field compound RHS guard 从 by-value `p.x += value` 扩展到 direct mutable arrow `p->x += value`，保持 skeleton path 和 real clang AST path 一致。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 把上一节的 mutable arrow compound 负例改为正例 `typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape`。
+  - 新增 direct typed IR 负例 `typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs`，确保复杂 RHS 仍 fail closed。
+  - 保留 `typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment`，确保写后一般 mutable arrow read 没有被顺手放开。
+  - 把 clang skeleton arrow compound 负例改为正例 `clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled` 和复杂 RHS 负例 `clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled`。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注单 pointer 参数下 mutable `struct T *p` 的直接 `p->scalar_field = scalar` 和简单 standalone `p->scalar_field += scalar` 已进入 typed IR candidate 子集；后续仍优先做 mutable field read-after-write、多 pointer alias/noalias proof、value-position/复杂 target/field inc-dec 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR mutable record pointer field compound assignment 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR complex RHS 负例：1 passed，错误原因包含 `mutable record pointer field compound assignment RHS`。
+- clang skeleton mutable arrow compound 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST mutable arrow compound 正例/复杂 RHS 负例：均 1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`。
+- 写后一般 `return p->field` mutable arrow read 负例：1 passed，仍按 `struct point *` arrow read unsupported 拒绝。
+
+边界：
+- 可以说：单 pointer 参数下的直接 mutable record pointer scalar field compound assignment（例如 `p->x += value`）已能从真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&mut T`。
+- 可以说：这是 value-discarded standalone statement 的窄 candidate path，正确性仍要靠后续验证门禁，不是 semantic acceptance。
+- 不应说：已支持一般 mutable `p->field` read、read-after-write 对象模型、多 pointer alias/noalias、nullable mutable pointer、value-position compound assignment、`p->field++`、复杂 RHS/target、integer promotion/truncation 组合、pointer arithmetic record access、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field compound-assignment candidate path: `struct T *p; p->scalar_field += scalar;` now emits `p: &mut T` and `p.scalar_field = (p.scalar_field + scalar);` only under the existing single-pointer-param gate.
+- The implementation does not globally enable mutable arrow field reads. It special-cases only assignment values shaped as `target = Binary(same_direct_arrow_member_target, op, simple_rhs)`.
+- Kept fail-closed behavior for complex RHS/targets, nullable mutable pointers, multi-pointer functions, `return p->field`, `p->field++`, value-position compound assignment, layout/ABI claims, and semantic acceptance.
+- Extended clang skeleton and real clang AST lowering to admit direct mutable record pointer arrow compound targets while applying the same simple-RHS record-field guard used for by-value `p.x += value`.
+- Updated the Chinese and English MVP backlog to mark this narrow compound write path as supported while keeping mutable read-after-write, alias/noalias proof, field inc-dec, and broader pointer ownership modeling open.

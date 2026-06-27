@@ -1405,7 +1405,7 @@ fn typed_ir_rejects_nullable_mutable_record_pointer_arrow_field_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape() {
+fn typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape() {
     let i32_ty = ir_i32();
     let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
     let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
@@ -1417,7 +1417,7 @@ fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape
         source_span: None,
     };
     let ir = IrFunction {
-        name: "bad_mutable_add_point_x".to_string(),
+        name: "add_point_x".to_string(),
         return_type: ir_void(),
         params: vec![
             IrParam {
@@ -1444,8 +1444,132 @@ fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape
         source_span: None,
     };
 
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit mutable record pointer compound field assignment shape");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-field-compound-assignment",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let field_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_add_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: field_target.clone(),
+            value: ir_binary(
+                IrBinOp::Add,
+                field_target,
+                ir_binary(
+                    IrBinOp::Add,
+                    ir_var("value", i32_ty.clone()),
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                i32_ty,
+            ),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
     let error = emit_rust_from_ir(&ir)
-        .expect_err("mutable record pointer compound field assignment must fail closed");
+        .expect_err("mutable record pointer field compound assignment complex RHS must fail");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable record pointer field compound assignment RHS"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_set_then_read_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer read must stay fail-closed after assignment");
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(
@@ -11670,7 +11794,7 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_index_target
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target() {
+fn clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment() {
     let int_ty = ClangTypeSkeleton {
         spelled: "int".to_string(),
         canonical: "int".to_string(),
@@ -11693,13 +11817,24 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target
             pointee: Box::new(point_ty.clone()),
         },
     };
+    let void_ty = ClangTypeSkeleton {
+        spelled: "void".to_string(),
+        canonical: "void".to_string(),
+        kind: ClangTypeKind::Void,
+    };
     let skeleton = ClangFunctionSkeleton {
-        name: "bad_record_field_compound_arrow".to_string(),
-        return_type: int_ty.clone(),
-        params: vec![ClangParamSkeleton {
-            name: "p".to_string(),
-            ty: point_ptr_ty.clone(),
-        }],
+        name: "add_point_x".to_string(),
+        return_type: void_ty,
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
         body: vec![ClangStmtSkeleton::CompoundAssign {
             target: ClangExprSkeleton::Member {
                 base: Box::new(ClangExprSkeleton::DeclRef {
@@ -11711,9 +11846,8 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target
                 is_arrow: true,
             },
             op: ClangBinaryOperator::Add,
-            value: ClangExprSkeleton::IntegerLiteral {
-                value: 1,
-                spelling: "1".to_string(),
+            value: ClangExprSkeleton::DeclRef {
+                name: "value".to_string(),
                 ty: int_ty.clone(),
             },
             result_ty: int_ty.clone(),
@@ -11722,11 +11856,37 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target
         }],
     };
 
-    let error = lower_function_skeleton(&skeleton)
-        .expect_err("record field compound assignment must reject arrow target");
+    let ir = lower_function_skeleton(&skeleton)
+        .expect("lower mutable record pointer field compound assignment");
 
-    assert_eq!(error.kind, "unsupported_compound_assignment_target");
-    assert!(error.message.contains("arrow member targets"));
+    let [IrStmt::Assign { target, value, .. }] = ir.body.as_slice() else {
+        panic!(
+            "expected mutable arrow field compound assignment, got {:?}",
+            ir.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member target, got {target:?}"
+    );
+    let IrExpr::Binary { op, lhs, rhs, .. } = value else {
+        panic!("expected binary compound value, got {value:?}");
+    };
+    assert_eq!(op, &IrBinOp::Add);
+    assert!(
+        matches!(lhs.as_ref(), IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member lhs, got {lhs:?}"
+    );
+    assert!(matches!(rhs.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+
+    let rust = emit_rust_from_ir(&ir)
+        .expect("emit mutable record pointer field compound assignment skeleton");
+    assert!(rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"));
+    assert!(rust.contains("p.x = (p.x + value);"));
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-mutable-record-pointer-field-compound",
+        &rust,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -18990,6 +19150,102 @@ fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enab
     );
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-mutable-arrow-member-assignment", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-compound-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_record_pointer_field_compound_assignment.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nvoid add_point_x(struct point *p, int value) { p->x += value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit mutable record pointer field compound assignment from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-mutable-record-pointer-field-compound-assignment",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled(
+) {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir =
+        unique_out_dir("clang-real-mutable-record-pointer-field-compound-assignment-complex-rhs");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file =
+        out_dir.join("mutable_record_pointer_field_compound_assignment_complex_rhs.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nvoid add_point_x(struct point *p, int value) { p->x += value + 1; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_point_x");
+
+    assert_eq!(report.status, "unsupported");
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("record field compound assignment RHS")),
+        "{:?}",
+        report.errors
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
