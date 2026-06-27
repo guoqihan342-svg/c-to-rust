@@ -669,6 +669,71 @@ fn typed_ir_emits_record_value_field_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_record_value_field_compound_assignment_shape() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let field_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: false,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "add_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: field_target.clone(),
+                value: IrExpr::Binary {
+                    op: IrBinOp::Add,
+                    lhs: Box::new(field_target),
+                    rhs: Box::new(ir_var("value", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit by-value record field compound shape");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub x: i32"));
+    assert!(rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"));
+    assert!(rust.contains("p.x = (p.x + value);"));
+    assert!(rust.contains("return p.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-value-field-compound-shape", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_record_local_copy_field_read() {
     let point_ty = ir_record("point");
     let i32_ty = ir_i32();
@@ -10135,6 +10200,757 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_record_field_compound_assignment() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let field_target = ClangExprSkeleton::Member {
+        base: Box::new(ClangExprSkeleton::DeclRef {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+        }),
+        field: "x".to_string(),
+        ty: int_ty.clone(),
+        is_arrow: false,
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "add_point_x".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::CompoundAssign {
+                target: field_target.clone(),
+                op: ClangBinaryOperator::Add,
+                value: ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                },
+                result_ty: int_ty.clone(),
+                compute_lhs_ty: int_ty.clone(),
+                compute_result_ty: int_ty.clone(),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(field_target.clone()),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton)
+        .expect("lower by-value record field compound assignment");
+
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = ir.body.as_slice() else {
+        panic!(
+            "expected record field compound assignment followed by return, got {:?}",
+            ir.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: false, .. } if field == "x"),
+        "expected dot-field assignment target, got {target:?}"
+    );
+    let IrExpr::Binary { op, lhs, rhs, .. } = value else {
+        panic!("expected compound assignment binary value, got {value:?}");
+    };
+    assert_eq!(op, &IrBinOp::Add);
+    assert!(
+        matches!(lhs.as_ref(), IrExpr::Member { field, is_arrow: false, .. } if field == "x"),
+        "expected dot-field binary lhs, got {lhs:?}"
+    );
+    assert!(matches!(rhs.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit record field compound assignment skeleton");
+    assert!(rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"));
+    assert!(rust.contains("p.x = (p.x + value);"));
+    assert!(rust.contains("return p.x;"));
+    assert_rust_snippet_compiles("typed-ir-clang-record-field-compound", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_record_field_compound_assignment_literal_and_cast_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let uint8_ty = ClangTypeSkeleton {
+        spelled: "uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let field_target = ClangExprSkeleton::Member {
+        base: Box::new(ClangExprSkeleton::DeclRef {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+        }),
+        field: "x".to_string(),
+        ty: int_ty.clone(),
+        is_arrow: false,
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "add_point_literals".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "byte".to_string(),
+                ty: uint8_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::CompoundAssign {
+                target: field_target.clone(),
+                op: ClangBinaryOperator::Add,
+                value: ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                },
+                result_ty: int_ty.clone(),
+                compute_lhs_ty: int_ty.clone(),
+                compute_result_ty: int_ty.clone(),
+            },
+            ClangStmtSkeleton::CompoundAssign {
+                target: field_target.clone(),
+                op: ClangBinaryOperator::Add,
+                value: ClangExprSkeleton::Cast {
+                    target: int_ty.clone(),
+                    expr: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "byte".to_string(),
+                        ty: uint8_ty,
+                    }),
+                    implicit: true,
+                },
+                result_ty: int_ty.clone(),
+                compute_lhs_ty: int_ty.clone(),
+                compute_result_ty: int_ty.clone(),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(field_target),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton)
+        .expect("lower by-value record field compound assignment literal/cast RHS");
+
+    let rust = emit_rust_from_ir(&ir).expect("emit record field compound assignment literal/cast");
+    assert!(rust.contains("p.x = (p.x + 1i32);"));
+    assert!(rust.contains("p.x = (p.x + (byte as i32));"));
+    assert_rust_snippet_compiles("typed-ir-clang-record-field-compound-literal-cast", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_complex_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_rhs".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Add,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject complex RHS");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_value");
+    assert!(error
+        .message
+        .contains("record field compound assignment RHS"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_call_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_call_rhs".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::Call {
+                callee: "helper".to_string(),
+                args: Vec::new(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject call RHS");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_value");
+    assert!(error
+        .message
+        .contains("record field compound assignment RHS"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_member_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_member_rhs".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty.clone(),
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty,
+                }),
+                field: "y".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject member RHS");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_value");
+    assert!(error
+        .message
+        .contains("record field compound assignment RHS"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_index_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_array_ty = ClangTypeSkeleton {
+        spelled: "int[4]".to_string(),
+        canonical: "int[4]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(int_ty.clone()),
+            len: Some(4),
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_index_rhs".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "values".to_string(),
+                ty: int_array_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::Index {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "values".to_string(),
+                    ty: int_array_ty,
+                }),
+                index: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject index RHS");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_value");
+    assert!(error
+        .message
+        .contains("record field compound assignment RHS"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_non_integer_rhs() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_ptr_ty = ClangTypeSkeleton {
+        spelled: "int *".to_string(),
+        canonical: "int *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(int_ty.clone()),
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_rhs_type".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "ptr".to_string(),
+                ty: int_ptr_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::DeclRef {
+                name: "ptr".to_string(),
+                ty: int_ptr_ty,
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject non-integer RHS");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_value");
+    assert!(error
+        .message
+        .contains("record field compound assignment RHS"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_deref_target() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_ptr_ty = ClangTypeSkeleton {
+        spelled: "int *".to_string(),
+        canonical: "int *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(int_ty.clone()),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_deref_target".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: int_ptr_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Deref {
+                ptr: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: int_ptr_ty,
+                }),
+                ty: int_ty.clone(),
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject deref target");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error
+        .message
+        .contains("simple variable or by-value record field"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_index_target() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_array_ty = ClangTypeSkeleton {
+        spelled: "int[4]".to_string(),
+        canonical: "int[4]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(int_ty.clone()),
+            len: Some(4),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_index_target".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "values".to_string(),
+            ty: int_array_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Index {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "values".to_string(),
+                    ty: int_array_ty,
+                }),
+                index: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject index target");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error
+        .message
+        .contains("simple variable or by-value record field"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let point_ptr_ty = ClangTypeSkeleton {
+        spelled: "struct point *".to_string(),
+        canonical: "struct point *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(point_ty.clone()),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_arrow".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: point_ptr_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ptr_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: true,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject arrow target");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error.message.contains("arrow member targets"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_nested_base() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let outer_ty = ClangTypeSkeleton {
+        spelled: "struct outer".to_string(),
+        canonical: "struct outer".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "outer".to_string(),
+        },
+    };
+    let inner_ty = ClangTypeSkeleton {
+        spelled: "struct inner".to_string(),
+        canonical: "struct inner".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "inner".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_nested_base".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: outer_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::Member {
+                    base: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "p".to_string(),
+                        ty: outer_ty,
+                    }),
+                    field: "inner".to_string(),
+                    ty: inner_ty,
+                    is_arrow: false,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject nested base");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error.message.contains("direct record variable base"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_compound_assignment_integer_promotion() {
     let uint8_ty = ClangTypeSkeleton {
         spelled: "uint8_t".to_string(),
@@ -16974,6 +17790,106 @@ fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-assignment", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_struct_field_compound_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-field-compound-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_field_compound_assignment.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint add_point_x(struct point p, int value) { p.x += value; return p.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit struct field compound assignment from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-compound-assignment", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-field-compound-assignment-complex-rhs");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_field_compound_assignment_complex_rhs.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint add_point_x(struct point p, int value) { p.x += value + 1; return p.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_point_x");
+
+    if report.status == "lowered" {
+        let function = report.function_ir.as_ref().expect("function ir");
+        let error = emit_rust_from_ir(function)
+            .expect_err("record field compound assignment complex RHS must fail closed");
+        assert!(
+            error
+                .reason
+                .contains("record field compound assignment RHS"),
+            "{:?}",
+            error
+        );
+    } else {
+        assert!(
+            report.errors.iter().any(|error| error
+                .message
+                .contains("record field compound assignment RHS")),
+            "{:?}",
+            report.errors
+        );
+    }
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

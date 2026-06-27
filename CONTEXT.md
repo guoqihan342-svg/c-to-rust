@@ -8806,3 +8806,92 @@ English mirror summary:
 - Whole-record by-value return is now a candidate only when that unique complete scalar inventory exists.
 - Duplicate tags, self-pointer fields, bitfields, volatile fields, packed records, non-scalar fields, `p->x`, pointer/alias-sensitive record access, layout/ABI claims, and semantic acceptance still fail closed.
 - Verification: record filter, struct-return regression tests, `--all-features`, and full real-clang bounded translation pass. `openspec validate --all --strict` passed 38/38. `git diff --check` reported only Windows LF-to-CRLF warnings.
+
+## 127. 2026-06-28 by-value record field compound assignment candidates
+
+本轮继续按多智能体推进 P1 record/compound-assignment 子集。只读代理结论一致：`p->x` 仍不应直接放开，因为缺少 readonly struct pointer 的 non-null/lifetime/alignment、pointer graph read effect、alias/effect gate 和 record ownership 证据；更安全的下一小步是按值 record dot-field compound assignment。完成切口是：`struct point { int x; int y; }; int add_point_x(struct point p, int value) { p.x += value; return p.x; }` 现在可从真实 clang AST lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate：
+
+```rust
+pub fn add_point_x(mut p: Point, value: i32) -> i32 {
+    p.x = (p.x + value);
+    return p.x;
+}
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `compound_assignment_target_type()`，把 compound-assignment target guard 从“只能 `DeclRef`”扩展为“`DeclRef` 或 by-value record dot-field target”。
+  - 新增 record-field compound RHS guard：只有简单整数变量、整数字面量和整数 cast 包裹的简单值可以作为 RHS；`value + 1`、call、member/index、非整数 RHS 都 fail closed。
+  - by-value record dot-field target 要求 `Member { is_arrow: false }`，且 base 必须是直接 `DeclRef` record 变量。
+  - `p->field` 明确以 pointer/record ownership evidence 缺失为由 fail closed；`*p += y`、`a[i] += y`、`(*p).x += y`、非直接 record 变量 base 仍 fail closed。
+  - `lower_compound_assign_stmt()` 不再手写 `IrExpr::Var` target，而是复用 `lower_expr(target)`，因此 `p.x += value` lowering 成 `IrStmt::Assign { target: Member(p.x), value: Binary(Member(p.x), Add, value) }`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR shape 测试：`typed_ir_emits_record_value_field_compound_assignment_shape`。
+  - 新增 clang skeleton lowering 测试：
+    - `clang_lowering_skeleton_maps_record_field_compound_assignment`
+    - `clang_lowering_skeleton_maps_record_field_compound_assignment_literal_and_cast_rhs`
+  - 新增 clang skeleton fail-closed 测试：
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_complex_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_non_integer_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_call_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_member_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_index_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_nested_base`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_deref_target`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_index_target`
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_struct_field_compound_assignment_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke：`clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled`。
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_lowering_skeleton_maps_record_field_compound_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features typed_ir_emits_record_value_field_compound_assignment_shape -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_ast_dump_emits_struct_field_compound_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features compound_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record_field_compound_assignment --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- TDD 红测先失败于 `unsupported_compound_assignment_target: compound assignment target must be a simple variable`，实现后通过。
+- 复审后补的复杂 RHS 红测先证明 `p.x += value + 1` 会被错误 lowering 成 IR；补 RHS guard 后通过。
+- `compound_assignment` filter：22 passed。
+- `record` filter：41 passed。
+- `record_field_compound_assignment` filter：11 passed。
+- `--all-features`：52 个 lib tests + 391 个 bounded tests + doc tests 通过。
+- 显式真实 clang bounded translation：390 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：仅报告 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：standalone statement 中 RHS 为简单整数变量/字面量/整数 cast 的 by-value record dot-field compound assignment（例如 `p.x += value`）现在可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 `p->x`、`p->x += value`、字段 update/inc-dec（`p.x++`）、record field compound assignment 复杂 RHS（如 `p.x += value + 1` / call / member/index RHS）、指针/alias-sensitive 字段写、非直接 record 变量 base、record layout/ABI 等价、semantic acceptance、volatile/hardware register 或完整 C compound-assignment 语义。
+- 后续建议：如果继续 record，下一刀仍应优先补 pointer-aware readonly `const struct T *p -> p->scalar_field` evidence 契约和红测；如果继续字段写，优先设计 `p.x++` / update field write 的 statement-side-effect 边界，不要把 value-position inc/dec 混进来。
+
+English mirror summary:
+
+- Added by-value record dot-field compound-assignment candidate generation for standalone statements such as `p.x += value`, with RHS limited to a simple integer variable, literal, or integer cast.
+- Clang lowering now accepts compound-assignment targets that are either simple scalar variables or direct by-value record dot fields; arrow members, deref/index targets, and non-direct record bases still fail closed.
+- Record field compound-assignment complex RHS, including `value + 1`, calls, member/index RHS, and non-integer RHS, fails closed.
+- The generic typed IR shape emits `p.x = (p.x + value);` and marks the by-value record parameter mutable.
+- `p->x`, pointer/alias-sensitive field writes, field update/inc-dec, C record layout/ABI claims, and semantic acceptance still fail closed.
+- Verification: targeted TDD red/green test, compound/record filters, `--all-features`, full real-clang bounded translation, OpenSpec strict validation, and `git diff --check` all pass, with only Windows LF-to-CRLF warnings from `git diff --check`.

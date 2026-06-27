@@ -28,7 +28,7 @@ This document honestly lists C language constructs that are "currently supported
 | `_Bool` | Unsupported | Not modeled |
 | `enum` | Unsupported | Not modeled |
 | `union` | Unsupported | Not modeled |
-| `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; no `->`, compound/update field writes, nesting, anonymous |
+| `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, by-value dot-field compound assignment, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; no `->`, update field writes, nesting, anonymous |
 
 ## Declarations and Initialization
 
@@ -65,7 +65,7 @@ This document honestly lists C language constructs that are "currently supported
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
 | `p->field` (arrow member) | Unsupported | Pointer/record ownership not modeled |
-| `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, and field access after local copy only; pointer/alias-sensitive field writes remain unsupported |
+| `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, statement-position `p.field += value` (RHS limited to a simple integer variable, literal, or integer cast), and field access after local copy only; `p.field++`, complex RHS, and pointer/alias-sensitive field writes remain unsupported |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |

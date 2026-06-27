@@ -1153,10 +1153,11 @@ fn compound_assign_stmt_skeleton_from_ast(
         });
     };
     let target = expr_skeleton_from_ast(target)?;
-    let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = &target else {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason: "compound assignment target must be a simple variable".to_string(),
-        });
+    let target_ty = match compound_assignment_target_type(&target) {
+        Ok(target_ty) => target_ty,
+        Err(reason) => {
+            return Ok(ClangStmtSkeleton::Unsupported { reason });
+        }
     };
     if !compound_assignment_types_match(target_ty, &result_ty) {
         return Ok(ClangStmtSkeleton::Unsupported {
@@ -1176,15 +1177,113 @@ fn compound_assign_stmt_skeleton_from_ast(
         });
     }
     let preserve_integral_casts = preserves_integral_operand_casts(&op);
+    let value = expr_skeleton_from_ast_with_options(value, preserve_integral_casts)?;
+    if compound_assignment_target_is_by_value_record_field(&target) {
+        if let Some(reason) = record_field_compound_assignment_value_rejection_reason(&value) {
+            return Ok(ClangStmtSkeleton::Unsupported { reason });
+        }
+    }
 
     Ok(ClangStmtSkeleton::CompoundAssign {
         target,
         op,
-        value: expr_skeleton_from_ast_with_options(value, preserve_integral_casts)?,
+        value,
         result_ty,
         compute_lhs_ty,
         compute_result_ty,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_target_type(
+    target: &ClangExprSkeleton,
+) -> Result<&ClangTypeSkeleton, String> {
+    match target {
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ty),
+        ClangExprSkeleton::Member { is_arrow: true, .. } => Err(
+            "compound assignment arrow member targets require pointer/record ownership evidence"
+                .to_string(),
+        ),
+        ClangExprSkeleton::Member {
+            base,
+            ty,
+            is_arrow: false,
+            ..
+        } => match base.as_ref() {
+            ClangExprSkeleton::DeclRef { ty: base_ty, .. }
+                if matches!(&base_ty.kind, ClangTypeKind::Record { .. }) =>
+            {
+                Ok(ty)
+            }
+            ClangExprSkeleton::DeclRef { .. } => Err(
+                "compound assignment record field target base must be a record variable"
+                    .to_string(),
+            ),
+            _ => Err(
+                "compound assignment record field target must have a direct record variable base"
+                    .to_string(),
+            ),
+        },
+        _ => Err(
+            "compound assignment target must be a simple variable or by-value record field"
+                .to_string(),
+        ),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_target_is_by_value_record_field(target: &ClangExprSkeleton) -> bool {
+    matches!(
+        target,
+        ClangExprSkeleton::Member {
+            base,
+            is_arrow: false,
+            ..
+        } if matches!(
+            base.as_ref(),
+            ClangExprSkeleton::DeclRef {
+                ty: ClangTypeSkeleton {
+                    kind: ClangTypeKind::Record { .. },
+                    ..
+                },
+                ..
+            }
+        )
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_field_compound_assignment_value_rejection_reason(
+    value: &ClangExprSkeleton,
+) -> Option<String> {
+    match value {
+        ClangExprSkeleton::DeclRef { ty, .. } | ClangExprSkeleton::IntegerLiteral { ty, .. } => {
+            if matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+                None
+            } else {
+                Some(format!(
+                    "record field compound assignment RHS must be a simple integer variable, literal, or integral cast; got {}",
+                    ty.spelled
+                ))
+            }
+        }
+        ClangExprSkeleton::Cast { target, expr, .. } => {
+            if !matches!(&target.kind, ClangTypeKind::Integer { .. }) {
+                return Some(format!(
+                    "record field compound assignment RHS cast target must be an integer; got {}",
+                    target.spelled
+                ));
+            }
+            record_field_compound_assignment_value_rejection_reason(expr)
+        }
+        ClangExprSkeleton::Unsupported { node, reason } => Some(format!(
+            "record field compound assignment RHS uses unsupported expression {node}: {reason}"
+        )),
+        _ => Some(
+            "record field compound assignment RHS must be a simple integer variable, literal, or integral cast"
+                .to_string(),
+        ),
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2334,13 +2433,12 @@ fn lower_compound_assign_stmt(
     compute_lhs_ty: &ClangTypeSkeleton,
     compute_result_ty: &ClangTypeSkeleton,
 ) -> Result<IrStmt, ClangFrontendError> {
-    let ClangExprSkeleton::DeclRef { name, ty } = target else {
-        return Err(ClangFrontendError {
+    let target_ty = compound_assignment_target_type(target)
+        .map_err(|reason| ClangFrontendError {
             kind: "unsupported_compound_assignment_target".to_string(),
-            message: "compound assignment target must be a simple variable".to_string(),
-        });
-    };
-    let target_ty = lower_type(ty)?;
+            message: reason,
+        })
+        .and_then(lower_type)?;
     let result_ty = lower_type(result_ty)?;
     let compute_lhs_ty = lower_type(compute_lhs_ty)?;
     let compute_result_ty = lower_type(compute_result_ty)?;
@@ -2362,11 +2460,15 @@ fn lower_compound_assign_stmt(
             ),
         });
     }
-    let target = IrExpr::Var {
-        name: name.clone(),
-        ty: target_ty.clone(),
-        source_span: None,
-    };
+    if compound_assignment_target_is_by_value_record_field(target) {
+        if let Some(reason) = record_field_compound_assignment_value_rejection_reason(value) {
+            return Err(ClangFrontendError {
+                kind: "unsupported_compound_assignment_value".to_string(),
+                message: reason,
+            });
+        }
+    }
+    let target = lower_expr(target)?;
     let lhs = cast_ir_expr_to_type_if_needed(target.clone(), &compute_lhs_ty);
     let rhs = cast_ir_expr_to_type_if_needed(lower_expr(value)?, &compute_lhs_ty);
     let binary = IrExpr::Binary {
