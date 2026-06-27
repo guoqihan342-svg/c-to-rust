@@ -7805,3 +7805,57 @@ English mirror summary:
 - `for (int i = 0, j = 0; i < limit; i++)` lowers from real clang AST to `For { init: [Decl(i), Decl(j)], ... }` and emits compilable Rust in source order inside the loop block.
 - Unsupported declarator types/initializers, VLA/incomplete arrays, duplicate symbols, complex init/step, missing condition/step, condition variable slots, `continue` / `break`, full C for-loop control-flow semantics, and semantic acceptance remain out of scope.
 - Focused red/green coverage, direct typed IR coverage, real clang AST smoke coverage, and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
+
+## 113. 2026-06-27 loop-body break and signed-char promotion slice
+
+本轮继续按多智能体推进 `c2r-translator` 的核心语法面，不写 FlashDB 专用路径。两个只读子智能体分别复核了 usual scalar conversion 的真实边界和测试/doc 缺口；主线程落地两个小切片：
+
+1. loop body `break`：真实 clang `BreakStmt` 现在能 lowering 成 `IrStmt::Break`，generic typed IR emitter 只在 `while` / scoped `ForStmt` body 内发射 Rust `break;`。顶层或非 loop 上下文的 `break` 继续 fail closed。
+2. 精确 `signed char` promotion：`type_from_qual_type()` 现在识别精确 `signed char` spelling 为 signed 8-bit integer。普通二元整数运算 operand 上，如果 clang 已保留 `IntegralCast` / `IntegralPromotion`，typed emitter 继续要求 cast 后 lhs/rhs/result 类型严格对齐后再发射，例如 `signed char value + 1` 发射 `((value as i32) + 1i32)`。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::Break`。
+  - `emit_stmt()` 增加 loop 上下文参数；`while` / `For` body 传入 `in_loop=true`，top-level、for init 和 for step 仍传入 `false`。
+  - definite-assignment、post-increment byte read、nullable pointer use 等只读遍历补上 `Break` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::Break`、`BreakStmt` skeleton lowering、`lower_stmt()` 到 `IrStmt::Break`。
+  - `type_from_qual_type("signed char")` 精确映射为 signed 8-bit integer；`short` / `long long` 等其他 target-dependent spelling 仍 unsupported。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `Break`：call evidence 跳过，statement label/kind 记录为 `break`，post-increment evidence 跳过。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR：`typed_ir_emits_break_in_scalar_while_body`、`typed_ir_rejects_break_outside_loop`、`typed_ir_emits_binary_arithmetic_with_integral_operand_cast`。
+  - real clang smoke：`clang_ast_dump_emits_typed_ir_while_break_when_enabled`、`clang_ast_dump_emits_signed_char_binary_promotion_when_enabled`。
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+验证已通过：
+```powershell
+cargo fmt --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`src/lib.rs` 43 passed，`bounded_translation.rs` 325 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：`while` / scoped `ForStmt` body 中的 `break` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：精确 `signed char` 可作为 signed 8-bit integer 进入 typed IR，并能通过 clang-preserved integral promotion cast 支持普通二元整数运算小切片。
+- 不应说：已支持 `continue`、`goto`、`switch`、`do-while`、完整 C for-loop control-flow semantics、plain `char`、plain `long`、`short` / `long long` target ABI 宽度推断、完整 usual scalar conversions、side-effect-heavy operand 或 semantic acceptance。
+
+下一步建议：
+- 继续 usual scalar conversion 分类，但仍只接受 clang 已显式证明的 integral cast / promotion 小切片，不要自行推断完整 C conversion。
+- 或继续控制流：优先设计 `continue` 的 for-step 语义，不能直接发 Rust `continue;`，因为当前 `ForStmt` lowering 把 step 放在 while body 尾部。
+
+English mirror summary:
+
+- Added loop-body `break` support through clang skeleton, typed IR, and the generic emitter.
+- `BreakStmt` lowers to `IrStmt::Break`; the emitter only emits Rust `break;` in loop contexts, and rejects top-level/non-loop `break`.
+- Added exact `signed char` type support as signed 8-bit integer, enabling clang-proven ordinary binary promotion such as `signed_char_add_one(signed char value) { return value + 1; }`.
+- This remains candidate generation only. `continue`, `goto`, `switch`, `do-while`, full C for-loop control-flow semantics, plain `char`, plain `long`, `short` / `long long` ABI width inference, complete usual scalar conversions, side-effect-heavy operands, and semantic acceptance still fail closed.
+- The full `clang-frontend,typed-ir,clang-lowering-report` gate passes: 43 lib tests, 325 bounded translation tests, and 0 doc-tests.

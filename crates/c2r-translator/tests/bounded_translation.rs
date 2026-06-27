@@ -2960,6 +2960,50 @@ fn typed_ir_emits_scalar_assignment_with_integer_promotion_and_truncation() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_binary_arithmetic_with_integral_operand_cast() {
+    let u32_ty = ir_u32();
+    let u8_ty = ir_u8();
+    let ir = IrFunction {
+        name: "add_byte".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "acc".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "byte".to_string(),
+                ty: u8_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Add,
+                ir_var("acc", u32_ty.clone()),
+                IrExpr::Cast {
+                    target: u32_ty.clone(),
+                    expr: Box::new(ir_var("byte", u8_ty)),
+                    implicit: true,
+                    source_span: None,
+                },
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit binary arithmetic integral cast");
+
+    assert!(rust.contains("pub fn add_byte(acc: u32, byte: u8) -> u32"));
+    assert!(rust.contains("return (acc + (byte as u32));"));
+    assert_rust_snippet_compiles("typed-ir-binary-integral-operand-cast", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_scalar_decl_init_and_integer_cast() {
     let i32_ty = ir_i32();
     let u32_ty = ir_u32();
@@ -3041,6 +3085,79 @@ fn typed_ir_emits_scalar_while_with_integer_condition() {
     assert!(rust.contains("count = (count + !0i32);"));
     assert!(rust.contains("return count;"));
     assert_rust_snippet_compiles("typed-ir-scalar-while", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_break_in_scalar_while_body() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "stop_at_limit".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_var("value", i32_ty.clone()),
+                body: vec![IrStmt::If {
+                    condition: ir_binary(
+                        IrBinOp::Gt,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    then_body: vec![IrStmt::Break { source_span: None }],
+                    else_body: vec![],
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit break in scalar while");
+
+    assert!(rust.contains("pub fn stop_at_limit(value: i32) -> i32"));
+    assert!(rust.contains("while value != 0i32 {"));
+    assert!(rust.contains("if (value > 3i32) {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-while-break", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_break_outside_loop() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_break".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Break { source_span: None },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("top-level break must fail closed");
+
+    assert!(error.reason.contains("break outside loop"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -12479,6 +12596,60 @@ fn clang_ast_dump_rejects_typed_ir_for_continue_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_typed_ir_while_break_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-while-break");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("stop_at_limit.c");
+    fs::write(
+        &source_file,
+        "int stop_at_limit(int value) { while (value) { if (value > 3) { break; } value = value - 1; } return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "stop_at_limit");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::While { body, .. }, IrStmt::Return { .. }] = function.body.as_slice() else {
+        panic!("expected while followed by return, got {:?}", function.body);
+    };
+    assert!(matches!(
+        body.as_slice(),
+        [IrStmt::If {
+            then_body,
+            ..
+        }, IrStmt::Assign { .. }] if matches!(then_body.as_slice(), [IrStmt::Break { .. }])
+    ));
+
+    let rust = emit_rust_from_ir(function).expect("emit typed IR while break from real clang AST");
+    assert!(rust.contains("pub fn stop_at_limit(mut value: i32) -> i32"));
+    assert!(rust.contains("while value != 0i32 {"));
+    assert!(rust.contains("if (value > 3i32) {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-while-break", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_rejects_typed_ir_for_missing_condition_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -14401,6 +14572,63 @@ fn clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled() {
     assert!(rust.contains("value = (value + 1u32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-unsigned-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_signed_char_binary_promotion_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-signed-char-binary-promotion");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("signed_char_add_one.c");
+    fs::write(
+        &source_file,
+        "int signed_char_add_one(signed char value) { return value + 1; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "signed_char_add_one",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary { lhs, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected signed char binary promotion return, got {:?}",
+            function.body
+        );
+    };
+    assert!(
+        matches!(lhs.as_ref(), IrExpr::Cast { implicit: true, .. }),
+        "expected clang integral promotion cast on signed char lhs, got {lhs:?}"
+    );
+
+    let rust = emit_rust_from_ir(function).expect("emit signed char binary promotion");
+    assert!(rust.contains("pub fn signed_char_add_one(value: i8) -> i32"));
+    assert!(rust.contains("return ((value as i32) + 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-signed-char-promotion", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

@@ -645,6 +645,7 @@ fn record_ir_call_expression_evidence(
                 value: Some(value), ..
             } => record_ir_call_expression_evidence_for_expr(value, "return", result),
             typed_ir::IrStmt::Return { value: None, .. } => {}
+            typed_ir::IrStmt::Break { .. } => {}
             typed_ir::IrStmt::Expr { expr, .. } => {
                 record_ir_call_expression_evidence_for_expr(expr, "expression", result);
             }
@@ -895,6 +896,7 @@ fn ir_statement_label(statement: &typed_ir::IrStmt) -> String {
         typed_ir::IrStmt::While { .. } => "while".to_string(),
         typed_ir::IrStmt::For { .. } => "for".to_string(),
         typed_ir::IrStmt::Return { .. } => "return".to_string(),
+        typed_ir::IrStmt::Break { .. } => "break".to_string(),
         typed_ir::IrStmt::Expr { expr, .. } => format!("expr {}", ir_expr_label(expr)),
         typed_ir::IrStmt::Unsupported { node, .. } => format!("unsupported {node}"),
     }
@@ -933,6 +935,7 @@ fn ir_statement_kind_labels(statements: &[typed_ir::IrStmt]) -> Vec<String> {
                 typed_ir::IrStmt::While { .. } => "while",
                 typed_ir::IrStmt::For { .. } => "for",
                 typed_ir::IrStmt::Return { .. } => "return",
+                typed_ir::IrStmt::Break { .. } => "break",
                 typed_ir::IrStmt::Expr { .. } => "expression",
                 typed_ir::IrStmt::Unsupported { .. } => "unsupported",
             },
@@ -1109,6 +1112,7 @@ fn collect_ir_post_increment_deref_vars_from_stmts(
                     collect_ir_post_increment_deref_vars_from_expr(value, vars);
                 }
             }
+            typed_ir::IrStmt::Break { .. } => {}
             typed_ir::IrStmt::Expr { expr, .. } => {
                 collect_ir_post_increment_deref_vars_from_expr(expr, vars);
             }

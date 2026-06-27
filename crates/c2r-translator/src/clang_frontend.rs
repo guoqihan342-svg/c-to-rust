@@ -182,6 +182,7 @@ pub enum ClangStmtSkeleton {
     Return {
         value: Option<ClangExprSkeleton>,
     },
+    Break,
     Expr {
         expr: ClangExprSkeleton,
     },
@@ -857,6 +858,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
                 .transpose()?;
             Ok(ClangStmtSkeleton::Return { value })
         }
+        Some("BreakStmt") => Ok(ClangStmtSkeleton::Break),
         Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
             reason: unsupported_stmt_reason(stmt, kind),
         }),
@@ -1927,6 +1929,14 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 width: 32,
             },
         }),
+        "signed char" => Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: "signed char".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 8,
+            },
+        }),
         "int8_t" => Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: "int8_t".to_string(),
@@ -2122,6 +2132,7 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             value: value.as_ref().map(lower_expr).transpose()?,
             source_span: None,
         }),
+        ClangStmtSkeleton::Break => Ok(IrStmt::Break { source_span: None }),
         ClangStmtSkeleton::Expr { expr } => Ok(IrStmt::Expr {
             expr: lower_expr(expr)?,
             source_span: None,
@@ -4310,14 +4321,23 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_maps_signed_char_scalar() {
+        let ty = type_from_qual_type("signed char").expect("signed char type");
+
+        assert_eq!(ty.spelled, "signed char");
+        assert_eq!(ty.canonical, "signed char");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 8
+            }
+        ));
+    }
+
+    #[test]
     fn type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported() {
-        for spelling in [
-            "signed char",
-            "short",
-            "unsigned short",
-            "long long",
-            "unsigned long long",
-        ] {
+        for spelling in ["short", "unsigned short", "long long", "unsigned long long"] {
             let ty = type_from_qual_type(spelling).expect("type skeleton");
 
             assert!(matches!(ty.kind, ClangTypeKind::Unsupported { .. }));
