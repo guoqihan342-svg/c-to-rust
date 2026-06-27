@@ -28,7 +28,7 @@
 | `_Bool` | 不支持 | 未建模 |
 | `enum` | 不支持 | 未建模 |
 | `union` | 不支持 | 未建模 |
-| `struct` (按值传递) | 窄支持 | dot-field read 和简单 dot-field assignment；无 `->`、compound/update field write、嵌套、匿名 |
+| `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、本地 by-value copy；无 `->`、whole-record return、compound/update field write、bitfield、volatile field、嵌套、匿名 |
 
 ## 声明与初始化
 
@@ -36,6 +36,7 @@
 |------|------|------|
 | 单变量标量声明 + 初始化 | 已支持 | `int x = 1;` |
 | 单变量无初始化 | 窄支持 | 仅在读取前有赋值证明时支持 |
+| 本地 record 声明 + copy 初始化 | 窄支持 | `struct point q = p;`，仅在后续访问已建模标量字段时作为候选 |
 | 多声明 `int a = 1, b = 2;` | 已支持 | compound body 和 for-init |
 | `const` 局部变量 | 未显式支持 | clang 降级至 non-const |
 | `static` 局部变量 | 不支持 | 需要静态存储模型 |
@@ -64,7 +65,7 @@
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
 | `p[i]` (array subscript) | 窄支持 | readonly pointer slice 或 local/global array |
 | `p->field` (arrow member) | 不支持 | pointer/record ownership 未建模 |
-| `p.field` (dot member access) | 窄支持 | 仅按值 record dot-field read 和简单 `p.field = value`；pointer/alias-sensitive field write 仍不支持 |
+| `p.field` (dot member access) | 窄支持 | 仅按值 record dot-field read、简单 `p.field = value`、本地 copy 后字段访问；pointer/alias-sensitive field write 仍不支持 |
 | `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
 | `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
 | `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |
@@ -77,6 +78,7 @@
 | 逗号表达式 | 不支持 | |
 | 赋值表达式 (value-position) | 不支持 | 仅 statement |
 | compound assignment (value-position) | 不支持 | 仅 statement |
+| whole-record return | 不支持 | 缺完整 field/layout model |
 
 ## 语句与控制流
 
@@ -157,5 +159,5 @@
 4. **bitwise/shift**：不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
 5. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
 6. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
-7. **record/struct**：当前 struct definition 是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof。
+7. **record/struct**：当前 struct definition 是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；bitfield、volatile field、union、packed/nested/anonymous record 仍 fail closed。
 8. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。

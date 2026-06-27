@@ -8661,3 +8661,73 @@ English mirror summary:
 - `struct point p; p.x = value; return p.x;` now emits a minimal Rust `Point` struct, `mut p: Point`, `p.x = value;`, and `return p.x;` as a candidate.
 - Pointer member access `p->x`, compound/update field writes, pointer/alias-sensitive field writes, record layout/ABI claims, record locals/returns, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
 - Direct typed IR, real clang AST smoke, full bounded translation, all-features tests, OpenSpec, and whitespace checks pass.
+
+## 125. 2026-06-28 initialized by-value record local copy support
+
+本轮继续按多智能体推进 P1 record 子集。只读代理共同结论：不要直接实现 `p->x`，因为它需要 pointer/record ownership、non-null/lifetime/alias/effect evidence；也不要直接实现 whole-record return，因为当前 Rust record 仍是从实际访问到的标量字段生成的最小 candidate shape，不是完整 C layout/ABI proof。本节只收敛纯 by-value 的 record local copy：`struct point q = p; q = r; return q.x;`。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增内部 `emit_value_type()`，允许当前 value-position 在标量之外识别 by-value record type name。
+  - `emit_stmt(Decl)` 支持带 initializer 的 record local declaration，发射 `let q: Point = p;`；无 initializer 的 record local 明确 fail closed。
+  - `emit_expr(Var)` 允许 record value variable 用作本地 copy initializer / assignment RHS。
+  - `validate_expr_matches_type()` 改成用 value type 校验标量和 record type identity，但仍不打开 pointer/array/unsupported aggregate。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_record_local_copy_field_read`
+    - `typed_ir_emits_record_local_copy_with_equivalent_record_spelling`
+    - `typed_ir_emits_record_local_copy_field_assignment`
+    - `typed_ir_emits_record_local_assignment_value_copy`
+  - 新增 direct typed IR 负测：
+    - `typed_ir_rejects_uninitialized_record_local_decl`
+    - `typed_ir_rejects_record_return_value_without_complete_field_model`
+    - `typed_ir_rejects_record_value_direct_call_arguments`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_struct_local_copy_field_read_when_enabled`
+    - `clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_local_copy_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record_local --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_local_copy_field_read_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_struct_return_value_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+
+- `typed_ir_emits_record_local_copy_field_read` 先红后绿；初始失败为 `stmt[0].decl q has record type point is unsupported`。
+- `typed_ir_emits_record_local_copy_with_equivalent_record_spelling` 先红后绿；初始失败为 `type Point does not match expected type Point`，修复为 value-type compatibility 而不是完整 `IrType` 结构相等。
+- `record_local` filter：5 passed。
+- `record` filter：17 passed。
+- `typed_ir_rejects_record_value_direct_call_arguments`：1 passed，固定 record value direct call argument 继续 fail closed。
+- 真实 clang AST local copy read 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST whole-record return 负例：1 passed。
+- 真实 clang AST local assignment copy 正例：1 passed，并通过 rustc snippet smoke。
+
+边界：
+
+- 可以说：已初始化本地 record copy 和本地 record copy assignment 在后续只访问已建模标量字段时，可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 whole-record return、完整 record local model、record layout/ABI、无初始化 record local、compound literal、designated initializer、`p->x`、record pointer/alias-sensitive field access、address-taken record、volatile/packed/bitfield/union/nested/anonymous record、非标量字段、record call arguments 或 semantic acceptance。
+- 后续建议：下一刀如果继续 record，应先补 whole-record return 的完整 field/layout inventory 证据；如果转向 `p->x`，必须先补 pointer graph v2 示例/校验、record field/layout evidence、non-null/lifetime/alias/effect preconditions 和 fail-closed 测试矩阵。
+
+English mirror summary:
+
+- Added initialized by-value record local copy support to the generic typed IR emitter.
+- `struct point q = p; q = r; return q.x;` now emits a minimal Rust `Point` struct plus `let mut q: Point = p; q = r; return q.x;` as a candidate.
+- Whole-record return, uninitialized record locals, `p->x`, pointer/alias-sensitive field access, record layout/ABI claims, compound literals, designated initializers, unions/bitfields/volatile fields, and semantic acceptance still fail closed.
+- Verification now passes after the value-type compatibility fix: `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation` passed 367/367 tests; `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features` passed 52 lib tests, 368 bounded tests, and doc tests; `openspec validate --all --strict` passed 38/38 items; `git diff --check` reported only Windows LF-to-CRLF warnings.

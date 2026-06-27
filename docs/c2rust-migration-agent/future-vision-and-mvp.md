@@ -143,7 +143,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P1: 扩大语法和内存模型覆盖
 
-- [ ] 继续扩 generic typed IR emitter，而不是恢复 crc32/FlashDB 特例：优先做 record local/return 的最小模型、pointer-aware record access、compound/update field write 设计和测试。
+- [ ] 继续扩 generic typed IR emitter，而不是恢复 crc32/FlashDB 特例：已初始化 record local copy 已进入候选子集；后续优先做 whole-record return 的完整 field/layout 模型、pointer-aware record access、compound/update field write 设计和测试。
 - [ ] 设计 alias/noalias 与 pointer escape 模型：把 readonly slice、mutable out slice、nullable pointer、unknown alias、volatile/hardware register 分成可证明路径和 L4 拒绝路径。
 - [ ] 完成 integer conversion 纪律：所有 clang `ImplicitCastExpr`、integer promotion、usual arithmetic conversions、narrowing/truncation 都要在 IR 中显式可见。
 - [ ] 扩控制流：`switch`/`goto` 先进入 CFG 证据和 fail-closed classifier，再考虑 relooper 和 Rust candidate。

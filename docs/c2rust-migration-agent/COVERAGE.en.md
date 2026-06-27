@@ -28,7 +28,7 @@ This document honestly lists C language constructs that are "currently supported
 | `_Bool` | Unsupported | Not modeled |
 | `enum` | Unsupported | Not modeled |
 | `union` | Unsupported | Not modeled |
-| `struct` (by-value) | Narrow | Dot-field read and simple dot-field assignment; no `->`, compound/update field writes, nesting, anonymous |
+| `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, and local by-value copy; no `->`, whole-record return, compound/update field writes, bitfields, volatile fields, nesting, anonymous |
 
 ## Declarations and Initialization
 
@@ -36,6 +36,7 @@ This document honestly lists C language constructs that are "currently supported
 |-----------|--------|-------|
 | Single scalar decl + init | Supported | `int x = 1;` |
 | Single scalar decl without init | Narrow | Only with assignment-before-read proof |
+| Local record decl + copy init | Narrow | `struct point q = p;`, candidate-only when later scalar field uses are modeled |
 | Multi-decl `int a = 1, b = 2;` | Supported | Compound body and for-init |
 | `const` local variable | Not explicit | Clang lowers to non-const |
 | `static` local variable | Unsupported | Requires static storage model |
@@ -64,7 +65,7 @@ This document honestly lists C language constructs that are "currently supported
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
 | `p->field` (arrow member) | Unsupported | Pointer/record ownership not modeled |
-| `p.field` (dot member access) | Narrow | By-value record dot-field read and simple `p.field = value` only; pointer/alias-sensitive field writes remain unsupported |
+| `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, and field access after local copy only; pointer/alias-sensitive field writes remain unsupported |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |
@@ -77,6 +78,7 @@ This document honestly lists C language constructs that are "currently supported
 | Comma expression | Unsupported | |
 | Assignment expression (value-position) | Unsupported | Statement only |
 | Compound assignment (value-position) | Unsupported | Statement only |
+| Whole-record return | Unsupported | Missing complete field/layout model |
 
 ## Statements and Control Flow
 
@@ -157,5 +159,5 @@ This document honestly lists C language constructs that are "currently supported
 4. **Bitwise/shift**: Does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
 5. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
 6. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
-7. **Record/struct**: The current struct definition is a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof.
+7. **Record/struct**: The current struct definition is a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof; bitfields, volatile fields, unions, and packed/nested/anonymous records still fail closed.
 8. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.

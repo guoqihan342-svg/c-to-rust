@@ -645,6 +645,286 @@ fn typed_ir_emits_record_value_field_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_record_local_copy_field_read() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "local_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: Some(ir_var("p", point_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit by-value record local copy field read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub x: i32"));
+    assert!(rust.contains("pub fn local_point_x(p: Point) -> i32"));
+    assert!(rust.contains("let q: Point = p;"));
+    assert!(rust.contains("return q.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-local-copy-field-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_record_local_copy_with_equivalent_record_spelling() {
+    let point_ty = ir_record("point");
+    let mut const_point_ty = point_ty.clone();
+    const_point_ty.spelled = "const struct point".to_string();
+    const_point_ty.canonical = "struct point".to_string();
+    const_point_ty.is_const = true;
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "local_const_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: Some(ir_var("p", const_point_ty)),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit record local copy despite non-semantic spelling differences");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn local_const_point_x(p: Point) -> i32"));
+    assert!(rust.contains("let q: Point = p;"));
+    assert!(rust.contains("return q.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-local-copy-equivalent-spelling", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_record_local_copy_field_assignment() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "set_local_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: Some(ir_var("p", point_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: false,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit by-value record local copy field assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub fn set_local_point_x(p: Point, value: i32) -> i32"));
+    assert!(rust.contains("let mut q: Point = p;"));
+    assert!(rust.contains("q.x = value;"));
+    assert!(rust.contains("return q.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-local-copy-field-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_record_local_assignment_value_copy() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "assign_local_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "r".to_string(),
+                ty: point_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: Some(ir_var("p", point_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: ir_var("q", point_ty.clone()),
+                value: ir_var("r", point_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit by-value record local assignment copy");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub fn assign_local_point_x(p: Point, r: Point) -> i32"));
+    assert!(rust.contains("let mut q: Point = p;"));
+    assert!(rust.contains("q = r;"));
+    assert!(rust.contains("return q.x;"));
+    assert_rust_snippet_compiles("typed-ir-record-local-assignment-value-copy", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_uninitialized_record_local_decl() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_record_local".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("record locals need explicit initializer");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("decl q record initializer is required"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_return_value_without_complete_field_model() {
+    let point_ty = ir_record("point");
+    let ir = IrFunction {
+        name: "identity_point".to_string(),
+        return_type: point_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("p", point_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("whole-record return must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("record type point is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_record_arrow_field_read() {
     let point_ty = ir_record("point");
     let i32_ty = ir_i32();
@@ -2458,6 +2738,52 @@ fn typed_ir_emits_direct_identifier_call_statement() {
         "typed-ir-direct-call-statement",
         &format!("fn observe(_: i32) {{}}\n{rust}"),
     );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_value_direct_call_arguments() {
+    let point_ty = ir_record("point");
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let ir = IrFunction {
+        name: "bad_record_call_arg".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "observe".to_string(),
+                    args: vec![ir_var("p", point_ty.clone())],
+                    ty: void_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("record call arguments must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("call arg[0] record type point is unsupported"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -16537,6 +16863,144 @@ fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert!(rust.contains("return p.x;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-assignment", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_struct_local_copy_field_read_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-local-copy-field-read");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_local_copy_field_read.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint local_point_x(struct point p) { struct point q = p; return q.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "local_point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted =
+        emit_rust_from_ir(function).expect("emit struct local copy field read from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn local_point_x(p: Point) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("let q: Point = p;"), "{rust}");
+    assert!(rust.contains("return q.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-local-copy-field-read", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-local-assignment-value-copy");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_local_assignment_value_copy.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint assign_local_point_x(struct point p, struct point r) { struct point q = p; q = r; return q.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "assign_local_point_x",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted =
+        emit_rust_from_ir(function).expect("emit struct local assignment copy from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn assign_local_point_x(p: Point, r: Point) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("let mut q: Point = p;"), "{rust}");
+    assert!(rust.contains("q = r;"), "{rust}");
+    assert!(rust.contains("return q.x;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-struct-local-assignment-value-copy",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-value");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_value.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nstruct point identity_point(struct point p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_point");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("whole-record return must fail closed");
+    assert!(error.reason.contains("record type point is unsupported"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

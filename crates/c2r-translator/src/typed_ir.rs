@@ -591,6 +591,10 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         let element_ty = emit_scalar_type(element_ty)?;
         return Ok(format!("&[{element_ty}]"));
     }
+    emit_value_type(ty)
+}
+
+fn emit_value_type(ty: &IrType) -> Result<String, String> {
     if let IrTypeKind::Record { name } = &ty.kind {
         return emit_record_type_name(name);
     }
@@ -1005,6 +1009,25 @@ fn emit_stmt(
                     context,
                     &format!("decl {name} initializer"),
                 )?;
+                symbols.insert(name.clone());
+                let mut_prefix = if context.is_assigned_var(name) {
+                    "mut "
+                } else {
+                    ""
+                };
+                return Ok(format!(
+                    "{indent}let {mut_prefix}{decl_name}: {decl_ty} = {init};\n"
+                ));
+            }
+            if matches!(ty.kind, IrTypeKind::Record { .. }) {
+                let decl_ty =
+                    emit_value_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
+                let Some(init) = init else {
+                    return Err(format!("decl {name} record initializer is required"));
+                };
+                validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
+                let init = emit_expr(init, symbols, context)
+                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
                 symbols.insert(name.clone());
                 let mut_prefix = if context.is_assigned_var(name) {
                     "mut "
@@ -1674,7 +1697,7 @@ fn emit_expr(
             if !symbols.contains(name) {
                 return Err(format!("var {name} is not declared"));
             }
-            emit_scalar_type(ty).map_err(|detail| format!("var {name} has {detail}"))?;
+            emit_value_type(ty).map_err(|detail| format!("var {name} has {detail}"))?;
             emit_identifier(name, "var")
         }
         IrExpr::Binary {
@@ -2686,17 +2709,16 @@ fn validate_expr_matches_type(
     expected_ty: &IrType,
     context: &str,
 ) -> Result<(), String> {
-    let expected_ty = emit_scalar_type(expected_ty)
-        .map_err(|detail| format!("{context} expected type has {detail}"))?;
     let actual_ty = expr_type(expr).ok_or_else(|| format!("{context} type is unsupported"))?;
-    let actual_ty =
-        emit_scalar_type(actual_ty).map_err(|detail| format!("{context} has {detail}"))?;
-    if actual_ty == expected_ty {
-        Ok(())
-    } else {
+    let expected = emit_value_type(expected_ty)
+        .map_err(|detail| format!("{context} expected type has {detail}"))?;
+    let actual = emit_value_type(actual_ty).map_err(|detail| format!("{context} has {detail}"))?;
+    if actual != expected {
         Err(format!(
-            "{context} type {actual_ty} does not match expected type {expected_ty}"
+            "{context} type {actual} does not match expected type {expected}"
         ))
+    } else {
+        Ok(())
     }
 }
 
