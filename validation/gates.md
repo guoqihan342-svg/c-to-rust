@@ -157,6 +157,8 @@ Boundary:
 
 Only L3 can support a limited semantic-equivalence claim, and only for the named slice and pinned commit.
 
+For auto-translation evidence, `final_verification.semantic_pass=true` is claimable only as an accepted or named-slice evidence-bundle result. It must not be read as `generated_draft_semantic_pass=true`; generated drafts, typed IR candidates, C2Rust candidates, and LLM candidates remain candidate/provenance artifacts unless a separate accepted evidence boundary explicitly promotes that exact artifact.
+
 Automatic translation capability claims require more than L1 target success or a hand-authored `c_source` string. A slice only counts as real-source automatic translation evidence when the slice spec is generated from real C source files with source span, source hash, build profile provenance, and completed L3 evidence for the named function.
 
 中文：catalog gate 的 `level:"L0"` 与 auto-translation `route_decision.level="L0"` 是两种不同证据。后者只表示 deterministic zero-token candidate routing，不是 catalog L0 pass、不是 L1/L2/L3 evidence，也不证明语义等价；C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 仍是 semantic acceptance 的来源。

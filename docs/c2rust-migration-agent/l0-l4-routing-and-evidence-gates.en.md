@@ -104,7 +104,7 @@ Validation profile determines which gates must pass for this run. Key fields:
 - `profile`: e.g. `L0-dev`, `L1-dev`, `L2-dev`, `L3-dev`, `L4-dev`, `L4-accepted-evidence`
 - `status`: `passed`, `blocked`, `incomplete`
 - `gates`: each gate's required / actual / skipped status
-- `generated_draft_semantic_pass`: whether generated draft has passed semantics (always false until independent gates accept)
+- `generated_draft_semantic_pass`: whether the generated draft itself passed semantics. It must remain `false`; even when `final_verification.semantic_pass=true`, the semantic source is the accepted/named-slice evidence bundle, not the generated draft itself.
 
 ### 4.1 Gate Inventory
 
@@ -127,6 +127,7 @@ Validation profile determines which gates must pass for this run. Key fields:
 3. Top-level `status=passed`
 4. L4/refused defaults to not-passed, unless slice spec declares `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` must be false (generated draft does not claim semantics directly)
+6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must state `source=accepted_evidence_binding` and `generated_draft_semantic_pass=false`.
 
 ### 4.3 Profile-Route Relationship
 

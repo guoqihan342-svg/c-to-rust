@@ -104,7 +104,7 @@ Validation profile 决定本次运行必须通过的 gates。核心字段：
 - `profile`: 例如 `L0-dev`, `L1-dev`, `L2-dev`, `L3-dev`, `L4-dev`, `L4-accepted-evidence`
 - `status`: `passed`, `blocked`, `incomplete`
 - `gates`: 每项 gate 的 required / actual / skipped 状态
-- `generated_draft_semantic_pass`: 是否生成草稿已通过语义（始终为 false，直到独立 gates 接受）
+- `generated_draft_semantic_pass`: 生成草稿本身是否通过语义。当前必须保持 `false`；即使 `final_verification.semantic_pass=true`，语义来源也是 accepted/named-slice evidence bundle，不是 generated draft 自身。
 
 ### 4.1 Gate 清单
 
@@ -127,6 +127,7 @@ Validation profile 决定本次运行必须通过的 gates。核心字段：
 3. 顶层 `status=passed`
 4. L4/refused 默认不通过，除非 slice spec 声明 `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` 必须是 false（generated draft 本身不直接 claim 语义）
+6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须同时说明 `source=accepted_evidence_binding` 和 `generated_draft_semantic_pass=false`。
 
 ### 4.3 Profile 与 Route 的关系
 
