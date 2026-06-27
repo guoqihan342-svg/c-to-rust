@@ -715,6 +715,9 @@ fn record_ir_call_expression_evidence_for_expr(
             record_ir_call_expression_evidence_for_expr(base, statement_context, result);
             record_ir_call_expression_evidence_for_expr(index, statement_context, result);
         }
+        typed_ir::IrExpr::Member { base, .. } => {
+            record_ir_call_expression_evidence_for_expr(base, statement_context, result);
+        }
         typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
             for element in elements {
                 record_ir_call_expression_evidence_for_expr(element, statement_context, result);
@@ -771,6 +774,15 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
                 ir_expr_source_text(base),
                 ir_expr_source_text(index)
             )
+        }
+        typed_ir::IrExpr::Member {
+            base,
+            field,
+            is_arrow,
+            ..
+        } => {
+            let op = if *is_arrow { "->" } else { "." };
+            format!("{}{}{}", ir_expr_source_text(base), op, field)
         }
         typed_ir::IrExpr::ArrayLiteral { elements, .. } => format!(
             "[{}]",
@@ -928,6 +940,7 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::Conditional { .. } => "conditional".to_string(),
         typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
         typed_ir::IrExpr::Index { .. } => "index".to_string(),
+        typed_ir::IrExpr::Member { field, .. } => format!("member {field}"),
         typed_ir::IrExpr::ArrayLiteral { .. } => "array_literal".to_string(),
         typed_ir::IrExpr::Call { callee, .. } => format!("call {callee}"),
         typed_ir::IrExpr::IncDec { op, prefix, .. } => format!("{op:?} prefix={prefix}"),
@@ -1180,6 +1193,9 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
         typed_ir::IrExpr::Index { base, index, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(base, vars);
             collect_ir_post_increment_deref_vars_from_expr(index, vars);
+        }
+        typed_ir::IrExpr::Member { base, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(base, vars);
         }
         typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
             for element in elements {
