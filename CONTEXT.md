@@ -6497,3 +6497,41 @@ English mirror summary:
 - This slice did not need comparison-lowering production changes in `clang_frontend.rs`; existing lowering already maps real `>`, `==`, and `!=` AST nodes to typed IR binary expressions with C `int` result type. It also fixes a separate `clang-frontend` dry-run feature compile gap by importing `std::path::Path` unconditionally.
 - This is candidate generation only and keeps `semantic_pass=false`. It does not support full C comparison semantics, pointer comparison, floating-point comparison, mixed-width/unsigned conversions, comparison cast operands, short-circuit `&&` / `||`, call/deref/inc/dec side-effect operands, usual arithmetic conversions, or semantic acceptance.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 94. 2026-06-27 FlashDB L3 evidence hash drift and Windows fake compiler timeout fix
+
+本轮只处理验证链稳定性问题，没有新增翻译能力，也没有改变 FlashDB L3 行为边界。前一轮 full-regression 在 step 31/35 暴露 `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json` 中已声明的 evidence `sha256` 与实际文件内容漂移；本轮将 4 个过期 hash 刷新到当前已提交的 evidence 文件内容，并修复 Windows fake compiler 在单测中复制 `cmd.exe` 后执行可能卡住 30s 的随机 timeout 问题。
+
+核心改动：
+- `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json`
+  - 刷新 `c_oracle.sha256`。
+  - 刷新 `c_oracle_producer_evidence.sha256`。
+  - 刷新 `mutated_value_or_entries_oracle.sha256`。
+  - 刷新 `summary_md.sha256`。
+- `validation/tools/test_auto_migrate.py`
+  - Windows fake compiler 不再把 `%COMSPEC%` / `cmd.exe` 复制为输出可执行文件。
+  - 改为复制 `SystemRoot` / `WINDIR` 下的 `System32/hostname.exe`，作为稳定零退出可执行文件，避免 harness 执行阶段随机卡到 30s timeout。
+  - fake `cc` 和 fake `gcc` helper 均同步修正。
+
+已验证：
+- `python -B validation/tools/validate_flashdb_l3_evidence.py --evidence-root validation/evidence --report target/tmp/flashdb-l3-evidence-after-kvdb-hash.json`: PASS，FlashDB L3 strict package `kvdb-compact-overwrite` 可被 validator 消费。
+- 额外全量扫描 FlashDB passed summary 的 summary-declared evidence hash：`checked_refs 19`，`mismatch_count 0`。
+- `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_compile_success_records_harness_execution_without_oracle_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_cc_compile_command_falls_back_to_gcc_when_cc_is_missing -v`: PASS，2 tests passed。
+- `python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence -v`: PASS，127 tests passed in 139.828s。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: PASS，run id `20260627T003504Z`，35/35 steps passed，包含 `flashdb-release-stress-all` 10000 loops、`openspec validate --all` 和 `git diff --check`。
+
+当前边界：
+- 可以说：这轮修复的是已接受 FlashDB L3 evidence package 的 metadata/hash drift，以及 Windows 单测 fake compiler 的 harness 稳定性。
+- 不应说：这轮新增了任何 C-to-Rust 翻译语义、扩大了 FlashDB L3 行为覆盖，或重新生成了完整 FlashDB L3 evidence package。
+- 子线程额外发现 `legacy_incomplete` 的 `kvdb-lifecycle` 和 `tsdb-append-query-status` summary 仍有 stale hash；它们当前不参与 strict passed-summary validator gate，本轮不顺手改。
+- 子线程还发现 `kvdb-compact-overwrite` 的部分 manifest-like input bindings 与当前工作区源码 hash 不一致；这说明旧 evidence 可以自洽通过当前 strict gate，但若要证明“基于最新 workspace 重新生成”，后续应重跑该 L3 evidence package，而不是只改声明 hash。
+- 工作树里仍有大量 `validation/evidence/demo`、`validation/evidence/l2-slices`、`validation/evidence/libuv` 的既有 EOL/dirty 噪声；提交时必须继续使用白名单，不能 stage/revert 无关 evidence 文件。
+
+English mirror summary:
+
+- This slice fixes validation-chain stability only. It does not add translation capability or expand the FlashDB L3 behavioral boundary.
+- `l3-kvdb-compact-overwrite-summary.json` now binds four stale evidence `sha256` fields to the current evidence files: `c_oracle`, `c_oracle_producer_evidence`, `mutated_value_or_entries_oracle`, and `summary_md`.
+- Windows fake compiler tests no longer copy interactive `cmd.exe` as the produced harness executable. They copy `System32/hostname.exe` instead, giving a stable zero-exit executable for harness execution checks.
+- Focused FlashDB L3 validation passed, the full auto-migrate unittest pair passed with 127 tests, and full regression run `20260627T003504Z` passed all 35 steps including release stress, OpenSpec validation, and `git diff --check`.
+- Legacy-incomplete FlashDB summaries still have stale hashes and are intentionally not changed in this slice because they are outside the current strict passed-summary gate.
+- The accepted `kvdb-compact-overwrite` evidence is self-consistent under the current validator, but some manifest-like input bindings do not match the latest workspace source hashes. Regenerate the L3 evidence package later if the claim needs to be “freshly generated from current workspace” rather than “current accepted package remains validator-consumable.”

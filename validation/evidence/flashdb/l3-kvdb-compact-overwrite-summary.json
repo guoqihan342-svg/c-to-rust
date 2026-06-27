@@ -78,11 +78,11 @@
                                      },
                      "c_oracle":  {
                                       "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
-                                      "sha256":  "2b7f57daca9a5bd905235c52f9fad96bd6e7abf67fda1bf4b94eaf261717e5ea"
+                                      "sha256":  "6003d05f935938f737445396fa5ae104cfccd08fd14a1a692dfb3a82f5e792f3"
                                   },
                      "c_oracle_producer_evidence":  {
                                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle-producer-evidence.json",
-                                                        "sha256":  "3441e09f2148f8f0ef7ccdddda25cb9270f6f79abcb54092cf8041966cc81b6f"
+                                                        "sha256":  "e13ff3f57a0e15cf7fba85afd90d70fed7ab6d8e7395454113bd91fed7515e4d"
                                                     },
                      "diff":  {
                                   "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
@@ -94,7 +94,7 @@
                                        },
                      "mutated_value_or_entries_oracle":  {
                                                              "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-mutated-value-or-entries-oracle.json",
-                                                             "sha256":  "4fe27b2be49974992f0cd96f4433ccac9cfaf0313f4999147db723c5c9b27121"
+                                                             "sha256":  "32da18cc4d077b701838c00cd286bf71f76ec1a5e50c8411e9aba9562c7b10d8"
                                                          },
                      "rust_check":  {
                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-check.json",
@@ -122,7 +122,7 @@
                                             },
                      "summary_md":  {
                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.md",
-                                        "sha256":  "af1c1caea9996bac7ab9ccd3860b1520880c01b579488b665dd185488f941753"
+                                        "sha256":  "c1d5c25bee78986df5a50294e0a4b0435e8bd0344aeba2e6d22366b3f4a43f9c"
                                     }
                  },
     "c_oracle":  {
