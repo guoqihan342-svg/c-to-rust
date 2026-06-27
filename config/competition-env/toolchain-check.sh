@@ -2,6 +2,7 @@
 set -u
 
 failures=0
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 record_failure() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -44,6 +45,21 @@ expect_output_contains_case_insensitive() {
   esac
 }
 
+expect_file_contains() {
+  name="$1"
+  path="$2"
+  expected="$3"
+  if [ ! -r "$path" ]; then
+    record_failure "$name file is not readable: $path"
+    return
+  fi
+  if grep -Fq "$expected" "$path"; then
+    printf 'OK: %s contains %s\n' "$name" "$expected"
+  else
+    record_failure "$name expected '$expected' in $path"
+  fi
+}
+
 if [ -r /etc/os-release ]; then
   . /etc/os-release
   [ "${ID:-}" = "ubuntu" ] || record_failure "OS ID expected ubuntu, got ${ID:-unknown}"
@@ -84,6 +100,11 @@ expect_output_contains "g++" "g++ --version | head -n 1" "13.3.0"
 expect_output_contains "make" "make --version | head -n 1" "GNU Make 4.3"
 
 [ "${MAVEN_HOME:-}" = "/usr/local/maven3" ] || record_failure "MAVEN_HOME expected /usr/local/maven3, got ${MAVEN_HOME:-unset}"
+
+expect_file_contains "APT mirror profile" "${script_dir}/apt/sources.list" "http://mirrors.tools.huawei.com/ubuntu"
+expect_file_contains "pip mirror profile" "${script_dir}/pip/pip.conf" "https://mirrors.tools.huawei.com/pypi/simple"
+expect_file_contains "npm registry profile" "${script_dir}/npm/.npmrc" "https://mirrors.tools.huawei.com/npm/"
+expect_file_contains "Cargo registry profile" "${script_dir}/cargo/config.toml" "sparse+http://rust.inhuawei.com/crates.io-index/"
 
 expect_absent go
 expect_absent cmake

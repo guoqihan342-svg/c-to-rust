@@ -1674,12 +1674,11 @@ fn emit_call_expr(
     if !is_void_type(ty) {
         emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
     }
+    validate_bounded_call_args(args)?;
     let args = args
         .iter()
         .enumerate()
         .map(|(index, arg)| {
-            validate_bounded_call_arg(arg)
-                .map_err(|detail| format!("call arg[{index}] {detail}"))?;
             emit_expr(arg, symbols, context).map_err(|detail| format!("call arg[{index}] {detail}"))
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -1687,7 +1686,27 @@ fn emit_call_expr(
     Ok(format!("{callee}({args})"))
 }
 
-fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
+fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
+    let nested_call_count = args
+        .iter()
+        .filter(|arg| matches!(arg, IrExpr::Call { .. }))
+        .count();
+    if nested_call_count > 1 {
+        return Err(
+            "multiple nested call arguments are outside the bounded call subset".to_string(),
+        );
+    }
+    for (index, arg) in args.iter().enumerate() {
+        validate_bounded_call_arg(arg, true)
+            .map_err(|detail| format!("call arg[{index}] {detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_bounded_call_arg(
+    expr: &IrExpr,
+    allow_immediate_nested_call: bool,
+) -> Result<(), String> {
     match expr {
         IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
             emit_scalar_type(ty)?;
@@ -1697,22 +1716,25 @@ fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
             Err("null pointer call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Binary { lhs, rhs, .. } => {
-            validate_bounded_call_arg(lhs)?;
-            validate_bounded_call_arg(rhs)
+            validate_bounded_call_arg(lhs, false)?;
+            validate_bounded_call_arg(rhs, false)
         }
         IrExpr::Unary { operand, .. } | IrExpr::Cast { expr: operand, .. } => {
-            validate_bounded_call_arg(operand)
+            validate_bounded_call_arg(operand, false)
         }
         IrExpr::Conditional { .. } => {
             Err("conditional call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Index { base, index, .. } => {
-            validate_bounded_call_arg(base)?;
-            validate_bounded_call_arg(index)
+            validate_bounded_call_arg(base, false)?;
+            validate_bounded_call_arg(index, false)
         }
         IrExpr::ArrayLiteral { .. } => {
             Err("array literal arguments are outside the bounded call subset".to_string())
         }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if allow_immediate_nested_call => validate_bounded_nested_call_arg(callee, args, ty),
         IrExpr::Call { .. } => {
             Err("nested call expressions are outside the bounded call subset".to_string())
         }
@@ -1729,6 +1751,20 @@ fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
             Err(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+fn validate_bounded_nested_call_arg(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+) -> Result<(), String> {
+    emit_identifier(callee, "nested call callee")?;
+    emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
+    for (index, arg) in args.iter().enumerate() {
+        validate_bounded_call_arg(arg, false)
+            .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
+    }
+    Ok(())
 }
 
 fn find_call_callee(expr: &IrExpr) -> Option<&str> {

@@ -1722,15 +1722,15 @@ fn call_expr_skeleton_from_ast(
         }
     };
     let mut args = Vec::with_capacity(arg_nodes.len());
-    for (index, arg_node) in arg_nodes.iter().enumerate() {
+    for arg_node in arg_nodes {
         let arg = expr_skeleton_from_ast_with_options(arg_node, preserve_integral_casts)?;
-        if let Some(reason) = bounded_call_arg_rejection_reason(&arg) {
-            return Ok(ClangExprSkeleton::Unsupported {
-                node: "CallExpr".to_string(),
-                reason: format!("argument {index}: {reason}"),
-            });
-        }
         args.push(arg);
+    }
+    if let Some(reason) = bounded_call_args_rejection_reason(&args) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "CallExpr".to_string(),
+            reason,
+        });
     }
     Ok(ClangExprSkeleton::Call {
         callee,
@@ -1788,25 +1788,63 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
 }
 
 #[cfg(feature = "typed-ir")]
-fn bounded_call_arg_rejection_reason(expr: &ClangExprSkeleton) -> Option<String> {
+fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<String> {
+    let nested_call_count = args
+        .iter()
+        .filter(|arg| matches!(arg, ClangExprSkeleton::Call { .. }))
+        .count();
+    if nested_call_count > 1 {
+        return Some(
+            "multiple nested call arguments are outside the bounded call subset".to_string(),
+        );
+    }
+    for (index, arg) in args.iter().enumerate() {
+        if let Some(reason) = bounded_call_arg_rejection_reason(arg, true) {
+            return Some(format!("argument {index}: {reason}"));
+        }
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn bounded_call_arg_rejection_reason(
+    expr: &ClangExprSkeleton,
+    allow_immediate_nested_call: bool,
+) -> Option<String> {
     match expr {
         ClangExprSkeleton::DeclRef { .. } | ClangExprSkeleton::IntegerLiteral { .. } => None,
         ClangExprSkeleton::NullPtr { .. } => {
             Some("call arguments cannot use null pointer value semantics".to_string())
         }
-        ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs)
-            .or_else(|| bounded_call_arg_rejection_reason(rhs)),
+        ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs, false)
+            .or_else(|| bounded_call_arg_rejection_reason(rhs, false)),
         ClangExprSkeleton::Unary { operand, .. }
         | ClangExprSkeleton::Cast { expr: operand, .. } => {
-            bounded_call_arg_rejection_reason(operand)
+            bounded_call_arg_rejection_reason(operand, false)
         }
         ClangExprSkeleton::Conditional { .. } => {
             Some("conditional call arguments are outside the bounded call subset".to_string())
         }
-        ClangExprSkeleton::Index { base, index, .. } => bounded_call_arg_rejection_reason(base)
-            .or_else(|| bounded_call_arg_rejection_reason(index)),
+        ClangExprSkeleton::Index { base, index, .. } => {
+            bounded_call_arg_rejection_reason(base, false)
+                .or_else(|| bounded_call_arg_rejection_reason(index, false))
+        }
         ClangExprSkeleton::ArrayLiteral { .. } => {
             Some("array initializer lists are outside the bounded call subset".to_string())
+        }
+        ClangExprSkeleton::Call { args, ty, .. } if allow_immediate_nested_call => {
+            if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+                return Some(format!(
+                    "nested call result type {} is outside the bounded call subset",
+                    ty.spelled
+                ));
+            }
+            for (index, arg) in args.iter().enumerate() {
+                if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
+                    return Some(format!("nested call argument {index}: {reason}"));
+                }
+            }
+            None
         }
         ClangExprSkeleton::Call { .. } => {
             Some("nested call expressions are outside the bounded call subset".to_string())

@@ -2247,7 +2247,7 @@ fn typed_ir_emits_direct_identifier_call_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_nested_direct_call_arguments() {
+fn typed_ir_emits_nested_direct_call_argument() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "nested_call_expression".to_string(),
@@ -2274,11 +2274,103 @@ fn typed_ir_rejects_nested_direct_call_arguments() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("nested call arg must fail closed");
+    let emitted = emit_rust_from_ir(&ir).expect("emit one-level nested direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn nested_call_expression(value: i32) -> i32"));
+    assert!(rust.contains("return helper(other(value));"));
+    assert_rust_snippet_compiles(
+        "typed-ir-nested-direct-call-argument",
+        &format!(
+            "fn other(value: i32) -> i32 {{ value + 1 }}\nfn helper(value: i32) -> i32 {{ value }}\n{rust}"
+        ),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_deeper_nested_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "deeper_nested_call_expression".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![IrExpr::Call {
+                    callee: "other".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "third".to_string(),
+                        args: vec![ir_var("value", i32_ty.clone())],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("deeper nested call arg must fail closed");
 
     assert!(error
         .reason
         .contains("nested call expressions are outside the bounded call subset"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_multiple_nested_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "multiple_nested_call_expression".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![
+                    IrExpr::Call {
+                        callee: "left".to_string(),
+                        args: vec![ir_var("value", i32_ty.clone())],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    IrExpr::Call {
+                        callee: "right".to_string(),
+                        args: vec![ir_var("value", i32_ty.clone())],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                ],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("multiple nested call args must fail closed");
+
+    assert!(error
+        .reason
+        .contains("multiple nested call arguments are outside the bounded call subset"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -16433,6 +16525,119 @@ fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-initialized-direct-call",
         &format!("fn helper() -> i32 {{ 0 }}\n{rust}"),
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_nested_direct_call_expr_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-nested-direct-call-lower");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("nested_direct_call.c");
+    fs::write(
+        &source_file,
+        "int inner(int value) { return value + 1; }\nint outer(int value) { return value; }\nint nested_direct_call(int value) { return outer(inner(value)); }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "nested_direct_call");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Call { callee, args, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected nested direct call return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(callee, "outer");
+    let [IrExpr::Call {
+        callee: inner_callee,
+        args: inner_args,
+        ..
+    }] = args.as_slice()
+    else {
+        panic!("expected one nested direct call arg, got {args:?}");
+    };
+    assert_eq!(inner_callee, "inner");
+    assert_eq!(inner_args.len(), 1);
+
+    let emitted = emit_rust_from_ir(function).expect("emit nested direct call from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn nested_direct_call(value: i32) -> i32"));
+    assert!(rust.contains("return outer(inner(value));"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-nested-direct-call",
+        &format!(
+            "fn inner(value: i32) -> i32 {{ value + 1 }}\nfn outer(value: i32) -> i32 {{ value }}\n{rust}"
+        ),
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_multiple_nested_direct_call_args_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-multiple-nested-direct-call-reject");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("multiple_nested_direct_call.c");
+    fs::write(
+        &source_file,
+        "int left(int value) { return value + 1; }\nint right(int value) { return value + 2; }\nint outer2(int a, int b) { return a + b; }\nint multiple_nested_direct_call(int value) { return outer2(left(value), right(value)); }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "multiple_nested_direct_call",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    let message = report
+        .errors
+        .first()
+        .map(|error| error.message.as_str())
+        .unwrap_or("");
+    assert!(
+        message.contains("multiple nested call arguments are outside the bounded call subset"),
+        "{message}"
     );
 }
 

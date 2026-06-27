@@ -105,7 +105,7 @@ These should still fail closed:
 - Unsupported type/initializer in any `ForStmt` init declarator, VLA/incomplete arrays, and duplicate symbols.
 - Uninitialized local reads before assignment, first assignments that read the same variable, initialization through only one branch or only a loop body, address-taken initialization, indirect writes, and alias writes.
 - Mutable pointer reads, complex pointer writes, pointer escape, unproven multi-mutable-pointer alias/noalias cases, and unmodeled alias writes.
-- Function-pointer callees, complex call side effects, and nested calls in conditions.
+- Function-pointer callees, complex call side effects, and nested calls in conditions. Direct-call arguments only allow the one-level single `outer(inner(value))` shape; deeper nesting, multiple sibling nested calls, and nested calls hidden inside binary/index/cast operands still fail closed.
 - Volatile, hardware registers, cross-thread, and interrupt semantics.
 - Unmodeled macro side effects, unrecoverable control flow, and insufficient test oracles.
 - Semantic acceptance not proven by the full C/Rust oracle, negative diff, unsafe ledger, and final verification pipeline.

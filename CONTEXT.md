@@ -8161,3 +8161,94 @@ English mirror summary:
 - Direct typed IR, clang-lowered skeleton, real clang AST smoke, and fail-closed boundary tests cover the new path.
 - Added standalone competition environment config under `config/competition-env/` and moved default validation/profile references to that path while keeping the old validation profile as a compatibility entrypoint.
 - Full translator gate passes with real clang enabled: 48 lib tests, 345 bounded translation tests, and 0 doc-tests.
+
+## 118. 2026-06-27 typed IR one-level nested direct calls and profile mirror checks
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 117 节建议的 nested pure direct call 快刀，并把用户补充的比赛环境约束核对到独立配置目录。四个只读子智能体分别给出结论：
+- nested direct call：建议只放开“一层、一个、整个实参就是 direct call”，保留 deeper / multiple sibling / condition call / side-effect argument fail-closed。
+- standalone typed clang inc/dec statement：当前真实 clang AST 还不支持普通 `value++; ++value;` statement；下一刀应复用 `ForStmt` step 的 inc/dec-to-Assign helper，只放开 statement value-discarded 场景。
+- alias/memory model：mutable pointer output write 仍缺 noalias/ownership/length/effect graph 证明；下一阶段应先补 struct/alias memory model OpenSpec 和 pointer/slice evidence schema。
+- 比赛环境配置：`config/competition-env/` 已完整匹配用户给出的 Ubuntu 24.04.4、kernel、Huawei mirrors、Python/Node/Java/Maven/Rust/GCC/Make 和 Go/CMake 缺失事实；validation 侧目录只是 compatibility entrypoint。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_call_expr()` 现在先对整组实参运行 `validate_bounded_call_args()`，再发射 Rust。
+  - 新增一层 nested direct call 实参支持：`outer(inner(value))` 可发射为同形 Rust，只要 outer/inner callee 都是合法 identifier，inner 返回当前支持的 scalar integer，inner args 仍属于无 call 的 bounded arg subset。
+  - `outer(inner(third(value)))` 继续 fail closed。
+  - `outer(left(value), right(value))` 继续 fail closed，避免在未建模 C sibling argument evaluation order 时错误改写语义。
+  - `outer(inner(value) + 1)`、`outer(arr[inner(value)])`、call arg 中 inc/dec、deref、addr-of、null、conditional、array literal、unsupported expr 仍 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `call_expr_skeleton_from_ast()` 先构建全部 arg skeleton，再用 `bounded_call_args_rejection_reason()` 做整组参数门禁。
+  - direct callee 证明仍要求 clang `referencedDecl.kind=FunctionDecl`；function pointer / complex callee 不因 nested call 支持而放开。
+  - nested direct call result 只接受 clang type skeleton 中的 supported integer scalar；void/pointer/array/unsupported result 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 把旧的 `typed_ir_rejects_nested_direct_call_arguments` 改成正例 `typed_ir_emits_nested_direct_call_argument`。
+  - 新增 `typed_ir_rejects_deeper_nested_direct_call_arguments`。
+  - 新增 `typed_ir_rejects_multiple_nested_direct_call_arguments`。
+  - 新增真实 clang AST opt-in smoke `clang_ast_dump_lowers_nested_direct_call_expr_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke `clang_ast_dump_rejects_multiple_nested_direct_call_args_when_enabled`。
+
+比赛环境配置改动：
+- `config/competition-env/toolchain-check.sh`
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh`
+  - 新增 profile 文件镜像源检查：APT、pip、npm、Cargo registry 必须包含用户指定的 Huawei mirror。
+  - 两个入口继续保持相同逻辑；区别仅在 `env.sh` 的 profile path 和 README 入口说明。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+  - nested direct call 从“下一刀/完全不支持”更新为“一层单个 direct call argument 已支持”。
+  - 文档明确保留 deeper nesting、多个 sibling nested call、binary/index/cast 内 nested call、condition tree call、function pointer callee、inc/dec/deref 参数的 fail-closed 边界。
+
+红灯已观察：
+```powershell
+cargo test --features "typed-ir clang-frontend" typed_ir_emits_nested_direct_call_argument --test bounded_translation
+```
+
+旧实现失败于：
+- `stmt[0].return expr call arg[0] nested call expressions are outside the bounded call subset`
+
+focused 验证：
+```powershell
+cargo test --features "typed-ir clang-frontend" nested --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" nested_direct_call --test bounded_translation -- --nocapture
+```
+
+focused 结果：
+- `nested` filter：13 passed。
+- real clang `nested_direct_call` filter：5 passed，0 skipped，包括 typed IR 正负例和真实 clang AST 正负例。
+
+完整验证：
+```powershell
+python -m json.tool config\competition-env\environment.json > $null
+python -m json.tool validation\environment-profiles\huawei-competition-ubuntu-24.04\environment.json > $null
+python -m json.tool validation\l3-template\config-profile.example.json > $null
+bash -n config/competition-env/env.sh; bash -n config/competition-env/toolchain-check.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+cargo fmt -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "clang-frontend typed-ir clang-lowering-report" -- --nocapture
+git diff --check
+```
+
+完整验证结果：
+- config/profile JSON 校验通过。
+- shell syntax 校验通过。
+- `cargo fmt --check` 通过。
+- 完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 349 passed，doc-tests 0 passed。
+- `git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：generic typed IR 现在支持一层单个 nested direct call argument，例如 `return outer(inner(value));`，并且 direct typed IR、真实 clang AST 和 rustc snippet smoke 均已覆盖。
+- 可以说：这个支持仍是 candidate generation，不是外部 callee semantic acceptance；external callee 仍需要现有 call evidence/signature/source binding 以及完整 validation gates。
+- 不应说：已支持 function pointer call、任意 nested call、多个 sibling nested call、condition 中 call、复杂 call side effect、call argument 中 inc/dec/deref、full C argument evaluation semantics 或 semantic acceptance。
+- 后续建议：下一刀优先 standalone typed clang inc/dec statement；并行推进 struct/alias memory model OpenSpec + pointer/slice evidence schema，避免 mutable pointer output write 误扩张成完整 C pointer ownership 模型。
+
+English mirror summary:
+
+- Added one-level single nested direct call argument support to the generic typed IR emitter.
+- `outer(inner(value))` now lowers through direct typed IR and real clang AST when both callees are direct identifiers and the nested result is a supported integer scalar.
+- Deeper nesting, multiple sibling nested calls, nested calls hidden in binary/index/cast operands, function-pointer callees, calls in conditions, and side-effect arguments still fail closed.
+- Strengthened competition profile self-check scripts to verify the checked-in APT, pip, npm, and Cargo Huawei mirror configuration files.
+- Full translator gate passes with real clang enabled: 48 lib tests, 349 bounded translation tests, and 0 doc-tests.
