@@ -31,11 +31,25 @@ expect_output_contains() {
   esac
 }
 
+expect_output_contains_case_insensitive() {
+  name="$1"
+  command_text="$2"
+  expected="$3"
+  output="$(sh -c "$command_text" 2>&1)"
+  lower_output="$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')"
+  lower_expected="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
+  case "$lower_output" in
+    *"$lower_expected"*) printf 'OK: %s contains %s\n' "$name" "$expected" ;;
+    *) record_failure "$name expected '$expected', got '$output'" ;;
+  esac
+}
+
 if [ -r /etc/os-release ]; then
   . /etc/os-release
   [ "${ID:-}" = "ubuntu" ] || record_failure "OS ID expected ubuntu, got ${ID:-unknown}"
   [ "${VERSION_ID:-}" = "24.04" ] || record_failure "VERSION_ID expected 24.04, got ${VERSION_ID:-unknown}"
   [ "${VERSION_CODENAME:-}" = "noble" ] || record_failure "VERSION_CODENAME expected noble, got ${VERSION_CODENAME:-unknown}"
+  [ "${VERSION:-}" = "24.04.4 LTS (Noble Numbat)" ] || record_failure "VERSION expected 24.04.4 LTS (Noble Numbat), got ${VERSION:-unknown}"
 else
   record_failure "/etc/os-release is not readable"
 fi
@@ -60,6 +74,8 @@ expect_output_contains "pip" "pip --version" "pip 24.0"
 expect_output_contains "node" "node --version" "v24.13.0"
 expect_output_contains "npm" "npm --version" "11.6.2"
 expect_output_contains "java" "java -version" "21.0.10"
+expect_output_contains_case_insensitive "java distribution" "java -version" "openjdk"
+expect_output_contains_case_insensitive "java vendor" "java -version" "bisheng"
 expect_output_contains "maven" "mvn --version" "Apache Maven 3.9.11"
 expect_output_contains "rustc" "rustc --version" "rustc 1.96.0"
 expect_output_contains "cargo" "cargo --version" "cargo 1.96.0"

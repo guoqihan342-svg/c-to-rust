@@ -74,7 +74,7 @@
 - 普通 compound body 和 `ForStmt` init 中的 `DeclStmt` 已能把多个简单 `VarDecl` 按源码顺序展开。
 - 无 initializer 的标量局部声明现在可在 generic typed IR route 中发射，但前提是保守 assignment-before-read guard 能证明每次读取前都已初始化。
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
-- `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt`（含多个简单 `VarDecl` declarator）或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集，并支持 loop-body `break` 和窄化 `continue`；同一层 `ForStmt` body 的 `continue` 会先发射 step 再发射 Rust `continue;`，嵌套循环里的 `continue` 只作用于内层循环；`goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
+- `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt`（含多个简单 `VarDecl` declarator）或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix-or-prefix inc-dec，body 复用现有 statement 子集，并支持 loop-body `break` 和窄化 `continue`；同一层 `ForStmt` body 的 `continue` 会先发射 step 再发射 Rust `continue;`，嵌套循环里的 `continue` 只作用于内层循环；step-position 的简单整数变量 `++i` / `--i` 只按值未使用的 statement side effect lowering，不代表 value-position inc/dec 已支持；`goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
 - `DoStmt` 已支持窄化 lowering 到 `DoWhile`：body 复用现有 statement 子集，condition 复用当前 condition emitter；body 中的 `continue` 会先检查同一个 condition 再继续，避免跳过 C `do-while` 条件。
 - `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
 - `type_from_qual_type()` 已能识别 fixed-width integer typedef aliases 和精确 `signed char`；`short` / `long long` 这类其他目标相关 spelling、plain `char`、plain `long` 和完整 usual scalar conversions 仍不放开。
@@ -98,7 +98,7 @@
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
 - 非简单 target、value-position 使用、unsupported compute/result 类型组合、pointer arithmetic、floating-point、volatile 或复杂 RHS side effect 的 compound assignment 仍 fail closed。
-- `ForStmt` 中的 `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、复杂 init/step、非 simple scalar init/step 或 step 里的 prefix inc-dec 仍 fail closed；`DoWhile` condition 中的 call/inc/dec/side effect 仍 fail closed；`break` 只在 loop body 中作为直接 loop exit candidate generation 放开，`continue` 只在 loop body 中作为带显式 `DoWhile` condition check 或 `ForStmt` step-before-continue 发射的窄化 candidate generation 放开。
+- `ForStmt` 中的 `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、复杂 init/step、非 simple scalar init/step、非 simple integer variable step target、parenthesized/comma step 或 value-position inc/dec 仍 fail closed；`DoWhile` condition 中的 call/inc/dec/side effect 仍 fail closed；`break` 只在 loop body 中作为直接 loop exit candidate generation 放开，`continue` 只在 loop body 中作为带显式 `DoWhile` condition check 或 `ForStmt` step-before-continue 发射的窄化 candidate generation 放开。
 - `ForStmt` init 任一 declarator 的 unsupported type/initializer、VLA/incomplete array、重复符号仍 fail closed。
 - 无初始化局部变量在赋值前读取、首次赋值读取自身、只在单侧分支或循环体中赋值、address-taken initialization、间接写入和 alias write 仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。

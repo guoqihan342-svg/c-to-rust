@@ -7982,3 +7982,75 @@ English mirror summary:
 - A `continue` inside a `DoWhile` body emits the same condition break check before Rust `continue;`, preserving C `do-while` condition semantics.
 - Added direct typed IR coverage and a real clang AST smoke test for the do-while path.
 - This is still candidate generation only. `switch`, `goto`, full loop control-flow semantics, side-effecting conditions, and semantic acceptance remain fail-closed.
+
+## 116. 2026-06-27 ForStmt step-position prefix inc/dec and competition self-check tightening
+
+本轮继续按多智能体推进 `c2r-translator` 的通用语法面，不写 FlashDB 专用代码。只读子智能体复核后确认：`for (...; ...; ++i)` / `--i` 的 step 表达式值被丢弃，对简单整数变量来说 prefix/postfix 的可观察差异只剩同一个 side effect，因此可以作为窄化 statement-position 切片放开。第 107、112、114、115 节中“prefix inc/dec step 仍不支持 / 是下一刀”的旧边界被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `inc_dec_expr_skeleton_from_ast(expr, allow_prefix, preserve_integral_casts)`，让通用表达式入口继续 `allow_prefix=false`，而 `ForStmt` step 专用入口可传 `allow_prefix=true`。
+  - `inc_dec_for_step_skeleton_from_ast()` 不再要求 postfix，只接受直接 `UnaryOperator` 的简单整数 `DeclRef` target，并 lowering 成 `ClangStmtSkeleton::Assign { value: Binary(Add/Sub, target, 1) }`。
+  - `isPostfix` 必须是显式 bool；缺失或非 bool 会 fail closed，避免 AST 元数据不完整时把 step 当成 prefix 默认接受。
+  - step helper 透传底层 unsupported reason，保留 fail-closed 诊断。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 原真实 clang prefix-step 负例改为正例：`clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled`。
+  - 新增真实 clang prefix decrement step 正例：`clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled`。
+  - 新增真实 clang 负例，证明 value-position/call-argument prefix inc 仍拒绝：
+    - `clang_ast_dump_rejects_prefix_increment_return_value_when_enabled`
+    - `clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled`
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh`
+  - 比赛环境静态配置已覆盖用户补充的版本和镜像源。
+  - 自检脚本补充完整 `VERSION=24.04.4 LTS (Noble Numbat)` 检查。
+  - `java -version` 现在除 `21.0.10` 外，还大小写不敏感检查 `openjdk` 和 `bisheng`。
+
+红灯已观察：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir for_step_stmt_skeleton_from_ast_rejects_inc_dec_without_explicit_postfix_flag -- --nocapture
+```
+
+旧实现会把缺失 `isPostfix` 的 `++i` step 当成 assignment 接受；红测失败信息为 expected unsupported but got `Assign { ... }`。
+
+focused 验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir for_step_stmt_skeleton_from_ast -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir prefix_ -- --nocapture
+```
+
+focused 结果：
+- `for_step_stmt_skeleton_from_ast*`：4 passed。
+- `prefix_`：`src/lib.rs` 4 passed，`bounded_translation.rs` 6 passed。
+
+完整验证：
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`cargo fmt --check`、shell syntax、environment JSON、`git diff --check` 均 exit 0；`git diff --check` 仅报告 Windows LF/CRLF 提示。完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 336 passed，doc-tests 0 passed。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+
+边界：
+- 可以说：`ForStmt` step-position 的简单整数变量 prefix `++i` / `--i` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：该支持只利用 step expression 值被丢弃的事实，按 statement side effect 发射为 `i = i +/- 1`。
+- 可以说：通用 expression path、return value、call argument、while/if/for condition、deref target、pointer target、缺失/非 bool `isPostfix` 元数据仍 fail closed。
+- 不应说：已支持 value-position `++i` / `--i`、condition 中 inc/dec、副作用复杂 step、parenthesized/comma step、非简单整数变量 target、指针/数组/字段 inc-dec、完整 C for-loop control-flow semantics 或 semantic acceptance。
+- 后续建议：下一刀优先考虑 mutable pointer write 到 `&mut [T]` 的受限 lowering、nested pure direct calls、generic inc/dec value semantics，或继续设计 `switch` / `goto`。
+
+English mirror summary:
+
+- Added narrow `ForStmt` step-position prefix `++i` / `--i` support for simple integer variable targets.
+- The normal expression path still rejects prefix inc/dec; real clang tests cover return value, call argument, while condition, and deref fail-closed boundaries.
+- Inc/dec clang JSON must carry an explicit boolean `isPostfix` field; missing or non-bool metadata fails closed.
+- Tightened the Huawei competition environment self-check for full Ubuntu `24.04.4 LTS (Noble Numbat)` and Bisheng/OpenJDK Java provenance.
+- Full translator gate passes with real clang enabled: 48 lib tests, 336 bounded translation tests, and 0 doc-tests.

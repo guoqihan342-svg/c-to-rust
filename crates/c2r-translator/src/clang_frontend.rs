@@ -963,17 +963,13 @@ fn for_step_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Cl
 fn inc_dec_for_step_skeleton_from_ast(
     stmt: &Value,
 ) -> Result<ClangStmtSkeleton, ClangFrontendError> {
-    let step = expr_skeleton_from_ast(stmt)?;
-    let ClangExprSkeleton::IncDec {
-        target,
-        op,
-        prefix: false,
-        ty,
-    } = step
-    else {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason: "ForStmt step inc/dec must be postfix".to_string(),
-        });
+    let step = inc_dec_expr_skeleton_from_ast(stmt, true, false)?;
+    let ClangExprSkeleton::IncDec { target, op, ty, .. } = step else {
+        let reason = match step {
+            ClangExprSkeleton::Unsupported { reason, .. } => reason,
+            _ => "ForStmt step must be an increment/decrement expression".to_string(),
+        };
+        return Ok(ClangStmtSkeleton::Unsupported { reason });
     };
     let ClangExprSkeleton::DeclRef {
         name: target_name,
@@ -1464,34 +1460,7 @@ fn expr_skeleton_from_ast_with_options(
                 message: "UnaryOperator is missing opcode".to_string(),
             })?;
             if opcode == "++" || opcode == "--" {
-                if !expr
-                    .get("isPostfix")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-                {
-                    return Ok(ClangExprSkeleton::Unsupported {
-                        node: "UnaryOperator".to_string(),
-                        reason: format!("prefix opcode {opcode} is outside the current skeleton"),
-                    });
-                }
-                let target = inner(expr).first().ok_or_else(|| ClangFrontendError {
-                    kind: "invalid_unary_operator".to_string(),
-                    message: "UnaryOperator is missing operand".to_string(),
-                })?;
-                let op = if opcode == "++" {
-                    ClangIncDecOperator::Inc
-                } else {
-                    ClangIncDecOperator::Dec
-                };
-                return Ok(ClangExprSkeleton::IncDec {
-                    target: Box::new(expr_skeleton_from_ast_with_options(
-                        target,
-                        preserve_integral_casts,
-                    )?),
-                    op,
-                    prefix: false,
-                    ty: expr_type(expr)?,
-                });
+                return inc_dec_expr_skeleton_from_ast(expr, false, preserve_integral_casts);
             }
             if opcode == "*" {
                 let ptr = inner(expr).first().ok_or_else(|| ClangFrontendError {
@@ -1682,6 +1651,53 @@ fn array_literal_element_rejection_reason(expr: &ClangExprSkeleton) -> Option<St
                 .to_string(),
         ),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn inc_dec_expr_skeleton_from_ast(
+    expr: &Value,
+    allow_prefix: bool,
+    preserve_integral_casts: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
+        kind: "invalid_unary_operator".to_string(),
+        message: "UnaryOperator is missing opcode".to_string(),
+    })?;
+    let op = match opcode.as_str() {
+        "++" => ClangIncDecOperator::Inc,
+        "--" => ClangIncDecOperator::Dec,
+        _ => {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "UnaryOperator".to_string(),
+                reason: format!("opcode {opcode} is outside the current inc/dec skeleton"),
+            })
+        }
+    };
+    let Some(is_postfix) = expr.get("isPostfix").and_then(Value::as_bool) else {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "UnaryOperator".to_string(),
+            reason: "inc/dec UnaryOperator is missing an explicit isPostfix flag".to_string(),
+        });
+    };
+    if !is_postfix && !allow_prefix {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "UnaryOperator".to_string(),
+            reason: format!("prefix opcode {opcode} is outside the current skeleton"),
+        });
+    }
+    let target = inner(expr).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_unary_operator".to_string(),
+        message: "UnaryOperator is missing operand".to_string(),
+    })?;
+    Ok(ClangExprSkeleton::IncDec {
+        target: Box::new(expr_skeleton_from_ast_with_options(
+            target,
+            preserve_integral_casts,
+        )?),
+        op,
+        prefix: !is_postfix,
+        ty: expr_type(expr)?,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4325,6 +4341,204 @@ mod tests {
             body.as_slice(),
             [ClangStmtSkeleton::Assign { .. }]
         ));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_accepts_prefix_increment_as_statement_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": false,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "i" }
+                }
+            ]
+        });
+
+        let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect("prefix increment step");
+
+        let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+            panic!("expected assignment step, got {skeleton:?}");
+        };
+        assert!(matches!(target, ClangExprSkeleton::DeclRef { name, .. } if name == "i"));
+        assert!(matches!(
+            value,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Add,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_accepts_prefix_decrement_as_statement_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "--",
+            "isPostfix": false,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "i" }
+                }
+            ]
+        });
+
+        let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect("prefix decrement step");
+
+        let ClangStmtSkeleton::Assign { value, .. } = skeleton else {
+            panic!("expected assignment step, got {skeleton:?}");
+        };
+        assert!(matches!(
+            value,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Sub,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_still_rejects_value_position_prefix_inc_dec() {
+        for opcode in ["++", "--"] {
+            let expr = serde_json::json!({
+                "kind": "UnaryOperator",
+                "opcode": opcode,
+                "isPostfix": false,
+                "type": { "qualType": "int" },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": "int" },
+                        "referencedDecl": { "name": "i" }
+                    }
+                ]
+            });
+
+            let skeleton = expr_skeleton_from_ast(&expr).expect("prefix inc/dec skeleton");
+
+            let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+                panic!("expected unsupported prefix {opcode}, got {skeleton:?}");
+            };
+            assert!(
+                reason.contains("prefix opcode"),
+                "unexpected reason for {opcode}: {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_prefix_inc_dec_non_scalar_targets() {
+        let cases = [
+            (
+                "prefix deref target",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "UnaryOperator",
+                            "opcode": "*",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int *" },
+                                    "referencedDecl": { "name": "p" }
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                "simple variable",
+            ),
+            (
+                "prefix pointer target",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }),
+                "unsupported",
+            ),
+        ];
+
+        for (label, stmt, expected_reason) in cases {
+            let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect(label);
+
+            let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+                panic!("expected unsupported {label}, got {skeleton:?}");
+            };
+            assert!(
+                reason.contains(expected_reason),
+                "unexpected reason for {label}: {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_inc_dec_without_explicit_bool_postfix_flag() {
+        let cases = [
+            (
+                "missing postfix flag",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }),
+            ),
+            (
+                "string postfix flag",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": "false",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }),
+            ),
+        ];
+
+        for (label, stmt) in cases {
+            let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect(label);
+
+            let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+                panic!("expected unsupported {label}, got {skeleton:?}");
+            };
+            assert!(
+                reason.contains("explicit isPostfix flag"),
+                "unexpected reason for {label}: {reason}"
+            );
+        }
     }
 
     #[test]

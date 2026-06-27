@@ -13273,7 +13273,7 @@ fn clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_typed_ir_for_prefix_increment_step_when_enabled() {
+fn clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -13288,10 +13288,57 @@ fn clang_ast_dump_rejects_typed_ir_for_prefix_increment_step_when_enabled() {
     );
     let out_dir = unique_out_dir("clang-real-typed-ir-for-prefix-step");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_for_prefix_step.c");
+    let source_file = out_dir.join("sum_prefix_for.c");
     fs::write(
         &source_file,
-        "int bad_for_prefix_step(int limit) { int total = 0; for (int i = 0; i < limit; ++i) { total = total + i; } return total; }\n",
+        "int sum_prefix_for(int limit) { int total = 0; for (int i = 0; i < limit; ++i) { total = total + i; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "sum_prefix_for");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { .. }, IrStmt::For { step, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!("expected decl, for, return, got {:?}", function.body);
+    };
+    assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
+
+    let rust = emit_rust_from_ir(function).expect("emit prefix increment for step");
+    assert!(rust.contains("pub fn sum_prefix_for(limit: i32) -> i32"));
+    assert!(rust.contains("while (i < limit) {"));
+    assert!(rust.contains("i = (i + 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-for-prefix-inc-step", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-prefix-dec-step");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("sum_prefix_down_for.c");
+    fs::write(
+        &source_file,
+        "int sum_prefix_down_for(int limit) { int total = 0; for (int i = limit; i > 0; --i) { total = total + i; } return total; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -13302,17 +13349,23 @@ fn clang_ast_dump_rejects_typed_ir_for_prefix_increment_step_when_enabled() {
     let report = lower_function_from_clang_ast_dump_report(
         &environment,
         &source_file,
-        "bad_for_prefix_step",
+        "sum_prefix_down_for",
     );
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert!(
-        report.errors.iter().any(|error| error
-            .message
-            .contains("ForStmt step inc/dec must be postfix")),
-        "{:?}",
-        report.errors
-    );
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { .. }, IrStmt::For { step, .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!("expected decl, for, return, got {:?}", function.body);
+    };
+    assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
+
+    let rust = emit_rust_from_ir(function).expect("emit prefix decrement for step");
+    assert!(rust.contains("pub fn sum_prefix_down_for(limit: i32) -> i32"));
+    assert!(rust.contains("while (i > 0i32) {"));
+    assert!(rust.contains("i = (i - 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-for-prefix-dec-step", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -15269,6 +15322,103 @@ fn clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled() {
             .errors
             .first()
             .map(|error| error.message.contains("prefix opcode --"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_prefix_increment_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-prefix-increment-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_prefix_return.c");
+    fs::write(
+        &source_file,
+        "int bad_prefix_return(int value) { return ++value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "bad_prefix_return");
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("prefix opcode ++"))
+            .unwrap_or(false),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-prefix-increment-call-arg");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_prefix_call_arg.c");
+    fs::write(
+        &source_file,
+        "int helper(int value) { return value; }\nint bad_prefix_call_arg(int value) { return helper(++value); }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_prefix_call_arg",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(
+        report.errors.first().map(|error| error.kind.as_str()),
+        Some("unsupported_clang_expr")
+    );
+    assert!(
+        report
+            .errors
+            .first()
+            .map(|error| error.message.contains("prefix opcode ++"))
             .unwrap_or(false),
         "{:?}",
         report.errors
