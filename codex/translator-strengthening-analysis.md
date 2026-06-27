@@ -45,7 +45,7 @@
 - declaration initializer、assignment RHS 和 return value 中的 clang-preserved value-position integer implicit casts。
 - comparison 条件位置和窄 value-position C `int` 0/1 materialization。
 - logical not 条件位置和窄 value-position C `int` 0/1 materialization。
-- condition-position short-circuit `&&` / `||`。
+- condition-position 和窄 value-position short-circuit `&&` / `||`，value-position 会 materialize 成 C `int` 0/1。
 - 纯整数 value-position `ConditionalOperator` / `?:`，通过 lazy `IrExpr::Conditional` 发射。
 - readonly pointer slice 参数、直接 `NULL` presence check、直接 readonly `*p` read、窄化 readonly `*(p+i)` / `*(i+p)` read。
 - readonly global const integer array、局部固定长度整数数组读写。
@@ -55,7 +55,6 @@
 仍缺失的 P0 能力：
 
 - 带 scope 模型的 `ForStmt`，避免 init scope 和 `continue` 语义漂移。
-- value-position `&&` / `||` materialization，但必须保留 lazy 求值，不能把副作用 prelude 提前。
 - 完整 usual scalar conversions 分类。
 - pointer write / alias / ownership 模型。
 
@@ -64,7 +63,7 @@
 真实 clang smoke 已跑通，所以现在问题不是“装 clang”，而是 clang skeleton / typed IR 支持的 AST 子集仍窄：
 
 - `CompoundAssignOperator` 已支持 standalone simple scalar variable target。
-- `&&` / `||` 已支持 condition-position。
+- `&&` / `||` 已支持 condition-position 和窄 value-position；value-position 的 return value、assignment RHS 和 declaration initializer 已覆盖。
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
 - `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
 - struct/record、field access、switch/goto/do-while 仍未进入安全 emitter。
@@ -74,9 +73,8 @@
 当前最合适的顺序不是回到 FlashDB 专用模板，而是继续按 typed IR 小切片推进：
 
 1. **scoped `ForStmt`**：先引入显式 scope/block 模型，或保持更窄 fail-closed 规则，避免 init scope 和 `continue` 行为漂移。
-2. **value-position short-circuit**：只有能保留 `&&` / `||` lazy 求值且不提前 hoist 副作用 prelude 时，才 materialize C `int` 0/1。
-3. **usual conversions 分类**：先把可证明的 integral cast 规则固化成显式 guard，不要一次性声明完整 C conversion。
-4. **struct / memory model 设计**：flat struct、field access、pointer write、alias/ownership 需要独立设计和验证 gate。
+2. **usual conversions 分类**：先把可证明的 integral cast 规则固化成显式 guard，不要一次性声明完整 C conversion。
+3. **struct / memory model 设计**：flat struct、field access、pointer write、alias/ownership 需要独立设计和验证 gate。
 
 ## 五、边界
 
@@ -85,6 +83,7 @@
 - 任意 pointer comparison、pointer truthiness、nullable pointer null check 后继续 index/deref。
 - 除 readonly integer pointer + 无副作用整数 index 的窄化 `*(p+i)` read 外，其他 pointer arithmetic 仍 fail closed。
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
+- short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。
 - function pointer callee、复杂 call side effects、nested calls in conditions。
 - volatile、硬件寄存器、跨线程/中断语义。

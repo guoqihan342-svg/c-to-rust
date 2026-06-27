@@ -959,6 +959,9 @@ fn emit_expr(
         IrExpr::Binary {
             op, lhs, rhs, ty, ..
         } => {
+            if let Some(expr) = emit_short_circuit_value_expr(op, lhs, rhs, ty, symbols, context)? {
+                return Ok(expr);
+            }
             if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)? {
                 return Ok(expr);
             }
@@ -1329,6 +1332,14 @@ fn emit_expr_with_prelude(
         IrExpr::Binary {
             op, lhs, rhs, ty, ..
         } => {
+            if let Some(expr) = emit_short_circuit_value_expr(op, lhs, rhs, ty, symbols, context)
+                .map_err(|detail| format!("{path} {detail}"))?
+            {
+                return Ok(EmittedExpr {
+                    prelude: String::new(),
+                    expr,
+                });
+            }
             if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)
                 .map_err(|detail| format!("{path} {detail}"))?
             {
@@ -2008,6 +2019,28 @@ fn emit_short_circuit_condition_expr(
     let rhs =
         emit_condition_expr(rhs, symbols, context).map_err(|detail| format!("rhs {detail}"))?;
     Ok(Some(format!("({lhs} {op} {rhs})")))
+}
+
+fn emit_short_circuit_value_expr(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Some(condition) =
+        emit_short_circuit_condition_expr(op, lhs, rhs, result_ty, symbols, context)?
+    else {
+        return Ok(None);
+    };
+    let one = emit_integer_literal(1, result_ty)
+        .map_err(|detail| format!("short-circuit true literal {detail}"))?;
+    let zero = emit_integer_literal(0, result_ty)
+        .map_err(|detail| format!("short-circuit false literal {detail}"))?;
+    Ok(Some(format!(
+        "(if {condition} {{ {one} }} else {{ {zero} }})"
+    )))
 }
 
 fn emit_comparison_value_expr(

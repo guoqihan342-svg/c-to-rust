@@ -27,7 +27,7 @@ flowchart TD
     clang-preserved value-position integer casts,
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
-    condition-position short-circuit && ||,
+    condition + narrow value-position short-circuit && ||,
     value-position scalar ?: / ConditionalOperator,
     const pointer slices,
     readonly pointer NULL checks,
@@ -62,6 +62,7 @@ flowchart TD
   - generic emitter 支持窄化的 readonly pointer null-presence 表面：`const int *values; return values != NULL;` 发射为 `values: Option<&[i32]>` 加 `.is_some()`；同一个 nullable 参数如果出现在直接 null comparison 之外会 fail closed。
   - generic emitter 支持窄化的 readonly pointer dereference read：`const uint8_t *p; return *p;` 发射为 `p: &[u8]` 和 `return p[0usize];`；bounded offset-deref read 例如 `return *(p+i);` / `return *(i+p);` 发射为 `return p[i as usize];`。这只覆盖 readonly integer pointer 的直接读或无副作用整数 offset 读；其他 pointer arithmetic、mutable pointer、pointer write、nullable pointer null check 后继续 deref/index 仍 fail closed。
   - generic emitter 支持一等 lazy `IrExpr::Conditional` 的纯整数 value-position 发射，生成 Rust `if cond { then } else { else }` 表达式，并且不会把分支副作用提前到条件外。
+  - generic emitter 支持窄化 value-position short-circuit `&&` / `||` 发射，复用 `emit_condition_expr()` 保留 Rust `&&` / `||` 的 lazy 求值，再 materialize 成 C `int` 0/1。
   - typed IR 层的旧 crc32 matcher、canned emitter 和 `DeprecatedLegacyCrc32` fallback 已删除；无 globals 的 crc32 IR 会 fail closed，而不是偷偷走模板。
 - `crates/c2r-translator/src/translation_route.rs`
   - 定义 typed IR candidate generation 的 route 元数据。
@@ -110,7 +111,7 @@ generic typed IR emission 现在覆盖：
 - clang-preserved value-position integer implicit casts：覆盖 declaration initializer、assignment RHS 和 return value，例如 `uint32_t value = 1; value = 2; return 3;` 可在 source/target 都是受支持整数类型时 lowering 成 typed IR cast，并发射 `(1i32 as u32)`、`(2i32 as u32)`、`(3i32 as u32)`；
 - comparison expression 的条件位置和窄 value-position：`if` / `while` 条件继续发 Rust bool condition；`return x > 0`、`out = x == y`、`int ok = x != 0` 等 value-position 生成 C `int` 0/1 materialization；
 - logical not `!expr` 的条件位置和窄 value-position：`if (!value)` / `while (!value)` 生成 `value == 0`，`!(value > 0)` 生成反转后的 comparison condition；`return !value`、assignment RHS 和 declaration initializer 等 value-position 生成 C `int` 0/1 materialization，例如 `if value == 0 { 1i32 } else { 0i32 }`；
-- short-circuit `&&` / `||` 的条件位置：`if (left && right)` / `while (left || right)` 生成 Rust bool 条件，左右操作数递归复用当前 `emit_condition_expr()` 支持的整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref 子集；
+- short-circuit `&&` / `||` 的条件位置和窄 value-position：`if (left && right)` / `while (left || right)` 生成 Rust bool 条件；`return left && right`、`out = left || right` 和 `int out = left && (right > 0)` materialize 成 C `int` 0/1；左右操作数递归复用当前 `emit_condition_expr()` 支持的整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref 子集；
 - 普通 clang `ConditionalOperator` / `?:` 的纯整数 value-position：`return flag ? left : right`、`out = flag ? value : fallback`、`int out = flag ? left : right` 会 lowering 成 lazy typed IR `IrExpr::Conditional`，并发射 Rust `if flag != 0 { ... } else { ... }` 表达式；clang 已保留的分支整型 cast 会继续保留，例如 `uint32_t choose(uint32_t flag, uint32_t value) { return flag ? value : 2; }` 的 else arm 会发射 `(2i32 as u32)`；
 - 来自 clang AST 的 initialized scalar local；
 - 来自 clang AST 的无大括号 `if` / `while` body；
@@ -134,13 +135,13 @@ generic typed IR emission 现在覆盖：
 - compound assignment family 只是 clang-lowered candidate generation。它只覆盖 standalone statement 中的 simple scalar variable target；`*p += y`、`a[i] += y`、`s.f += y`、`p->f += y`、value-position `(x += y)`、condition/call argument 中的 compound assignment、compute type 与 target type 不一致的 promotion/truncation 场景、pointer arithmetic、float、volatile、复杂 RHS side effect 和 semantic acceptance 继续 fail closed。
 - value-position implicit cast preservation 只是 clang-lowered candidate generation。它只保留 declaration initializer、assignment RHS 和 return value 中的 clang `IntegralCast` / `IntegralPromotion` 节点，typed IR emitter 仍要求 source/target 都是受支持整数类型；函数指针 decay、现有显式 byte-cursor 处理之外的 pointer cast、float cast、隐藏副作用转换、cast 结果仍与语句边界类型不匹配的情况，以及完整 usual scalar conversions 继续 fail closed。
 - comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前覆盖窄化标量整数比较、C `int` 0/1 materialization、comparison operand 上 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast、readonly integer pointer 参数的 null presence check、readonly direct deref read operand，以及 bounded readonly offset-deref read operand；除 bounded readonly `*(p+i)` read 外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未由 clang-preserved 或显式整数 cast 对齐的 mixed-width/unsigned conversions、call/inc/dec side-effect operands、pointer truthiness、null check 后继续 deref/index 使用、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
-- logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition、readonly direct deref read operand、bounded readonly offset-deref read operand，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref side effect、pointer truthiness、窄化 readonly pointer-parameter presence 表面之外的 pointer null check、float truthiness、unsupported type、value-position 短路逻辑或完整 usual scalar conversions 时继续 fail closed。
-- short-circuit `&&` / `||` 只是 candidate generation，目前只覆盖条件位置，且结果类型必须是 C `int`。`return a && b`、assignment RHS、declaration initializer、operand 含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 时继续 fail closed。
+- logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition、readonly direct deref read operand、bounded readonly offset-deref read operand，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref side effect、pointer truthiness、窄化 readonly pointer-parameter presence 表面之外的 pointer null check、float truthiness、unsupported type 或完整 usual scalar conversions 时继续 fail closed。
+- short-circuit `&&` / `||` 只是 candidate generation，覆盖条件位置和窄 value-position，且结果类型必须是 C `int`。value-position 只覆盖 return value、assignment RHS 和 declaration initializer，并用 Rust `&&` / `||` 保留 lazy 求值后 materialize C `int` 0/1；operand 含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 时继续 fail closed。
 - conditional `?:` 只是 candidate generation，目前只覆盖纯整数 value-position。condition-position `if (a ? b : c)` / `while (a ? b : c)`、expression statement、GNU omitted-middle `a ?: b`、then/else 分支中的 call/inc/dec/post-increment/assignment/comma 副作用、pointer 或 floating-point 结果、pointer truthiness、aggregate 结果、未建模 usual scalar conversions 和 semantic acceptance 继续 fail closed。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是带显式作用域模型的 `ForStmt`、value-position short-circuit materialization，或更系统的 usual-conversion 分类。condition-position `&&` / `||`、simple scalar compound assignment family、value-position integer implicit cast preservation 和纯整数 value-position `ConditionalOperator` / `?:` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read 和 lazy `?:` 分支语义要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
+1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是带显式作用域模型的 `ForStmt`，或更系统的 usual-conversion 分类。condition/value-position `&&` / `||`、simple scalar compound assignment family、value-position integer implicit cast preservation 和纯整数 value-position `ConditionalOperator` / `?:` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read、lazy `?:` 分支语义和 short-circuit lazy 求值要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

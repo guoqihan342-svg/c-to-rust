@@ -7290,3 +7290,70 @@ English mirror summary:
 - Ordinary clang `ConditionalOperator` lowers to first-class lazy `IrExpr::Conditional` and emits Rust `if cond { then } else { else }` expressions.
 - Return values, assignment RHS, declaration initializers, and clang-preserved integer casts in branches are covered by direct, skeleton, and real clang smoke tests.
 - GNU omitted-middle `a ?: b`, condition-position `?:`, expression-statement `?:`, side-effecting branches, pointer/float/aggregate results, full usual conversions, and semantic acceptance still fail closed.
+
+## 106. 2026-06-27 value-position short-circuit through typed IR
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。只读子智能体分别复核了 value-position `&&` / `||` 的 lazy materialization 方案、scoped `ForStmt` 风险，以及 usual conversion 边界；主线程按 TDD 落地最小安全切片：支持 C short-circuit `&&` / `||` 在 value-position 中生成 C `int` 0/1 candidate，覆盖 return value、assignment RHS 和 declaration initializer。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_short_circuit_value_expr()`，复用现有 `emit_short_circuit_condition_expr()` / `emit_condition_expr()` 生成 Rust bool condition。
+  - value-position 发射为 `(if <condition> { 1i32 } else { 0i32 })`，其中 `<condition>` 仍使用 Rust `&&` / `||`，保留 RHS lazy 求值。
+  - `emit_expr()` 和 `emit_expr_with_prelude()` 都在普通 binary op fallback 之前识别 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - 结果类型仍必须是 C `int`；operand 子集继续继承当前 condition emitter：整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref read。call/inc/dec/side-effect operand、pointer truthiness、float truthiness、unsupported type 和未建模 usual conversions 继续 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 删除旧的“value-position short-circuit 必须拒绝”负测，改为 direct typed IR 正测：
+    - `typed_ir_emits_short_circuit_return_value_as_c_int`
+    - `typed_ir_emits_short_circuit_assignment_value_as_c_int`
+    - `typed_ir_emits_short_circuit_decl_initializer_as_c_int`
+  - 新增 fail-closed：
+    - `typed_ir_rejects_short_circuit_value_with_non_int_result_type`
+    - `typed_ir_rejects_short_circuit_value_with_call_operand`
+  - 新增 clang skeleton 正测 `clang_lowering_skeleton_maps_short_circuit_value_positions`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_short_circuit_value_positions_when_enabled`，覆盖 `int out = left || right; left = left && (right > 0); return left || out;`。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+红灯已确认：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir short_circuit -- --nocapture
+```
+
+红灯表现：
+- 新增 value-position 正测失败于 `binary op LogAnd is unsupported` / `binary op LogOr is unsupported`。
+- non-C-int result 和 call operand 负测也先失败为普通 unsupported，而不是专门的 short-circuit 边界错误。
+
+已跑过的绿灯：
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir short_circuit -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+聚焦与完整结果：
+- `short_circuit` filter 在真实 clang gate 打开后 12 条通过。
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` 回归通过：lib 37 条、`bounded_translation` 301 条、doc-tests 0 条。
+
+当前边界：
+- 可以说：condition-position 和窄 value-position `&&` / `||` 现在能从 direct typed IR、clang skeleton 和真实 clang AST 进入 `GenericTypedIr`，并生成可编译 Rust candidate。
+- 可以说：`return left && right`、`out = left || right`、`int out = left && (right > 0)` 现在会发射 C `int` 0/1 materialization，并保留 Rust short-circuit lazy 求值。
+- 不应说：已支持 pointer truthiness、float truthiness、call/inc/dec/side-effect operand、完整 usual scalar conversions、函数指针、volatile/hardware register、跨线程/中断语义或 semantic acceptance。
+- 旧第 102 节“只支持 condition-position short-circuit”和第 105 节“下一步 value-position short-circuit materialization”的说法已被本节 supersede；后续按本节读取最新状态。
+
+下一步建议：
+- 下一个核心语法切片优先 scoped `ForStmt`，但必须引入一等 `IrStmt::For` 或 scoped block，不能裸降成同级 `Decl + While`，否则会破坏 init scope 和 `continue` 语义。
+- usual conversions 继续只做 clang/type-map 已证明的整数 cast/promotion 子集，不要一次性放开完整 C conversion。
+
+English mirror summary:
+
+- Added narrow value-position short-circuit `&&` / `||` candidate generation through generic typed IR.
+- `return left && right`, assignment RHS, and declaration initializers now materialize C `int` 0/1 as Rust `if condition { 1i32 } else { 0i32 }`.
+- The condition still uses Rust `&&` / `||`, preserving lazy RHS evaluation.
+- Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path.
+- Pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, full usual scalar conversions, function pointers, volatile/hardware register semantics, cross-thread/interrupt semantics, and semantic acceptance still fail closed.
