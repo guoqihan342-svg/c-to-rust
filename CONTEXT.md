@@ -9541,3 +9541,45 @@ English mirror summary:
 - Made clang record inventory attach to function params and recursively into pointer pointees/array elements, so real clang record pointer candidates can use complete direct scalar field inventories.
 - Treated declaration `int` and const-read expression `const int` as compatible for the same integer record field while preserving real type mismatch failures.
 - Updated the Chinese and English MVP backlog to mark this narrow readonly pointer field read candidate as supported while keeping pointer field writes and alias-sensitive ownership out of scope.
+
+## 138. 2026-06-28 P1 readonly record pointer null presence checks
+
+本轮继续按多智能体和 TDD 推进 P1 pointer-aware record access 的前置能力。上一节已经支持非 nullable `const struct T *p` 的简单 `p->scalar_field` read；本节不做 flow-sensitive guarded field read，而是先把 readonly record pointer 的 null presence check 打通到 `Option<&T>`，例如 `return p != NULL;` 和 `if (p == NULL) return 0;`。这一步为后续 `if (p == NULL) return ...; return p->x;` 的路径敏感 non-null 证明铺路，但不打开 `Option<&T>` 下的 deref/member use。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_nullable_pointer_param_type()` 现在同时支持 readonly integer pointer slice 和 readonly record pointer：前者仍发 `Option<&[T]>`，后者发 `Option<&RecordName>`。
+  - `collect_nullable_pointer_params()` 改用 `is_supported_nullable_pointer_type()`，使 `const struct T *p` 在直接 `p == NULL` / `p != NULL` 比较中可被识别为 nullable param。
+  - `emit_null_pointer_comparison_condition()` 复用新的 `validate_nullable_pointer_type()`，record pointer 和 integer pointer 的 `.is_none()` / `.is_some()` 发射共用同一条窄路径。
+  - nullable pointer 的非 null-comparison 用途仍由 `validate_nullable_pointer_param_uses_in_expr()` 拒绝；因此本节没有放开 nullable `p->x`、`*p`、`p[i]` 或 call-argument escape。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_value_comparison_with_record_null_pointer_operand`，验证 `return p != NULL;` 生成 `pub fn has_point(p: Option<&Point>) -> i32` 和 `p.is_some()`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_comparison_condition_with_record_null_pointer_operand`，验证 `if (p == NULL)` 生成 `p.is_none()`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled`，验证 `struct point { int x; }; int has_point(const struct point *p) { return p != NULL; }` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 readonly record pointer null presence check 已进入 typed IR candidate 子集，同时把下一步明确为 flow-sensitive null-guarded field read。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_value_comparison_with_record_null_pointer_operand
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_comparison_condition_with_record_null_pointer_operand
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR value comparison 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR condition comparison 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST record null pointer comparison smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：readonly `const struct T *p` 的直接 null presence check 现在会把 Rust 参数建模为 `Option<&T>`，并在 condition/value comparison 中发射 `.is_none()` / `.is_some()`。
+- 不应说：已支持 nullable record pointer 的 guarded `p->field` read、path-sensitive non-null refinement、nullable integer slice deref/index、`if (p)`, `p != NULL && p->x`, loop guard、非支配 guard、pointer field writes、alias-sensitive ownership 或 semantic acceptance。
+- 下一刀建议：按只读代理建议，先做极窄 flow fact：识别 `if (p == NULL) return ...;` 且 else 为空、then 必定 return，之后只允许 proven-nonnull nullable readonly record pointer 的 direct `p->scalar_field` read，发射 `p.unwrap().field` 或等价 shadow binding。
+
+English mirror summary:
+
+- Added readonly record pointer null-presence candidate generation: `const struct T *p` compared directly with `NULL` now maps to `Option<&T>` and emits `.is_none()` / `.is_some()`.
+- Preserved nullable pointer fail-closed behavior for all non-comparison uses, including nullable `p->field`, `*p`, `p[i]`, call-argument escape, and pointer writes.
+- Added direct typed IR tests for value and condition comparisons, plus a real clang AST smoke test for `struct point { int x; }; int has_point(const struct point *p) { return p != NULL; }`.
+- Updated Chinese and English MVP backlog to make flow-sensitive null-guarded record field reads the next explicit P1 target.

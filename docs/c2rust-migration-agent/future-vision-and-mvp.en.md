@@ -113,7 +113,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] Support real function slices from libuv, zlib-ng, and other projects
 - [ ] Select 5+ projects from `validation/projects.json`, pushing at least one named function slice per project: project-level L1 native baseline + slice-level L2/L3 evidence
 - [ ] Explicit model for usual arithmetic conversions
-- [ ] Pointer/alias-sensitive struct field writes (with alias/noalias proof; simple readonly `const struct T *p` `p->scalar_field` reads, non-pointer simple by-value `p.x = value`, and standalone statement-position `p.x++` / `++p.x` / `p.x--` / `--p.x` are already in the typed IR candidate subset; pointer field writes such as `p->field = value` still fail closed)
+- [ ] Pointer/alias-sensitive struct field writes (with alias/noalias proof; simple readonly `const struct T *p` `p->scalar_field` reads, `p == NULL` / `p != NULL` presence checks to `Option<&T>`, non-pointer simple by-value `p.x = value`, and standalone statement-position `p.x++` / `++p.x` / `p.x--` / `--p.x` are already in the typed IR candidate subset; pointer field writes such as `p->field = value` still fail closed)
 - [ ] Nested structs / anonymous structs
 - [ ] Bitfields (at least common patterns)
 - [ ] Macro expansion tracking
@@ -143,7 +143,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P1: Expand syntax and memory-model coverage
 
-- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: initialized record local copy, by-value record dot-field compound assignment, statement-position by-value record dot-field inc/dec, whole-record return with unique named complete direct scalar field inventory, and simple readonly `const struct T *p` `p->scalar_field` reads are now in the candidate subset; next prioritize evidence-backed convergence for pointer-aware record access, value-position/complex-target/pointer-alias-sensitive update field writes, and stronger layout/ABI evidence.
+- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: initialized record local copy, by-value record dot-field compound assignment, statement-position by-value record dot-field inc/dec, whole-record return with unique named complete direct scalar field inventory, simple readonly `const struct T *p` `p->scalar_field` reads, and readonly record pointer `p == NULL` / `p != NULL` presence checks are now in the candidate subset; next prioritize flow-sensitive null-guarded `p->scalar_field` reads, value-position/complex-target/pointer-alias-sensitive update field writes, and stronger layout/ABI evidence.
 - [ ] Design alias/noalias and pointer escape modeling: split readonly slices, mutable out slices, nullable pointers, unknown alias, and volatile/hardware registers into provable paths and L4 refusal paths.
 - [ ] Finish integer conversion discipline: every clang `ImplicitCastExpr`, integer promotion, usual arithmetic conversion, and narrowing/truncation must become explicit in the IR.
 - [ ] Expand control flow: send `switch`/`goto` through CFG evidence and a fail-closed classifier first, then consider relooper and Rust candidates.

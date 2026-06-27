@@ -612,14 +612,18 @@ fn emit_value_type(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
-    let Some(element_ty) = readonly_pointer_slice_element_type(ty) else {
-        return Err(format!(
-            "nullable pointer param type {} is unsupported",
-            type_label(ty)
-        ));
-    };
-    let element_ty = emit_scalar_type(element_ty)?;
-    Ok(format!("Option<&[{element_ty}]>"))
+    if let Some(element_ty) = readonly_pointer_slice_element_type(ty) {
+        let element_ty = emit_scalar_type(element_ty)?;
+        return Ok(format!("Option<&[{element_ty}]>"));
+    }
+    if let Some(pointee) = readonly_record_pointer_pointee_type(ty) {
+        let pointee = emit_value_type(pointee)?;
+        return Ok(format!("Option<&{pointee}>"));
+    }
+    Err(format!(
+        "nullable pointer param type {} is unsupported",
+        type_label(ty)
+    ))
 }
 
 fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
@@ -3249,12 +3253,7 @@ fn emit_null_pointer_comparison_condition(
     if !symbols.contains(name) {
         return Err(format!("nullable pointer param {name} is not declared"));
     }
-    readonly_pointer_slice_element_type(pointer_ty).ok_or_else(|| {
-        format!(
-            "nullable pointer param {name} has unsupported type {}",
-            type_label(pointer_ty)
-        )
-    })?;
+    validate_nullable_pointer_type(name, pointer_ty)?;
     let name = emit_identifier(name, "nullable pointer param")?;
     match op {
         "==" => Ok(Some(format!("{name}.is_none()"))),
@@ -3859,7 +3858,7 @@ fn collect_nullable_pointer_params(
 ) -> Result<HashSet<String>, String> {
     let readonly_pointer_params = params
         .iter()
-        .filter(|param| readonly_pointer_slice_element_type(&param.ty).is_some())
+        .filter(|param| is_supported_nullable_pointer_type(&param.ty))
         .map(|param| (param.name.as_str(), &param.ty))
         .collect::<HashMap<_, _>>();
     let mut nullable_params = HashSet::new();
@@ -4454,6 +4453,21 @@ fn readonly_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
         }
         _ => None,
     }
+}
+
+fn is_supported_nullable_pointer_type(ty: &IrType) -> bool {
+    readonly_pointer_slice_element_type(ty).is_some()
+        || readonly_record_pointer_pointee_type(ty).is_some()
+}
+
+fn validate_nullable_pointer_type(name: &str, ty: &IrType) -> Result<(), String> {
+    if is_supported_nullable_pointer_type(ty) {
+        return Ok(());
+    }
+    Err(format!(
+        "nullable pointer param {name} has unsupported type {}",
+        type_label(ty)
+    ))
 }
 
 fn mutable_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {

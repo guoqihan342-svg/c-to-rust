@@ -5975,6 +5975,53 @@ fn typed_ir_emits_value_comparison_with_null_pointer_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_value_comparison_with_record_null_pointer_operand() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "has_point".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Neq,
+                ir_var("p", ptr_ty.clone()),
+                ir_null_ptr(ptr_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit record null pointer value comparison");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn has_point(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return (if p.is_some() { 1i32 } else { 0i32 });"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-record-null-pointer-value-comparison", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_value_comparison_with_unsupported_operand_type() {
     let i32_ty = ir_i32();
     let unsupported_ty = IrType {
@@ -7063,6 +7110,63 @@ fn typed_ir_emits_comparison_condition_with_null_pointer_operand() {
     assert!(rust.contains("return 0i32;"));
     assert!(rust.contains("return 1i32;"));
     assert_rust_snippet_compiles("typed-ir-null-pointer-condition-comparison", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_comparison_condition_with_record_null_pointer_operand() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let ptr_ty = ir_pointer(
+        "const struct point *",
+        "const struct point *",
+        ir_const(point_ty),
+        false,
+    );
+    let ir = IrFunction {
+        name: "zero_if_missing_point".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(1, "1", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit record null pointer condition comparison");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn zero_if_missing_point(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("if p.is_none() {"), "{rust}");
+    assert!(rust.contains("return 0i32;"), "{rust}");
+    assert!(rust.contains("return 1i32;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-record-null-pointer-condition-comparison", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -16435,6 +16539,76 @@ fn clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled() {
     assert!(rust.contains("pub fn has_values(values: Option<&[i32]>) -> i32"));
     assert!(rust.contains("return (if values.is_some() { 1i32 } else { 0i32 });"));
     assert_rust_snippet_compiles("typed-ir-real-clang-return-null-pointer-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-record-null-pointer-comparison-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("has_point.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\n\
+         struct point { int x; };\n\
+         int has_point(const struct point *p) { return p != NULL; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "has_point");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Neq,
+                rhs,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected record null pointer comparison return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(rhs.as_ref(), IrExpr::NullPtr { .. }));
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit record null pointer comparison return from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn has_point(p: Option<&Point>) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return (if p.is_some() { 1i32 } else { 0i32 });"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-return-record-null-pointer-comparison",
+        rust,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
