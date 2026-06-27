@@ -27,6 +27,7 @@ flowchart TD
     clang-preserved value-position integer casts,
     fixed-width integer aliases,
     multi VarDecl body expansion,
+    assigned uninitialized scalar locals,
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     condition + narrow value-position short-circuit && ||,
@@ -65,6 +66,7 @@ flowchart TD
   - `emit_rust_from_ir()` 仍保留无 globals 的兼容入口。
   - `emit_rust_from_ir_with_globals(function, globals)` 是 clang lowering 路径的核心入口，会生成 `EmittedRust { rust, route }`。
   - generic emitter 已支持 readonly global const integer array 的 Rust `const` 输出和 `CRC32_TABLE[...]` 形式的下标访问。
+  - generic emitter 现在会在 Rust 发射前运行保守 definite-assignment guard；无 initializer 的标量局部声明只有在支持子集内能证明读取前已有赋值时，才会发射为 `let mut x: T;`。
   - generic emitter 也支持 typed IR 层的局部固定长度整数数组字面量、下标读取和局部数组元素赋值，生成 Rust `[T; N]` 局部数组，并在元素被写入时发射 `let mut`。
   - generic emitter 支持窄化的 readonly pointer null-presence 表面：`const int *values; return values != NULL;` 发射为 `values: Option<&[i32]>` 加 `.is_some()`；同一个 nullable 参数如果出现在直接 null comparison 之外会 fail closed。
   - generic emitter 支持窄化的 readonly pointer dereference read：`const uint8_t *p; return *p;` 发射为 `p: &[u8]` 和 `return p[0usize];`；bounded offset-deref read 例如 `return *(p+i);` / `return *(i+p);` 发射为 `return p[i as usize];`。这只覆盖 readonly integer pointer 的直接读或无副作用整数 offset 读；其他 pointer arithmetic、mutable pointer、pointer write、nullable pointer null check 后继续 deref/index 仍 fail closed。
@@ -115,6 +117,7 @@ generic typed IR emission 现在覆盖：
 - scalar declaration、assignment、return、`if`、`while`；
 - clang-lowered fixed-width integer scalar aliases：`int8_t` / `int16_t` / `int32_t` / `int64_t` / `uint8_t` / `uint16_t` / `uint32_t` / `uint64_t` 现在能作为参数、局部变量和 return 类型进入 typed IR，并发射为 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`；
 - 普通 compound body 中的多 `VarDecl` declaration statement，例如 `int a = 1, b = 2;`，会展开成连续 typed IR `Decl` 并按源码顺序发射 Rust 局部声明；
+- 读取前可证明已有赋值的无初始化标量局部声明，例如 `int tmp; tmp = 7; return tmp;`，会发射为 `let mut tmp: i32; tmp = 7i32; return tmp;`；
 - 标量整数二元表达式 `+`、`-`、`*`、`/`、`%`、`&`、`|`、`^`、`<<`、`>>`；
 - signed 标量整数 unary minus `-value`；
 - clang-lowered simple scalar compound assignment family：`+=`、`-=`、`*=`、`/=`、`%=`、`&=`、`|=`、`^=`、`<<=`、`>>=` 覆盖 standalone statement 和 simple `ForStmt` step 中的 simple scalar variable target；当 clang 证明 target/result 是同一个受支持整数类型、compute lhs/result 是同一个受支持整数类型时，compute type 可以不同于 target type，并通过显式 cast lowering，例如 `value = (((value as i32) + 1i32) as u8);`；
@@ -141,7 +144,8 @@ generic typed IR emission 现在覆盖：
 
 - 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；raw string crc32 byte-cursor 输入现在保持 fail-closed。真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
 - fixed-width integer alias coverage 只是 clang type skeleton / typed IR candidate generation。raw `signed char` / `short` / `long long` 这类目标相关 spelling、plain `char`、plain `long`、target ABI 宽度推断、完整 integer promotion/usual scalar conversions、以及 semantic acceptance 仍未建模。
-- multi `VarDecl` expansion 只覆盖普通 compound body 中每个 declarator 本身已可 lowering 的场景；`ForStmt` init 多声明、unsupported type/initializer、VLA/incomplete array、init marker 无 child、多个 initializer child、普通无初始化声明、重复符号和 semantic acceptance 仍 fail closed。
+- multi `VarDecl` expansion 只覆盖普通 compound body 中每个 declarator 本身已可 lowering 的场景；`ForStmt` init 多声明、unsupported type/initializer、VLA/incomplete array、init marker 无 child、多个 initializer child、重复符号和 semantic acceptance 仍 fail closed。
+- 无初始化标量局部声明仍只是 candidate generation，并要求保守的 assignment-before-read 证明。读取前未赋值、首次赋值读取自身、只在 loop 或单侧 branch 中赋值、无 initializer 数组、pointer/record/function 声明、address-taken initialization、间接写入、alias write 和 semantic acceptance 仍 fail closed。
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
 - bitwise OR / left shift 只表示窄化标量整数 candidate generation。当前 `|` 要求左右 operand 和 result 是同一个标量整数类型，`<<` 沿用 shift 规则要求 lhs/result 类型一致；它不声明完整 C 位运算/位移语义、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
 - signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
@@ -156,6 +160,6 @@ generic typed IR emission 现在覆盖：
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是更系统的 usual-conversion 分类，或在 scoped `ForStmt` MVP 之后继续设计 `break` / `continue` / `do-while` / `switch` / `goto` 的控制流语义。multi `VarDecl` body expansion、fixed-width integer aliases、condition/value-position `&&` / `||`、包含窄化 clang-proven promotion/truncation 的 simple scalar compound assignment family、value-position integer implicit cast preservation、纯整数 value-position `ConditionalOperator` / `?:` 和窄化 scoped `ForStmt` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read、lazy `?:` 分支语义、short-circuit lazy 求值和 for-loop scope 边界要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
+1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是更系统的 usual-conversion 分类、`for` init 多声明 scope model，或在 scoped `ForStmt` MVP 之后继续设计 `break` / `continue` / `do-while` / `switch` / `goto` 的控制流语义。multi `VarDecl` body expansion、assignment-before-read 无初始化标量局部声明、fixed-width integer aliases、condition/value-position `&&` / `||`、包含窄化 clang-proven promotion/truncation 的 simple scalar compound assignment family、value-position integer implicit cast preservation、纯整数 value-position `ConditionalOperator` / `?:` 和窄化 scoped `ForStmt` 已有 direct/skeleton/real clang smoke 覆盖；bounded readonly `*(p+i)` read、lazy `?:` 分支语义、short-circuit lazy 求值和 for-loop scope 边界要继续保留 real-clang 与 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

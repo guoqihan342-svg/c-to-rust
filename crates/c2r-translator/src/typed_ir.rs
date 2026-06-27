@@ -261,6 +261,56 @@ struct EmittedExpr {
     expr: String,
 }
 
+#[derive(Clone, Debug, Default)]
+struct DefiniteAssignmentState {
+    declared: HashSet<String>,
+    initialized: HashSet<String>,
+}
+
+impl DefiniteAssignmentState {
+    fn from_function_and_globals(function: &IrFunction, globals: &[IrGlobal]) -> Self {
+        let mut state = Self::default();
+        for param in &function.params {
+            state.declared.insert(param.name.clone());
+            state.initialized.insert(param.name.clone());
+        }
+        for global in globals {
+            state.declared.insert(global.name.clone());
+            state.initialized.insert(global.name.clone());
+        }
+        state
+    }
+
+    fn declare(&mut self, name: &str, initialized: bool) -> Result<(), String> {
+        if self.declared.contains(name) {
+            return Err(format!("decl {name} duplicates an existing symbol"));
+        }
+        self.declared.insert(name.to_string());
+        if initialized {
+            self.initialized.insert(name.to_string());
+        }
+        Ok(())
+    }
+
+    fn assign(&mut self, name: &str) -> Result<(), String> {
+        if !self.declared.contains(name) {
+            return Err(format!("assign target {name} is not declared"));
+        }
+        self.initialized.insert(name.to_string());
+        Ok(())
+    }
+
+    fn require_initialized(&self, name: &str) -> Result<(), String> {
+        if !self.declared.contains(name) {
+            return Err(format!("var {name} is not declared"));
+        }
+        if !self.initialized.contains(name) {
+            return Err(format!("var {name} is read before assignment"));
+        }
+        Ok(())
+    }
+}
+
 impl EmitContext {
     fn from_function_and_globals(
         function: &IrFunction,
@@ -380,6 +430,7 @@ fn emit_scalar_rust_from_ir_with_globals(
         return Err("non-void function must end with a return value".to_string());
     }
     let context = EmitContext::from_function_and_globals(function, globals)?;
+    validate_definite_assignment(function, globals)?;
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params
@@ -648,7 +699,8 @@ fn emit_stmt(
                     "{indent}let mut {decl_name}: {decl_ty} = {init};\n"
                 ))
             } else {
-                Err(format!("decl {name} without initializer is unsupported"))
+                symbols.insert(name.clone());
+                Ok(format!("{indent}let mut {decl_name}: {decl_ty};\n"))
             }
         }
         IrStmt::Assign { target, value, .. } => {
@@ -2452,6 +2504,217 @@ fn validate_comparison_cast_operand(expr: &IrExpr, side: &str) -> Result<(), Str
 
 fn ends_with_return_value(body: &[IrStmt]) -> bool {
     matches!(body.last(), Some(IrStmt::Return { value: Some(_), .. }))
+}
+
+fn validate_definite_assignment(function: &IrFunction, globals: &[IrGlobal]) -> Result<(), String> {
+    let mut state = DefiniteAssignmentState::from_function_and_globals(function, globals);
+    validate_definite_assignment_body(&function.body, &mut state)
+}
+
+fn validate_definite_assignment_body(
+    body: &[IrStmt],
+    state: &mut DefiniteAssignmentState,
+) -> Result<(), String> {
+    for (index, stmt) in body.iter().enumerate() {
+        validate_definite_assignment_stmt(stmt, state)
+            .map_err(|detail| format!("stmt[{index}].{detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_definite_assignment_labeled_body(
+    body: &[IrStmt],
+    state: &mut DefiniteAssignmentState,
+    label: &str,
+) -> Result<(), String> {
+    for (index, stmt) in body.iter().enumerate() {
+        validate_definite_assignment_stmt(stmt, state)
+            .map_err(|detail| format!("{label}[{index}].{detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_definite_assignment_stmt(
+    stmt: &IrStmt,
+    state: &mut DefiniteAssignmentState,
+) -> Result<(), String> {
+    match stmt {
+        IrStmt::Decl { name, init, .. } => {
+            if let Some(init) = init {
+                validate_definite_assignment_expr(init, state)
+                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+            }
+            state.declare(name, init.is_some())
+        }
+        IrStmt::Assign { target, value, .. } => {
+            let assigned_var = validate_definite_assignment_target(target, state)?;
+            validate_definite_assignment_expr(value, state)
+                .map_err(|detail| format!("assign value {detail}"))?;
+            if let Some(name) = assigned_var {
+                state.assign(&name)?;
+            }
+            Ok(())
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                validate_definite_assignment_expr(value, state)
+                    .map_err(|detail| format!("return expr {detail}"))?;
+            }
+            Ok(())
+        }
+        IrStmt::Expr { expr, .. } => validate_definite_assignment_expr(expr, state)
+            .map_err(|detail| format!("expr {detail}")),
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            validate_definite_assignment_expr(condition, state)
+                .map_err(|detail| format!("if condition {detail}"))?;
+            let before = state.clone();
+            let mut then_state = before.clone();
+            validate_definite_assignment_labeled_body(then_body, &mut then_state, "if then")?;
+            let mut else_state = before.clone();
+            validate_definite_assignment_labeled_body(else_body, &mut else_state, "if else")?;
+
+            state.initialized = before
+                .declared
+                .iter()
+                .filter(|name| {
+                    before.initialized.contains(*name)
+                        || (then_state.initialized.contains(*name)
+                            && else_state.initialized.contains(*name))
+                })
+                .cloned()
+                .collect();
+            Ok(())
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            validate_definite_assignment_expr(condition, state)
+                .map_err(|detail| format!("while condition {detail}"))?;
+            let mut body_state = state.clone();
+            validate_definite_assignment_labeled_body(body, &mut body_state, "while body")?;
+            Ok(())
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            let mut loop_state = state.clone();
+            if let Some(init) = init {
+                validate_definite_assignment_stmt(init, &mut loop_state)
+                    .map_err(|detail| format!("for init {detail}"))?;
+            }
+            if let Some(condition) = condition {
+                validate_definite_assignment_expr(condition, &loop_state)
+                    .map_err(|detail| format!("for condition {detail}"))?;
+            }
+            let mut body_state = loop_state.clone();
+            validate_definite_assignment_labeled_body(body, &mut body_state, "for body")?;
+            if let Some(step) = step {
+                let mut step_state = loop_state;
+                validate_definite_assignment_stmt(step, &mut step_state)
+                    .map_err(|detail| format!("for step {detail}"))?;
+            }
+            Ok(())
+        }
+        IrStmt::Unsupported { .. } => Ok(()),
+    }
+}
+
+fn validate_definite_assignment_target(
+    target: &IrExpr,
+    state: &DefiniteAssignmentState,
+) -> Result<Option<String>, String> {
+    match target {
+        IrExpr::Var { name, ty, .. } if should_track_definite_assignment_type(ty) => {
+            if !state.declared.contains(name) {
+                return Err(format!("assign target {name} is not declared"));
+            }
+            Ok(Some(name.clone()))
+        }
+        IrExpr::Var { .. } => Ok(None),
+        IrExpr::Index { base, index, .. } => {
+            validate_definite_assignment_expr(base, state)
+                .map_err(|detail| format!("assign index base {detail}"))?;
+            validate_definite_assignment_expr(index, state)
+                .map_err(|detail| format!("assign index operand {detail}"))?;
+            Ok(None)
+        }
+        _ => Err("assign target must be Var or local fixed array Index".to_string()),
+    }
+}
+
+fn validate_definite_assignment_expr(
+    expr: &IrExpr,
+    state: &DefiniteAssignmentState,
+) -> Result<(), String> {
+    match expr {
+        IrExpr::Var { name, ty, .. } if should_track_definite_assignment_type(ty) => {
+            state.require_initialized(name)
+        }
+        IrExpr::Var { .. } => Ok(()),
+        IrExpr::Binary { lhs, rhs, .. } => {
+            validate_definite_assignment_expr(lhs, state)
+                .map_err(|detail| format!("binary lhs {detail}"))?;
+            validate_definite_assignment_expr(rhs, state)
+                .map_err(|detail| format!("binary rhs {detail}"))
+        }
+        IrExpr::Unary { operand, .. } => validate_definite_assignment_expr(operand, state)
+            .map_err(|detail| format!("unary operand {detail}")),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            validate_definite_assignment_expr(condition, state)
+                .map_err(|detail| format!("conditional condition {detail}"))?;
+            validate_definite_assignment_expr(then_expr, state)
+                .map_err(|detail| format!("conditional then {detail}"))?;
+            validate_definite_assignment_expr(else_expr, state)
+                .map_err(|detail| format!("conditional else {detail}"))
+        }
+        IrExpr::Cast { expr, .. } => validate_definite_assignment_expr(expr, state)
+            .map_err(|detail| format!("cast expr {detail}")),
+        IrExpr::Index { base, index, .. } => {
+            validate_definite_assignment_expr(base, state)
+                .map_err(|detail| format!("index base {detail}"))?;
+            validate_definite_assignment_expr(index, state)
+                .map_err(|detail| format!("index operand {detail}"))
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for (index, element) in elements.iter().enumerate() {
+                validate_definite_assignment_expr(element, state)
+                    .map_err(|detail| format!("array element[{index}] {detail}"))?;
+            }
+            Ok(())
+        }
+        IrExpr::Call { args, .. } => {
+            for (index, arg) in args.iter().enumerate() {
+                validate_definite_assignment_expr(arg, state)
+                    .map_err(|detail| format!("call arg[{index}] {detail}"))?;
+            }
+            Ok(())
+        }
+        IrExpr::IncDec { target, .. } => validate_definite_assignment_expr(target, state)
+            .map_err(|detail| format!("inc/dec target {detail}")),
+        IrExpr::Deref { ptr, .. } => validate_definite_assignment_expr(ptr, state)
+            .map_err(|detail| format!("deref pointer {detail}")),
+        IrExpr::AddrOf { operand, .. } => validate_definite_assignment_expr(operand, state)
+            .map_err(|detail| format!("address-of operand {detail}")),
+        IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => Ok(()),
+    }
+}
+
+fn should_track_definite_assignment_type(ty: &IrType) -> bool {
+    emit_scalar_type(ty).is_ok()
 }
 
 fn emit_integer_literal_suffix(ty: &IrType) -> Result<String, String> {

@@ -7628,3 +7628,95 @@ English mirror summary:
 - The expansion is intentionally limited to ordinary compound bodies. Multi `VarDecl` in `ForStmt` init still uses the singular init parser and remains fail-closed.
 - Unsupported VarDecl types, unsupported initializers, VLA or incomplete arrays, missing initializer children, multiple initializer children, uninitialized ordinary declarations, duplicate symbols, and full semantic acceptance are still out of scope.
 - Unit skeleton coverage and real clang AST smoke coverage pass for this slice.
+
+## 111. 2026-06-27 assigned-before-read uninitialized scalar locals
+
+本轮继续拓展 `c2r-translator` 的 generic typed IR emitter，不写 FlashDB 专用分支。切片目标是支持普通标量局部变量先声明、后赋值、再读取的真实 C 形态，例如：
+
+```c
+int assign_after_decl(void) {
+    int tmp;
+    tmp = 7;
+    return tmp;
+}
+```
+
+现在会由 clang AST lower 成：
+
+```text
+Decl(tmp, init=None)
+Assign(tmp = 7)
+Return(tmp)
+```
+
+并由 typed IR generic emitter 发射成可编译 Rust：
+
+```rust
+let mut tmp: i32;
+tmp = 7i32;
+return tmp;
+```
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `DefiniteAssignmentState`，在 Rust 发射前运行保守 definite-assignment guard。
+  - 参数和 readonly globals 视为已声明且已初始化。
+  - `Decl(init=None)` 只声明、不初始化；`Assign` 先验证 RHS 中没有读取未初始化标量，再把 target 标为 initialized。
+  - guard 只跟踪当前 generic emitter 能发射的标量类型，避免抢走 pointer/array/unsupported type 原本更精确的 fail-closed reason。
+  - 普通 scalar `Decl(init=None)` 现在发射 `let mut name: Ty;`；array/pointer/record/function 等仍由既有类型门禁拒绝。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_emits_uninitialized_local_decl_assigned_before_read`
+  - `typed_ir_rejects_uninitialized_local_decl_read_before_assignment`
+  - `clang_ast_dump_emits_uninitialized_local_decl_assigned_before_read_when_enabled`
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-uninitialized-local-decl.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir uninitialized_local_decl -- --nocapture
+```
+
+旧实现中两个正测失败在 `stmt[0].decl tmp without initializer is unsupported`，说明 clang frontend 已能 lower，但 generic emitter 全局拒绝无 initializer 声明。
+
+调试记录：
+- 首版 guard 曾抢先拒绝 pointer/unsupported-type 负测，改变旧的精确错误原因。
+- 修正后 guard 仅跟踪可发射标量类型；pointer/array/unsupported expression 继续交给原有 emitter 子集判断。
+- 嵌套 body 的错误路径也对齐原 emitter 的 `while body[0]` / `if else[0]` 格式。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir uninitialized_local_decl -- --nocapture
+```
+
+完整验证已通过：
+
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`src/lib.rs` 42 passed，`bounded_translation.rs` 319 passed。
+
+边界：
+- 可以说：普通标量局部 `int tmp; tmp = 7; return tmp;` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：`int tmp; return tmp;` 继续 fail closed，reason 中会指出 `tmp` 读取前未赋值。
+- 不应说：已支持完整 C definite assignment、默认零初始化、address-taken initialization、间接写入、alias write、loop-only initialization、所有 branch-sensitive initialization、数组无 initializer、pointer/record/function 无 initializer、完整 semantic acceptance。
+
+下一步建议：
+- 继续扩大普通 C 语法面时，优先候选是 `for` init 多声明的 scoped model，或更系统的 usual conversion 分类；`break` / `continue` 需要先设计 `for` step 语义，不能直接发 Rust `continue;`。
+
+English mirror summary:
+
+- Added conservative assignment-before-read support for uninitialized scalar local declarations in the generic typed IR emitter.
+- `int tmp; tmp = 7; return tmp;` now lowers through real clang AST to `Decl(init=None)`, `Assign`, `Return`, and emits compilable Rust with `let mut tmp: i32;`.
+- The pre-emission guard tracks only scalar types that the generic emitter can emit, so pointer/array/unsupported-type cases keep their existing fail-closed reasons.
+- Reads before assignment still fail closed; this is not default zero initialization and not full C definite-assignment analysis.
+- Focused real-clang smoke coverage and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
