@@ -1019,10 +1019,32 @@ fn compound_body_skeleton_from_ast(
         });
     }
 
-    inner(compound)
-        .iter()
-        .map(stmt_skeleton_from_ast)
-        .collect::<Result<Vec<_>, ClangFrontendError>>()
+    let mut body = Vec::new();
+    for stmt in inner(compound) {
+        body.extend(body_stmt_skeletons_from_ast(stmt)?);
+    }
+    Ok(body)
+}
+
+#[cfg(feature = "typed-ir")]
+fn body_stmt_skeletons_from_ast(
+    stmt: &Value,
+) -> Result<Vec<ClangStmtSkeleton>, ClangFrontendError> {
+    if string_field(stmt, "kind").as_deref() != Some("DeclStmt") {
+        return Ok(vec![stmt_skeleton_from_ast(stmt)?]);
+    }
+
+    let var_decls = decl_stmt_var_decls(stmt);
+    if var_decls.is_empty() {
+        return Ok(vec![ClangStmtSkeleton::Unsupported {
+            reason: decl_stmt_var_decl_count_reason(0),
+        }]);
+    }
+
+    var_decls
+        .into_iter()
+        .map(var_decl_skeleton_from_ast)
+        .collect()
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1182,18 +1204,30 @@ fn unsupported_stmt_reason(stmt: &Value, kind: &str) -> String {
 
 #[cfg(feature = "typed-ir")]
 fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
-    let var_decls = inner(stmt)
-        .iter()
-        .filter(|child| string_field(child, "kind").as_deref() == Some("VarDecl"))
-        .collect::<Vec<_>>();
+    let var_decls = decl_stmt_var_decls(stmt);
     let [var_decl] = var_decls.as_slice() else {
         return Ok(ClangStmtSkeleton::Unsupported {
-            reason: format!(
-                "DeclStmt with {} VarDecl children is outside the current clang lowering skeleton",
-                var_decls.len()
-            ),
+            reason: decl_stmt_var_decl_count_reason(var_decls.len()),
         });
     };
+    var_decl_skeleton_from_ast(var_decl)
+}
+
+#[cfg(feature = "typed-ir")]
+fn decl_stmt_var_decls(stmt: &Value) -> Vec<&Value> {
+    inner(stmt)
+        .iter()
+        .filter(|child| string_field(child, "kind").as_deref() == Some("VarDecl"))
+        .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn decl_stmt_var_decl_count_reason(count: usize) -> String {
+    format!("DeclStmt with {count} VarDecl children is outside the current clang lowering skeleton")
+}
+
+#[cfg(feature = "typed-ir")]
+fn var_decl_skeleton_from_ast(var_decl: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let name = string_field(var_decl, "name").ok_or_else(|| ClangFrontendError {
         kind: "invalid_var_decl".to_string(),
         message: "VarDecl is missing name".to_string(),
@@ -3671,6 +3705,95 @@ mod tests {
             init,
             ClangExprSkeleton::DeclRef { name, .. } if name == "crc"
         ));
+    }
+
+    #[test]
+    fn compound_body_skeleton_from_ast_expands_multi_var_decl_stmt() {
+        let body = serde_json::json!({
+            "kind": "CompoundStmt",
+            "inner": [
+                {
+                    "kind": "DeclStmt",
+                    "inner": [
+                        {
+                            "kind": "VarDecl",
+                            "name": "a",
+                            "type": { "qualType": "int" },
+                            "init": "c",
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "value": "1",
+                                    "type": { "qualType": "int" }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "VarDecl",
+                            "name": "b",
+                            "type": { "qualType": "int" },
+                            "init": "c",
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "value": "2",
+                                    "type": { "qualType": "int" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "ReturnStmt",
+                    "inner": [
+                        {
+                            "kind": "BinaryOperator",
+                            "opcode": "+",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": {
+                                        "kind": "VarDecl",
+                                        "name": "a",
+                                        "type": { "qualType": "int" }
+                                    }
+                                },
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": {
+                                        "kind": "VarDecl",
+                                        "name": "b",
+                                        "type": { "qualType": "int" }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = compound_body_skeleton_from_ast(&body).expect("compound body skeleton");
+        let [ClangStmtSkeleton::Decl {
+            name: a_name,
+            init: Some(ClangExprSkeleton::IntegerLiteral { value: a_value, .. }),
+            ..
+        }, ClangStmtSkeleton::Decl {
+            name: b_name,
+            init: Some(ClangExprSkeleton::IntegerLiteral { value: b_value, .. }),
+            ..
+        }, ClangStmtSkeleton::Return { value: Some(_), .. }] = skeleton.as_slice()
+        else {
+            panic!("expected two declarations followed by return, got {skeleton:?}");
+        };
+
+        assert_eq!(a_name, "a");
+        assert_eq!(*a_value, 1);
+        assert_eq!(b_name, "b");
+        assert_eq!(*b_value, 2);
     }
 
     #[test]

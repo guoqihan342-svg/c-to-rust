@@ -7560,3 +7560,71 @@ English mirror summary:
 - Raw target-dependent spellings such as `signed char`, `short`, `long long`, `unsigned short`, and `unsigned long long` are not normalized to fixed-width canonical types in this slice.
 - Plain `char`, plain `long`, target-ABI width inference, complete usual scalar conversions, and semantic acceptance still fail closed.
 - Direct type unit coverage and real clang AST smoke coverage pass for this slice.
+
+## 110. 2026-06-27 compound-body multi VarDecl expansion
+
+本轮继续拓展 `c2r-translator` 的 clang-lowered typed IR candidate generation，不写 FlashDB 专用分支。切片目标是支持普通 compound body 中一个 `DeclStmt` 含多个简单 `VarDecl` 的真实 clang AST 形态，例如：
+
+```c
+int multi_decl(void) {
+    int a = 1, b = 2;
+    return a + b;
+}
+```
+
+现在会 lower 成连续 typed IR 声明，并由 generic emitter 生成可编译 Rust：
+
+```rust
+let mut a: i32 = 1i32;
+let mut b: i32 = 2i32;
+return (a + b);
+```
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `compound_body_skeleton_from_ast()` 改为一对多展开 body statement。
+  - 新增 `body_stmt_skeletons_from_ast()`，仅对普通 compound body 中的 `DeclStmt` 展开多个 `VarDecl`。
+  - 新增 `var_decl_skeleton_from_ast()`，复用原单 `VarDecl` 的 name/type/init 逻辑。
+  - `decl_stmt_skeleton_from_ast()` 仍是 singular API；`for_init_stmt_skeleton_from_ast()` 继续调用它，所以 `for (int i = 0, j = 0; ...)` 保持 fail-closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_ast_dump_emits_multi_var_decl_stmt_when_enabled`
+  - `clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled`
+- `crates/c2r-translator/src/clang_frontend.rs` tests
+  - `compound_body_skeleton_from_ast_expands_multi_var_decl_stmt`
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-multi-var-decl-expansion.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl -- --nocapture
+```
+
+旧实现返回 `Unsupported { reason: "DeclStmt with 2 VarDecl children..." }`，不能把一个 clang `DeclStmt` 展开为连续声明。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl -- --nocapture
+```
+
+边界：
+- 可以说：普通 compound body 中多个简单 `VarDecl` 现在按源码顺序展开为连续 typed IR `Decl`，并可由 generic emitter 生成可编译 Rust candidate。
+- 不应说：已支持 `ForStmt` init 多声明、所有 declaration statement、无初始化普通声明、unsupported type/initializer、VLA/incomplete array、重复符号恢复、完整 C scope/semantic acceptance。
+
+下一步建议：
+- 继续扩普通声明/表达式覆盖时，可选切片是 `for` init 多声明的 scoped model，或者 `break` / `continue` 语义；不要混进 pointer/alias 语义。
+
+English mirror summary:
+
+- Added clang-frontend expansion for ordinary compound-body `DeclStmt` nodes that contain multiple simple `VarDecl` children.
+- `int a = 1, b = 2; return a + b;` now lowers to consecutive typed IR declarations and emits compilable Rust through the generic emitter.
+- The expansion is intentionally limited to ordinary compound bodies. Multi `VarDecl` in `ForStmt` init still uses the singular init parser and remains fail-closed.
+- Unsupported VarDecl types, unsupported initializers, VLA or incomplete arrays, missing initializer children, multiple initializer children, uninitialized ordinary declarations, duplicate symbols, and full semantic acceptance are still out of scope.
+- Unit skeleton coverage and real clang AST smoke coverage pass for this slice.

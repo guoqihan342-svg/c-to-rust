@@ -12447,6 +12447,51 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-multi-var-decl-init");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_for_multi_decl_init.c");
+    fs::write(
+        &source_file,
+        "int bad_for_multi_decl_init(int limit) { int total = 0; for (int i = 0, j = 0; i < limit; i++) { total = total + i + j; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_for_multi_decl_init",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.message.contains("DeclStmt with 2 VarDecl children")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_rejects_typed_ir_for_prefix_increment_step_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
@@ -14826,7 +14871,7 @@ fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_multi_var_decl_stmt_when_enabled() {
+fn clang_ast_dump_emits_multi_var_decl_stmt_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -14839,7 +14884,7 @@ fn clang_ast_dump_rejects_multi_var_decl_stmt_when_enabled() {
         "clang path does not exist: {}",
         clang_path.display()
     );
-    let out_dir = unique_out_dir("clang-real-multi-var-decl-reject");
+    let out_dir = unique_out_dir("clang-real-multi-var-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("multi_decl.c");
     fs::write(
@@ -14855,20 +14900,39 @@ fn clang_ast_dump_rejects_multi_var_decl_stmt_when_enabled() {
     let report =
         lower_function_from_clang_ast_dump_report(&environment, &source_file, "multi_decl");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_stmt")
-    );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| error.message.contains("DeclStmt with 2 VarDecl children"))
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
-    );
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        name: a_name,
+        init: Some(IrExpr::LitInt { value: a_value, .. }),
+        ..
+    }, IrStmt::Decl {
+        name: b_name,
+        init: Some(IrExpr::LitInt { value: b_value, .. }),
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Binary { .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected two declarations followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(a_name, "a");
+    assert_eq!(*a_value, 1);
+    assert_eq!(b_name, "b");
+    assert_eq!(*b_value, 2);
+
+    let emitted = emit_rust_from_ir(function)
+        .unwrap_or_else(|error| panic!("emit multi var decl: {error:?}"));
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn multi_decl() -> i32"), "{rust}");
+    assert!(rust.contains("let mut a: i32 = 1i32;"), "{rust}");
+    assert!(rust.contains("let mut b: i32 = 2i32;"), "{rust}");
+    assert!(rust.contains("return (a + b);"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-multi-var-decl", rust);
 }
 
 #[test]

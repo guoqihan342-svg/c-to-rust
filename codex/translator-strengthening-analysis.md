@@ -41,6 +41,7 @@
 已经支持的关键增量：
 
 - 标量声明、赋值、return、`if`、`while`。
+- 普通 compound body 中多 `VarDecl` declaration statement 展开，例如 `int a = 1, b = 2;`。
 - 标量整数 `+ - * / % & | ^ << >>`、signed unary `-`。
 - clang-lowered simple scalar compound assignment family，包含 simple variable target 上 clang-proven integer promotion/truncation 的窄化路径。
 - declaration initializer、assignment RHS 和 return value 中的 clang-preserved value-position integer implicit casts。
@@ -66,6 +67,7 @@
 
 - `CompoundAssignOperator` 已支持 standalone simple scalar variable target；当 target/result 一致、compute lhs/result 一致且所有相关类型都是受支持整数时，也支持 clang-proven integer promotion/truncation。
 - `&&` / `||` 已支持 condition-position 和窄 value-position；value-position 的 return value、assignment RHS 和 declaration initializer 已覆盖。
+- 普通 compound body 中的 `DeclStmt` 已能把多个简单 `VarDecl` 按源码顺序展开；`ForStmt` init 多声明仍 fail closed。
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
 - `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt` 或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集；`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
 - `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
@@ -91,6 +93,7 @@
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
 - 非简单 target、value-position 使用、unsupported compute/result 类型组合、pointer arithmetic、floating-point、volatile 或复杂 RHS side effect 的 compound assignment 仍 fail closed。
 - `ForStmt` 中的 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、非 simple scalar init/step 或 step 里的 prefix inc-dec 仍 fail closed。
+- `ForStmt` init 中的多 `VarDecl`、任一 declarator 的 unsupported type/initializer、VLA/incomplete array、普通无初始化声明、重复符号仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。
 - function pointer callee、复杂 call side effects、nested calls in conditions。
 - volatile、硬件寄存器、跨线程/中断语义。

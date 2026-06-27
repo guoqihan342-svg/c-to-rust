@@ -41,6 +41,7 @@ Typed IR currently has only two routes:
 Important supported increments:
 
 - Scalar declarations, assignments, returns, `if`, and `while`.
+- Multi-`VarDecl` declaration statements in ordinary compound bodies, for example `int a = 1, b = 2;`.
 - Scalar integer `+ - * / % & | ^ << >>` and signed unary `-`.
 - Clang-lowered simple scalar compound assignment family, including narrow clang-proven integer promotion/truncation for simple variable targets.
 - Clang-preserved value-position integer implicit casts in declaration initializers, assignment RHS, and return values.
@@ -66,6 +67,7 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 - `CompoundAssignOperator` now lowers for standalone simple scalar variable targets, including clang-proven integer promotion/truncation when target/result match, compute lhs/result match, and all involved types are supported integers.
 - `&&` / `||` now lower for condition positions and narrow value positions; return values, assignment RHS, and declaration initializers are covered.
+- `DeclStmt` nodes in ordinary compound bodies now expand multiple simple `VarDecl` children in source order. Multi-declaration `ForStmt` init remains fail-closed.
 - Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
 - `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt` or assignment, condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
 - `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
@@ -91,6 +93,7 @@ These should still fail closed:
 - Short-circuit operands containing calls/inc/dec/side effects, pointer truthiness, floating-point truthiness, unsupported types, or cases requiring full usual scalar conversions.
 - Compound assignments with non-simple targets, value-position use, unsupported compute/result type combinations, pointer arithmetic, floating-point, volatile, or complex RHS side effects.
 - `ForStmt` with `continue` / `break` / `goto` / `switch`, a condition variable slot, empty condition/step, calls/inc/dec/side effects in the condition, non-simple-scalar init/step, or prefix inc-dec in the step.
+- Multi-`VarDecl` `ForStmt` init, unsupported type/initializer in any declarator, VLA/incomplete arrays, ordinary uninitialized declarations, and duplicate symbols.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.
 - Volatile, hardware registers, cross-thread, and interrupt semantics.
