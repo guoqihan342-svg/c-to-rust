@@ -1,7 +1,7 @@
 {
   "accepted_negative_diff": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
-    "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+    "sha256": "7dc12e45d5c570823993e70a2d57472b2534afad34d9e355fe1391e303e890be",
     "status": "passed"
   },
   "accepted_negative_diff_required": true,

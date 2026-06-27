@@ -50,7 +50,7 @@
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-status.json",
-      "sha256": "0a20baa4e8112e9daebd755a6b2226cf34fd71ddff8ed0b09e3d12e31b1fb6d8",
+      "sha256": "05bbebd36c91e3feaeb7b535f85b68b2bedcf1fc88d49edea8644133dbb0458a",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
@@ -61,7 +61,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-config-profile.json",
       "profile_id": "demo-call-expression-wsl-gcc",
-      "sha256": "49d64fc9c474b5d777a0d7c95ed6906fda8b69a57d1681f4fb4b1a4d6e56d58e",
+      "sha256": "e903007a639b061c30394aea532aa5cfb24605de9d92b38e384a1d6fadbd427d",
       "status": "recorded"
     },
     "context_pack": {
@@ -71,20 +71,20 @@
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-final-verification.json",
-      "sha256": "0840243d4136bb686b9d1f2108bffac10088cc042c97fd41ac692a6ca83c77f1",
+      "sha256": "a3dd92fb8b9255072a1da52f0a2dc2f96ceb029a51e27f73e3ae1f8cb9d1febf",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-negative-diff.json",
-      "sha256": "3523b69599abb5578e63d1b46956a710aca2309d3185014c46d051775874c039",
+      "sha256": "f03ae90efa3f0207a9fc2c63130d2c8b038f740e9f01766f7a2a8d72d91b4651",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "1fde1da71dc6db1d1ac9626f09e1a06e5c4568b14a5bbeb971bc9293cd48b980",
+      "sha256": "2352deffd4b528cff48f75ad0fd604c21d42fb2813c6e02aa48bbdaf9eff709b",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
@@ -106,12 +106,12 @@
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-report.json",
-      "sha256": "b09b8dd41d735d148ca10ddff7577408b40827f2d868264c3bb27d8e21db8593",
+      "sha256": "70d7cb3216acf4c32b19aa673fdd4483c4668a5af610b93f376a98894181f8b3",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-diff.json",
-      "sha256": "702df1589a99cfee1b4fc0d64b6e2e0e165cee095c088052b1651e9367d9ad83",
+      "sha256": "2385c7c92d225e87173335d6ebd701917958728bbdca76ce4f2aa935def5d6f6",
       "status": "passed"
     },
     "slice_contract": {
@@ -121,22 +121,22 @@
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-summary.json",
-      "sha256": "5864cd3921bfc50ff9851b5458701f69f31c727c2ac7deb4e0bcd227edd82e16",
+      "sha256": "8c3ed0f2dcdaccb8c6f68d6bb4323f9538a5865a4377283d0fc097d1cbc20d5b",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-test-translation-generated.json",
-      "sha256": "d7e0778b1ce7ecb63b48d0e87ecb0bd2583629a2e1f7b01c6539dd0b8e7f3d92",
+      "sha256": "bf17abd85d4b7c3461f60510fb32ea809975e3d824f33e6f457af0d815a517b2",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-unsafe-ledger.json",
-      "sha256": "81372f41efbf3f2c71c0a9f60db3b76585369fbac28c40b0704479f7580aba0a",
+      "sha256": "c08f9b5a1e6fb6500edbd402bf000fb74e0e6c7e210f2a148aa96ead55b8eb6d",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-unsafe-scan.json",
-      "sha256": "daedd0bbdfb52c1972d125953e7c88333b17be2776a8b6a876ef3f8001bc1107",
+      "sha256": "6bc6f30abbf5428460b958cc9e6d918286df70673e136da23495c1c656839ae7",
       "status": "passed"
     },
     "validation_profile": {
@@ -147,7 +147,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-version-manifest.json",
-      "sha256": "5d33fc9dd8957ec218f9cfd6b7be51c0101ea97a5d0861ecc634325c57fb981f",
+      "sha256": "5691a1924ebb6e61521591afb9145191b0fa337ab4b33fab3b3a1d780dc9b1bc",
       "status": "recorded"
     }
   },

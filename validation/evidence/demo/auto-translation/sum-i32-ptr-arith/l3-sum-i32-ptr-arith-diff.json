@@ -1,7 +1,7 @@
 {
   "accepted_diff": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
-    "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+    "sha256": "bac8b639324cf5035c8282eeac62cf155567d9fb38bcd9b059b510390a710aa0",
     "status": "passed"
   },
   "accepted_diff_required": true,

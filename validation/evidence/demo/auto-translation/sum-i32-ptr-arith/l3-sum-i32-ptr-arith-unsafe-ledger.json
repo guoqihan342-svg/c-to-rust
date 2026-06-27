@@ -1,7 +1,7 @@
 {
   "accepted_unsafe_ledger": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-    "sha256": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
+    "sha256": "cce8c8308899bbcf72337280e07a8d5eb5bba7d10606aca77ac69ab6b552cc4a",
     "status": "passed"
   },
   "entries": [],

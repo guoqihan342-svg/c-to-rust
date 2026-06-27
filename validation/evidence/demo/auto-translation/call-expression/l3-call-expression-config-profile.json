@@ -5,15 +5,15 @@
     "fixture_sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
-      "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
-      "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
-      "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
-      "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
-      "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
-      "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
-      "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
-      "version_manifest": "8ad11660cf15d396a47c8819823eb3433aebf28946db54d465e9ebf5906adcc7"
+      "c_oracle": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
+      "diff": "c0fc64079a3a89bcec0158d9889903b6befe293bffdb49986276ec71860907b8",
+      "final_verification": "113ec404dec1f9cc9f853f5b565e04c82b32250bd028abaf05c81e90acefee95",
+      "negative_diff": "fe1806b1a8e329a60d4aa54e3db00531525d5df27bdd30ef4847ea50fea1e8eb",
+      "performance_smoke": "608680a6f3d35b9fc222b1d46497e1b1cd29e65ed8f5f6e4b019a8bca62d083e",
+      "rust_report": "f57bb7c212d659334515511d73db975b51d97595f530cb5db430d9e16182a851",
+      "unsafe_ledger": "106fe356be954bb30b3f93aadb14fe115b89c99e4834fb1d55d38027daf144c2",
+      "unsafe_scan": "27798b6813cae46709f6f533178d30e19f55e3383024d7bad4906bdffeca8114",
+      "version_manifest": "da922cd3b595ad963fbce527f23d0a37a185abca191e94062c122438196e0a1a"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",

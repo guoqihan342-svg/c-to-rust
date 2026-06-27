@@ -5,15 +5,15 @@
     "fixture_sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
-      "diff": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
-      "final_verification": "afd15baa820382ddb7c9957d68cd74d483505aec0bcdc752fc2b01b201351c32",
-      "negative_diff": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
-      "performance_smoke": "b8842b777fe1510478a708a86a94417979fbe9f30ddd20566780782b7abbbbaf",
-      "rust_report": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
-      "unsafe_ledger": "36b74f0e644f02ece0f2ba8c5221402ff662a93682a6260587048689e11d2fb5",
-      "unsafe_scan": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
-      "version_manifest": "a957a9d4f3f39f57f27386932d147e6a2aaa16207d7295b5b21177df1820206e"
+      "c_oracle": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
+      "diff": "bac8b639324cf5035c8282eeac62cf155567d9fb38bcd9b059b510390a710aa0",
+      "final_verification": "f6731870280b36f3afb658313899f26231c4518b0944a5d5674bdcb199f0b55c",
+      "negative_diff": "7dc12e45d5c570823993e70a2d57472b2534afad34d9e355fe1391e303e890be",
+      "performance_smoke": "fc798db8c6bd5110dd7e6cfd7eac459018f5c9562243ea0caf3af8dcba19d804",
+      "rust_report": "c2fc984bbe29400ce3eae5148972614a05ec65f6e838813dcbae1633c0d5b376",
+      "unsafe_ledger": "cce8c8308899bbcf72337280e07a8d5eb5bba7d10606aca77ac69ab6b552cc4a",
+      "unsafe_scan": "692fb94bbfd4b2545d85f345aaa5b934e6ecbb3b57985821e65577a30d372c17",
+      "version_manifest": "ce3cd08ff95132c31e94211f53948a5eebc226ad0cbcaa58ec77a49e1a816aef"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",

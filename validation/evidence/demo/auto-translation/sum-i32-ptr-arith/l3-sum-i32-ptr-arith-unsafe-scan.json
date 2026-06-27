@@ -1,7 +1,7 @@
 {
   "accepted_unsafe_scan": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-unsafe-scan.json",
-    "sha256": "241e0df92cb003189d4c9984f0b80d2047a1b172886eb53ba924b646b4b725c3",
+    "sha256": "692fb94bbfd4b2545d85f345aaa5b934e6ecbb3b57985821e65577a30d372c17",
     "status": "passed"
   },
   "first_party_non_test_unsafe_count": 0,

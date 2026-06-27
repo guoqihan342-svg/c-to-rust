@@ -6890,6 +6890,8 @@ English mirror summary:
   - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
   - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
   - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+- 验证流水线修复：
+  - 修复 `validation/evidence/demo/auto-translation/sum-i32-ptr-arith/**` 和 `validation/evidence/demo/auto-translation/call-expression/**` 中 stale accepted c_oracle sha256；这些字段指向的 accepted oracle 文件真实 hash 分别是 `b48e57...` 和 `cc00fb...`，旧值会让 `validate_auto_translation_evidence.py --require-semantic-pass` 在 schema/negative-diff gate 之前先失败。
 
 已确认红灯：
 
@@ -6927,3 +6929,99 @@ English mirror summary:
 - `const uint8_t *p; return *p;` now emits as `pub fn read_byte(p: &[u8]) -> u8 { return p[0usize]; }`.
 - Direct readonly deref reads can also act as ordinary scalar operands in comparison/logical-not candidate generation, for example `*p == 0` and `!*p`.
 - `*p++` byte cursor behavior remains on its prelude path; nullable pointer deref, `*(p+i)`, mutable pointer, pointer writes, pointer truthiness, arbitrary pointer comparison, alias semantics, and semantic acceptance still fail closed.
+
+## 100. 2026-06-27 readonly bounded pointer offset-deref read candidate
+
+本轮继续按多智能体并行推进。只读子线程分别复核了真实 clang AST 里的 `*(p+i)` 形态、typed IR emitter 边界、测试缺口和文档同步范围；主线程按 TDD 选择最小核心翻译切片：readonly integer pointer 的 bounded offset-deref read。结论：`*(p+i)` / `*(i+p)` 现在可作为无副作用标量读进入 `GenericTypedIr` candidate，并发射为 Rust slice index；这不是任意 pointer arithmetic、pointer write、alias semantics 或 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_readonly_pointer_deref_expr()` 先识别 `Deref(Binary(Add, base, index))`。
+  - 新增 `emit_readonly_pointer_add_deref_expr()` 和 `readonly_pointer_add_operands()`，只接受 readonly integer pointer base + integer index，并支持 `p+i` / `i+p`。
+  - 新增 `validate_readonly_pointer_add_index_expr()`，index 只允许整数变量、整数字面量和整数 cast；call、inc/dec、deref、compound expression、unary、index、address-of、null pointer、array literal 和 unsupported expression 都 fail closed。
+  - nullable pointer param、mutable pointer、base 未声明、pointer add result type 与 base type 不一致、deref result type 与 pointee element type 不一致继续 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_readonly_pointer_add_index_deref_read`
+    - `typed_ir_emits_readonly_index_add_pointer_deref_read`
+    - `typed_ir_emits_readonly_pointer_add_literal_deref_read`
+    - `typed_ir_emits_value_comparison_with_readonly_pointer_add_index_deref_operand_as_c_int`
+    - `typed_ir_emits_comparison_condition_with_readonly_pointer_add_index_deref_operand`
+    - `typed_ir_emits_logical_not_value_with_readonly_pointer_add_index_deref_operand`
+    - `typed_ir_emits_logical_not_condition_with_readonly_pointer_add_index_deref_operand`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_mutable_pointer_add_index_deref_read`
+    - `typed_ir_rejects_readonly_pointer_add_call_index_deref_read`
+    - `typed_ir_rejects_readonly_pointer_add_compound_index_deref_read`
+    - `typed_ir_rejects_logical_not_condition_with_readonly_pointer_add_compound_index_deref_operand`
+  - 新增 clang skeleton / real clang smoke：
+    - `clang_lowering_skeleton_maps_pointer_add_deref_expr`
+    - `clang_ast_dump_emits_pointer_add_deref_return_values_when_enabled`
+    - `clang_ast_dump_emits_pointer_add_deref_logical_not_if_condition_when_enabled`
+- 文档同步：
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_add_index_deref_read -- --nocapture
+```
+
+红灯表现：旧 production 报 `stmt[0].return expr deref pointer must be Var`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir pointer_add -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_add_deref -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_add_deref -- --nocapture
+```
+
+聚焦结果：
+- `pointer_add` filter 下 10 条测试通过：return、literal offset、`i+p` commuted、comparison value-position、comparison condition、logical-not value-position、logical-not condition，以及 mutable/call/compound index fail-closed。
+- `pointer_add_deref` filter 下 3 条 clang 测试通过；真实 clang AST gate 打开后同 3 条实际运行通过，覆盖 `read_pi`、`read_ip`、`read_p1` 和 `if (!*(p+i))`。
+
+当前边界：
+- 可以说：readonly integer pointer 的 bounded `*(p+i)` / `*(i+p)` read 现在发射为 Rust slice index，并可作为普通标量读参与 comparison/logical-not candidate generation。
+- 不应说：已经支持任意 pointer arithmetic、pointer subtraction、array-to-pointer decay、nullable pointer deref/index、mutable pointer、pointer write、pointer truthiness、任意 pointer comparison、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、白名单提交并推送本切片。
+- 后续核心切片优先级：typed IR first-class scalar compound assignment、condition-position `&&` / `||`、usual conversion 分类。
+
+English mirror summary:
+
+- Added narrow readonly bounded pointer offset-deref read candidate generation.
+- `const uint8_t *p; return *(p+i);` now emits as `pub fn read_pi(p: &[u8], i: usize) -> u8 { return p[i as usize]; }`.
+- The same support covers `*(i+p)`, literal offsets, comparison operands such as `*(p+i) == 0`, and logical-not operands such as `!*(p+i)`.
+- Index expressions are deliberately narrow: only integer vars, integer literals, and integer casts are accepted; call, inc/dec, compound index expressions, mutable pointers, nullable pointer deref/index, pointer writes, arbitrary pointer arithmetic, alias semantics, and semantic acceptance still fail closed.
+
+## 101. 2026-06-27 reviewer follow-up and evidence binding repair
+
+中文摘要：
+
+- 只读 code-review 子智能体复核后未发现实现层 Critical 问题，但建议把 fail-closed 边界测得更细。
+- 已补充直接负测：
+  - `typed_ir_rejects_nullable_readonly_pointer_add_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_incdec_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_deref_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_unsupported_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_result_type_mismatch`
+  - `typed_ir_rejects_readonly_pointer_add_deref_result_type_mismatch`
+- 注意：nullable pointer 的 offset deref 在 nullable-use validator 阶段更早被拒绝，错误是 `nullable pointer param p is only supported in null comparisons`，这是比 emitter 分支更保守的 fail-closed。
+- 修复了 `sum-i32-ptr-arith` 与 `call-expression` 两个 demo auto-translation evidence 中 accepted artifact SHA 绑定漂移；没有采用 `auto_migrate --accept-existing-evidence` 对 `sum-i32-ptr-arith` 的重生成结果，因为当前 L2/noalias profile 会把它确定性降级为 `candidate_generated / semantic_pass=false`。
+
+English mirror:
+
+- A read-only reviewer subagent found no critical implementation defect, but asked for tighter fail-closed regression tests.
+- Added direct negative tests for nullable base, inc/dec index, deref index, unsupported index, pointer-add result type mismatch, and deref result type mismatch.
+- Nullable offset deref is rejected earlier by the nullable-use validator, before the pointer-offset-deref emitter runs.
+- Repaired accepted artifact SHA bindings for the demo `sum-i32-ptr-arith` and `call-expression` evidence packages while preserving `semantic_pass=true`.

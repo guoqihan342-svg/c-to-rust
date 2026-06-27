@@ -605,6 +605,560 @@ fn typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_readonly_pointer_add_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "read_byte_at".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_index, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly pointer add-index deref read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn read_byte_at(p: &[u8], i: usize) -> u8"));
+    assert!(rust.contains("return p[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-readonly-pointer-add-index-deref-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_readonly_index_add_pointer_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let index_plus_ptr = ir_binary(
+        IrBinOp::Add,
+        ir_var("i", usize_ty.clone()),
+        ir_var("p", const_u8_ptr_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "read_byte_at_commuted".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(index_plus_ptr, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly index-add-pointer deref read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn read_byte_at_commuted(p: &[u8], i: usize) -> u8"));
+    assert!(rust.contains("return p[i as usize];"));
+    assert_rust_snippet_compiles("typed-ir-readonly-index-add-pointer-deref-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_readonly_pointer_add_literal_deref_read() {
+    let u8_ty = ir_u8();
+    let i32_ty = ir_i32();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_one = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_lit(1, "1", i32_ty),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "read_second_byte".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_one, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly pointer add-literal deref read");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn read_second_byte(p: &[u8]) -> u8"));
+    assert!(rust.contains("return p[1i32 as usize];"));
+    assert_rust_snippet_compiles("typed-ir-readonly-pointer-add-literal-deref-read", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_pointer_add_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "uint8_t *", u8_ty.clone(), false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", mutable_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        mutable_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_mut_ptr_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: mutable_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_index, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("mutable pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("param p"));
+    assert!(error.reason.contains("pointer type"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_call_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_call = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        IrExpr::Call {
+            callee: "next_index".to_string(),
+            args: vec![],
+            ty: usize_ty,
+            source_span: None,
+        },
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_call_index_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_call, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("call index pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("deref pointer add index call expression next_index is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_compound_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let compound_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("i", usize_ty.clone()),
+        ir_lit(1, "1", usize_ty.clone()),
+        usize_ty.clone(),
+    );
+    let ptr_plus_compound = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        compound_index,
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_compound_index_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_compound, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("compound index pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("deref pointer add index cannot use compound expression"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_readonly_pointer_add_index_deref_read() {
+    let i32_ty = ir_i32();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let const_i32_ptr_ty = ir_pointer("const int *", "const int *", const_i32_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_i32_ptr_ty.clone()),
+        ir_var("i", i32_ty.clone()),
+        const_i32_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_nullable_offset_read".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_i32_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", const_i32_ptr_ty.clone()),
+                    ir_null_ptr(const_i32_ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_deref(ptr_plus_index, i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("nullable offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("nullable pointer param p is only supported in null comparisons"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_incdec_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let inc_index = IrExpr::IncDec {
+        target: Box::new(ir_var("i", usize_ty.clone())),
+        op: IrIncDecOp::Inc,
+        prefix: false,
+        ty: usize_ty.clone(),
+        source_span: None,
+    };
+    let ptr_plus_inc = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        inc_index,
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_incdec_index_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_inc, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("inc/dec index pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref pointer add index cannot use increment/decrement"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_deref_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_usize_ty = ir_const(usize_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let const_usize_ptr_ty = ir_pointer("const size_t *", "size_t *", const_usize_ty, false);
+    let deref_index = ir_deref(ir_var("idx", const_usize_ptr_ty.clone()), usize_ty.clone());
+    let ptr_plus_deref = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        deref_index,
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_deref_index_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "idx".to_string(),
+                ty: const_usize_ptr_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_deref, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("deref index pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref pointer add index cannot use dereference"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_unsupported_index_deref_read() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let unsupported_index = IrExpr::Cast {
+        target: usize_ty,
+        expr: Box::new(IrExpr::Unsupported {
+            node: "RecoveryExpr".to_string(),
+            reason: "clang could not recover index expression".to_string(),
+            source_span: None,
+        }),
+        implicit: false,
+        source_span: None,
+    };
+    let ptr_plus_unsupported = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        unsupported_index,
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_unsupported_index_offset_read".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_unsupported, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("unsupported index pointer offset deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref pointer add index unsupported expression RecoveryExpr"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_result_type_mismatch() {
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index_with_bad_ty = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        u8_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_pointer_add_result_type".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_index_with_bad_ty, u8_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("pointer add result type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref pointer add result type uint8_t does not match base type"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_add_deref_result_type_mismatch() {
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let usize_ty = ir_usize();
+    let const_u8_ty = ir_const(u8_ty);
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_deref_result_type".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_deref(ptr_plus_index, i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("deref result type mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("deref result type i32 does not match pointer element type u8"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_local_fixed_array_index_assignment() {
     let u32_ty = ir_u32();
     let usize_ty = ir_usize();
@@ -2922,6 +3476,128 @@ fn typed_ir_emits_scalar_if_with_logical_not_integer_condition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_logical_not_condition_with_readonly_pointer_add_index_deref_operand() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let u8_ty = ir_u8();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "offset_is_zero_not_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(ir_deref(ptr_plus_index, u8_ty), i32_ty.clone()),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit logical not offset deref condition");
+
+    assert!(rust.contains("pub fn offset_is_zero_not_condition(p: &[u8], i: usize) -> i32"));
+    assert!(rust.contains("if p[i as usize] == 0u8 {"));
+    assert!(rust.contains("return 1i32;"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-offset-deref-logical-not-condition", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_logical_not_condition_with_readonly_pointer_add_compound_index_deref_operand() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let u8_ty = ir_u8();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let compound_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("i", usize_ty.clone()),
+        ir_lit(1, "1", usize_ty.clone()),
+        usize_ty.clone(),
+    );
+    let ptr_plus_compound = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        compound_index,
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_logical_not_offset_compound_index".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_not(ir_deref(ptr_plus_compound, u8_ty), i32_ty.clone()),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("compound index logical-not deref must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error.reason.contains("logical not operand"));
+    assert!(error
+        .reason
+        .contains("deref pointer add index cannot use compound expression"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_scalar_while_with_logical_not_integer_condition() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -3319,6 +3995,54 @@ fn typed_ir_emits_value_comparison_with_readonly_pointer_deref_operand_as_c_int(
     assert!(rust.contains("pub fn first_is_zero_value(p: &[i32]) -> i32"));
     assert!(rust.contains("if (p[0usize] == 0i32) { 1i32 } else { 0i32 }"));
     assert_rust_snippet_compiles("typed-ir-deref-value-comparison", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_value_comparison_with_readonly_pointer_add_index_deref_operand_as_c_int() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let const_i32_ptr_ty = ir_pointer("const int *", "int *", const_i32_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_i32_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_i32_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "offset_is_zero_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_i32_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_deref(ptr_plus_index, i32_ty.clone()),
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit offset deref value comparison");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub fn offset_is_zero_value(p: &[i32], i: usize) -> i32"));
+    assert!(rust.contains("if (p[i as usize] == 0i32) { 1i32 } else { 0i32 }"));
+    assert_rust_snippet_compiles("typed-ir-offset-deref-value-comparison", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4126,6 +4850,65 @@ fn typed_ir_emits_comparison_condition_with_readonly_pointer_deref_operand() {
     assert!(rust.contains("pub fn first_is_zero_condition(p: &[i32]) -> i32"));
     assert!(rust.contains("if (p[0usize] == 0i32) {"));
     assert_rust_snippet_compiles("typed-ir-deref-comparison-condition", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_comparison_condition_with_readonly_pointer_add_index_deref_operand() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let const_i32_ptr_ty = ir_pointer("const int *", "int *", const_i32_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_i32_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_i32_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "offset_is_zero_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_i32_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_deref(ptr_plus_index, i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit offset deref comparison condition");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub fn offset_is_zero_condition(p: &[i32], i: usize) -> i32"));
+    assert!(rust.contains("if (p[i as usize] == 0i32) {"));
+    assert_rust_snippet_compiles("typed-ir-offset-deref-comparison-condition", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5267,6 +6050,50 @@ fn typed_ir_emits_logical_not_value_with_readonly_pointer_deref_operand() {
     assert!(rust.contains("pub fn first_is_zero_not(p: &[u8]) -> i32"));
     assert!(rust.contains("if p[0usize] == 0u8 { 1i32 } else { 0i32 }"));
     assert_rust_snippet_compiles("typed-ir-logical-not-deref-value", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_logical_not_value_with_readonly_pointer_add_index_deref_operand() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let u8_ty = ir_u8();
+    let const_u8_ty = ir_const(u8_ty.clone());
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("p", const_u8_ptr_ty.clone()),
+        ir_var("i", usize_ty.clone()),
+        const_u8_ptr_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "offset_is_zero_not".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: const_u8_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_not(ir_deref(ptr_plus_index, u8_ty), i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit logical not offset deref value");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub fn offset_is_zero_not(p: &[u8], i: usize) -> i32"));
+    assert!(rust.contains("if p[i as usize] == 0u8 { 1i32 } else { 0i32 }"));
+    assert_rust_snippet_compiles("typed-ir-logical-not-offset-deref-value", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7790,6 +8617,101 @@ fn clang_lowering_skeleton_maps_pointer_deref_expr() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_pointer_add_deref_expr() {
+    let uint8_ty = ClangTypeSkeleton {
+        spelled: "uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let const_uint8_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let const_uint8_ptr_ty = ClangTypeSkeleton {
+        spelled: "const uint8_t *".to_string(),
+        canonical: "uint8_t *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(const_uint8_ty),
+        },
+    };
+    let size_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "read_byte_at".to_string(),
+        return_type: uint8_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: const_uint8_ptr_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "i".to_string(),
+                ty: size_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Deref {
+                ptr: Box::new(ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Add,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "p".to_string(),
+                        ty: const_uint8_ptr_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "i".to_string(),
+                        ty: size_ty,
+                    }),
+                    ty: const_uint8_ptr_ty,
+                }),
+                ty: uint8_ty,
+            }),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower pointer add deref skeleton");
+
+    let [IrStmt::Return {
+        value: Some(IrExpr::Deref { ptr, ty, .. }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected return pointer-add deref, got {:?}", ir.body);
+    };
+    let IrExpr::Binary {
+        op: IrBinOp::Add,
+        lhs,
+        rhs,
+        ..
+    } = ptr.as_ref()
+    else {
+        panic!("expected pointer-add deref ptr, got {ptr:?}");
+    };
+    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "p"));
+    assert!(matches!(rhs.as_ref(), IrExpr::Var { name, .. } if name == "i"));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_postfix_increment_in_deref_expr() {
     let uint8_ty = ClangTypeSkeleton {
         spelled: "uint8_t".to_string(),
@@ -8719,6 +9641,130 @@ fn clang_ast_dump_emits_pointer_deref_return_value_when_enabled() {
     assert!(rust.contains("pub fn read_byte(p: &[u8]) -> u8"));
     assert!(rust.contains("return p[0usize];"));
     assert_rust_snippet_compiles("typed-ir-real-clang-pointer-deref-emit", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_pointer_add_deref_return_values_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-pointer-add-deref-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_offset.c");
+    fs::write(
+        &source_file,
+        concat!(
+            "#include <stdint.h>\n",
+            "#include <stddef.h>\n",
+            "uint8_t read_pi(const uint8_t *p, size_t i) { return *(p + i); }\n",
+            "uint8_t read_ip(const uint8_t *p, size_t i) { return *(i + p); }\n",
+            "uint8_t read_p1(const uint8_t *p) { return *(p + 1); }\n",
+        ),
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    for (function_name, signature, return_expr) in [
+        (
+            "read_pi",
+            "pub fn read_pi(p: &[u8], i: usize) -> u8",
+            "return p[i as usize];",
+        ),
+        (
+            "read_ip",
+            "pub fn read_ip(p: &[u8], i: usize) -> u8",
+            "return p[i as usize];",
+        ),
+        (
+            "read_p1",
+            "pub fn read_p1(p: &[u8]) -> u8",
+            "return p[1i32 as usize];",
+        ),
+    ] {
+        let report =
+            lower_function_from_clang_ast_dump_report(&environment, &source_file, function_name);
+
+        assert_eq!(
+            report.status, "lowered",
+            "{function_name}: {:?}",
+            report.errors
+        );
+        let function = report.function_ir.as_ref().expect("function ir");
+        let emitted = emit_rust_from_ir(function)
+            .unwrap_or_else(|error| panic!("{function_name}: {}", error.reason));
+        let rust = &emitted.rust;
+        assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+        assert!(rust.contains(signature), "{function_name}: {rust}");
+        assert!(rust.contains(return_expr), "{function_name}: {rust}");
+        assert_rust_snippet_compiles(
+            &format!("typed-ir-real-clang-pointer-add-deref-emit-{function_name}"),
+            rust,
+        );
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_pointer_add_deref_logical_not_if_condition_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-pointer-add-deref-logical-not-if");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("offset_is_zero_not.c");
+    fs::write(
+        &source_file,
+        concat!(
+            "#include <stdint.h>\n",
+            "#include <stddef.h>\n",
+            "int offset_is_zero_not(const uint8_t *p, size_t i) {\n",
+            "    if (!*(p + i)) { return 1; }\n",
+            "    return 0;\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "offset_is_zero_not");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted =
+        emit_rust_from_ir(function).expect("emit pointer add deref logical-not if from clang AST");
+    let rust = &emitted.rust;
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn offset_is_zero_not(p: &[u8], i: usize) -> i32"));
+    assert!(rust.contains("if p[i as usize] == 0u8 {"));
+    assert!(rust.contains("return 1i32;"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-pointer-add-deref-logical-not-if", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

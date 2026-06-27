@@ -15,6 +15,7 @@ Some earlier wording is now stale. The branch no longer needs to "first install 
 - Readonly integer pointer parameters emitted as Rust slices, for example `const uint32_t *p -> p: &[u32]`.
 - Readonly pointer `NULL` presence checks emitted as `Option<&[T]>` plus `.is_none()` / `.is_some()`.
 - Direct readonly pointer dereference reads emitted as slice index zero, for example `return *p; -> return p[0usize];`.
+- Narrow readonly pointer offset-dereference reads emitted as slice indexes, for example `return *(p+i); -> return p[i as usize];`, also covering `*(i+p)` and literal offsets.
 
 These are still **candidate generation** results. They do not mean the real FlashDB slice has `semantic_pass=true`.
 
@@ -42,14 +43,13 @@ Important supported increments:
 - Scalar integer `+ - * / % & | ^ << >>` and signed unary `-`.
 - Comparisons in conditions and narrow value-position C `int` 0/1 materialization.
 - Logical not in conditions and narrow value-position C `int` 0/1 materialization.
-- Readonly pointer slice parameters, direct `NULL` presence checks, and direct readonly `*p` reads.
+- Readonly pointer slice parameters, direct `NULL` presence checks, direct readonly `*p` reads, and narrow readonly `*(p+i)` / `*(i+p)` reads.
 - Readonly global const integer arrays and local fixed-length integer array reads/writes.
 - Bounded direct identifier calls.
 - Narrow byte cursor `*p++` prelude support.
 
 Remaining P0 gaps:
 
-- Generic `*(p+i)` / pointer arithmetic reads.
 - First-class typed IR compound assignment such as `x += y`.
 - Short-circuit `&&` / `||`.
 - Complete usual scalar conversion classification.
@@ -61,14 +61,14 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 - `CompoundAssignOperator` is not yet modeled as typed IR.
 - `&&` / `||` are not yet mapped into typed IR.
-- `Deref(Binary(Add, p, i))` is not yet normalized into a bounded slice index.
+- `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
 - Structs/records, field access, switch/goto/do-while, and memory semantics are still outside the safe emitter.
 
 ## Recommended Route
 
 The right next path is not returning to FlashDB-specific templates. Continue extending typed IR through small verifiable slices:
 
-1. **Readonly pointer deref read**: the first cut `*p -> p[0usize]` is complete; `*(p+i)` should be a separate cut.
+1. **Bounded readonly offset-deref hardening**: `*p -> p[0usize]` and narrow `*(p+i)` / `*(i+p) -> p[i as usize]` now work; the next step is keeping real-clang, documentation, and fail-closed boundary coverage in place.
 2. **Scalar compound assignment**: add a first-class typed IR statement, initially only for scalar `Var` targets, rejecting indexed or side-effecting lvalues.
 3. **Condition-position `&&` / `||`**: only allow side-effect-free comparison/logical-not operands and preserve short-circuit behavior. Value-position 0/1 materialization should be separate.
 4. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
@@ -79,6 +79,7 @@ The right next path is not returning to FlashDB-specific templates. Continue ext
 These should still fail closed:
 
 - Arbitrary pointer comparison, pointer truthiness, and nullable pointer index/deref after a null check.
+- Pointer arithmetic other than the narrow readonly integer pointer plus side-effect-free integer index `*(p+i)` read.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.
 - Volatile, hardware registers, cross-thread, and interrupt semantics.
@@ -89,4 +90,4 @@ These should still fail closed:
 
 The proposal direction is right: **the validation gates are strict enough; the core work is extending the typed IR translator.**
 
-The P0 wording should be updated: the task is no longer "install clang / make pointer stop failing". It is now "continue extending the provable generic typed IR subset on top of a working real-clang path". FlashDB remains an important use case and gate sample, but the project should not become a FlashDB-specific translator.
+The P0 wording should be updated: the task is no longer "install clang / make pointer stop failing", and `*(p+i)` is no longer completely missing. It is now "continue extending the provable generic typed IR subset on top of a working real-clang path". FlashDB remains an important use case and gate sample, but the project should not become a FlashDB-specific translator.

@@ -1,7 +1,7 @@
 {
   "accepted_rust_report": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
-    "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+    "sha256": "c2fc984bbe29400ce3eae5148972614a05ec65f6e838813dcbae1633c0d5b376",
     "status": "passed"
   },
   "case_count": 6,
@@ -51,12 +51,12 @@
     "evidence_links": {
       "c_oracle": {
         "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
-        "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+        "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
         "status": "passed"
       },
       "negative_diff": {
         "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
-        "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+        "sha256": "7dc12e45d5c570823993e70a2d57472b2534afad34d9e355fe1391e303e890be",
         "status": "passed"
       },
       "rust_draft": {
@@ -65,12 +65,12 @@
       },
       "rust_report": {
         "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
-        "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+        "sha256": "c2fc984bbe29400ce3eae5148972614a05ec65f6e838813dcbae1633c0d5b376",
         "status": "passed"
       },
       "schema_diff": {
         "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
-        "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+        "sha256": "bac8b639324cf5035c8282eeac62cf155567d9fb38bcd9b059b510390a710aa0",
         "status": "passed"
       }
     },
@@ -116,12 +116,12 @@
       "oracle_reports": [
         {
           "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
-          "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+          "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
           "status": "passed"
         },
         {
           "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
-          "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+          "sha256": "c2fc984bbe29400ce3eae5148972614a05ec65f6e838813dcbae1633c0d5b376",
           "status": "passed"
         }
       ],
@@ -145,17 +145,17 @@
         "evidence": [
           {
             "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
-            "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+            "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
             "status": "passed"
           },
           {
             "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-rust-report.json",
-            "sha256": "f67baca4ec63b38ade4f0b36360308f74748250d88276cabebd740d99444c384",
+            "sha256": "c2fc984bbe29400ce3eae5148972614a05ec65f6e838813dcbae1633c0d5b376",
             "status": "passed"
           },
           {
             "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-diff.json",
-            "sha256": "16ae6b514a93dc91fbcb0fdc9ecc1860857a74399af16c98b251aba724a4ec3d",
+            "sha256": "bac8b639324cf5035c8282eeac62cf155567d9fb38bcd9b059b510390a710aa0",
             "status": "passed"
           }
         ],
@@ -177,7 +177,7 @@
         "evidence": [
           {
             "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-negative-diff.json",
-            "sha256": "3059989d07cb095f477dbce6ee9034492c437a3beacc40378886a6e2baa57d6c",
+            "sha256": "7dc12e45d5c570823993e70a2d57472b2534afad34d9e355fe1391e303e890be",
             "status": "passed"
           }
         ],

@@ -15,6 +15,7 @@
 - readonly integer pointer 参数可发射为 Rust slice，例如 `const uint32_t *p -> p: &[u32]`。
 - readonly pointer `NULL` presence check 可发射为 `Option<&[T]>` 加 `.is_none()` / `.is_some()`。
 - 普通 readonly pointer direct deref read 已可发射为 slice 0 下标，例如 `return *p; -> return p[0usize];`。
+- 窄化 readonly pointer offset-deref read 已可发射为 slice 下标，例如 `return *(p+i); -> return p[i as usize];`，也覆盖 `*(i+p)` 和 literal offset。
 
 这些都是 **candidate generation**。它们不等于真实 FlashDB slice 已经 `semantic_pass=true`。
 
@@ -42,14 +43,13 @@
 - 标量整数 `+ - * / % & | ^ << >>`、signed unary `-`。
 - comparison 条件位置和窄 value-position C `int` 0/1 materialization。
 - logical not 条件位置和窄 value-position C `int` 0/1 materialization。
-- readonly pointer slice 参数、直接 `NULL` presence check、直接 readonly `*p` read。
+- readonly pointer slice 参数、直接 `NULL` presence check、直接 readonly `*p` read、窄化 readonly `*(p+i)` / `*(i+p)` read。
 - readonly global const integer array、局部固定长度整数数组读写。
 - bounded direct identifier calls。
 - byte cursor `*p++` 的窄化 prelude 路径。
 
 仍缺失的 P0 能力：
 
-- `*(p+i)` / pointer arithmetic read 的通用 lowering。
 - first-class typed IR compound assignment，例如 `x += y`。
 - `&&` / `||` 的短路语义。
 - 完整 usual scalar conversions 分类。
@@ -61,14 +61,14 @@
 
 - `CompoundAssignOperator` 还未建模为 typed IR。
 - `&&` / `||` 还未映射到 typed IR。
-- `Deref(Binary(Add, p, i))` 还未规范化为 bounded slice index。
+- `Deref(Binary(Add, p, i))` 已在 readonly integer pointer + 无副作用整数 index 条件下规范化为 bounded slice index；其他 pointer arithmetic 仍未建模。
 - struct/record、field access、switch/goto/do-while 仍未进入安全 emitter。
 
 ## 四、路线建议
 
 当前最合适的顺序不是回到 FlashDB 专用模板，而是继续按 typed IR 小切片推进：
 
-1. **readonly pointer deref read**：已完成第一刀 `*p -> p[0usize]`，下一刀才考虑 `*(p+i)`。
+1. **bounded readonly offset-deref read 收尾**：`*p -> p[0usize]` 和窄化 `*(p+i)` / `*(i+p) -> p[i as usize]` 已打通；下一步主要是继续保留 real-clang、文档和 fail-closed 边界覆盖。
 2. **scalar compound assignment**：新增 typed IR first-class statement，只放行 scalar `Var` target，拒绝 indexed/side-effect lvalue。
 3. **condition-position `&&` / `||`**：只放行无副作用 comparison/logical-not operands，保持短路语义；value-position 0/1 materialization 另做一刀。
 4. **usual conversions 分类**：先把可证明的 integral cast 规则固化成显式 guard，不要一次性声明完整 C conversion。
@@ -79,6 +79,7 @@
 仍应 fail closed：
 
 - 任意 pointer comparison、pointer truthiness、nullable pointer null check 后继续 index/deref。
+- 除 readonly integer pointer + 无副作用整数 index 的窄化 `*(p+i)` read 外，其他 pointer arithmetic 仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。
 - function pointer callee、复杂 call side effects、nested calls in conditions。
 - volatile、硬件寄存器、跨线程/中断语义。
@@ -89,4 +90,4 @@
 
 方案方向是对的：**验证门禁已经足够严，核心工作要继续补 typed IR translator。**
 
-但 P0 表述要更新：现在不是“先装 clang / 先让 pointer 不 fail”，而是“在真实 clang 已通的基础上，继续扩 generic typed IR 的可证明子集”。FlashDB 仍是重要用例和门禁样本，但不能反过来把项目写成 FlashDB 专用翻译器。
+但 P0 表述要更新：现在不是“先装 clang / 先让 pointer 不 fail”，也不是“`*(p+i)` 仍完全缺失”，而是“在真实 clang 已通的基础上，继续扩 generic typed IR 的可证明子集”。FlashDB 仍是重要用例和门禁样本，但不能反过来把项目写成 FlashDB 专用翻译器。

@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/demo/l3-sum-i32-ptr-arith-c-oracle.json",
-    "sha256": "161a090798648cbe4e30aacfa8413147a75c5bafee2ed9619856a92479a7e9d7",
+    "sha256": "b48e57c58187c69b2e15de807ac496d7cebc790ab25824ec92a1acb15328698b",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",

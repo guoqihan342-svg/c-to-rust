@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
-    "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+    "sha256": "cc00fb96865b5b63e8d1cbbe3ed9b0f9d96f193f70d55e1be327983d2234f422",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",

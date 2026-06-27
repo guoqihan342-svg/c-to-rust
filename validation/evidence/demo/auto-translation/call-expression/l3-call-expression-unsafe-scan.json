@@ -1,7 +1,7 @@
 {
   "accepted_unsafe_scan": {
     "path": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
-    "sha256": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+    "sha256": "27798b6813cae46709f6f533178d30e19f55e3383024d7bad4906bdffeca8114",
     "status": "passed"
   },
   "c2rust_baseline": {

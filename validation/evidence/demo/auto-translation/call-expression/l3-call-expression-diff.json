@@ -1,7 +1,7 @@
 {
   "accepted_diff": {
     "path": "validation/evidence/demo/l3-call-expression-diff.json",
-    "sha256": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+    "sha256": "c0fc64079a3a89bcec0158d9889903b6befe293bffdb49986276ec71860907b8",
     "status": "passed"
   },
   "accepted_diff_required": true,

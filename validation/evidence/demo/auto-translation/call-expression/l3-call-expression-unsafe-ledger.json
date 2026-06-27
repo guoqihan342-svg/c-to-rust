@@ -1,7 +1,7 @@
 {
   "accepted_unsafe_ledger": {
     "path": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
-    "sha256": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+    "sha256": "106fe356be954bb30b3f93aadb14fe115b89c99e4834fb1d55d38027daf144c2",
     "status": "passed"
   },
   "c2rust_baseline": {

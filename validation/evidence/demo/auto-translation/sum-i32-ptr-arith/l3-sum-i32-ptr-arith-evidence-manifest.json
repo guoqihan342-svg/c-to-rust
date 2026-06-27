@@ -56,7 +56,7 @@
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-c-oracle-status.json",
-      "sha256": "626df65a505f5ea88b6dd7c1fe0cb461256aab13b83414d6ddd1466d4703c2f8",
+      "sha256": "c292668efbc493f2801e6db1ebd8780c0a3e28baa3230bd1a244ab5ad26e8ad8",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
@@ -67,7 +67,7 @@
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-config-profile.json",
       "profile_id": "demo-sum-i32-ptr-arith-wsl-gcc",
-      "sha256": "7f75632094287789e1c1fbf67fde445eadf9499a07f44e9202203906c9557262",
+      "sha256": "aeabad8f1360a4301d042bfdac83a8c6506ca0ed04e1c051adf94b5511af1804",
       "status": "recorded"
     },
     "context_pack": {
@@ -77,20 +77,20 @@
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-final-verification.json",
-      "sha256": "d9f8602977607b4860bdfc890e638f7791c7b6c60bc7220a9da767e07c53e0de",
+      "sha256": "a90e93ca6542bbc9b39f4d78575d1f0291cf35740f3e469d4f46df14adcc7746",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json",
-      "sha256": "b38aa499ad58bc397ad03cc0811c8a1844f44771a4e913fa35566b3d10a87368",
+      "sha256": "1a8480c1139869d009784a2e73c47722b53047833b625fa9592a9398071d3f16",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "79223e87660f6db0fcbaf99bda4216a5b1aa3a5d1fef055da8b17182df51182f",
+      "sha256": "91ae69a827352ca0c99a196bf3c621ec862d836840e6e4913565101661310789",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
@@ -111,12 +111,12 @@
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-report.json",
-      "sha256": "3d3e44ecf0ca9c23608e55cd85d17466495abc6efca45a96efb3e7fe66f43cb8",
+      "sha256": "6ceb5513399b664b63e0032e97d8a8136c0896883ec41f6d579d6cae331273f7",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json",
-      "sha256": "11e4e2ad97865e26476cfd49d10e9cddd047887274bad400aa391bf15bb349c8",
+      "sha256": "4ba564e02169ebd4007c8ae25f0606f19a9363e71c00f83f1ab9f76161ff2670",
       "status": "passed"
     },
     "slice_contract": {
@@ -126,22 +126,22 @@
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-summary.json",
-      "sha256": "9082cc63cb23d3aedf715ef5b99fa80f359977da53877fd007c5a2b6a928209c",
+      "sha256": "f09c1b149e6f860d7561dea00e3e8a7ba29e2e4aa110abadb52d060a93eee182",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-test-translation-generated.json",
-      "sha256": "0008f3f31d001141013e2e8d47a6c0a00cd34f5e489c9d4b1294c2b081ba9574",
+      "sha256": "bc117901c6a635d7e5902721b682bfa06785ac38ef6c398d0688598a8ad6a5ff",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "c310339ef055c6238d949740923c4e242a5dd47b02fe9e99bb29896560bf5923",
+      "sha256": "840f59b2403ed07b3acda559c0224e42114bcc3fac97e6407c77e181a3d551ab",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "dfa0ca7a2749b41963f9506f1a8bec051f3adfed679e0234bcc8239ffe9b2eed",
+      "sha256": "5e0ee5e8910bd10ed75ab6172ab8803109328a485df8de459b4375679f27e3a3",
       "status": "passed"
     },
     "validation_profile": {
@@ -152,7 +152,7 @@
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-version-manifest.json",
-      "sha256": "3b19a0f358a733211926a7a159fdb84b6aef398922df7c2fee2ca22417542485",
+      "sha256": "3c6030bf8e7c1f4bb0e93699012d8988e23eb19f04e2be7d7d37cbde6a1e92b1",
       "status": "recorded"
     }
   },
