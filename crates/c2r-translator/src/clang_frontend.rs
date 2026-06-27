@@ -854,6 +854,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
         Some("DoStmt") => do_stmt_skeleton_from_ast(stmt),
         Some("ForStmt") => for_stmt_skeleton_from_ast(stmt),
+        Some("UnaryOperator") => inc_dec_stmt_skeleton_from_ast(stmt, "statement"),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
             expr: expr_skeleton_from_ast(stmt)?,
         }),
@@ -963,11 +964,19 @@ fn for_step_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Cl
 fn inc_dec_for_step_skeleton_from_ast(
     stmt: &Value,
 ) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    inc_dec_stmt_skeleton_from_ast(stmt, "ForStmt step")
+}
+
+#[cfg(feature = "typed-ir")]
+fn inc_dec_stmt_skeleton_from_ast(
+    stmt: &Value,
+    context: &str,
+) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let step = inc_dec_expr_skeleton_from_ast(stmt, true, false)?;
     let ClangExprSkeleton::IncDec { target, op, ty, .. } = step else {
         let reason = match step {
             ClangExprSkeleton::Unsupported { reason, .. } => reason,
-            _ => "ForStmt step must be an increment/decrement expression".to_string(),
+            _ => format!("{context} must be an increment/decrement expression"),
         };
         return Ok(ClangStmtSkeleton::Unsupported { reason });
     };
@@ -977,7 +986,7 @@ fn inc_dec_for_step_skeleton_from_ast(
     } = target.as_ref()
     else {
         return Ok(ClangStmtSkeleton::Unsupported {
-            reason: "ForStmt step inc/dec target must be a simple variable".to_string(),
+            reason: format!("{context} inc/dec target must be a simple variable"),
         });
     };
     if !matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
@@ -985,7 +994,7 @@ fn inc_dec_for_step_skeleton_from_ast(
     {
         return Ok(ClangStmtSkeleton::Unsupported {
             reason: format!(
-                "ForStmt step inc/dec target type {} is unsupported",
+                "{context} inc/dec target type {} is unsupported",
                 target_ty.canonical
             ),
         });
@@ -3285,6 +3294,47 @@ mod tests {
         ));
         assert_eq!(compute_lhs_ty, compute_result_ty);
         assert!(matches!(value, ClangExprSkeleton::DeclRef { name, .. } if name == "y"));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment() {
+        for (case_name, opcode, is_postfix, expected_op) in [
+            ("postfix increment", "++", true, ClangBinaryOperator::Add),
+            ("prefix increment", "++", false, ClangBinaryOperator::Add),
+            ("postfix decrement", "--", true, ClangBinaryOperator::Sub),
+            ("prefix decrement", "--", false, ClangBinaryOperator::Sub),
+        ] {
+            let stmt = serde_json::json!({
+                "kind": "UnaryOperator",
+                "opcode": opcode,
+                "isPostfix": is_postfix,
+                "type": { "qualType": "int" },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": "int" },
+                        "referencedDecl": { "name": "value" }
+                    }
+                ]
+            });
+
+            let skeleton = stmt_skeleton_from_ast(&stmt).expect(case_name);
+            let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+                panic!("{case_name}: expected assignment statement, got {skeleton:?}");
+            };
+            assert!(matches!(target, ClangExprSkeleton::DeclRef { name, .. } if name == "value"));
+            let ClangExprSkeleton::Binary { op, lhs, rhs, .. } = value else {
+                panic!("{case_name}: expected binary assignment value, got {value:?}");
+            };
+            assert_eq!(op, expected_op);
+            assert!(
+                matches!(lhs.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "value")
+            );
+            assert!(matches!(
+                rhs.as_ref(),
+                ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+            ));
+        }
     }
 
     #[test]

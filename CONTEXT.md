@@ -8252,3 +8252,76 @@ English mirror summary:
 - Deeper nesting, multiple sibling nested calls, nested calls hidden in binary/index/cast operands, function-pointer callees, calls in conditions, and side-effect arguments still fail closed.
 - Strengthened competition profile self-check scripts to verify the checked-in APT, pip, npm, and Cargo Huawei mirror configuration files.
 - Full translator gate passes with real clang enabled: 48 lib tests, 349 bounded translation tests, and 0 doc-tests.
+
+## 119. 2026-06-27 standalone typed clang inc/dec statements
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 118 节建议的 standalone typed clang inc/dec statement 快刀。三个只读子智能体分别给出结论：
+- inc/dec 代码路径：当前普通函数体 `UnaryOperator` statement 会在 `stmt_skeleton_from_ast()` 落到 `Unsupported`；已有 `ForStmt` step helper 可把 inc/dec 降成 `Assign`，应抽成 statement 通用 helper。
+- 文档同步：需要更新 `core-translation-architecture` 中英文、README 中英文、translator-strengthening-analysis 中英文，并在 CONTEXT 新章节说明第 118 节的下一刀建议已完成。
+- alias/memory model：应单独做 `add-struct-alias-memory-model-evidence` OpenSpec，不应和 inc/dec 语法切片混在一起；当前 pointer graph / slice spec / manifest schema 与 validator 的 alias gate 字段仍不一致。
+
+核心翻译改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `stmt_skeleton_from_ast()` 新增普通 `UnaryOperator` statement 分支。
+  - 原 `inc_dec_for_step_skeleton_from_ast()` 改为 wrapper，复用新的 `inc_dec_stmt_skeleton_from_ast(stmt, context)`。
+  - standalone `value++` / `++value` / `value--` / `--value` 在表达式值被丢弃的 statement 位置会 lowering 成 `ClangStmtSkeleton::Assign`，再进入现有 typed IR `IrStmt::Assign`。
+  - 生成形式保持与 `ForStmt` step 一致：`value = value + 1` 或 `value = value - 1`，由 typed IR emitter 发射为 Rust assignment。
+  - 仍只支持简单整数变量 target，且 target type 与 inc/dec expression type 必须匹配。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST opt-in smoke `clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled`。
+  - 测试 C 源：`int standalone_inc_dec(int value) { value++; ++value; value--; --value; return value; }`。
+  - 断言真实 AST lowering 后是 4 条 `IrStmt::Assign` + `Return`，Rust draft 含 2 条 `value = (value + 1i32);` 和 2 条 `value = (value - 1i32);`，并通过 rustc snippet smoke。
+- `crates/c2r-translator/src/clang_frontend.rs` 单元测试
+  - 新增 `stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment`，覆盖 postfix increment、prefix increment、postfix decrement、prefix decrement 四种 standalone statement。
+
+保留的 fail-closed 边界：
+- `return ++value;`、`helper(++value)`、`*++p` 仍在真实 clang AST 层 fail closed。
+- `if (value++)` 仍会 lower 成 IR 但在 scalar emitter 条件位置 fail closed。
+- `++*p`、`++p`、array/field target、pointer target、缺 `isPostfix` 元数据、非整数 target、target/type mismatch 继续 fail closed。
+- 这不是通用 `IrExpr::IncDec` emitter，也不表示 value-position inc/dec、condition/call argument/return 中 inc/dec、完整 C 自增表达式值语义或 semantic acceptance 已支持。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+  - standalone inc/dec statement 从“后续切口/不支持”更新为“value-discarded statement 已支持”。
+  - 文档明确保留 value-position、condition/call argument/return、复杂 target、pointer/array/field target 和完整语义的 fail-closed 边界。
+
+红灯已观察：
+```powershell
+cargo test --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled --test bounded_translation -- --nocapture
+```
+
+旧实现失败于：
+- 单元层：`postfix increment: expected assignment statement, got Unsupported { reason: "UnaryOperator opcode ++ is outside the current clang lowering skeleton" }`
+- 真实 clang AST 层：`unsupported_clang_stmt: UnaryOperator opcode ++ is outside the current clang lowering skeleton`
+
+focused 验证：
+```powershell
+cargo test --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" "prefix_increment" --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" "postfix_increment_if" --test bounded_translation -- --nocapture
+```
+
+focused 结果：
+- 单元 inc/dec statement：1 passed。
+- 真实 clang standalone inc/dec statement：1 passed。
+- `prefix_increment` regression filter：4 passed，覆盖 for-step 正例和 return/call/deref 负例。
+- `postfix_increment_if` regression filter：1 passed，condition 位置仍 fail closed。
+
+后续建议：
+- 下一刀优先做 `add-struct-alias-memory-model-evidence`，把 pointer graph、slice spec、auto translation plan、evidence manifest、validator 和测试中的 `alias_contract` / `alias_risks` / `safe_boundary_preconditions` / ownership / effect graph 字段对齐。
+- 其次才考虑更宽 `switch` / `goto` 或 struct/field access；不要在 alias gate 未固化前扩大 pointer/struct emitter。
+
+English mirror summary:
+
+- Added standalone value-discarded clang inc/dec statement lowering.
+- `value++`, `++value`, `value--`, and `--value` now lower to assignment candidates when used as ordinary statements.
+- The implementation reuses the existing `ForStmt` step inc/dec-to-Assign path through a shared helper.
+- Value-position inc/dec, inc/dec in conditions/call arguments/returns, complex targets, pointer/array/field targets, and full C increment-expression semantics still fail closed.
+- Focused tests pass for the new unit path, real clang AST smoke, and existing negative regressions.
