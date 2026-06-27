@@ -837,7 +837,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("ReturnStmt") => {
             let value = inner(stmt)
                 .first()
-                .map(expr_skeleton_from_ast)
+                .map(value_expr_skeleton_from_ast)
                 .transpose()?;
             Ok(ClangStmtSkeleton::Return { value })
         }
@@ -889,7 +889,7 @@ fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clan
 
     Ok(ClangStmtSkeleton::Assign {
         target: expr_skeleton_from_ast(target)?,
-        value: expr_skeleton_from_ast(value)?,
+        value: value_expr_skeleton_from_ast(value)?,
     })
 }
 
@@ -1037,7 +1037,7 @@ fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangF
                 reason: "VarDecl initializer marker without initializer child is outside the current clang lowering skeleton".to_string(),
             });
         }
-        [initializer] => Some(expr_skeleton_from_ast(initializer)?),
+        [initializer] => Some(value_expr_skeleton_from_ast(initializer)?),
         _ => {
             return Ok(ClangStmtSkeleton::Unsupported {
                 reason: format!(
@@ -1054,6 +1054,11 @@ fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangF
 #[cfg(feature = "typed-ir")]
 fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
     expr_skeleton_from_ast_with_options(expr, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn value_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    expr_skeleton_from_ast_with_options(expr, true)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2300,6 +2305,153 @@ mod tests {
                         width: 32
                     }
                 )
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "=",
+            "type": { "qualType": "unsigned int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "unsigned int" },
+                    "referencedDecl": { "name": "value" }
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "unsigned int" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "1"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("assignment skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower assignment skeleton");
+
+        let IrStmt::Assign { value, .. } = ir else {
+            panic!("expected assignment, got {ir:?}");
+        };
+        assert!(matches!(
+            value,
+            IrExpr::Cast {
+                implicit: true,
+                target: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_decl_initializer_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "value",
+                    "type": { "qualType": "unsigned int" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "IntegralCast",
+                            "type": { "qualType": "unsigned int" },
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "1"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower decl skeleton");
+
+        let IrStmt::Decl {
+            init: Some(value), ..
+        } = ir
+        else {
+            panic!("expected initialized decl, got {ir:?}");
+        };
+        assert!(matches!(
+            value,
+            IrExpr::Cast {
+                implicit: true,
+                target: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_return_value_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "ReturnStmt",
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "unsigned int" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "1"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("return skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower return skeleton");
+
+        let IrStmt::Return {
+            value: Some(value), ..
+        } = ir
+        else {
+            panic!("expected return value, got {ir:?}");
+        };
+        assert!(matches!(
+            value,
+            IrExpr::Cast {
+                implicit: true,
+                target: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
         ));
     }
 

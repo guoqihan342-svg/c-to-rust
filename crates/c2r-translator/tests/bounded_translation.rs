@@ -11778,6 +11778,115 @@ fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_unsigned_assignment_rhs_integral_cast_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-unsigned-assignment-rhs-cast");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("set_unsigned_one.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t set_unsigned_one(uint32_t value) { value = 1; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "set_unsigned_one");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign {
+        value: IrExpr::Cast { implicit: true, .. },
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected unsigned assignment RHS cast followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit unsigned assignment RHS integral cast");
+    assert!(rust.contains("pub fn set_unsigned_one(mut value: u32) -> u32"));
+    assert!(rust.contains("value = (1i32 as u32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-assign-rhs-cast", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_unsigned_decl_and_return_integral_casts_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-unsigned-decl-return-casts");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("unsigned_decl_return.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t unsigned_decl_return(void) { uint32_t value = 1; return 2; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "unsigned_decl_return",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        init: Some(IrExpr::Cast { implicit: true, .. }),
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Cast { implicit: true, .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected unsigned decl initializer and return casts, got {:?}",
+            function.body
+        );
+    };
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit unsigned decl initializer and return casts");
+    assert!(rust.contains("pub fn unsigned_decl_return() -> u32"));
+    assert!(rust.contains("let mut value: u32 = (1i32 as u32);"));
+    assert!(rust.contains("return (2i32 as u32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-decl-return-casts", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_logical_not_if_condition_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");

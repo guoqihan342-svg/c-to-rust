@@ -7163,3 +7163,72 @@ English mirror summary:
 - Real clang emits these as `CompoundAssignOperator` nodes. The translator now maps them to typed IR assignments of the form `x = x op rhs`.
 - The support is intentionally limited to standalone statements with simple scalar variable targets, and clang `type`, `computeLHSType`, and `computeResultType` must all match the target type.
 - Non-variable targets, value-position compound assignment, promotion/truncation compute-type mismatches, pointer arithmetic, floating-point, volatile, side-effect-heavy RHS, full usual conversions, and semantic acceptance still fail closed.
+
+## 104. 2026-06-27 clang-preserved value-position integer implicit casts
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。只读子智能体分别复核了 value-position implicit cast、ConditionalOperator / `?:` 和 scoped `ForStmt`。结论：`?:` 需要一等 `IrExpr::Conditional` 保护 lazy arms，`ForStmt` 需要 block/scope 模型避免 init scope 和 `continue` 语义偏差；本轮最适合落地的是 clang 已经给出类型证明的 value-position integer implicit casts。
+
+核心结论：declaration initializer、assignment RHS 和 return value 中的 clang `IntegralCast` / `IntegralPromotion` 现在会被保留进 typed IR，随后由现有整数 `IrExpr::Cast` emitter 发射 Rust `as`。这不是 full usual scalar conversions，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `value_expr_skeleton_from_ast()`，内部调用 `expr_skeleton_from_ast_with_options(expr, true)`。
+  - `DeclStmt` initializer、assignment RHS 和 `ReturnStmt` value 改为走 `value_expr_skeleton_from_ast()`。
+  - target expression、condition expression、普通 expression statement 仍不因此放开新语义。
+  - 未新增 typed IR 结构；复用已有 `ClangExprSkeleton::Cast` / `IrExpr::Cast`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang smoke：
+    - `clang_ast_dump_emits_unsigned_assignment_rhs_integral_cast_when_enabled`
+    - `clang_ast_dump_emits_unsigned_decl_and_return_integral_casts_when_enabled`
+- `crates/c2r-translator/src/clang_frontend.rs` unit tests
+  - 新增：
+    - `stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast`
+    - `stmt_skeleton_from_ast_preserves_decl_initializer_integral_cast`
+    - `stmt_skeleton_from_ast_preserves_return_value_integral_cast`
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" preserves_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" unsigned_ -- --nocapture
+```
+
+红灯表现：
+- assignment RHS / decl initializer / return value 的 `IntegralCast` 被剥掉，IR 里只剩 `LitInt { ty: int }`。
+- 真实 clang 用例 `uint32_t value = 1; value = 2; return 3;` 不能生成期望的 `(1i32 as u32)` / `(2i32 as u32)` / `(3i32 as u32)`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" preserves_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" unsigned_ -- --nocapture
+```
+
+聚焦结果：
+- `preserves_` filter 8 条通过。
+- 真实 clang gate 打开后 `unsigned_` filter 4 条通过，其中新增 2 条实际运行并通过。
+
+当前边界：
+- 可以说：clang AST 中 declaration initializer、assignment RHS、return value 的 `IntegralCast` / `IntegralPromotion` 现在能进入 `GenericTypedIr` candidate，并由 Rust `as` 发射。
+- 可以说：例如 `uint32_t set_unsigned_one(uint32_t value) { value = 1; return value; }` 现在能发射 `value = (1i32 as u32);`。
+- 不应说：支持完整 usual scalar conversions、函数指针 decay、pointer cast、float cast、隐藏副作用转换、所有 mixed-width 算术、语义等价接受或 validation semantic pass。
+- typed IR emitter 仍会要求 source/target 是受支持整数类型，且 statement boundary 类型最终匹配。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续更大语法切片优先级：
+  1. pure scalar `ConditionalOperator` / `?:`，但必须新增 `IrExpr::Conditional` 并保护 lazy arms；
+  2. scoped `ForStmt`，但应先引入 block/scope 或明确更窄的 fail-closed 规则，避免 init scope / `continue` 语义偏差；
+  3. 更系统的 usual conversion 分类，而不是把所有 `ImplicitCastExpr` 直接放行。
+
+English mirror summary:
+
+- Added clang-preserved value-position integer implicit cast preservation for declaration initializers, assignment RHS, and return values.
+- The implementation reuses existing `ClangExprSkeleton::Cast` / `IrExpr::Cast`; no new IR structure was added.
+- Real clang cases such as `uint32_t value = 1; value = 2; return 3;` now emit Rust integer casts such as `(1i32 as u32)`.
+- This is candidate generation only. Full usual scalar conversions, function-pointer decay, pointer casts, floating-point casts, hidden side-effect conversions, semantic acceptance, and validation `semantic_pass` still fail closed.
