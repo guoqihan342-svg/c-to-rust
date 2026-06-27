@@ -9216,3 +9216,74 @@ English mirror summary:
 - Preserved artifact filenames, JSON schema, diagnostic-only claim boundary, manifest status behavior, feature gates, and Python `--emit-clang-lowering-report` opt-in semantics.
 - Added a direct module test for the parse-spec blocked report branch.
 - Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 133. 2026-06-28 P0 core translation artifact writer helper split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 写出边界，仍然是行为保持重构：不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 文件名、artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+两个只读子智能体并行复核后结论一致：
+
+- 当前最适合收口的是 CLI/manifest helper 里的核心 artifact 写出边界，因为已有 Rust/Python 覆盖最强。
+- `write_translation_artifacts()` 应继续留在 `lib.rs`，作为 public facade 负责建目录、选择默认/clang-lowered 翻译结果、追加 optional clang artifacts、返回 `ArtifactManifest`。
+- 下一刀不要混进本提交；更适合单独做 `clang_lowered_translation.rs` 私有模块，或 metadata/evidence builder 拆分。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `pub(crate) fn write_core_translation_artifacts(...)`。
+  - 负责写出 8 个核心文件：`auto-translation-plan.json`、`auto-translation-events.jsonl`、`type-map.json`、`cfg.json`、`pointer-graph.json`、`ai-candidate-manifest.json`、`blocked-repairs.json`、`rust-draft.rs`。
+  - 保持原有 JSON/JSONL schema、blocked repairs 结构、AI candidate boundary、pointer graph `not_applicable_reason`、type-map status 和 rust draft 文件名不变。
+  - 将原 `translation_events_jsonl_records_blocked_errors` 单测迁入 artifact 模块，并新增 `core_translation_artifacts_write_stable_file_set_and_blocked_repairs`。
+- `crates/c2r-translator/src/lib.rs`
+  - 删除内联核心 artifact 写出列表。
+  - 改为调用 `write_core_translation_artifacts(spec, &result, out_dir, &prefix, status)?`。
+  - 继续保留 `write_translation_artifacts()` public orchestration，以及 feature-gated `write_clang_dry_run_artifact()` / `write_clang_lowering_report_artifact()` 追加逻辑。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 总项仍保持未完成，只把 core translation artifact writer helper 标为已完成子项。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml core_translation_artifact_tests
+cargo test --manifest-path crates/c2r-translator/Cargo.toml translation_artifacts
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- core artifact helper 红绿测试：初始失败于 `write_core_translation_artifacts` 不存在；实现后通过。
+- `translation_artifacts` 定向集成测试：artifact 模块单测 + 2 个 bounded translation tests 通过。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：2 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：3 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：2 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/route-profile/cache identity 定向测试：3/3 passed。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：core translation artifact writer helper 已从 `lib.rs` 拆到 `artifacts.rs`，`write_translation_artifacts()` 现在是更薄的 public facade。
+- 不应说：P0 `lib.rs` 拆分完成、`write_translation_artifacts()` 已拆出、CLI/manifest orchestration 已完全模块化、或新增任何 C 语法翻译能力。
+- 后续建议：下一刀可单独拆 `clang-lowering-report` 私有翻译/evidence cluster 到 `clang_lowered_translation.rs`，或者按 TDD 先抽 metadata/evidence builder；不要把两者混在同一个提交。
+
+English mirror summary:
+
+- Moved the core translation artifact writer set into private `artifacts.rs` as `write_core_translation_artifacts`.
+- Kept `write_translation_artifacts` in `lib.rs` as the public facade that selects the translation path, appends optional clang artifacts, and returns `ArtifactManifest`.
+- Preserved artifact filenames, ordering, JSON/JSONL schema, manifest status behavior, feature gates, and Python default/route-profile/cache identity behavior.
+- Added a direct module test for the stable core artifact file set and blocked repairs JSON, and moved the JSONL test into the artifacts module.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.

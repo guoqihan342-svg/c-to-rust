@@ -72,6 +72,108 @@ pub(crate) fn translation_events_jsonl(
     Ok(lines.join("\n") + "\n")
 }
 
+pub(crate) fn write_core_translation_artifacts(
+    spec: &SliceSpec,
+    result: &TranslationResult,
+    out_dir: &Path,
+    prefix: &str,
+    status: &str,
+) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    Ok(vec![
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-auto-translation-plan.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "fixture_hash": spec.fixture_hash,
+                "status": status,
+                "plan": &result.plan,
+                "errors": &result.errors,
+            }),
+        )?,
+        write_text_file(
+            out_dir,
+            &format!("{prefix}-auto-translation-events.jsonl"),
+            &translation_events_jsonl(spec, result)?,
+        )?,
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-type-map.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "status": if result.type_map.uncertainties.is_empty() { "recorded" } else { "uncertain" },
+                "type_map": &result.type_map,
+            }),
+        )?,
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-cfg.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "status": "recorded",
+                "cfg": &result.cfg,
+            }),
+        )?,
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-pointer-graph.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "status": if result.pointer_graph.nodes.is_empty() { "not_applicable" } else { "recorded" },
+                "pointer_graph": &result.pointer_graph,
+                "not_applicable_reason": if result.pointer_graph.nodes.is_empty() { Some("slice has no pointer surface") } else { None },
+            }),
+        )?,
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-ai-candidate-manifest.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "status": "not_used",
+                "ai_required": false,
+                "candidates": [],
+                "boundary": "Local rule-based translator path; AI output is not evidence.",
+            }),
+        )?,
+        write_json_file(
+            out_dir,
+            &format!("{prefix}-blocked-repairs.json"),
+            &json!({
+                "schema_version": 1,
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "status": if result.errors.is_empty() { "none" } else { "blocked" },
+                "blocked": result.errors.iter().map(|error| {
+                    json!({
+                        "kind": error.kind,
+                        "reason": error.message,
+                        "source_span": error.source_span,
+                    })
+                }).collect::<Vec<_>>(),
+            }),
+        )?,
+        write_text_file(
+            out_dir,
+            &format!("{prefix}-rust-draft.rs"),
+            &result.rust_code,
+        )?,
+    ])
+}
+
 #[cfg(feature = "clang-frontend")]
 pub(crate) fn write_clang_dry_run_artifact(
     spec: &SliceSpec,
@@ -270,6 +372,115 @@ fn readonly_global_summary(global: &typed_ir::IrGlobal) -> serde_json::Value {
         "init_kind": init_kind,
         "value_count": value_count,
     })
+}
+
+#[cfg(test)]
+mod core_translation_artifact_tests {
+    use std::{
+        env, fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use serde_json::Value;
+
+    use super::*;
+    use crate::{TranslationError, TranslationPlan};
+
+    fn unique_out_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!(
+            "c2r-artifacts-{name}-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn translation_events_jsonl_records_blocked_errors() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "unsupported".to_string(),
+            source_commit: "1234567".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+        result.errors.push(TranslationError {
+            kind: "unsupported_syntax".to_string(),
+            message: "switch is not supported".to_string(),
+            source_span: Some("switch (value)".to_string()),
+        });
+
+        let jsonl = translation_events_jsonl(&spec, &result).unwrap();
+
+        let lines = jsonl.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"event\":\"translation_started\""));
+        assert!(lines[1].contains("\"event\":\"translation_blocked\""));
+        assert!(lines[1].contains("\"kind\":\"unsupported_syntax\""));
+        assert!(!jsonl.contains("translation_generated"));
+    }
+
+    #[test]
+    fn core_translation_artifacts_write_stable_file_set_and_blocked_repairs() {
+        let spec = SliceSpec {
+            target_id: "demo-target".to_string(),
+            slice_id: "demo-slice".to_string(),
+            source_commit: "abcdef0".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            ..SliceSpec::default()
+        };
+        let result = TranslationResult {
+            plan: TranslationPlan {
+                target_id: spec.target_id.clone(),
+                slice_id: spec.slice_id.clone(),
+                function_name: "demo".to_string(),
+                ..TranslationPlan::default()
+            },
+            errors: vec![TranslationError {
+                kind: "unsupported_syntax".to_string(),
+                message: "switch requires CFG/relooper support before automatic lowering"
+                    .to_string(),
+                source_span: Some("switch".to_string()),
+            }],
+            ..TranslationResult::default()
+        };
+        let out_dir = unique_out_dir("core-translation-artifacts");
+        fs::create_dir_all(&out_dir).unwrap();
+
+        let artifacts =
+            write_core_translation_artifacts(&spec, &result, &out_dir, "l3-demo-slice", "blocked")
+                .unwrap();
+        let names = artifacts
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "l3-demo-slice-auto-translation-plan.json",
+                "l3-demo-slice-auto-translation-events.jsonl",
+                "l3-demo-slice-type-map.json",
+                "l3-demo-slice-cfg.json",
+                "l3-demo-slice-pointer-graph.json",
+                "l3-demo-slice-ai-candidate-manifest.json",
+                "l3-demo-slice-blocked-repairs.json",
+                "l3-demo-slice-rust-draft.rs",
+            ]
+        );
+        let blocked: Value = serde_json::from_str(
+            &fs::read_to_string(out_dir.join("l3-demo-slice-blocked-repairs.json")).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(blocked["status"], "blocked");
+        assert_eq!(blocked["blocked"][0]["kind"], "unsupported_syntax");
+        assert_eq!(blocked["blocked"][0]["source_span"], "switch");
+    }
 }
 
 #[cfg(all(test, feature = "clang-frontend"))]

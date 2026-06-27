@@ -2,8 +2,6 @@
 use std::collections::BTreeMap;
 use std::{error::Error, fs, path::Path};
 
-use serde_json::json;
-
 mod artifacts;
 #[cfg(feature = "clang-frontend")]
 pub mod clang_frontend;
@@ -24,7 +22,7 @@ pub use model::{
 use artifacts::write_clang_dry_run_artifact;
 #[cfg(feature = "clang-lowering-report")]
 use artifacts::write_clang_lowering_report_artifact;
-use artifacts::{translation_events_jsonl, write_json_file, write_text_file};
+use artifacts::write_core_translation_artifacts;
 
 #[derive(Clone, Debug)]
 struct ParsedFunction {
@@ -213,99 +211,7 @@ pub fn write_translation_artifacts(
         "blocked"
     };
 
-    let artifacts = vec![
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-auto-translation-plan.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "fixture_hash": spec.fixture_hash,
-                "status": status,
-                "plan": result.plan,
-                "errors": result.errors,
-            }),
-        )?,
-        write_text_file(
-            out_dir,
-            &format!("{prefix}-auto-translation-events.jsonl"),
-            &translation_events_jsonl(spec, &result)?,
-        )?,
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-type-map.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "status": if result.type_map.uncertainties.is_empty() { "recorded" } else { "uncertain" },
-                "type_map": result.type_map,
-            }),
-        )?,
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-cfg.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "status": "recorded",
-                "cfg": result.cfg,
-            }),
-        )?,
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-pointer-graph.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "source_commit": spec.source_commit,
-                "status": if result.pointer_graph.nodes.is_empty() { "not_applicable" } else { "recorded" },
-                "pointer_graph": result.pointer_graph,
-                "not_applicable_reason": if result.pointer_graph.nodes.is_empty() { Some("slice has no pointer surface") } else { None },
-            }),
-        )?,
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-ai-candidate-manifest.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "status": "not_used",
-                "ai_required": false,
-                "candidates": [],
-                "boundary": "Local rule-based translator path; AI output is not evidence.",
-            }),
-        )?,
-        write_json_file(
-            out_dir,
-            &format!("{prefix}-blocked-repairs.json"),
-            &json!({
-                "schema_version": 1,
-                "target_id": spec.target_id,
-                "slice_id": spec.slice_id,
-                "status": if result.errors.is_empty() { "none" } else { "blocked" },
-                "blocked": result.errors.iter().map(|error| {
-                    json!({
-                        "kind": error.kind,
-                        "reason": error.message,
-                        "source_span": error.source_span,
-                    })
-                }).collect::<Vec<_>>(),
-            }),
-        )?,
-        write_text_file(
-            out_dir,
-            &format!("{prefix}-rust-draft.rs"),
-            &result.rust_code,
-        )?,
-    ];
+    let artifacts = write_core_translation_artifacts(spec, &result, out_dir, &prefix, status)?;
     #[cfg(feature = "clang-frontend")]
     let artifacts = {
         let mut artifacts = artifacts;
@@ -3442,37 +3348,6 @@ fn translate_expr(expr: &str) -> String {
         );
     }
     out
-}
-
-#[cfg(test)]
-mod artifact_tests {
-    use super::*;
-
-    #[test]
-    fn translation_events_jsonl_records_blocked_errors() {
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "unsupported".to_string(),
-            source_commit: "1234567".to_string(),
-            fixture_hash: "fixture-sha".to_string(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-        result.errors.push(TranslationError {
-            kind: "unsupported_syntax".to_string(),
-            message: "switch is not supported".to_string(),
-            source_span: Some("switch (value)".to_string()),
-        });
-
-        let jsonl = crate::artifacts::translation_events_jsonl(&spec, &result).unwrap();
-
-        let lines = jsonl.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("\"event\":\"translation_started\""));
-        assert!(lines[1].contains("\"event\":\"translation_blocked\""));
-        assert!(lines[1].contains("\"kind\":\"unsupported_syntax\""));
-        assert!(!jsonl.contains("translation_generated"));
-    }
 }
 
 #[cfg(all(test, feature = "clang-lowering-report"))]
