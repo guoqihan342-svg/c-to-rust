@@ -250,6 +250,8 @@ pub enum ClangBinaryOperator {
     BitXor,
     Shl,
     Shr,
+    LogAnd,
+    LogOr,
     Eq,
     Neq,
     Lt,
@@ -1062,6 +1064,8 @@ fn expr_skeleton_from_ast_with_options(
                 Some("^") => ClangBinaryOperator::BitXor,
                 Some("<<") => ClangBinaryOperator::Shl,
                 Some(">>") => ClangBinaryOperator::Shr,
+                Some("&&") => ClangBinaryOperator::LogAnd,
+                Some("||") => ClangBinaryOperator::LogOr,
                 Some("==") => ClangBinaryOperator::Eq,
                 Some("!=") => ClangBinaryOperator::Neq,
                 Some("<") => ClangBinaryOperator::Lt,
@@ -1493,6 +1497,8 @@ fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
             | ClangBinaryOperator::BitXor
             | ClangBinaryOperator::Shl
             | ClangBinaryOperator::Shr
+            | ClangBinaryOperator::LogAnd
+            | ClangBinaryOperator::LogOr
             | ClangBinaryOperator::Eq
             | ClangBinaryOperator::Neq
             | ClangBinaryOperator::Lt
@@ -1843,6 +1849,8 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
         ClangBinaryOperator::Shl => IrBinOp::Shl,
         ClangBinaryOperator::Shr => IrBinOp::Shr,
+        ClangBinaryOperator::LogAnd => IrBinOp::LogAnd,
+        ClangBinaryOperator::LogOr => IrBinOp::LogOr,
         ClangBinaryOperator::Eq => IrBinOp::Eq,
         ClangBinaryOperator::Neq => IrBinOp::Neq,
         ClangBinaryOperator::Lt => IrBinOp::Lt,

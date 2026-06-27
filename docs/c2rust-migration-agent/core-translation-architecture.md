@@ -25,6 +25,7 @@ flowchart TD
     (candidate generation only),
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
+    condition-position short-circuit && ||,
     const pointer slices,
     readonly pointer NULL checks,
     readonly pointer *p and *(p+i) reads,
@@ -101,6 +102,7 @@ generic typed IR emission 现在覆盖：
 - signed 标量整数 unary minus `-value`；
 - comparison expression 的条件位置和窄 value-position：`if` / `while` 条件继续发 Rust bool condition；`return x > 0`、`out = x == y`、`int ok = x != 0` 等 value-position 生成 C `int` 0/1 materialization；
 - logical not `!expr` 的条件位置和窄 value-position：`if (!value)` / `while (!value)` 生成 `value == 0`，`!(value > 0)` 生成反转后的 comparison condition；`return !value`、assignment RHS 和 declaration initializer 等 value-position 生成 C `int` 0/1 materialization，例如 `if value == 0 { 1i32 } else { 0i32 }`；
+- short-circuit `&&` / `||` 的条件位置：`if (left && right)` / `while (left || right)` 生成 Rust bool 条件，左右操作数递归复用当前 `emit_condition_expr()` 支持的整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref 子集；
 - 来自 clang AST 的 initialized scalar local；
 - 来自 clang AST 的无大括号 `if` / `while` body；
 - readonly integer pointer parameter 到 Rust slice，例如 `const uint32_t *table -> table: &[u32]`；
@@ -120,12 +122,13 @@ generic typed IR emission 现在覆盖：
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
 - bitwise OR / left shift 只表示窄化标量整数 candidate generation。当前 `|` 要求左右 operand 和 result 是同一个标量整数类型，`<<` 沿用 shift 规则要求 lhs/result 类型一致；它不声明完整 C 位运算/位移语义、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
 - signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
-- comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前覆盖窄化标量整数比较、C `int` 0/1 materialization、comparison operand 上 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast、readonly integer pointer 参数的 null presence check、readonly direct deref read operand，以及 bounded readonly offset-deref read operand；除 bounded readonly `*(p+i)` read 外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未由显式整数 cast 对齐的 mixed-width/unsigned conversions、call/inc/dec side-effect operands、short-circuit `&&` / `||`、pointer truthiness、null check 后继续 deref/index 使用、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
-- logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition、readonly direct deref read operand、bounded readonly offset-deref read operand，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref side effect、pointer truthiness、窄化 readonly pointer-parameter presence 表面之外的 pointer null check、float truthiness、unsupported type、短路逻辑或完整 usual scalar conversions 时继续 fail closed。
+- comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前覆盖窄化标量整数比较、C `int` 0/1 materialization、comparison operand 上 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast、readonly integer pointer 参数的 null presence check、readonly direct deref read operand，以及 bounded readonly offset-deref read operand；除 bounded readonly `*(p+i)` read 外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未由显式整数 cast 对齐的 mixed-width/unsigned conversions、call/inc/dec side-effect operands、pointer truthiness、null check 后继续 deref/index 使用、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
+- logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition、readonly direct deref read operand、bounded readonly offset-deref read operand，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref side effect、pointer truthiness、窄化 readonly pointer-parameter presence 表面之外的 pointer null check、float truthiness、unsupported type、value-position 短路逻辑或完整 usual scalar conversions 时继续 fail closed。
+- short-circuit `&&` / `||` 只是 candidate generation，目前只覆盖条件位置，且结果类型必须是 C `int`。`return a && b`、assignment RHS、declaration initializer、operand 含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 时继续 fail closed。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是简单标量 compound assignment lowering、condition-position `&&` / `||`，或把 explicit usual-conversion 分类拆成独立切片。bounded readonly `*(p+i)` read 要继续保留 real-clang 和 fail-closed 边界覆盖；除该窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
+1. 继续用红测优先扩展 generic typed IR 覆盖；当前更适合的后续切口是简单标量 compound assignment lowering、assignment RHS implicit integral cast preservation，或把 explicit usual-conversion 分类拆成独立切片。condition-position `&&` / `||` 已有 direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖；bounded readonly `*(p+i)` read 要继续保留 real-clang 和 fail-closed 边界覆盖；除这些窄切片外的任意 pointer arithmetic、任意 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands 和 semantic acceptance 仍要 fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

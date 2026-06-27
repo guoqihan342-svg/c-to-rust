@@ -7025,3 +7025,70 @@ English mirror:
 - Added direct negative tests for nullable base, inc/dec index, deref index, unsupported index, pointer-add result type mismatch, and deref result type mismatch.
 - Nullable offset deref is rejected earlier by the nullable-use validator, before the pointer-offset-deref emitter runs.
 - Repaired accepted artifact SHA bindings for the demo `sum-i32-ptr-arith` and `call-expression` evidence packages while preserving `semantic_pass=true`.
+
+## 102. 2026-06-27 condition-position short-circuit through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 `&&` / `||`、compound assignment 和 implicit integral cast 的当前缺口；主线程按 TDD 选择最小安全切片：只支持 `if` / `while` 条件位置的 C short-circuit `&&` / `||`。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance；value-position `return a && b`、assignment RHS 和 declaration initializer 仍 fail closed。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_condition_expr()` 在 comparison fallback 前识别 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - 新增 `emit_short_circuit_condition_expr()`，要求 logical operator 结果类型是 C `int`。
+  - 左右操作数递归复用 `emit_condition_expr()`，因此只继承当前已建模的整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref 条件子集。
+  - `emit_expr()` / `emit_binary_op()` 没有放开 `LogAnd` / `LogOr`，所以 value-position 仍拒绝。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `LogAnd` / `LogOr`。
+  - clang `BinaryOperator` opcode `"&&"` / `"||"` 现在 lowering 到 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - logical op operands 保留 clang 已给出的 integral cast；不自行实现完整 usual conversions。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_short_circuit_if_conditions`
+    - `typed_ir_emits_short_circuit_while_condition_with_comparison_operands`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_short_circuit_condition_with_non_int_result_type`
+  - 既有 value-position 负测 `typed_ir_rejects_value_comparison_short_circuit_ops` 保持通过。
+  - 新增 clang skeleton / real clang smoke：
+    - `clang_lowering_skeleton_maps_short_circuit_if_condition`
+    - `clang_ast_dump_emits_short_circuit_if_condition_when_enabled`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir short_circuit -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].if condition binary op LogAnd is unsupported` / `stmt[0].while condition binary op LogOr is unsupported`。
+- non-C-int result 负测先失败为普通 unsupported，而不是专门的 `short-circuit result type must be C int`。
+- clang skeleton 测试编译失败于 `ClangBinaryOperator::LogAnd` 不存在。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir short_circuit -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+```
+
+聚焦结果：
+- `typed-ir` 下 `short_circuit` filter 4 条通过。
+- `typed-ir clang-frontend` 下 `short_circuit` filter 6 条通过。
+- 真实 clang AST gate 打开后同 6 条实际运行通过，覆盖 `if (left && right)`。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 condition-position `&&` / `||` 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`if (left && right)` 生成 `if (left != 0i32 && right != 0i32)`；`while ((left < 3) || (right != 0))` 生成 Rust bool condition。
+- 不应说：已经支持 value-position short-circuit、完整 usual scalar conversions、pointer truthiness、float truthiness、call/inc/dec/side-effect operand、函数指针、volatile/hardware register 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续核心切片优先级：simple scalar compound assignment lowering、assignment RHS implicit integral cast preservation、usual conversion 分类。
+
+English mirror summary:
+
+- Added condition-position short-circuit `&&` / `||` candidate generation through generic typed IR.
+- `if (left && right)` now emits a Rust bool condition such as `if (left != 0i32 && right != 0i32)`.
+- `while ((left < 3) || (right != 0))` emits a Rust bool condition while reusing comparison condition emission.
+- Support is intentionally limited to `if` / `while` conditions with C `int` logical result type. Value-position short-circuit, full usual scalar conversions, pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, function pointers, volatile/hardware register semantics, and semantic acceptance still fail closed.

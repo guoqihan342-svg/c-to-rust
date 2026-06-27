@@ -4913,72 +4913,174 @@ fn typed_ir_emits_comparison_condition_with_readonly_pointer_add_index_deref_ope
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_comparison_condition_short_circuit_ops() {
-    for (op, name) in [
-        (IrBinOp::LogAnd, "bad_cmp_condition_short_circuit_and"),
-        (IrBinOp::LogOr, "bad_cmp_condition_short_circuit_or"),
-    ] {
-        let i32_ty = ir_i32();
-        let ir = IrFunction {
-            name: name.to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![
-                IrParam {
-                    name: "left".to_string(),
-                    ty: i32_ty.clone(),
+fn typed_ir_emits_short_circuit_if_conditions() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "both_nonzero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::LogAnd,
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(1, "1", i32_ty.clone())),
                     source_span: None,
-                },
-                IrParam {
-                    name: "right".to_string(),
-                    ty: i32_ty.clone(),
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::LogOr,
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(2, "2", i32_ty.clone())),
                     source_span: None,
-                },
-            ],
-            body: vec![
-                IrStmt::If {
-                    condition: ir_binary(
-                        op,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit short-circuit if conditions");
+
+    assert!(rust.contains("pub fn both_nonzero(left: i32, right: i32) -> i32"));
+    assert!(rust.contains("if (left != 0i32 && right != 0i32) {"));
+    assert!(rust.contains("if (left != 0i32 || right != 0i32) {"));
+    assert_rust_snippet_compiles("typed-ir-short-circuit-if", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_short_circuit_while_condition_with_comparison_operands() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "loop_until_done".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::While {
+                condition: ir_binary(
+                    IrBinOp::LogOr,
+                    ir_binary(
+                        IrBinOp::Lt,
                         ir_var("left", i32_ty.clone()),
-                        ir_var("right", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
                         i32_ty.clone(),
                     ),
-                    then_body: vec![],
-                    else_body: vec![],
+                    ir_binary(
+                        IrBinOp::Neq,
+                        ir_var("right", i32_ty.clone()),
+                        ir_lit(0, "0", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    i32_ty.clone(),
+                ),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("left", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("left", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
                     source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(ir_lit(0, "0", i32_ty.clone())),
-                    source_span: None,
-                },
-            ],
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("left", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit short-circuit while condition with comparisons");
+
+    assert!(rust.contains("pub fn loop_until_done(mut left: i32, right: i32) -> i32"));
+    assert!(rust.contains("while ((left < 3i32) || (right != 0i32)) {"));
+    assert_rust_snippet_compiles("typed-ir-short-circuit-while-comparisons", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_short_circuit_condition_with_non_int_result_type() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_short_circuit_result".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
             source_span: None,
-        };
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::LogAnd,
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
+                    u32_ty,
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
 
-        let error = emit_rust_from_ir(&ir).expect_err("short-circuit condition must fail closed");
+    let error = emit_rust_from_ir(&ir).expect_err("short-circuit condition result must be C int");
 
-        assert!(
-            error
-                .reason
-                .contains("outside the current typed IR emitter subset"),
-            "{name} produced unexpected error: {}",
-            error.reason
-        );
-        assert!(
-            error.reason.contains("stmt[0].if condition"),
-            "{name} produced unexpected error: {}",
-            error.reason
-        );
-        assert!(
-            error.reason.contains("binary op Log"),
-            "{name} produced unexpected error: {}",
-            error.reason
-        );
-        assert!(
-            error.reason.contains("is unsupported"),
-            "{name} produced unexpected error: {}",
-            error.reason
-        );
-    }
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("short-circuit result type must be C int"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -8086,6 +8188,84 @@ fn clang_lowering_skeleton_maps_comparison_assignment_value() {
     assert!(rust.contains("pub fn cmp_assign(mut left: i32, right: i32) -> i32"));
     assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
     assert_rust_snippet_compiles("typed-ir-clang-assign-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_short_circuit_if_condition() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "short_circuit".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "left".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "right".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::If {
+                condition: ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::LogAnd,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "left".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "right".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty.clone(),
+                },
+                then_body: vec![ClangStmtSkeleton::Return {
+                    value: Some(ClangExprSkeleton::IntegerLiteral {
+                        value: 1,
+                        spelling: "1".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                }],
+                else_body: vec![],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower short-circuit if condition");
+
+    let [IrStmt::If {
+        condition: IrExpr::Binary {
+            op: IrBinOp::LogAnd,
+            ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!(
+            "expected short-circuit if followed by return, got {:?}",
+            ir.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit short-circuit if from lowered IR");
+    assert!(rust.contains("pub fn short_circuit(left: i32, right: i32) -> i32"));
+    assert!(rust.contains("if (left != 0i32 && right != 0i32) {"));
+    assert_rust_snippet_compiles("typed-ir-clang-if-short-circuit", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -11512,6 +11692,59 @@ fn clang_ast_dump_emits_logical_not_if_condition_when_enabled() {
     assert!(rust.contains("return 1i32;"));
     assert!(rust.contains("return 0i32;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-logical-not", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_short_circuit_if_condition_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-short-circuit-if");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("both_nonzero.c");
+    fs::write(
+        &source_file,
+        "int both_nonzero(int left, int right) { if (left && right) { return 1; } return 0; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "both_nonzero");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::If {
+        condition: IrExpr::Binary {
+            op: IrBinOp::LogAnd,
+            ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected short-circuit if followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit short-circuit if from real clang AST");
+    assert!(rust.contains("pub fn both_nonzero(left: i32, right: i32) -> i32"));
+    assert!(rust.contains("if (left != 0i32 && right != 0i32) {"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-if-short-circuit", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

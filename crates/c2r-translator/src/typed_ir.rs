@@ -1878,6 +1878,16 @@ fn emit_condition_expr(
     {
         return emit_logical_not_condition_expr(operand, ty, symbols, context);
     }
+    if let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = expr
+    {
+        if let Some(condition) =
+            emit_short_circuit_condition_expr(op, lhs, rhs, ty, symbols, context)?
+        {
+            return Ok(condition);
+        }
+    }
     if let Some(condition) = emit_comparison_condition_expr(expr, symbols, context)? {
         return Ok(condition);
     }
@@ -1927,6 +1937,32 @@ fn emit_comparison_condition_from_parts(
         emit_expr(lhs, symbols, context).map_err(|detail| format!("comparison lhs {detail}"))?;
     let rhs =
         emit_expr(rhs, symbols, context).map_err(|detail| format!("comparison rhs {detail}"))?;
+    Ok(Some(format!("({lhs} {op} {rhs})")))
+}
+
+fn emit_short_circuit_condition_expr(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let op = match op {
+        IrBinOp::LogAnd => "&&",
+        IrBinOp::LogOr => "||",
+        _ => return Ok(None),
+    };
+    if !is_c_int_type(result_ty) {
+        return Err(format!(
+            "short-circuit result type must be C int, got {}",
+            type_label(result_ty)
+        ));
+    }
+    let lhs =
+        emit_condition_expr(lhs, symbols, context).map_err(|detail| format!("lhs {detail}"))?;
+    let rhs =
+        emit_condition_expr(rhs, symbols, context).map_err(|detail| format!("rhs {detail}"))?;
     Ok(Some(format!("({lhs} {op} {rhs})")))
 }
 
