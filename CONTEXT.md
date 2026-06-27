@@ -7095,25 +7095,27 @@ English mirror summary:
 
 ## 103. 2026-06-27 clang-lowered simple scalar compound assignment family
 
+注意：本节是初始 compound-assignment family 切片记录。第 108 节已经在此基础上放开 clang-proven integer promotion/truncation 的窄化路径；恢复时以第 108 节为当前边界。
+
 本轮继续按多智能体并行推进“不要太窄”的核心语法面扩展。只读线程分别复核了 compound assignment、ForStmt 和 ConditionalOperator / `?:`。主线程按 TDD 选择最适合这一轮的宽切片：standalone simple scalar compound assignment family。结论：`+=`、`-=`、`*=`、`/=`、`%=`、`&=`、`|=`、`^=`、`<<=`、`>>=` 现在可以从真实 clang AST 的 `CompoundAssignOperator` 进入 typed IR，并 desugar 成现有 `IrStmt::Assign { value: Binary(...) }`。这不是完整 C compound assignment，也不是 semantic acceptance。
 
 核心改动：
 - `crates/c2r-translator/src/clang_frontend.rs`
-  - `ClangStmtSkeleton` 新增 `CompoundAssign { target, op, value }`。
+  - `ClangStmtSkeleton` 新增 `CompoundAssign`；第 108 节已继续补充 result/compute type 字段。
   - `stmt_skeleton_from_ast()` 新增 `CompoundAssignOperator` 分支。
   - 新增 `compound_assignment_operator_from_opcode()`，把 `+=` / `-=` / `*=` / `/=` / `%=` / `&=` / `|=` / `^=` / `<<=` / `>>=` 映射到已有 `ClangBinaryOperator`。
   - 新增 `compound_assignment_type_field()` 和 `compound_assignment_types_match()`。
-  - `compound_assign_stmt_skeleton_from_ast()` 要求：
+  - 初始 `compound_assign_stmt_skeleton_from_ast()` 要求：
     - 恰好两个 child；
     - LHS 是 simple `DeclRefExpr`；
-    - clang `type`、`computeLHSType`、`computeResultType` 都和 target 类型一致。
+    - result/compute 类型边界见第 108 节当前规则。
   - `lower_compound_assign_stmt()` 只把 simple variable target 降成 `x = x op rhs` 的 typed IR；非简单 target fail closed。
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - 新增 `clang_lowering_skeleton_maps_scalar_compound_assignment_family`，覆盖 10 种 opcode。
   - 新增 `clang_lowering_skeleton_rejects_compound_assignment_non_var_target`，拒绝 `*p += 1` 这类非简单变量 target。
   - 新增 gated real clang smoke `clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled`，实际跑 `value += 1; ... value >>= 1;`。
 - `crates/c2r-translator/src/clang_frontend.rs` unit tests
-  - 新增 `stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch`，锁住 `unsigned char x; x += y;` 这种 compute type 为 `int` 的 promotion/truncation 场景。
+  - 初始切片新增 compute-type 边界测试；第 108 节已把 `unsigned char` / `uint8_t` 的 clang-proven promotion/truncation 改为正测，并保留 unsupported compute 组合负测。
 - 双语文档同步：
   - `docs/c2rust-migration-agent/README.md`
   - `docs/c2rust-migration-agent/README.en.md`
@@ -7147,7 +7149,7 @@ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\cla
 当前边界：
 - 可以说：standalone simple scalar variable target 的 10 种 compound assignment 现在可由 clang AST lowering 进入 `GenericTypedIr` candidate。
 - 可以说：真实 clang AST 中这些语法是 `CompoundAssignOperator`，不是 `BinaryOperator "+="`。
-- 不应说：支持 value-position `(x += y)`、`if (x += y)`、call argument compound assignment、`*p += y`、`a[i] += y`、`s.f += y`、`p->f += y`、compute type 与 target type 不一致的 promotion/truncation、pointer arithmetic、float、volatile、复杂 RHS side effect、完整 usual conversions 或 semantic acceptance。
+- 不应说：支持 value-position `(x += y)`、`if (x += y)`、call argument compound assignment、`*p += y`、`a[i] += y`、`s.f += y`、`p->f += y`、未被第 108 节 guard 证明的 promotion/truncation、pointer arithmetic、float、volatile、复杂 RHS side effect、完整 usual conversions 或 semantic acceptance。
 - `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
 
 下一步建议：
@@ -7161,8 +7163,8 @@ English mirror summary:
 
 - Added clang-lowered simple scalar compound assignment family support for `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, and `>>=`.
 - Real clang emits these as `CompoundAssignOperator` nodes. The translator now maps them to typed IR assignments of the form `x = x op rhs`.
-- The support is intentionally limited to standalone statements with simple scalar variable targets, and clang `type`, `computeLHSType`, and `computeResultType` must all match the target type.
-- Non-variable targets, value-position compound assignment, promotion/truncation compute-type mismatches, pointer arithmetic, floating-point, volatile, side-effect-heavy RHS, full usual conversions, and semantic acceptance still fail closed.
+- This section recorded the initial same-type slice; section 108 supersedes it with a narrow clang-proven integer promotion/truncation path.
+- Non-variable targets, value-position compound assignment, unsupported promotion/truncation, pointer arithmetic, floating-point, volatile, side-effect-heavy RHS, full usual conversions, and semantic acceptance still fail closed.
 
 ## 104. 2026-06-27 clang-preserved value-position integer implicit casts
 
@@ -7433,3 +7435,71 @@ English mirror summary:
 - Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path, including fail-closed real-clang tests for `continue`, missing condition, missing step, and prefix increment step.
 - The `clang-lowering-report` feature now traverses `For` for type mapping, call evidence, statement kinds, CFG edges, and byte-cursor pointer scans.
 - `continue`, `break`, `goto`, `switch`, condition variable slots, empty condition/step, prefix inc/dec steps, complex init/step, full C for-loop control-flow semantics, full usual scalar conversions, and semantic acceptance still fail closed.
+
+## 108. 2026-06-27 clang-proven compound assignment integer promotion
+
+本轮继续拓展 `c2r-translator` 核心 typed IR 翻译能力，不写 FlashDB 专用分支。切片目标是把 clang 已证明的 `CompoundAssignOperator` 整数提升/回写截断打通，例如：
+
+```c
+#include <stdint.h>
+uint8_t compound_assignment_integer_promotion(uint8_t value) {
+    value += 1;
+    return value;
+}
+```
+
+现在能 lower 成 typed IR：
+
+```rust
+value = (((value as i32) + 1i32) as u8);
+```
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::CompoundAssign` 新增 `result_ty`、`compute_lhs_ty`、`compute_result_ty`。
+  - `compound_assign_stmt_skeleton_from_ast()` 不再要求 compute type 必须等于 target type；改为要求 target/result 一致、compute lhs/result 一致、且 target/compute 都是受支持整数。
+  - `lower_compound_assign_stmt()` 对 lhs/rhs 显式 cast 到 compute type，再把 binary 结果 cast 回 target type。
+  - `ir_types_match_for_clang()` / `cast_ir_expr_to_type_if_needed()` 避免 clang spelling 差异导致误拒或多余判断。
+  - simple `ForStmt` compound-assignment step 通过现有 step parser 继承同一个 guard。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 测试：`typed_ir_emits_scalar_assignment_with_integer_promotion_and_truncation`。
+  - 新增 clang skeleton 测试：`clang_lowering_skeleton_maps_compound_assignment_integer_promotion`。
+  - 新增真实 clang smoke：`clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled`。
+  - 原 `compound_assignment` family、non-var target、ForStmt step、bounded translator 记录规则回归仍通过。
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `docs/superpowers/plans/2026-06-27-compound-assignment-integer-promotion.md`
+  - `docs/superpowers/plans/2026-06-27-typed-ir-scoped-forstmt.md`
+  - `openspec/changes/expand-translator-compound-statement-support/*`
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir integer_promotion -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir compound_assignment -- --nocapture
+```
+
+边界：
+- 可以说：standalone statement 和 simple `ForStmt` step 中的 simple scalar compound assignment，现在支持 clang-proven integer promotion/truncation。
+- 可以说：`uint8_t value; value += 1;` 会用 compute `int` 做加法，再显式 cast 回 `u8`。
+- 不应说：已支持完整 usual scalar conversions、非简单 lvalue target、value-position `(x += y)`、pointer arithmetic、float、volatile、复杂 RHS side effect、semantic acceptance。
+
+下一步建议：
+- 继续做 usual conversions 分类，但仍按 clang/type-map 已证明的小切片推进；不要一次性打开完整 C conversion。
+- 可以选的后续切片：comparison/binary operand 的更系统 mixed-width guard，或者在 scoped `ForStmt` 上设计 `break` / `continue` 的 step 语义和 evidence。
+
+English mirror summary:
+
+- Added narrow clang-proven compound-assignment integer promotion/truncation candidate generation.
+- `ClangStmtSkeleton::CompoundAssign` now carries result and compute types.
+- Lowering accepts target/result match plus compute-lhs/compute-result match when all involved types are supported integers, even if compute type differs from target type.
+- `uint8_t value; value += 1;` now emits `value = (((value as i32) + 1i32) as u8);`.
+- Direct typed IR, clang skeleton, real clang AST smoke, and compound-assignment regression filters pass.
+- Full usual scalar conversions, non-simple targets, value-position compound assignment, pointer arithmetic, floating-point, volatile, complex RHS side effects, and semantic acceptance still fail closed.

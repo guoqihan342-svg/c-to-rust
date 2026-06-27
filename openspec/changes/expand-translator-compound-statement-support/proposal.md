@@ -5,6 +5,7 @@
 ## What Changes
 
 - 支持 C compound assignment 语句，例如 `+=`、`-=`、`*=`、`/=`、`%=` 以及 Rust 同样支持的位运算复合赋值。
+- typed IR / clang-lowered 路径在 simple scalar variable target 上支持 clang-proven integer promotion/truncation，例如 `uint8_t value; value += 1;` 会通过 compute type 显式 cast 后再 cast 回 target type。
 - 支持 standalone pre/post increment 和 decrement 语句，例如 `i++`、`++i`、`i--`、`--i`。
 - 继续拒绝不在 bounded MVP 子集内的未知 expression，避免误报翻译成功。
 - 更新 translator tests，证明新语句生成 Rust draft、CFG statement kind 和 translation rule evidence。

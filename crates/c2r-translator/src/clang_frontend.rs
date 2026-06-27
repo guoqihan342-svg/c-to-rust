@@ -160,6 +160,9 @@ pub enum ClangStmtSkeleton {
         target: ClangExprSkeleton,
         op: ClangBinaryOperator,
         value: ClangExprSkeleton,
+        result_ty: ClangTypeSkeleton,
+        compute_lhs_ty: ClangTypeSkeleton,
+        compute_result_ty: ClangTypeSkeleton,
     },
     If {
         condition: ClangExprSkeleton,
@@ -970,7 +973,7 @@ fn inc_dec_for_step_skeleton_from_ast(
             reason: "ForStmt step inc/dec target must be a simple variable".to_string(),
         });
     };
-    if !matches!(target_ty.kind, ClangTypeKind::Integer { .. })
+    if !matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
         || !compound_assignment_types_match(target_ty, &ty)
     {
         return Ok(ClangStmtSkeleton::Unsupported {
@@ -1068,14 +1071,20 @@ fn compound_assign_stmt_skeleton_from_ast(
             reason: "compound assignment target must be a simple variable".to_string(),
         });
     };
-    if !compound_assignment_types_match(target_ty, &result_ty)
-        || !compound_assignment_types_match(target_ty, &compute_lhs_ty)
-        || !compound_assignment_types_match(target_ty, &compute_result_ty)
+    if !compound_assignment_types_match(target_ty, &result_ty) {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!(
+                "compound assignment result type must match target type: target={}, result={}",
+                target_ty.canonical, result_ty.canonical
+            ),
+        });
+    }
+    if !compound_assignment_integer_types_supported(target_ty, &compute_lhs_ty, &compute_result_ty)
     {
         return Ok(ClangStmtSkeleton::Unsupported {
             reason: format!(
-                "compound assignment compute types must match target type: target={}, result={}, compute_lhs={}, compute_result={}",
-                target_ty.canonical, result_ty.canonical, compute_lhs_ty.canonical, compute_result_ty.canonical
+                "compound assignment integer promotion types are unsupported: target={}, compute_lhs={}, compute_result={}",
+                target_ty.canonical, compute_lhs_ty.canonical, compute_result_ty.canonical
             ),
         });
     }
@@ -1085,6 +1094,9 @@ fn compound_assign_stmt_skeleton_from_ast(
         target,
         op,
         value: expr_skeleton_from_ast_with_options(value, preserve_integral_casts)?,
+        result_ty,
+        compute_lhs_ty,
+        compute_result_ty,
     })
 }
 
@@ -1105,6 +1117,17 @@ fn compound_assignment_type_field(
 #[cfg(feature = "typed-ir")]
 fn compound_assignment_types_match(lhs: &ClangTypeSkeleton, rhs: &ClangTypeSkeleton) -> bool {
     lhs.canonical == rhs.canonical && lhs.kind == rhs.kind
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_integer_types_supported(
+    target_ty: &ClangTypeSkeleton,
+    compute_lhs_ty: &ClangTypeSkeleton,
+    compute_result_ty: &ClangTypeSkeleton,
+) -> bool {
+    matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
+        && matches!(&compute_lhs_ty.kind, ClangTypeKind::Integer { .. })
+        && compound_assignment_types_match(compute_lhs_ty, compute_result_ty)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1954,9 +1977,21 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             value: lower_expr(value)?,
             source_span: None,
         }),
-        ClangStmtSkeleton::CompoundAssign { target, op, value } => {
-            lower_compound_assign_stmt(target, op, value)
-        }
+        ClangStmtSkeleton::CompoundAssign {
+            target,
+            op,
+            value,
+            result_ty,
+            compute_lhs_ty,
+            compute_result_ty,
+        } => lower_compound_assign_stmt(
+            target,
+            op,
+            value,
+            result_ty,
+            compute_lhs_ty,
+            compute_result_ty,
+        ),
         ClangStmtSkeleton::If {
             condition,
             then_body,
@@ -2016,6 +2051,9 @@ fn lower_compound_assign_stmt(
     target: &ClangExprSkeleton,
     op: &ClangBinaryOperator,
     value: &ClangExprSkeleton,
+    result_ty: &ClangTypeSkeleton,
+    compute_lhs_ty: &ClangTypeSkeleton,
+    compute_result_ty: &ClangTypeSkeleton,
 ) -> Result<IrStmt, ClangFrontendError> {
     let ClangExprSkeleton::DeclRef { name, ty } = target else {
         return Err(ClangFrontendError {
@@ -2024,24 +2062,87 @@ fn lower_compound_assign_stmt(
         });
     };
     let target_ty = lower_type(ty)?;
+    let result_ty = lower_type(result_ty)?;
+    let compute_lhs_ty = lower_type(compute_lhs_ty)?;
+    let compute_result_ty = lower_type(compute_result_ty)?;
+    if !ir_types_match_for_clang(&target_ty, &result_ty) {
+        return Err(ClangFrontendError {
+            kind: "unsupported_compound_assignment_type".to_string(),
+            message: format!(
+                "compound assignment result type must match target type: target={}, result={}",
+                target_ty.canonical, result_ty.canonical
+            ),
+        });
+    }
+    if !ir_types_match_for_clang(&compute_lhs_ty, &compute_result_ty) {
+        return Err(ClangFrontendError {
+            kind: "unsupported_compound_assignment_type".to_string(),
+            message: format!(
+                "compound assignment compute lhs/result types must match: compute_lhs={}, compute_result={}",
+                compute_lhs_ty.canonical, compute_result_ty.canonical
+            ),
+        });
+    }
     let target = IrExpr::Var {
         name: name.clone(),
         ty: target_ty.clone(),
         source_span: None,
     };
-    let value = IrExpr::Binary {
+    let lhs = cast_ir_expr_to_type_if_needed(target.clone(), &compute_lhs_ty);
+    let rhs = cast_ir_expr_to_type_if_needed(lower_expr(value)?, &compute_lhs_ty);
+    let binary = IrExpr::Binary {
         op: lower_binary_operator(op),
-        lhs: Box::new(target.clone()),
-        rhs: Box::new(lower_expr(value)?),
-        ty: target_ty,
+        lhs: Box::new(lhs),
+        rhs: Box::new(rhs),
+        ty: compute_lhs_ty,
         source_span: None,
     };
+    let value = cast_ir_expr_to_type_if_needed(binary, &target_ty);
 
     Ok(IrStmt::Assign {
         target,
         value,
         source_span: None,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn cast_ir_expr_to_type_if_needed(expr: IrExpr, target: &IrType) -> IrExpr {
+    if ir_expr_type_matches(&expr, target) {
+        expr
+    } else {
+        IrExpr::Cast {
+            target: target.clone(),
+            expr: Box::new(expr),
+            implicit: true,
+            source_span: None,
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_types_match_for_clang(lhs: &IrType, rhs: &IrType) -> bool {
+    lhs.canonical == rhs.canonical && lhs.kind == rhs.kind && lhs.is_const == rhs.is_const
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
+    match expr {
+        IrExpr::Var { ty, .. }
+        | IrExpr::LitInt { ty, .. }
+        | IrExpr::NullPtr { ty, .. }
+        | IrExpr::Binary { ty, .. }
+        | IrExpr::Unary { ty, .. }
+        | IrExpr::Conditional { ty, .. }
+        | IrExpr::IncDec { ty, .. }
+        | IrExpr::Deref { ty, .. }
+        | IrExpr::Index { ty, .. }
+        | IrExpr::ArrayLiteral { ty, .. }
+        | IrExpr::Call { ty, .. }
+        | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
+        IrExpr::Cast { target, .. } => ir_types_match_for_clang(target, expected),
+        IrExpr::Unsupported { .. } => false,
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2939,7 +3040,7 @@ mod tests {
     }
 
     #[test]
-    fn stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch() {
+    fn stmt_skeleton_from_ast_accepts_compound_assignment_integer_promotion() {
         let stmt = serde_json::json!({
             "kind": "CompoundAssignOperator",
             "opcode": "+=",
@@ -2975,10 +3076,65 @@ mod tests {
 
         let skeleton = stmt_skeleton_from_ast(&stmt).expect("compound assignment skeleton");
 
+        let ClangStmtSkeleton::CompoundAssign {
+            result_ty,
+            compute_lhs_ty,
+            compute_result_ty,
+            value,
+            ..
+        } = skeleton
+        else {
+            panic!("expected promoted compound assignment skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            result_ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 8
+            }
+        ));
+        assert!(matches!(
+            compute_lhs_ty.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert_eq!(compute_lhs_ty, compute_result_ty);
+        assert!(matches!(value, ClangExprSkeleton::DeclRef { name, .. } if name == "y"));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch() {
+        let stmt = serde_json::json!({
+            "kind": "CompoundAssignOperator",
+            "opcode": "+=",
+            "type": { "qualType": "unsigned char" },
+            "computeLHSType": { "qualType": "int" },
+            "computeResultType": { "qualType": "unsigned int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "unsigned char" },
+                    "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "x"
+                    }
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("compound assignment skeleton");
+
         let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
             panic!("expected compute-type mismatch to be unsupported, got {skeleton:?}");
         };
-        assert!(reason.contains("compound assignment compute types must match target type"));
+        assert!(reason.contains("compound assignment integer promotion types are unsupported"));
     }
 
     #[test]

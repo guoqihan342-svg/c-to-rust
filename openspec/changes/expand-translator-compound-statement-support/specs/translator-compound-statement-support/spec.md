@@ -9,6 +9,11 @@ The bounded translator SHALL translate standalone C compound assignment statemen
 - **AND** the generated plan records a compound-assignment translation rule
 - **AND** the CFG evidence records the statement kind as compound assignment
 
+#### Scenario: Clang-proven narrow integer promotion lowers through explicit casts
+- **WHEN** typed IR clang lowering sees a standalone simple scalar compound assignment whose target/result types match and whose compute lhs/result types match, such as `uint8_t value; value += 1;`
+- **THEN** the typed IR candidate lowers the operation through the compute type and casts back to the target type
+- **AND** the generated Rust remains candidate generation only until semantic gates accept it
+
 #### Scenario: Unknown expression still blocks translation
 - **WHEN** a C function contains an expression statement outside the supported subset
 - **THEN** the translator does not emit a Rust draft

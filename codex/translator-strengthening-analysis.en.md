@@ -41,7 +41,7 @@ Important supported increments:
 
 - Scalar declarations, assignments, returns, `if`, and `while`.
 - Scalar integer `+ - * / % & | ^ << >>` and signed unary `-`.
-- Clang-lowered simple scalar compound assignment family.
+- Clang-lowered simple scalar compound assignment family, including narrow clang-proven integer promotion/truncation for simple variable targets.
 - Clang-preserved value-position integer implicit casts in declaration initializers, assignment RHS, and return values.
 - Comparisons in conditions and narrow value-position C `int` 0/1 materialization.
 - Logical not in conditions and narrow value-position C `int` 0/1 materialization.
@@ -55,14 +55,14 @@ Important supported increments:
 
 Remaining P0 gaps:
 
-- Complete usual scalar conversion classification.
+- Complete usual scalar conversion classification beyond the current explicit integer-cast and compound-assignment promotion guards.
 - Pointer writes, aliasing, and ownership modeling.
 
 ### P0.2 clang is no longer "not wired", but AST coverage is still narrow
 
 Real clang smoke tests pass, so the issue is no longer clang installation. The issue is the supported clang skeleton / typed IR subset:
 
-- `CompoundAssignOperator` now lowers for standalone simple scalar variable targets only.
+- `CompoundAssignOperator` now lowers for standalone simple scalar variable targets, including clang-proven integer promotion/truncation when target/result match, compute lhs/result match, and all involved types are supported integers.
 - `&&` / `||` now lower for condition positions and narrow value positions; return values, assignment RHS, and declaration initializers are covered.
 - Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
 - `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt` or assignment, condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
@@ -73,7 +73,7 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 The right next path is not returning to FlashDB-specific templates. Continue extending typed IR through small verifiable slices:
 
-1. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
+1. **Usual conversions classification**: continue turning provable integral-cast and compute-type rules into explicit guards instead of claiming full C conversions.
 2. **Struct / memory model design**: flat structs, field access, pointer writes, aliasing, and ownership need a separate design plus validation gates.
 3. **Wider control flow**: after the scoped `ForStmt` MVP, design explicit semantics and validation boundaries for `break` / `continue` / `do-while` / `switch` / `goto`.
 
@@ -85,6 +85,7 @@ These should still fail closed:
 - Pointer arithmetic other than the narrow readonly integer pointer plus side-effect-free integer index `*(p+i)` read.
 - Condition-position `?:`, expression-statement `?:`, GNU omitted-middle `a ?: b`, and conditional branches with call/inc/dec/post-increment/assignment/comma side effects.
 - Short-circuit operands containing calls/inc/dec/side effects, pointer truthiness, floating-point truthiness, unsupported types, or cases requiring full usual scalar conversions.
+- Compound assignments with non-simple targets, value-position use, unsupported compute/result type combinations, pointer arithmetic, floating-point, volatile, or complex RHS side effects.
 - `ForStmt` with `continue` / `break` / `goto` / `switch`, a condition variable slot, empty condition/step, calls/inc/dec/side effects in the condition, non-simple-scalar init/step, or prefix inc-dec in the step.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.

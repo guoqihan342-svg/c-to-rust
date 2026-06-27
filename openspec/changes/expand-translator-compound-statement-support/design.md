@@ -26,12 +26,12 @@
    Rationale: 这样 CFG evidence 和 translation rule ids 能清楚说明新能力来自哪条规则，后续 validators 可追踪。
    Alternative considered: 复用 `Assignment`。Rejected because `parse_assignment()` 的 plain assignment 规则故意跳过复合运算符。
 
-3. 支持 Rust 原生可表达的复合赋值运算符，先不做类型溢出或整数提升推断。
-   Rationale: 受限 translator 生成 draft candidate，语义接受仍由 oracle/diff gates 决定。这个 change 只声明语法 lowering，不声明 C integer promotion 完整等价。
+3. 支持 Rust 原生可表达的复合赋值运算符；typed IR / clang-lowered 路径额外支持 clang 已证明的窄化整数 promotion/truncation，但不做完整 usual arithmetic conversions 推断。
+   Rationale: 受限 translator 生成 draft candidate，语义接受仍由 oracle/diff gates 决定。这个 change 只声明语法 lowering 和 clang-proven narrow cast lowering，不声明 C integer promotion 完整等价。
 
 ## Risks / Trade-offs
 
-- [Risk] C integer promotion 和 Rust 运算类型规则可能在窄整数上不同。-> Mitigation: 只生成 candidate；semantic pass 仍必须经过 oracle/replay/diff。
+- [Risk] C integer promotion 和 Rust 运算类型规则可能在窄整数上不同。-> Mitigation: 只有 clang 已给出 target/result 与 compute 类型且 guard 可证明时才显式 cast；semantic pass 仍必须经过 oracle/replay/diff。
 - [Risk] `x++` 在 C 表达式上下文有返回旧值语义。-> Mitigation: 只支持 standalone statement，不支持 expression context。
 - [Risk] 过宽的 parser 误接收复杂 lvalue。-> Mitigation: 复用 simple target 检查，并保留 unsupported tests。
 

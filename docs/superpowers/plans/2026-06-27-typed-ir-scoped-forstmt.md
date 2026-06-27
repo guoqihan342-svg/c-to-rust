@@ -104,7 +104,7 @@ Add `ClangStmtSkeleton::For { init, condition, step, body }`.
 Accepted clang subset:
 - init: one scalar `DeclStmt` with initializer, or one simple scalar assignment.
 - condition: required expression parsed with existing expression skeleton rules.
-- step: required postfix scalar inc/dec or simple scalar compound assignment/assignment.
+- step: required postfix scalar inc/dec or simple scalar compound assignment/assignment. Simple compound-assignment steps now reuse the guarded clang-proven integer promotion/truncation lowering from `2026-06-27-compound-assignment-integer-promotion.md`.
 - body: existing supported statement subset.
 
 - [x] **Step 3: Lower skeleton to typed IR**

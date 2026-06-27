@@ -41,7 +41,7 @@
 
 - 标量声明、赋值、return、`if`、`while`。
 - 标量整数 `+ - * / % & | ^ << >>`、signed unary `-`。
-- clang-lowered simple scalar compound assignment family。
+- clang-lowered simple scalar compound assignment family，包含 simple variable target 上 clang-proven integer promotion/truncation 的窄化路径。
 - declaration initializer、assignment RHS 和 return value 中的 clang-preserved value-position integer implicit casts。
 - comparison 条件位置和窄 value-position C `int` 0/1 materialization。
 - logical not 条件位置和窄 value-position C `int` 0/1 materialization。
@@ -55,14 +55,14 @@
 
 仍缺失的 P0 能力：
 
-- 完整 usual scalar conversions 分类。
+- 当前显式整数 cast 和 compound-assignment promotion guard 之外的完整 usual scalar conversions 分类。
 - pointer write / alias / ownership 模型。
 
 ### P0.2 clang 前端不再是“未打通”，但覆盖仍窄
 
 真实 clang smoke 已跑通，所以现在问题不是“装 clang”，而是 clang skeleton / typed IR 支持的 AST 子集仍窄：
 
-- `CompoundAssignOperator` 已支持 standalone simple scalar variable target。
+- `CompoundAssignOperator` 已支持 standalone simple scalar variable target；当 target/result 一致、compute lhs/result 一致且所有相关类型都是受支持整数时，也支持 clang-proven integer promotion/truncation。
 - `&&` / `||` 已支持 condition-position 和窄 value-position；value-position 的 return value、assignment RHS 和 declaration initializer 已覆盖。
 - 普通 `ConditionalOperator` 已支持纯整数 value-position；GNU `BinaryConditionalOperator` 仍 fail closed。
 - `ForStmt` 已支持窄化 scoped lowering：init 只接受简单 scalar `DeclStmt` 或 assignment，condition 复用当前 condition emitter，step 只接受简单 assignment/compound assignment/postfix inc-dec，body 复用现有 statement 子集；`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step 和复杂 init/step 仍 fail closed。
@@ -73,7 +73,7 @@
 
 当前最合适的顺序不是回到 FlashDB 专用模板，而是继续按 typed IR 小切片推进：
 
-1. **usual conversions 分类**：先把可证明的 integral cast 规则固化成显式 guard，不要一次性声明完整 C conversion。
+1. **usual conversions 分类**：继续把可证明的 integral cast 和 compute-type 规则固化成显式 guard，不要一次性声明完整 C conversion。
 2. **struct / memory model 设计**：flat struct、field access、pointer write、alias/ownership 需要独立设计和验证 gate。
 3. **更宽控制流**：在 `ForStmt` 已有 scoped MVP 后，再设计 `break` / `continue` / `do-while` / `switch` / `goto` 的明确语义和验证边界。
 
@@ -85,6 +85,7 @@
 - 除 readonly integer pointer + 无副作用整数 index 的窄化 `*(p+i)` read 外，其他 pointer arithmetic 仍 fail closed。
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
+- 非简单 target、value-position 使用、unsupported compute/result 类型组合、pointer arithmetic、floating-point、volatile 或复杂 RHS side effect 的 compound assignment 仍 fail closed。
 - `ForStmt` 中的 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、condition 中 call/inc/dec/side effect、非 simple scalar init/step 或 step 里的 prefix inc-dec 仍 fail closed。
 - mutable pointer、pointer writes、未建模 alias write。
 - function pointer callee、复杂 call side effects、nested calls in conditions。

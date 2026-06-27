@@ -2910,6 +2910,56 @@ fn typed_ir_emits_scalar_assignment_to_mut_param() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_assignment_with_integer_promotion_and_truncation() {
+    let u8_ty = ir_u8();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "inc8".to_string(),
+        return_type: u8_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u8_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("value", u8_ty.clone()),
+                value: IrExpr::Cast {
+                    target: u8_ty.clone(),
+                    expr: Box::new(ir_binary(
+                        IrBinOp::Add,
+                        IrExpr::Cast {
+                            target: i32_ty.clone(),
+                            expr: Box::new(ir_var("value", u8_ty.clone())),
+                            implicit: true,
+                            source_span: None,
+                        },
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    )),
+                    implicit: true,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", u8_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit promoted/truncated scalar assignment");
+
+    assert!(rust.contains("pub fn inc8(mut value: u8) -> u8"));
+    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-assignment-promote-truncate", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_scalar_decl_init_and_integer_cast() {
     let i32_ty = ir_i32();
     let u32_ty = ir_u32();
@@ -8291,6 +8341,9 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
                 spelling: spelling.to_string(),
                 ty: int_ty.clone(),
             },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
         });
     }
     body.push(ClangStmtSkeleton::Return {
@@ -8337,6 +8390,117 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
     assert!(rust.contains("value = (value << 1i32);"));
     assert!(rust.contains("value = (value >> 1i32);"));
     assert_rust_snippet_compiles("typed-ir-clang-compound-family", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_compound_assignment_integer_promotion() {
+    let uint8_ty = ClangTypeSkeleton {
+        spelled: "uint8_t".to_string(),
+        canonical: "uint8_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 8,
+        },
+    };
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "inc8".to_string(),
+        return_type: uint8_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: uint8_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::CompoundAssign {
+                target: ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: uint8_ty.clone(),
+                },
+                op: ClangBinaryOperator::Add,
+                value: ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                },
+                result_ty: uint8_ty.clone(),
+                compute_lhs_ty: int_ty.clone(),
+                compute_result_ty: int_ty.clone(),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: uint8_ty.clone(),
+                }),
+            },
+        ],
+    };
+
+    let ir =
+        lower_function_skeleton(&skeleton).expect("lower promoted compound assignment skeleton");
+
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = ir.body.as_slice() else {
+        panic!(
+            "expected promoted compound assignment followed by return, got {:?}",
+            ir.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "value"));
+    let IrExpr::Cast {
+        target: cast_target,
+        expr,
+        implicit: true,
+        ..
+    } = value
+    else {
+        panic!("expected final truncation cast, got {value:?}");
+    };
+    assert!(matches!(
+        &cast_target.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ));
+    let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = expr.as_ref()
+    else {
+        panic!("expected promoted binary, got {expr:?}");
+    };
+    assert_eq!(op, &IrBinOp::Add);
+    assert!(matches!(
+        &ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: true,
+            ..
+        } if matches!(&target.kind, IrTypeKind::Integer { signed: true, width: 32 })
+            && matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "value")
+    ));
+    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 1, .. }));
+
+    let rust =
+        emit_rust_from_ir(&ir).expect("emit promoted compound assignment from lowered skeleton");
+    assert!(rust.contains("pub fn inc8(mut value: u8) -> u8"));
+    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-clang-compound-promotion", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -8456,8 +8620,11 @@ fn clang_lowering_skeleton_rejects_compound_assignment_non_var_target() {
             value: ClangExprSkeleton::IntegerLiteral {
                 value: 1,
                 spelling: "1".to_string(),
-                ty: int_ty,
+                ty: int_ty.clone(),
             },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
         }],
     };
 
@@ -13742,6 +13909,83 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
     assert!(rust.contains("value = (value << 1i32);"));
     assert!(rust.contains("value = (value >> 1i32);"));
     assert_rust_snippet_compiles("typed-ir-real-clang-compound-family", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-compound-assignment-integer-promotion");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("inc8.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint8_t compound_assignment_integer_promotion(uint8_t value) { value += 1; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "compound_assignment_integer_promotion",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected promoted compound assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "value"));
+    let IrExpr::Cast {
+        target: cast_target,
+        expr,
+        implicit: true,
+        ..
+    } = value
+    else {
+        panic!("expected compound assignment final cast, got {value:?}");
+    };
+    assert!(matches!(
+        &cast_target.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ));
+    assert!(matches!(
+        expr.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Add,
+            ty,
+            ..
+        } if matches!(&ty.kind, IrTypeKind::Integer { signed: true, width: 32 })
+    ));
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit promoted compound assignment from real clang AST");
+    assert!(rust.contains("pub fn compound_assignment_integer_promotion(mut value: u8) -> u8"));
+    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-compound-promotion", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
