@@ -1064,6 +1064,47 @@ fn typed_ir_emits_scalar_mul_div_mod() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_bit_or_and_left_shift() {
+    let u32_ty = ir_u32();
+    let shifted = ir_binary(
+        IrBinOp::Shl,
+        ir_var("value", u32_ty.clone()),
+        ir_lit(4, "4U", u32_ty.clone()),
+        u32_ty.clone(),
+    );
+    let mask = ir_binary(
+        IrBinOp::BitOr,
+        shifted,
+        ir_lit(3, "3U", u32_ty.clone()),
+        u32_ty.clone(),
+    );
+    let ir = IrFunction {
+        name: "pack_flags".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(mask),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit scalar bit-or and left shift");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
+    assert!(rust.contains("return ((value << 4u32) | 3u32);"));
+    assert!(!rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("typed-ir-scalar-bit-or-left-shift", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_signed_unary_minus() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -5844,6 +5885,160 @@ fn typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let shifted = ClangExprSkeleton::Binary {
+        op: ClangBinaryOperator::Shl,
+        lhs: Box::new(ClangExprSkeleton::DeclRef {
+            name: "value".to_string(),
+            ty: uint32_ty.clone(),
+        }),
+        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+            value: 4,
+            spelling: "4U".to_string(),
+            ty: uint32_ty.clone(),
+        }),
+        ty: uint32_ty.clone(),
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "pack_flags".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::BitOr,
+                lhs: Box::new(shifted),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 3,
+                    spelling: "3U".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower bit-or left-shift skeleton");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::BitOr,
+                lhs,
+                rhs,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected bit-or return, got {:?}", ir.body);
+    };
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Shl,
+            ..
+        }
+    ));
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { value: 3, spelling, .. } if spelling == "3U"
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit bit-or left-shift from lowered typed IR");
+
+    assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
+    assert!(rust.contains("return ((value << 4u32) | 3u32);"));
+    assert_rust_snippet_compiles("typed-ir-clang-bit-or-left-shift", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir() {
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "shift_flags".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: uint32_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Shl,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: uint32_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 4,
+                    spelling: "4".to_string(),
+                    ty: int_ty,
+                }),
+                ty: uint32_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower shift with int count");
+
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Shl,
+                rhs,
+                ..
+            }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected left-shift return, got {:?}", ir.body);
+    };
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt { value: 4, spelling, ty, .. }
+            if spelling == "4"
+                && matches!(
+                    ty.kind,
+                    IrTypeKind::Integer {
+                        signed: true,
+                        width: 32
+                    }
+                )
+    ));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit left shift with int shift count");
+
+    assert!(rust.contains("pub fn shift_flags(value: u32) -> u32"));
+    assert!(rust.contains("return (value << 4i32);"));
+    assert_rust_snippet_compiles("typed-ir-clang-left-shift-int-count", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn typed_ir_emits_signed_unary_minus_from_clang_lowered_ir() {
     let int_ty = ClangTypeSkeleton {
         spelled: "int".to_string(),
@@ -8379,6 +8574,66 @@ fn clang_ast_dump_lowers_shift_right_expr_when_enabled() {
     };
     assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
     assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 8, .. }));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_bit_or_and_left_shift_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-bit-or-left-shift");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("pack_flags.c");
+    fs::write(
+        &source_file,
+        "#include <stdint.h>\nuint32_t pack_flags(uint32_t value) { return (value << 4) | 3U; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "pack_flags");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::BitOr,
+                lhs,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected bit-or return, got {:?}", function.body);
+    };
+    assert!(matches!(
+        lhs.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Shl,
+            ..
+        }
+    ));
+
+    let rust = emit_rust_from_ir(function).expect("emit bit-or left-shift from real clang AST");
+    assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
+    assert!(rust.contains("<<"));
+    assert!(rust.contains("|"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-bit-or-left-shift", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

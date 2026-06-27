@@ -1509,7 +1509,9 @@ fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
         IrBinOp::Div => Ok("/"),
         IrBinOp::Mod => Ok("%"),
         IrBinOp::BitAnd => Ok("&"),
+        IrBinOp::BitOr => Ok("|"),
         IrBinOp::BitXor => Ok("^"),
+        IrBinOp::Shl => Ok("<<"),
         IrBinOp::Shr => Ok(">>"),
         _ => Err(format!("binary op {op:?} is unsupported")),
     }
@@ -1553,7 +1555,7 @@ fn validate_binary_operand_types(
     let rhs_ty = emit_scalar_type(rhs_ty).map_err(|detail| format!("binary rhs has {detail}"))?;
 
     match op {
-        "+" | "-" | "*" | "/" | "%" | "&" | "^" => {
+        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" => {
             if lhs_ty == result_ty && rhs_ty == result_ty {
                 Ok(())
             } else {
@@ -1562,12 +1564,12 @@ fn validate_binary_operand_types(
                 ))
             }
         }
-        ">>" => {
+        "<<" | ">>" => {
             if lhs_ty == result_ty {
                 Ok(())
             } else {
                 Err(format!(
-                    "shift lhs type must match result type: lhs={lhs_ty}, result={result_ty}"
+                    "shift lhs type must match result type for {op}: lhs={lhs_ty}, result={result_ty}"
                 ))
             }
         }

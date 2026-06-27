@@ -6535,3 +6535,103 @@ English mirror summary:
 - Focused FlashDB L3 validation passed, the full auto-migrate unittest pair passed with 127 tests, and full regression run `20260627T003504Z` passed all 35 steps including release stress, OpenSpec validation, and `git diff --check`.
 - Legacy-incomplete FlashDB summaries still have stale hashes and are intentionally not changed in this slice because they are outside the current strict passed-summary gate.
 - The accepted `kvdb-compact-overwrite` evidence is self-consistent under the current validator, but some manifest-like input bindings do not match the latest workspace source hashes. Regenerate the L3 evidence package later if the claim needs to be “freshly generated from current workspace” rather than “current accepted package remains validator-consumable.”
+
+## 95. 2026-06-27 scalar bitwise OR and left shift through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读子线程分别复核了 typed IR / clang lowering 改动风险、双语文档同步点和提交前验证边界；主线程按 TDD 把窄化标量整数 bitwise OR `|` 与 left shift `<<` 接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrBinOp::BitOr` 现在发射 Rust `|`。
+  - `IrBinOp::Shl` 现在发射 Rust `<<`。
+  - `|` 沿用同类型标量整数规则，要求 lhs/rhs/result 三者类型一致。
+  - `<<` 沿用 shift 规则，要求 lhs/result 类型一致；本轮没有建模 rhs shift count 合法性或完整 C shift UB。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangBinaryOperator::BitOr` 和 `ClangBinaryOperator::Shl`。
+  - AST opcode `"|"` / `"<<"` 会进入 skeleton。
+  - cast-preservation 和 lowering 都映射到 `IrBinOp::BitOr` / `IrBinOp::Shl`。
+  - 新增 opcode mapping 单元测试，并补 `|` operand 的 `int -> uint32_t` implicit integral cast preservation 回归测试。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_bit_or_and_left_shift`。
+  - 新增 clang skeleton lowering 测试 `typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir`。
+  - 新增 clang skeleton 回归测试 `typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir`，覆盖真实 clang 常见的 `uint32_t value << 4` 中 rhs shift count 为 `int` literal 的形态。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_bit_or_and_left_shift_when_enabled`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_bit_or_and_left_shift -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+
+- direct typed IR 失败于 `stmt[0].return expr binary op BitOr is unsupported`。
+- clang skeleton 测试在实现前编译失败，提示 `ClangBinaryOperator` 没有 `Shl` / `BitOr` variant。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_bit_or_and_left_shift -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_bit_or_and_left_shift_when_enabled -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report expr_skeleton_from_ast_maps_bitwise_or_and_left_shift_opcodes -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_or_operands -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report bit_or_and_left_shift -- --nocapture
+```
+
+聚焦结果：
+
+- direct typed IR 正向测试通过，并生成可 rustc 编译的 `return ((value << 4u32) | 3u32);`。
+- clang skeleton lowering 测试通过。
+- real clang AST smoke 在 `C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe` 时实际运行并通过。
+- opcode mapping 单元测试通过。
+- `uint32_t << int` shift-count skeleton 回归测试通过，锁住真实 clang AST 常见 rhs 类型。
+- `|` operand implicit integral cast preservation 单元测试通过。
+- `bit_or_and_left_shift` filter 下的 3 个聚焦测试通过；其中 gated real clang smoke 在未设置环境变量的 grouped run 中会按设计跳过，实际执行结果以上面的单独 env smoke 为准。
+
+提交前最终验证结果：
+
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir`: PASS，141 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend`: PASS，44 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir,clang-frontend`: PASS，25 个 lib tests + 241 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，29 个 lib tests + 242 个 bounded translation tests 通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- 没有在主工作树跑 `scripts/run-full-regression.ps1`，因为当前已有大量既有 `validation/evidence/**` dirty/EOL 噪声，且该脚本包含会刷新 evidence 的步骤；本轮以 translator feature suite、real clang smoke、clippy、OpenSpec 和白名单 diff check 作为提交前验证。
+
+当前边界：
+
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄化标量整数 `|` / `<<` 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：这是候选生成能力，`semantic_pass` 仍必须保持 `false`，最终接受仍属于 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification。
+- 不应说：已经支持完整 C bitwise/shift semantics、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
+- 不应说：本轮实现了 L0 0-token deterministic route。子线程确认当前 `route_level()` 仍把 `GenericTypedIr` generated 视为 L1 signal；L0 `token_cost=0` 路由规则应作为单独切口实现。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+- 本节更新当前能力状态；早期章节中“不要顺手实现 `<<`、`|`”的限制只针对当时 shift-right 切口，已经被本节的 TDD 切片 supersede。
+
+下一步建议：
+
+- 完成本轮最终验证、白名单提交并推送。
+- 后续核心切口优先做 cast/usual-conversion 分类或 L0 `token_cost=0` 路由规则；不要把 short-circuit、pointer/null comparison 或完整 C shift 语义混入本轮。
+
+English mirror summary:
+
+- Narrow scalar integer bitwise OR `|` and left shift `<<` now flow through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `IrBinOp::BitOr` emits `|`; `IrBinOp::Shl` emits `<<`.
+- `ClangBinaryOperator::{BitOr, Shl}` map AST opcodes `"|"` and `"<<"` into typed IR.
+- This is candidate generation only and must keep `semantic_pass=false`.
+- It does not support full C bitwise/shift semantics, usual arithmetic conversions, invalid shift counts, signed shift/overflow UB parity, pointer arithmetic, or semantic acceptance.
+- The L0 `token_cost=0` deterministic route is still a separate future router slice; current `GenericTypedIr` generated output remains an L1 route signal.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

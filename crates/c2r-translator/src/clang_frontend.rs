@@ -243,7 +243,9 @@ pub enum ClangBinaryOperator {
     Div,
     Mod,
     BitAnd,
+    BitOr,
     BitXor,
+    Shl,
     Shr,
     Eq,
     Neq,
@@ -1050,7 +1052,9 @@ fn expr_skeleton_from_ast_with_options(
                 Some("/") => ClangBinaryOperator::Div,
                 Some("%") => ClangBinaryOperator::Mod,
                 Some("&") => ClangBinaryOperator::BitAnd,
+                Some("|") => ClangBinaryOperator::BitOr,
                 Some("^") => ClangBinaryOperator::BitXor,
+                Some("<<") => ClangBinaryOperator::Shl,
                 Some(">>") => ClangBinaryOperator::Shr,
                 Some("==") => ClangBinaryOperator::Eq,
                 Some("!=") => ClangBinaryOperator::Neq,
@@ -1442,7 +1446,9 @@ fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
             | ClangBinaryOperator::Div
             | ClangBinaryOperator::Mod
             | ClangBinaryOperator::BitAnd
+            | ClangBinaryOperator::BitOr
             | ClangBinaryOperator::BitXor
+            | ClangBinaryOperator::Shl
             | ClangBinaryOperator::Shr
             | ClangBinaryOperator::Eq
             | ClangBinaryOperator::Neq
@@ -1786,7 +1792,9 @@ fn lower_binary_operator(op: &ClangBinaryOperator) -> IrBinOp {
         ClangBinaryOperator::Div => IrBinOp::Div,
         ClangBinaryOperator::Mod => IrBinOp::Mod,
         ClangBinaryOperator::BitAnd => IrBinOp::BitAnd,
+        ClangBinaryOperator::BitOr => IrBinOp::BitOr,
         ClangBinaryOperator::BitXor => IrBinOp::BitXor,
+        ClangBinaryOperator::Shl => IrBinOp::Shl,
         ClangBinaryOperator::Shr => IrBinOp::Shr,
         ClangBinaryOperator::Eq => IrBinOp::Eq,
         ClangBinaryOperator::Neq => IrBinOp::Neq,
@@ -1942,6 +1950,40 @@ mod tests {
             });
 
             let skeleton = expr_skeleton_from_ast(&expr).expect("comparison skeleton");
+            let ClangExprSkeleton::Binary { op, .. } = skeleton else {
+                panic!("expected binary skeleton for {opcode}, got {skeleton:?}");
+            };
+            assert_eq!(op, expected);
+        }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_maps_bitwise_or_and_left_shift_opcodes() {
+        let cases = [
+            ("|", ClangBinaryOperator::BitOr),
+            ("<<", ClangBinaryOperator::Shl),
+        ];
+
+        for (opcode, expected) in cases {
+            let expr = serde_json::json!({
+                "kind": "BinaryOperator",
+                "opcode": opcode,
+                "type": { "qualType": "unsigned int" },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": "unsigned int" },
+                        "referencedDecl": { "name": "value" }
+                    },
+                    {
+                        "kind": "IntegerLiteral",
+                        "type": { "qualType": "unsigned int" },
+                        "value": "4"
+                    }
+                ]
+            });
+
+            let skeleton = expr_skeleton_from_ast(&expr).expect("bitwise skeleton");
             let ClangExprSkeleton::Binary { op, .. } = skeleton else {
                 panic!("expected binary skeleton for {opcode}, got {skeleton:?}");
             };
@@ -2497,6 +2539,59 @@ mod tests {
         assert!(matches!(
             expr.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 255, .. }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_or_operands() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "|",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "uint32_t" },
+                    "referencedDecl": { "name": "value" }
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "3"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("bitor skeleton");
+        let ClangExprSkeleton::Binary { rhs, .. } = skeleton else {
+            panic!("expected binary skeleton, got {skeleton:?}");
+        };
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = rhs.as_ref()
+        else {
+            panic!("expected preserved bitwise-or integral cast, got {rhs:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 3, .. }
         ));
     }
 
