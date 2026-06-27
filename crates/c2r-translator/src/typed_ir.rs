@@ -1794,8 +1794,8 @@ fn validate_comparison_condition_types(
             type_label(result_ty)
         ));
     }
-    reject_comparison_cast_operand(lhs, "lhs")?;
-    reject_comparison_cast_operand(rhs, "rhs")?;
+    validate_comparison_cast_operand(lhs, "lhs")?;
+    validate_comparison_cast_operand(rhs, "rhs")?;
     let lhs_ty = expr_type(lhs).ok_or_else(|| "comparison lhs type is unsupported".to_string())?;
     let rhs_ty = expr_type(rhs).ok_or_else(|| "comparison rhs type is unsupported".to_string())?;
     let lhs_ty =
@@ -1811,14 +1811,29 @@ fn validate_comparison_condition_types(
     }
 }
 
-fn reject_comparison_cast_operand(expr: &IrExpr, side: &str) -> Result<(), String> {
-    if matches!(expr, IrExpr::Cast { .. }) {
-        Err(format!(
-            "comparison {side} cast operand is unsupported until usual conversions are modeled"
-        ))
-    } else {
-        Ok(())
+fn validate_comparison_cast_operand(expr: &IrExpr, side: &str) -> Result<(), String> {
+    let IrExpr::Cast { target, expr, .. } = expr else {
+        return Ok(());
+    };
+    if !is_integer_type(target) {
+        return Err(format!(
+            "comparison {side} cast target {} is unsupported",
+            type_label(target)
+        ));
     }
+    let source_type = expr_type(expr)
+        .ok_or_else(|| format!("comparison {side} cast source type is unsupported"))?;
+    if !is_integer_type(source_type) {
+        return Err(format!(
+            "comparison {side} cast source {} is unsupported",
+            type_label(source_type)
+        ));
+    }
+    emit_scalar_type(target)
+        .map_err(|detail| format!("comparison {side} cast target has {detail}"))?;
+    emit_scalar_type(source_type)
+        .map_err(|detail| format!("comparison {side} cast source has {detail}"))?;
+    Ok(())
 }
 
 fn ends_with_return_value(body: &[IrStmt]) -> bool {

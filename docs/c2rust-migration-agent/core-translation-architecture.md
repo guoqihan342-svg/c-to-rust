@@ -113,12 +113,12 @@ generic typed IR emission 现在覆盖：
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
 - bitwise OR / left shift 只表示窄化标量整数 candidate generation。当前 `|` 要求左右 operand 和 result 是同一个标量整数类型，`<<` 沿用 shift 规则要求 lhs/result 类型一致；它不声明完整 C 位运算/位移语义、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
 - signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
-- comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖窄化标量整数比较和 C `int` 0/1 materialization；pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||`、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
+- comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前覆盖窄化标量整数比较、C `int` 0/1 materialization，以及 comparison operand 上 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast；pointer comparison、float comparison、未由显式整数 cast 对齐的 mixed-width/unsigned conversions、side-effect operands、short-circuit `&&` / `||`、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
 - logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref/side effect、pointer null test、float truthiness、unsupported type、短路逻辑或完整 usual scalar conversions 时继续 fail closed。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；当前更适合的后续切口是 cast/usual-conversion 分类，而不是把 short-circuit、pointer/null comparison 或完整 C shift 语义混进同一刀。后续仍要让 pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
+1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；当前更适合的后续切口是明确 usual-conversion 分类，而不是把 short-circuit、pointer/null comparison 或完整 C shift 语义混进同一刀。后续仍要让 pointer comparison、float comparison、未建模 mixed-width conversions、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

@@ -4968,7 +4968,7 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,
 TDD/验证要点：
 - direct typed IR comparison-if 红灯最初失败于 `stmt[0].if condition binary op Gt is unsupported`。
 - clang skeleton comparison-if 红灯最初编译失败于 `no variant or associated item named Gt found for enum ClangBinaryOperator`。
-- real clang unsigned comparison 红灯复现：`uint32_t value > 0` 的 RHS 仍是 `int` literal，缺少 `IntegralCast`，会被 typed emitter 作为 `u32` vs `i32` 拒绝。
+- 历史红灯复现：当时 `uint32_t value > 0` 的 RHS 仍是 `int` literal，缺少 `IntegralCast`，会被 typed emitter 作为 `u32` vs `i32` 拒绝；后续 clang lowering 已保留 `IntegralCast`，第 97 节又放开了窄化整数 comparison cast operand。
 - comparison result 非 C `int` 红灯复现：手写错误 IR 曾能把 `u32` result comparison 作为 condition emit。
 - 并行跑两个 `cargo test` 曾在 Windows 链接阶段撞同一个 test exe，出现 `LNK1104`；串行重跑后通过，属于测试运行方式问题，不是代码失败。
 
@@ -6431,13 +6431,13 @@ English mirror summary:
   - 新增 `emit_comparison_condition_from_parts()`，让 condition-position 和 value-position comparison 共用同一套 scalar comparison 校验与 Rust bool condition 生成。
   - 新增 `emit_comparison_value_expr()`，把 `return x > 0`、assignment RHS、declaration initializer 里的 comparison materialize 为 `(if condition { 1i32 } else { 0i32 })`，保持 C `int` 0/1 语义。
   - `if` / `while` 条件里的 comparison 仍发射 Rust bool condition，不额外 materialize 成整数。
-  - comparison result type 必须是 C `int`；pointer comparison、float/unsupported comparison、mixed-width/unsigned conversions、comparison cast operand、call/inc/dec/deref side-effect operands、short-circuit `&&` / `||` 继续 fail closed。
+  - comparison result type 必须是 C `int`；pointer comparison、float/unsupported comparison、mixed-width/unsigned conversions、call/inc/dec/deref side-effect operands、short-circuit `&&` / `||` 继续 fail closed。历史说明：本节写作时 comparison cast operand 仍 fail closed；第 97 节已窄化放开 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast operand。
 - `crates/c2r-translator/src/clang_frontend.rs`
   - comparison lowering 本身没有 production 改动；既有 clang AST lowering 已经能把真实 TU 中的 `>`, `==`, `!=` comparison lowering 成 result type 为 `int` 的 typed IR binary expression。
   - 额外修复 `clang-frontend` feature 单独编译时的 dry-run 路径：`normalized_path(path: &Path)` 需要无条件导入 `std::path::Path`，否则 `--emit-clang-dry-run` 会在该 feature 组合下编译失败。
 - `crates/c2r-translator/tests/bounded_translation.rs`
   - 新增 direct typed IR 正向测试：return value、assignment RHS、declaration initializer、`u8` operand comparison result、logical-not operand 嵌套 materialization。
-  - 新增 fail-closed 测试：call operand、inc/dec operand、deref operand、pointer operand、float/unsupported operand、mismatched operand types、mismatched operand widths、non-C-int result type、comparison cast operand、short-circuit logical ops、`*p++ == 0` 这类需要 prelude 的 byte-read operand，以及 condition-position 的 pointer/unsupported/deref/short-circuit 边界。
+  - 新增 fail-closed 测试：call operand、inc/dec operand、deref operand、pointer operand、float/unsupported operand、mismatched operand types、mismatched operand widths、non-C-int result type、short-circuit logical ops、`*p++ == 0` 这类需要 prelude 的 byte-read operand，以及 condition-position 的 pointer/unsupported/deref/short-circuit 边界。历史说明：comparison cast operand 的窄化整数 cast 情况已由第 97 节改成正向发射测试。
   - 新增 clang skeleton 测试：comparison return value、declaration initializer、assignment RHS。
   - 新增 gated real clang smoke：真实 C `return x > 0`、decl initializer、assignment value 的 comparison AST lowering。
 - 双语文档已同步：
@@ -6480,7 +6480,7 @@ cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-l
 - 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄 value-position comparison expression 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
 - 可以说：`return x > 0`、`out = x == y`、declaration initializer 和 `u8` scalar operand 的 comparison result 会生成 C `int` 0/1，而不是 Rust bool value。
 - 可以说：`if` / `while` 中的 comparison 仍生成 Rust bool condition。
-- 不应说：已经支持完整 C comparison expression、pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、short-circuit `&&` / `||`、call/deref/inc/dec side-effect operands、usual arithmetic conversions 或 semantic acceptance。
+- 不应说：已经支持完整 C comparison expression、pointer comparison、float comparison、未由显式整数 cast 对齐的 mixed-width/unsigned conversions、short-circuit `&&` / `||`、call/deref/inc/dec side-effect operands、usual arithmetic conversions 或 semantic acceptance。
 - FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
 - 本轮额外修了 `clang-frontend` dry-run feature 编译缺口；它只保证 `--emit-clang-dry-run` feature 组合能编译并写出 dry-run artifact，不改变 comparison lowering 语义。
 - 本节已经 supersede 第 92 节末尾“下一小步建议 value-position comparison”的历史建议；后续继续按最新编号章节读取。
@@ -6495,7 +6495,7 @@ English mirror summary:
 - `emit_expr()` and `emit_expr_with_prelude()` support comparison `IrExpr::Binary` values by materializing C `int` 0/1 as `(if condition { 1i32 } else { 0i32 })`, not as Rust bool values.
 - `if` / `while` comparison conditions still emit Rust bool conditions.
 - This slice did not need comparison-lowering production changes in `clang_frontend.rs`; existing lowering already maps real `>`, `==`, and `!=` AST nodes to typed IR binary expressions with C `int` result type. It also fixes a separate `clang-frontend` dry-run feature compile gap by importing `std::path::Path` unconditionally.
-- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C comparison semantics, pointer comparison, floating-point comparison, mixed-width/unsigned conversions, comparison cast operands, short-circuit `&&` / `||`, call/deref/inc/dec side-effect operands, usual arithmetic conversions, or semantic acceptance.
+- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C comparison semantics, pointer comparison, floating-point comparison, mixed-width/unsigned conversions not aligned by explicit integer casts, short-circuit `&&` / `||`, call/deref/inc/dec side-effect operands, usual arithmetic conversions, or semantic acceptance.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
 
 ## 94. 2026-06-27 FlashDB L3 evidence hash drift and Windows fake compiler timeout fix
@@ -6694,7 +6694,7 @@ python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_r
 下一步建议：
 
 - 完成本轮最终验证、白名单提交并推送。
-- 后续核心切口优先做 comparison operand integral cast 的窄化放开：当前 clang 已保留 `IntegralCast` / `IntegralPromotion`，但 comparison operand 上的 cast 仍 fail closed；这会影响真实 `uint32_t value; if (value > 0)` 形态。
+- 历史说明：本节写作时 comparison operand integral cast 仍是下一步；第 97 节已窄化放开 clang/type-map 已证明的 integer cast operand，覆盖真实 `uint32_t value; if (value > 0)` 形态，但仍不是完整 usual arithmetic conversions。
 
 English mirror summary:
 
@@ -6704,3 +6704,83 @@ English mirror summary:
 - Pointer-bearing `GenericTypedIr` candidates remain at least L1; alias blocked, requires-noalias, unknown alias, and unknown pointer ownership floors still override to L3/L2.
 - Catalog L0 and auto-translation `route_decision.level=L0` are different evidence concepts.
 - The next high-value core slice is narrow integral-cast support for comparison operands, not full usual arithmetic conversions.
+
+## 97. 2026-06-27 narrow integral cast comparison operands
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 typed IR comparison emitter、clang lowering/真实 clang smoke，以及中英文文档 stale 边界；主线程按 TDD 把 comparison operand 上的窄化整数 cast 从 fail-closed 改成 deterministic candidate generation。结论：这只覆盖 clang/type-map 已证明的 integer cast operand，不是完整 usual arithmetic/scalar conversions，也不是 semantic acceptance。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `validate_comparison_condition_types()` 不再无条件拒绝顶层 `IrExpr::Cast`。
+  - 新增 `validate_comparison_cast_operand()`：只有 cast source 和 target 都是当前 emitter 可发射的整数 scalar type 时才允许继续。
+  - cast 后两侧 operand 仍必须通过既有 `expr_type()` / `emit_scalar_type()` 完全同型检查，例如 `u32 > (0i32 as u32)` 可发射。
+  - 非整数 cast、unsupported type、pointer/float comparison、call/inc/dec/deref side-effect operand、short-circuit `&&` / `||`、非 C `int` result type 和未建模 mixed-width conversion 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将旧的 fail-closed 测试改为正向测试：
+    - `typed_ir_emits_comparison_condition_with_integral_cast_operand`
+    - `typed_ir_emits_value_comparison_with_integral_cast_operand_as_c_int`
+  - 两个测试都确认生成 `(0i32 as u32)`，并通过 `rustc` smoke。
+  - 新增 `typed_ir_rejects_comparison_with_non_integer_cast_operand`，锁住非整数 cast source 仍 fail closed。
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir integral_cast_operand -- --nocapture
+```
+
+红灯表现：旧 production 仍报 `comparison rhs cast operand is unsupported until usual conversions are modeled`，两个新增正向测试均失败。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir integral_cast_operand -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir non_integer_cast -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir comparison -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir --test bounded_translation clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled -- --nocapture
+```
+
+聚焦结果：
+
+- `integral_cast_operand` filter 下 2 个测试通过。
+- `non_integer_cast` filter 下 1 个 fail-closed 测试通过。
+- `comparison` filter 下 32 个 typed IR comparison tests 通过。
+- 真实 clang gated smoke `clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled` 通过。
+
+提交前最终验证结果：
+
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir`: PASS，142 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir`: PASS，25 个 lib tests + 242 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，29 个 lib tests + 243 个 bounded translation tests 通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+
+当前边界：
+
+- 可以说：comparison condition 和 value-position C `int` 0/1 materialization 现在可处理 source/target 都是可发射整数类型、且 cast 后两侧类型完全一致的 integral cast operand。
+- 可以说：真实 clang 已保留 `uint32_t value; if (value > 0)` 的 RHS `IntegralCast`，typed IR emitter 现在能生成 `if (value > (0i32 as u32)) {`。
+- 不应说：已经支持完整 C usual arithmetic conversions、完整 mixed-width/unsigned conversions、pointer comparison、float comparison、side-effect operand、short-circuit logic 或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+
+下一步建议：
+
+- 跑真实 clang gated smoke：`clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled`。
+- 完成本轮最终验证、白名单提交并推送。
+- 后续核心切口可以继续做 explicit usual-conversion 分类，但不要把 pointer/null comparison、short-circuit 或完整 C arithmetic semantics 混入这刀。
+
+English mirror summary:
+
+- Narrow integral-cast comparison operands now emit through generic typed IR when cast source and target are supported integer scalar types and the post-cast operand types match exactly.
+- This unlocks real clang `uint32_t value; if (value > 0)` lowering into `if (value > (0i32 as u32)) {`.
+- This remains candidate generation only and keeps `semantic_pass=false`.
+- It is not full usual arithmetic/scalar conversion support. Pointer/floating-point comparisons, unmodeled mixed-width conversions, side-effect operands, short-circuit logic, and semantic acceptance still fail closed.
