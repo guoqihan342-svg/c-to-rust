@@ -1,13 +1,12 @@
 #[cfg(feature = "clang-lowering-report")]
 use std::collections::BTreeMap;
-use std::{
-    error::Error,
-    fs,
-    path::{Path, PathBuf},
-};
+#[cfg(any(feature = "clang-frontend", feature = "clang-lowering-report"))]
+use std::path::PathBuf;
+use std::{error::Error, fs, path::Path};
 
 use serde_json::json;
 
+mod artifacts;
 #[cfg(feature = "clang-frontend")]
 pub mod clang_frontend;
 mod model;
@@ -22,6 +21,8 @@ pub use model::{
     TranslationError, TranslationPlan, TranslationResult, TypeMapEvidence, TypeMapping,
     TypeUncertainty,
 };
+
+use artifacts::{translation_events_jsonl, write_json_file, write_text_file};
 
 #[derive(Clone, Debug)]
 struct ParsedFunction {
@@ -1303,60 +1304,6 @@ fn write_clang_dry_run_artifact(
         }),
     };
     write_json_file(out_dir, &format!("{prefix}-clang-dry-run.json"), &value)
-}
-
-fn write_json_file(
-    out_dir: &Path,
-    file_name: &str,
-    value: &serde_json::Value,
-) -> Result<PathBuf, Box<dyn Error>> {
-    write_text_file(
-        out_dir,
-        file_name,
-        &(serde_json::to_string_pretty(value)? + "\n"),
-    )
-}
-
-fn write_text_file(out_dir: &Path, file_name: &str, text: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let path = out_dir.join(file_name);
-    fs::write(&path, text)?;
-    Ok(path)
-}
-
-fn translation_events_jsonl(
-    spec: &SliceSpec,
-    result: &TranslationResult,
-) -> Result<String, Box<dyn Error>> {
-    let mut lines = Vec::new();
-    lines.push(serde_json::to_string(&json!({
-        "schema_version": 1,
-        "target_id": spec.target_id,
-        "slice_id": spec.slice_id,
-        "event": "translation_started",
-        "source_commit": spec.source_commit,
-        "fixture_hash": spec.fixture_hash,
-    }))?);
-    for error in &result.errors {
-        lines.push(serde_json::to_string(&json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "event": "translation_blocked",
-            "kind": error.kind,
-            "message": error.message,
-            "source_span": error.source_span,
-        }))?);
-    }
-    if result.errors.is_empty() {
-        lines.push(serde_json::to_string(&json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "event": "translation_generated",
-            "translation_rule_ids": result.plan.translation_rule_ids,
-        }))?);
-    }
-    Ok(lines.join("\n") + "\n")
 }
 
 fn parse_function(source: &str, expected_name: &str) -> Result<ParsedFunction, TranslationError> {
@@ -3693,6 +3640,37 @@ fn translate_expr(expr: &str) -> String {
         );
     }
     out
+}
+
+#[cfg(test)]
+mod artifact_tests {
+    use super::*;
+
+    #[test]
+    fn translation_events_jsonl_records_blocked_errors() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "unsupported".to_string(),
+            source_commit: "1234567".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+        result.errors.push(TranslationError {
+            kind: "unsupported_syntax".to_string(),
+            message: "switch is not supported".to_string(),
+            source_span: Some("switch (value)".to_string()),
+        });
+
+        let jsonl = crate::artifacts::translation_events_jsonl(&spec, &result).unwrap();
+
+        let lines = jsonl.lines().collect::<Vec<_>>();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("\"event\":\"translation_started\""));
+        assert!(lines[1].contains("\"event\":\"translation_blocked\""));
+        assert!(lines[1].contains("\"kind\":\"unsupported_syntax\""));
+        assert!(!jsonl.contains("translation_generated"));
+    }
 }
 
 #[cfg(all(test, feature = "clang-lowering-report"))]

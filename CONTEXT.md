@@ -9021,3 +9021,68 @@ English mirror summary:
 - Public DTO/schema types moved into private `model.rs`, while root-level re-exports keep `c2r_translator::SliceSpec`, `BuildProfile`, `TranslationResult`, `ArtifactManifest`, and related types compatible.
 - Serde derives/default fields were preserved; no translation behavior or C syntax coverage changed.
 - This is only the first P0 split step. CLI/manifest, legacy string translator, typed IR route, artifact writing, unsafe/metadata statistics, parser, evidence builder, and emitter responsibilities still need later splits.
+
+## 130. 2026-06-28 P0 artifact/IO leaf helper split
+
+本轮继续按 P0 “拆分 `crates/c2r-translator/src/lib.rs`”推进维护性工作，仍然不新增翻译语法、不改变 public API、不改变 artifact 文件名、manifest status 或 feature gate 语义。两个只读子智能体并行复核后结论一致：`write_translation_artifacts()` 是 public orchestration，仍然绑定 `translate_slice()`、可选 clang-lowering 翻译路径、artifact 顺序和 `ArtifactManifest` 状态，第一刀不应整体搬迁；更稳的切口是先拆纯 leaf helper。
+
+核心改动：
+
+- 新增 `crates/c2r-translator/src/artifacts.rs`：
+  - 承载 `write_json_file()`、`write_text_file()`、`translation_events_jsonl()`。
+  - 三个 helper 都是 `pub(crate)`，模块本身保持私有 `mod artifacts;`，不新增外部 API。
+  - `translation_events_jsonl()` 保持既有事件语义：先写 `translation_started`；有错误时写每个 `translation_blocked`；无错误时写 `translation_generated`。
+- `crates/c2r-translator/src/lib.rs`：
+  - 通过 `use artifacts::{translation_events_jsonl, write_json_file, write_text_file};` 继续调用 leaf helper。
+  - `write_translation_artifacts()`、`write_clang_dry_run_artifact()`、`write_clang_lowering_report_artifact()` 暂留原处，避免把 IO 拆分和 clang/typed-IR 语义路径混在同一提交。
+  - `PathBuf` 改成仅在 `clang-frontend` 或 `clang-lowering-report` feature 下导入，默认 feature 不再产生拆分后的 unused import warning。
+- 新增单元测试 `artifact_tests::translation_events_jsonl_records_blocked_errors`：
+  - 红测先失败于 `crate::artifacts` 不存在。
+  - 实现后验证 blocked JSONL 会包含 `translation_started` + `translation_blocked`，且不会误写 `translation_generated`。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 明确 P0 已完成 public model schema split 与 artifact/IO leaf helper split；P0 整体仍未完成。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml translation_events_jsonl_records_blocked_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+openspec validate --all --strict
+```
+
+结果：
+
+- 定向红绿测试：1 个 `artifact_tests` 测试通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：1 个 lib test + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：1 个 lib test + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：49 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `--all-features`：57 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-dry-run` opt-in 定向测试：2/2 passed。
+- `openspec validate --all --strict`：38/38 passed。
+
+边界：
+
+- 可以说：artifact/IO leaf helper 已从 `lib.rs` 拆出，root public API、artifact 文件名、JSON/JSONL 语义、feature gate 行为和 manifest status 保持兼容。
+- 不应说：P0 `lib.rs` 拆分已完成、artifact writer orchestration 已模块化完成、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀可以继续拆 `write_clang_dry_run_artifact()` 这类相对轻的 feature-gated artifact writer；`write_clang_lowering_report_artifact()` 和 `write_translation_artifacts()` 仍要谨慎，因为前者触发 clang lowering/report 语义路径，后者是 public orchestration。
+
+English mirror summary:
+
+- Continued the P0 `lib.rs` split with a behavior-preserving artifact/IO leaf helper extraction.
+- Added private `artifacts.rs` containing `write_json_file`, `write_text_file`, and `translation_events_jsonl`, all `pub(crate)`.
+- Kept `write_translation_artifacts`, clang dry-run artifact writing, and clang lowering report writing in `lib.rs` for now, preserving the public API, artifact filenames, feature gates, JSON/JSONL semantics, and manifest status behavior.
+- Added a blocked JSONL regression test for `translation_events_jsonl`.
+- Updated the Chinese and English MVP backlog to mark the model schema split and artifact/IO leaf helper split as done, while keeping the broader P0 `lib.rs` split open.
+- Verified default, `clang-frontend`, `typed-ir`, `typed-ir clang-frontend`, and `--all-features` Rust test matrices, selected Python `--emit-clang-dry-run` opt-in tests, and `openspec validate --all --strict`.
