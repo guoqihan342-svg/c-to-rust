@@ -47,6 +47,7 @@ Important supported increments:
 - Logical not in conditions and narrow value-position C `int` 0/1 materialization.
 - Short-circuit `&&` / `||` in conditions plus narrow value-position C `int` 0/1 materialization.
 - Pure integer value-position `ConditionalOperator` / `?:` with lazy `IrExpr::Conditional`.
+- Narrow `ForStmt` with an explicit typed IR scope, covering simple scalar init, condition, step, and body, emitted as a Rust block plus `while` candidate.
 - Readonly pointer slice parameters, direct `NULL` presence checks, direct readonly `*p` reads, and narrow readonly `*(p+i)` / `*(i+p)` reads.
 - Readonly global const integer arrays and local fixed-length integer array reads/writes.
 - Bounded direct identifier calls.
@@ -54,7 +55,6 @@ Important supported increments:
 
 Remaining P0 gaps:
 
-- `ForStmt` with a scope model that does not break init scope or `continue` semantics.
 - Complete usual scalar conversion classification.
 - Pointer writes, aliasing, and ownership modeling.
 
@@ -65,6 +65,7 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 - `CompoundAssignOperator` now lowers for standalone simple scalar variable targets only.
 - `&&` / `||` now lower for condition positions and narrow value positions; return values, assignment RHS, and declaration initializers are covered.
 - Ordinary `ConditionalOperator` now lowers for pure integer value positions only; GNU `BinaryConditionalOperator` still fails closed.
+- `ForStmt` now has narrow scoped lowering: init accepts only simple scalar `DeclStmt` or assignment, condition reuses the current condition emitter, step accepts only simple assignment/compound assignment/postfix inc-dec, and body reuses the existing statement subset. `continue` / `break` / `goto` / `switch`, condition variable slots, empty condition/step, and complex init/step remain fail-closed.
 - `Deref(Binary(Add, p, i))` is now normalized into a bounded slice index when the base is a readonly integer pointer and the index is a side-effect-free integer expression; other pointer arithmetic remains unmodeled.
 - Structs/records, field access, switch/goto/do-while, and memory semantics are still outside the safe emitter.
 
@@ -72,9 +73,9 @@ Real clang smoke tests pass, so the issue is no longer clang installation. The i
 
 The right next path is not returning to FlashDB-specific templates. Continue extending typed IR through small verifiable slices:
 
-1. **Scoped `ForStmt`**: add an explicit scope/block model first, or keep a deliberately narrower fail-closed rule, so init scope and `continue` behavior do not drift.
-2. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
-3. **Struct / memory model design**: flat structs, field access, pointer writes, aliasing, and ownership need a separate design plus validation gates.
+1. **Usual conversions classification**: turn the provable integral-cast rules into explicit guards instead of claiming full C conversions.
+2. **Struct / memory model design**: flat structs, field access, pointer writes, aliasing, and ownership need a separate design plus validation gates.
+3. **Wider control flow**: after the scoped `ForStmt` MVP, design explicit semantics and validation boundaries for `break` / `continue` / `do-while` / `switch` / `goto`.
 
 ## Boundaries
 
@@ -84,6 +85,7 @@ These should still fail closed:
 - Pointer arithmetic other than the narrow readonly integer pointer plus side-effect-free integer index `*(p+i)` read.
 - Condition-position `?:`, expression-statement `?:`, GNU omitted-middle `a ?: b`, and conditional branches with call/inc/dec/post-increment/assignment/comma side effects.
 - Short-circuit operands containing calls/inc/dec/side effects, pointer truthiness, floating-point truthiness, unsupported types, or cases requiring full usual scalar conversions.
+- `ForStmt` with `continue` / `break` / `goto` / `switch`, a condition variable slot, empty condition/step, calls/inc/dec/side effects in the condition, non-simple-scalar init/step, or prefix inc-dec in the step.
 - Mutable pointers, pointer writes, and unmodeled alias writes.
 - Function-pointer callees, complex call side effects, and nested calls in conditions.
 - Volatile, hardware registers, cross-thread, and interrupt semantics.

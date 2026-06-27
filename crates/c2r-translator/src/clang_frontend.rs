@@ -170,6 +170,12 @@ pub enum ClangStmtSkeleton {
         condition: ClangExprSkeleton,
         body: Vec<ClangStmtSkeleton>,
     },
+    For {
+        init: Option<Box<ClangStmtSkeleton>>,
+        condition: Option<ClangExprSkeleton>,
+        step: Option<Box<ClangStmtSkeleton>>,
+        body: Vec<ClangStmtSkeleton>,
+    },
     Return {
         value: Option<ClangExprSkeleton>,
     },
@@ -837,6 +843,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("CompoundAssignOperator") => compound_assign_stmt_skeleton_from_ast(stmt),
         Some("IfStmt") => if_stmt_skeleton_from_ast(stmt),
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
+        Some("ForStmt") => for_stmt_skeleton_from_ast(stmt),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
             expr: expr_skeleton_from_ast(stmt)?,
         }),
@@ -855,6 +862,147 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
             message: "clang statement node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn for_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let children = inner(stmt);
+    let [init, condition_var, condition, step, body] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_for_stmt".to_string(),
+            message: "ForStmt must have init, condition variable, condition, step, and body slots"
+                .to_string(),
+        });
+    };
+    if !is_empty_ast_slot(condition_var) {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "ForStmt condition variable is outside the current clang lowering skeleton"
+                .to_string(),
+        });
+    }
+    let init = if is_empty_ast_slot(init) {
+        None
+    } else {
+        Some(Box::new(for_init_stmt_skeleton_from_ast(init)?))
+    };
+    if is_empty_ast_slot(condition) {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "ForStmt without condition is outside the current clang lowering skeleton"
+                .to_string(),
+        });
+    }
+    if is_empty_ast_slot(step) {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "ForStmt without step is outside the current clang lowering skeleton"
+                .to_string(),
+        });
+    }
+    Ok(ClangStmtSkeleton::For {
+        init,
+        condition: Some(expr_skeleton_from_ast(condition)?),
+        step: Some(Box::new(for_step_stmt_skeleton_from_ast(step)?)),
+        body: stmt_body_skeleton_from_ast(body)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_empty_ast_slot(value: &Value) -> bool {
+    value.as_object().is_some_and(|object| object.is_empty())
+}
+
+#[cfg(feature = "typed-ir")]
+fn for_init_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    match string_field(stmt, "kind").as_deref() {
+        Some("DeclStmt") => decl_stmt_skeleton_from_ast(stmt),
+        Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
+            assign_stmt_skeleton_from_ast(stmt)
+        }
+        Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!("ForStmt init {kind} is outside the current clang lowering skeleton"),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "invalid_for_stmt".to_string(),
+            message: "ForStmt init slot is missing kind".to_string(),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn for_step_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    match string_field(stmt, "kind").as_deref() {
+        Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
+            assign_stmt_skeleton_from_ast(stmt)
+        }
+        Some("CompoundAssignOperator") => compound_assign_stmt_skeleton_from_ast(stmt),
+        Some("UnaryOperator") => inc_dec_for_step_skeleton_from_ast(stmt),
+        Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!("ForStmt step {kind} is outside the current clang lowering skeleton"),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "invalid_for_stmt".to_string(),
+            message: "ForStmt step slot is missing kind".to_string(),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn inc_dec_for_step_skeleton_from_ast(
+    stmt: &Value,
+) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let step = expr_skeleton_from_ast(stmt)?;
+    let ClangExprSkeleton::IncDec {
+        target,
+        op,
+        prefix: false,
+        ty,
+    } = step
+    else {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "ForStmt step inc/dec must be postfix".to_string(),
+        });
+    };
+    let ClangExprSkeleton::DeclRef {
+        name: target_name,
+        ty: target_ty,
+    } = target.as_ref()
+    else {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "ForStmt step inc/dec target must be a simple variable".to_string(),
+        });
+    };
+    if !matches!(target_ty.kind, ClangTypeKind::Integer { .. })
+        || !compound_assignment_types_match(target_ty, &ty)
+    {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!(
+                "ForStmt step inc/dec target type {} is unsupported",
+                target_ty.canonical
+            ),
+        });
+    }
+    let bin_op = match op {
+        ClangIncDecOperator::Inc => ClangBinaryOperator::Add,
+        ClangIncDecOperator::Dec => ClangBinaryOperator::Sub,
+    };
+    Ok(ClangStmtSkeleton::Assign {
+        target: ClangExprSkeleton::DeclRef {
+            name: target_name.clone(),
+            ty: target_ty.clone(),
+        },
+        value: ClangExprSkeleton::Binary {
+            op: bin_op,
+            lhs: Box::new(ClangExprSkeleton::DeclRef {
+                name: target_name.clone(),
+                ty: target_ty.clone(),
+            }),
+            rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: target_ty.clone(),
+            }),
+            ty: target_ty.clone(),
+        },
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1827,6 +1975,21 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
         }),
         ClangStmtSkeleton::While { condition, body } => Ok(IrStmt::While {
             condition: lower_expr(condition)?,
+            body: body
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
+            source_span: None,
+        }),
+        ClangStmtSkeleton::For {
+            init,
+            condition,
+            step,
+            body,
+        } => Ok(IrStmt::For {
+            init: init.as_deref().map(lower_stmt).transpose()?.map(Box::new),
+            condition: condition.as_ref().map(lower_expr).transpose()?,
+            step: step.as_deref().map(lower_stmt).transpose()?.map(Box::new),
             body: body
                 .iter()
                 .map(lower_stmt)

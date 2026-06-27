@@ -7357,3 +7357,79 @@ English mirror summary:
 - The condition still uses Rust `&&` / `||`, preserving lazy RHS evaluation.
 - Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path.
 - Pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, full usual scalar conversions, function pointers, volatile/hardware register semantics, cross-thread/interrupt semantics, and semantic acceptance still fail closed.
+
+## 107. 2026-06-27 scoped typed IR ForStmt lowering
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。两个只读子智能体分别复核了 typed IR `ForStmt` scope 模型和 clang `ForStmt` AST 槽位/文档同步；主线程按 TDD 落地 scoped `ForStmt` MVP。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。第 106 节“下一刀优先 scoped `ForStmt`”已被本节 supersede；后续优先 usual conversions 分类，或在已有 scoped MVP 上继续设计 `break` / `continue` / `do-while` / `switch` / `goto`。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增一等 `IrStmt::For { init, condition, step, body }`。
+  - 新增 scoped emitter：发射为外层 Rust block + `while`，例如 `for (int i = 0; i < limit; i++)` 生成 `{ let mut i: i32 = 0i32; while i < limit { ...; i = i + 1i32; } }`。
+  - loop-init 声明只写入 loop block scope，不回写父级；body 局部声明不会泄漏到 step。
+  - `validate_for_init_stmt()` 只接受 `Decl` / `Assign`；`validate_for_step_stmt()` 只接受 `Assign`。
+  - nullable pointer、byte cursor、post-increment scan、assigned-var scan 等递归 helper 已覆盖 `For`。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::For` 和 `for_stmt_skeleton_from_ast()`。
+  - clang `ForStmt.inner` 按 5 槽位解析：init、condition variable slot、condition、step、body。
+  - condition variable slot、空 condition、空 step 均 fail closed。
+  - init 只接受简单 `DeclStmt` 或 assignment；step 只接受 assignment、compound assignment 和 postfix inc/dec；postfix `i++` / `i--` lowering 成 `i = i + 1` / `i = i - 1`。
+  - `continue` / `break` / `goto` / `switch` 等未建模 body statement 继续通过 unsupported skeleton fail closed。
+- `crates/c2r-translator/src/lib.rs`
+  - 修复 `clang-lowering-report` feature 下的 report/evidence 遍历：type mapping、direct call evidence、statement kind、CFG edge、byte cursor pointer scan 都已识别或递归 `IrStmt::For`。
+  - 新增单元测试覆盖 `For` statement kind、`entry->for-*` CFG edge、loop init/body type map 和 body/step direct call evidence。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：scoped loop emit + rustc smoke。
+  - 新增 direct typed IR 负测：init decl 不泄漏到父级、body decl 不泄漏到 step、decl step 拒绝、非 C `int` condition result 拒绝。
+  - 新增 clang skeleton 正测和真实 clang AST smoke：`int sum_to_limit(int limit) { int total = 0; for (int i = 0; i < limit; i++) { total = total + i; } return total; }`。
+  - 新增真实 clang fail-closed：`continue` in for body、缺 condition、缺 step、prefix `++i` step。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-typed-ir-scoped-forstmt.md`
+
+红灯已确认：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir typed_ir_for -- --nocapture
+```
+
+红灯表现：
+- 新增 direct typed IR 测试在 `IrStmt::For` 不存在时编译失败。
+- 新增 clang skeleton/real clang 测试在 `ClangStmtSkeleton::For` 不存在时编译失败。
+
+调试中额外发现并修复：
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` feature 组合最初失败于 `src/lib.rs` 的多个 `match IrStmt` 未覆盖 `For`。
+- 根因是 `clang-lowering-report` 的 evidence/report helper 在前一轮未随新 statement variant 同步递归。
+- 修复后新增 `clang_lowered_ir_evidence_tests::clang_lowered_ir_records_for_statement_evidence_recursively` 锁住该路径。
+
+已跑过的绿灯：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir typed_ir_for -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+聚焦与完整结果：
+- `typed_ir_for` filter 在真实 clang gate 打开后 12 条通过。
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` 回归通过：lib 38 条、`bounded_translation` 312 条、doc-tests 0 条。
+
+当前边界：
+- 可以说：窄化 scoped `ForStmt` 现在能从 direct typed IR、clang skeleton 和真实 clang AST 进入 `GenericTypedIr`，并生成可编译 Rust candidate。
+- 可以说：simple scalar init/condition/assignment step、compound assignment step、postfix inc/dec step 和现有 statement body 子集已有测试覆盖。
+- 不应说：已支持 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、prefix inc/dec step、复杂 init/step、完整 C for-loop control-flow semantics、完整 usual scalar conversions 或 semantic acceptance。
+
+下一步建议：
+- 优先 usual conversions 分类：把 clang 已证明的 integral cast/promotion 继续系统化，而不是一次性放开完整 C conversion。
+- 或继续控制流：在已有 scoped `ForStmt` MVP 上，单独设计 `break` / `continue` 的 step 语义、CFG evidence 和 validation gate。
+
+English mirror summary:
+
+- Added narrow scoped `ForStmt` candidate generation through generic typed IR.
+- `IrStmt::For` emits a Rust block plus `while`, keeping loop-init declarations scoped to the loop block and preventing body-local declarations from leaking into the step.
+- Clang `ForStmt` lowering accepts simple scalar init, required condition, required assignment/compound-assignment/postfix-inc-dec step, and the existing body subset.
+- Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path, including fail-closed real-clang tests for `continue`, missing condition, missing step, and prefix increment step.
+- The `clang-lowering-report` feature now traverses `For` for type mapping, call evidence, statement kinds, CFG edges, and byte-cursor pointer scans.
+- `continue`, `break`, `goto`, `switch`, condition variable slots, empty condition/step, prefix inc/dec steps, complex init/step, full C for-loop control-flow semantics, full usual scalar conversions, and semantic acceptance still fail closed.

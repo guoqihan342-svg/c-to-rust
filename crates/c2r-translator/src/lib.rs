@@ -591,6 +591,17 @@ fn record_ir_decl_type_mappings(
             typed_ir::IrStmt::While { body, .. } => {
                 record_ir_decl_type_mappings(body, profile, result);
             }
+            typed_ir::IrStmt::For {
+                init, step, body, ..
+            } => {
+                if let Some(init) = init.as_deref() {
+                    record_ir_decl_type_mappings(std::slice::from_ref(init), profile, result);
+                }
+                record_ir_decl_type_mappings(body, profile, result);
+                if let Some(step) = step.as_deref() {
+                    record_ir_decl_type_mappings(std::slice::from_ref(step), profile, result);
+                }
+            }
             _ => {}
         }
     }
@@ -622,6 +633,17 @@ fn record_ir_call_expression_evidence(
             }
             typed_ir::IrStmt::While { body, .. } => {
                 record_ir_call_expression_evidence(body, result);
+            }
+            typed_ir::IrStmt::For {
+                init, step, body, ..
+            } => {
+                if let Some(init) = init.as_deref() {
+                    record_ir_call_expression_evidence(std::slice::from_ref(init), result);
+                }
+                record_ir_call_expression_evidence(body, result);
+                if let Some(step) = step.as_deref() {
+                    record_ir_call_expression_evidence(std::slice::from_ref(step), result);
+                }
             }
             typed_ir::IrStmt::Return {
                 value: Some(value), ..
@@ -875,6 +897,7 @@ fn ir_statement_label(statement: &typed_ir::IrStmt) -> String {
         typed_ir::IrStmt::Assign { target, .. } => format!("assign {}", ir_expr_label(target)),
         typed_ir::IrStmt::If { .. } => "if".to_string(),
         typed_ir::IrStmt::While { .. } => "while".to_string(),
+        typed_ir::IrStmt::For { .. } => "for".to_string(),
         typed_ir::IrStmt::Return { .. } => "return".to_string(),
         typed_ir::IrStmt::Expr { expr, .. } => format!("expr {}", ir_expr_label(expr)),
         typed_ir::IrStmt::Unsupported { node, .. } => format!("unsupported {node}"),
@@ -912,6 +935,7 @@ fn ir_statement_kind_labels(statements: &[typed_ir::IrStmt]) -> Vec<String> {
                 typed_ir::IrStmt::Assign { .. } => "assignment",
                 typed_ir::IrStmt::If { .. } => "if",
                 typed_ir::IrStmt::While { .. } => "while",
+                typed_ir::IrStmt::For { .. } => "for",
                 typed_ir::IrStmt::Return { .. } => "return",
                 typed_ir::IrStmt::Expr { .. } => "expression",
                 typed_ir::IrStmt::Unsupported { .. } => "unsupported",
@@ -929,6 +953,7 @@ fn ir_cfg_edges(statements: &[typed_ir::IrStmt]) -> Vec<String> {
         .filter_map(|(index, statement)| match statement {
             typed_ir::IrStmt::If { .. } => Some(format!("entry->if-{index}")),
             typed_ir::IrStmt::While { .. } => Some(format!("entry->while-{index}")),
+            typed_ir::IrStmt::For { .. } => Some(format!("entry->for-{index}")),
             typed_ir::IrStmt::Return { .. } => Some(format!("entry->return-{index}")),
             _ => None,
         })
@@ -1006,6 +1031,17 @@ fn collect_ir_pointer_cursor_sources(
             typed_ir::IrStmt::While { body, .. } => {
                 collect_ir_pointer_cursor_sources(body, cursor_sources);
             }
+            typed_ir::IrStmt::For {
+                init, step, body, ..
+            } => {
+                if let Some(init) = init.as_deref() {
+                    collect_ir_pointer_cursor_sources(std::slice::from_ref(init), cursor_sources);
+                }
+                collect_ir_pointer_cursor_sources(body, cursor_sources);
+                if let Some(step) = step.as_deref() {
+                    collect_ir_pointer_cursor_sources(std::slice::from_ref(step), cursor_sources);
+                }
+            }
             _ => {}
         }
     }
@@ -1054,6 +1090,30 @@ fn collect_ir_post_increment_deref_vars_from_stmts(
             } => {
                 collect_ir_post_increment_deref_vars_from_expr(condition, vars);
                 collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+            }
+            typed_ir::IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                if let Some(init) = init.as_deref() {
+                    collect_ir_post_increment_deref_vars_from_stmts(
+                        std::slice::from_ref(init),
+                        vars,
+                    );
+                }
+                if let Some(condition) = condition {
+                    collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                }
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+                if let Some(step) = step.as_deref() {
+                    collect_ir_post_increment_deref_vars_from_stmts(
+                        std::slice::from_ref(step),
+                        vars,
+                    );
+                }
             }
             typed_ir::IrStmt::Return { value, .. } => {
                 if let Some(value) = value {
@@ -3747,7 +3807,9 @@ fn translate_expr(expr: &str) -> String {
 #[cfg(all(test, feature = "clang-lowering-report"))]
 mod clang_lowered_ir_evidence_tests {
     use super::*;
-    use crate::typed_ir::{IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan};
+    use crate::typed_ir::{
+        IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan,
+    };
 
     fn test_profile() -> BuildProfile {
         BuildProfile {
@@ -3996,6 +4058,106 @@ mod clang_lowered_ir_evidence_tests {
             .plan
             .translation_rule_ids
             .contains(&"bounded-call-expression".to_string()));
+    }
+
+    #[test]
+    fn clang_lowered_ir_records_for_statement_evidence_recursively() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let function = IrFunction {
+            name: "for_evidence".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![param("limit", i32_ty.clone())],
+            body: vec![
+                IrStmt::Decl {
+                    name: "total".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(var("limit", i32_ty.clone())),
+                    source_span: None,
+                },
+                IrStmt::For {
+                    init: Some(Box::new(IrStmt::Decl {
+                        name: "i".to_string(),
+                        ty: i32_ty.clone(),
+                        init: Some(var("limit", i32_ty.clone())),
+                        source_span: None,
+                    })),
+                    condition: Some(IrExpr::Binary {
+                        op: IrBinOp::Lt,
+                        lhs: Box::new(var("i", i32_ty.clone())),
+                        rhs: Box::new(var("limit", i32_ty.clone())),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    }),
+                    step: Some(Box::new(IrStmt::Assign {
+                        target: var("i", i32_ty.clone()),
+                        value: call(
+                            "step_helper",
+                            vec![var("i", i32_ty.clone())],
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    })),
+                    body: vec![IrStmt::Decl {
+                        name: "next".to_string(),
+                        ty: i32_ty.clone(),
+                        init: Some(call(
+                            "body_helper",
+                            vec![var("total", i32_ty.clone())],
+                            i32_ty.clone(),
+                        )),
+                        source_span: None,
+                    }],
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(var("total", i32_ty.clone())),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "for-evidence".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "for_evidence".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        let block = &result.cfg.functions[0].blocks[0];
+        assert!(block.statement_kinds.contains(&"for".to_string()));
+        assert!(block.edges.contains(&"entry->for-1".to_string()));
+        assert!(result
+            .type_map
+            .mappings
+            .iter()
+            .any(|mapping| mapping.symbol == "i"));
+        assert!(result
+            .type_map
+            .mappings
+            .iter()
+            .any(|mapping| mapping.symbol == "next"));
+        assert_eq!(result.plan.call_expressions.len(), 2);
+        assert_eq!(
+            result.plan.call_expressions[0].source_expression,
+            "body_helper(total)"
+        );
+        assert_eq!(
+            result.plan.call_expressions[0].statement_context,
+            "declaration_initializer"
+        );
+        assert_eq!(
+            result.plan.call_expressions[1].source_expression,
+            "step_helper(i)"
+        );
+        assert_eq!(
+            result.plan.call_expressions[1].statement_context,
+            "assignment"
+        );
     }
 
     #[test]

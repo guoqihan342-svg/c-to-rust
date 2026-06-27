@@ -181,6 +181,13 @@ pub enum IrStmt {
         body: Vec<IrStmt>,
         source_span: Option<SourceSpan>,
     },
+    For {
+        init: Option<Box<IrStmt>>,
+        condition: Option<IrExpr>,
+        step: Option<Box<IrStmt>>,
+        body: Vec<IrStmt>,
+        source_span: Option<SourceSpan>,
+    },
     Return {
         value: Option<IrExpr>,
         source_span: Option<SourceSpan>,
@@ -769,9 +776,106 @@ fn emit_stmt(
             block.push_str(&format!("{indent}}}\n"));
             Ok(block)
         }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => emit_for_stmt(
+            init.as_deref(),
+            condition.as_ref(),
+            step.as_deref(),
+            body,
+            return_type,
+            indent_level,
+            symbols,
+            context,
+        ),
         IrStmt::Unsupported { node, reason, .. } => {
             Err(format!("unsupported statement {node}: {reason}"))
         }
+    }
+}
+
+fn emit_for_stmt(
+    init: Option<&IrStmt>,
+    condition: Option<&IrExpr>,
+    step: Option<&IrStmt>,
+    body: &[IrStmt],
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    let mut loop_symbols = symbols.clone();
+    let mut block = String::new();
+    block.push_str(&format!("{indent}{{\n"));
+
+    if let Some(init) = init {
+        validate_for_init_stmt(init)?;
+        let line = emit_stmt(
+            init,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+        )
+        .map_err(|detail| format!("for init {detail}"))?;
+        block.push_str(&line);
+    }
+
+    let condition = match condition {
+        Some(condition) => emit_condition_expr(condition, &loop_symbols, context)
+            .map_err(|detail| format!("for condition {detail}"))?,
+        None => "true".to_string(),
+    };
+    block.push_str(&format!("{inner_indent}while {condition} {{\n"));
+
+    let mut body_symbols = loop_symbols.clone();
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 2,
+            &mut body_symbols,
+            context,
+        )
+        .map_err(|detail| format!("for body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+
+    if let Some(step) = step {
+        validate_for_step_stmt(step)?;
+        let line = emit_stmt(
+            step,
+            return_type,
+            indent_level + 2,
+            &mut loop_symbols,
+            context,
+        )
+        .map_err(|detail| format!("for step {detail}"))?;
+        block.push_str(&line);
+    }
+
+    block.push_str(&format!("{inner_indent}}}\n"));
+    block.push_str(&format!("{indent}}}\n"));
+    Ok(block)
+}
+
+fn validate_for_init_stmt(stmt: &IrStmt) -> Result<(), String> {
+    match stmt {
+        IrStmt::Decl { .. } | IrStmt::Assign { .. } => Ok(()),
+        _ => Err("for init must be a Decl or Assign statement".to_string()),
+    }
+}
+
+fn validate_for_step_stmt(stmt: &IrStmt) -> Result<(), String> {
+    match stmt {
+        IrStmt::Assign { .. } => Ok(()),
+        _ => Err("for step must be an Assign statement".to_string()),
     }
 }
 
@@ -2454,6 +2558,23 @@ fn collect_byte_cursor_sources_from_body(
             IrStmt::While { body, .. } => {
                 collect_byte_cursor_sources_from_body(body, cursor_sources);
             }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                if let Some(init) = init {
+                    collect_byte_cursor_sources_from_body(
+                        std::slice::from_ref(init.as_ref()),
+                        cursor_sources,
+                    );
+                }
+                if let Some(step) = step {
+                    collect_byte_cursor_sources_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        cursor_sources,
+                    );
+                }
+                collect_byte_cursor_sources_from_body(body, cursor_sources);
+            }
             _ => {}
         }
     }
@@ -2527,6 +2648,23 @@ fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
             condition, body, ..
         } => {
             expr_has_post_increment_byte_read(condition, cursor)
+                || body_has_post_increment_byte_read(body, cursor)
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            init.as_ref()
+                .is_some_and(|stmt| stmt_has_post_increment_byte_read(stmt, cursor))
+                || condition
+                    .as_ref()
+                    .is_some_and(|expr| expr_has_post_increment_byte_read(expr, cursor))
+                || step
+                    .as_ref()
+                    .is_some_and(|stmt| stmt_has_post_increment_byte_read(stmt, cursor))
                 || body_has_post_increment_byte_read(body, cursor)
         }
         IrStmt::Unsupported { .. } => false,
@@ -2681,6 +2819,40 @@ fn collect_nullable_pointer_params_from_body(
                     readonly_pointer_params,
                     nullable_params,
                 );
+                collect_nullable_pointer_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                if let Some(init) = init {
+                    collect_nullable_pointer_params_from_body(
+                        std::slice::from_ref(init.as_ref()),
+                        readonly_pointer_params,
+                        nullable_params,
+                    );
+                }
+                if let Some(condition) = condition {
+                    collect_nullable_pointer_params_from_expr(
+                        condition,
+                        readonly_pointer_params,
+                        nullable_params,
+                    );
+                }
+                if let Some(step) = step {
+                    collect_nullable_pointer_params_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        readonly_pointer_params,
+                        nullable_params,
+                    );
+                }
                 collect_nullable_pointer_params_from_body(
                     body,
                     readonly_pointer_params,
@@ -2855,6 +3027,26 @@ fn validate_nullable_pointer_param_uses_in_stmt(
                 validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
             }
         }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            if let Some(init) = init {
+                validate_nullable_pointer_param_uses_in_stmt(init, nullable_params)?;
+            }
+            if let Some(condition) = condition {
+                validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+            }
+            if let Some(step) = step {
+                validate_nullable_pointer_param_uses_in_stmt(step, nullable_params)?;
+            }
+            for stmt in body {
+                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            }
+        }
         IrStmt::Return { value, .. } => {
             if let Some(value) = value {
                 validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
@@ -2979,6 +3171,23 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                     if let IrExpr::Var { name, .. } = target.as_ref() {
                         assigned_vars.insert(name.clone());
                     }
+                }
+                collect_assigned_vars_from_body(body, assigned_vars);
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                if let Some(init) = init {
+                    collect_assigned_vars_from_body(
+                        std::slice::from_ref(init.as_ref()),
+                        assigned_vars,
+                    );
+                }
+                if let Some(step) = step {
+                    collect_assigned_vars_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        assigned_vars,
+                    );
                 }
                 collect_assigned_vars_from_body(body, assigned_vars);
             }

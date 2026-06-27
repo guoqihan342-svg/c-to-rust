@@ -5593,6 +5593,266 @@ fn typed_ir_emits_short_circuit_while_condition_with_comparison_operands() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_for_emits_scoped_loop_with_decl_init_and_step_assignment() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "sum_to_limit".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "limit".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "total".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::For {
+                init: Some(Box::new(IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                })),
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("total", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("total", i32_ty.clone()),
+                        ir_var("i", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("total", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scoped for loop");
+
+    assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
+    assert!(rust.contains("let mut total: i32 = 0i32;"));
+    assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
+    assert!(rust.contains("total = (total + i);"));
+    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("return total;"));
+    assert_rust_snippet_compiles("typed-ir-for-scoped-loop", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_rejects_loop_init_decl_scope_leak() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_for_scope_leak".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::For {
+                init: Some(Box::new(IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                })),
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_lit(3, "3", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("i", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("for init decl must not leak");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[1].return expr"));
+    assert!(error.reason.contains("var i is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_rejects_body_decl_scope_leak_into_step() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_for_body_scope_leak".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "keep_going".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::For {
+                init: None,
+                condition: Some(ir_var("keep_going", i32_ty.clone())),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("tmp", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("tmp", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![IrStmt::Decl {
+                    name: "tmp".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("for body decl must not leak into step");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].for step"));
+    assert!(error.reason.contains("assign target tmp is not declared"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_rejects_decl_step() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_for_decl_step".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::For {
+                init: None,
+                condition: None,
+                step: Some(Box::new(IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                })),
+                body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("for step decl must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("stmt[0].for step must be an Assign statement"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_rejects_non_c_int_condition_result() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_for_condition_result".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::For {
+                init: None,
+                condition: Some(ir_binary(
+                    IrBinOp::LogAnd,
+                    ir_var("value", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
+                    u32_ty,
+                )),
+                step: None,
+                body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("for condition result must be C int");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].for condition"));
+    assert!(error
+        .reason
+        .contains("short-circuit result type must be C int"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_short_circuit_condition_with_non_int_result_type() {
     let i32_ty = ir_i32();
     let u32_ty = ir_u32();
@@ -8767,6 +9027,123 @@ fn clang_lowering_skeleton_maps_comparison_if_condition() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_typed_ir_for_loop() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "sum_to_limit".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "limit".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "total".to_string(),
+                ty: int_ty.clone(),
+                init: Some(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+            },
+            ClangStmtSkeleton::For {
+                init: Some(Box::new(ClangStmtSkeleton::Decl {
+                    name: "i".to_string(),
+                    ty: int_ty.clone(),
+                    init: Some(ClangExprSkeleton::IntegerLiteral {
+                        value: 0,
+                        spelling: "0".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                })),
+                condition: Some(ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Lt,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "i".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "limit".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty.clone(),
+                }),
+                step: Some(Box::new(ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "i".to_string(),
+                        ty: int_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::Add,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "i".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                            value: 1,
+                            spelling: "1".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        ty: int_ty.clone(),
+                    },
+                })),
+                body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "total".to_string(),
+                        ty: int_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::Binary {
+                        op: ClangBinaryOperator::Add,
+                        lhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "total".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        rhs: Box::new(ClangExprSkeleton::DeclRef {
+                            name: "i".to_string(),
+                            ty: int_ty.clone(),
+                        }),
+                        ty: int_ty.clone(),
+                    },
+                }],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "total".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower typed IR for loop");
+
+    let [IrStmt::Decl { name, .. }, IrStmt::For {
+        init, step, body, ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!("expected decl, for, return, got {:?}", ir.body);
+    };
+    assert_eq!(name, "total");
+    assert!(matches!(init.as_deref(), Some(IrStmt::Decl { name, .. }) if name == "i"));
+    assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
+    assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
+
+    let rust = emit_rust_from_ir(&ir).expect("emit typed IR for loop from skeleton");
+    assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
+    assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
+    assert!(rust.contains("total = (total + i);"));
+    assert!(rust.contains("i = (i + 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-clang-for-skeleton", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_comparison_return_value() {
     let int_ty = ClangTypeSkeleton {
         spelled: "int".to_string(),
@@ -11714,6 +12091,234 @@ fn clang_ast_dump_records_static_const_integer_array_global_when_enabled() {
     assert_eq!(
         global.init,
         IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_typed_ir_for_loop_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-loop");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("sum_to_limit.c");
+    fs::write(
+        &source_file,
+        "int sum_to_limit(int limit) { int total = 0; for (int i = 0; i < limit; i++) { total = total + i; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "sum_to_limit");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl { name, .. }, IrStmt::For {
+        init, step, body, ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!("expected decl, for, return, got {:?}", function.body);
+    };
+    assert_eq!(name, "total");
+    assert!(matches!(init.as_deref(), Some(IrStmt::Decl { name, .. }) if name == "i"));
+    assert!(matches!(step.as_deref(), Some(IrStmt::Assign { .. })));
+    assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
+
+    let rust = emit_rust_from_ir(function).expect("emit typed IR for loop from real clang AST");
+    assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
+    assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
+    assert!(rust.contains("total = (total + i);"));
+    assert!(rust.contains("i = (i + 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-for-loop", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_typed_ir_for_continue_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-continue");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_for_continue.c");
+    fs::write(
+        &source_file,
+        "int bad_for_continue(int limit) { int total = 0; for (int i = 0; i < limit; i++) { if (i) { continue; } total = total + i; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "bad_for_continue");
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.message.contains("ContinueStmt")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_typed_ir_for_missing_condition_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-missing-condition");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_for_missing_condition.c");
+    fs::write(
+        &source_file,
+        "int bad_for_missing_condition(int limit) { int total = 0; for (int i = 0; ; i++) { total = total + i; if (total > limit) { return total; } } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_for_missing_condition",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.message.contains("ForStmt without condition")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-missing-step");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_for_missing_step.c");
+    fs::write(
+        &source_file,
+        "int bad_for_missing_step(int limit) { int total = 0; for (int i = 0; i < limit;) { total = total + i; i = i + 1; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_for_missing_step",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|error| error.message.contains("ForStmt without step")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_typed_ir_for_prefix_increment_step_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-for-prefix-step");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_for_prefix_step.c");
+    fs::write(
+        &source_file,
+        "int bad_for_prefix_step(int limit) { int total = 0; for (int i = 0; i < limit; ++i) { total = total + i; } return total; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_for_prefix_step",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("ForStmt step inc/dec must be postfix")),
+        "{:?}",
+        report.errors
     );
 }
 
