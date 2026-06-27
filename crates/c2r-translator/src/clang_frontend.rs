@@ -156,6 +156,11 @@ pub enum ClangStmtSkeleton {
         target: ClangExprSkeleton,
         value: ClangExprSkeleton,
     },
+    CompoundAssign {
+        target: ClangExprSkeleton,
+        op: ClangBinaryOperator,
+        value: ClangExprSkeleton,
+    },
     If {
         condition: ClangExprSkeleton,
         then_body: Vec<ClangStmtSkeleton>,
@@ -823,6 +828,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("BinaryOperator") if string_field(stmt, "opcode").as_deref() == Some("=") => {
             assign_stmt_skeleton_from_ast(stmt)
         }
+        Some("CompoundAssignOperator") => compound_assign_stmt_skeleton_from_ast(stmt),
         Some("IfStmt") => if_stmt_skeleton_from_ast(stmt),
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
@@ -885,6 +891,66 @@ fn assign_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clan
         target: expr_skeleton_from_ast(target)?,
         value: expr_skeleton_from_ast(value)?,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assign_stmt_skeleton_from_ast(
+    stmt: &Value,
+) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let op = compound_assignment_operator_from_opcode(string_field(stmt, "opcode").as_deref())?;
+    let result_ty = expr_type(stmt)?;
+    let compute_lhs_ty = compound_assignment_type_field(stmt, "computeLHSType")?;
+    let compute_result_ty = compound_assignment_type_field(stmt, "computeResultType")?;
+    let children = inner(stmt);
+    let [target, value] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_compound_assignment_operator".to_string(),
+            message: "CompoundAssignOperator must have two operands".to_string(),
+        });
+    };
+    let target = expr_skeleton_from_ast(target)?;
+    let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = &target else {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: "compound assignment target must be a simple variable".to_string(),
+        });
+    };
+    if !compound_assignment_types_match(target_ty, &result_ty)
+        || !compound_assignment_types_match(target_ty, &compute_lhs_ty)
+        || !compound_assignment_types_match(target_ty, &compute_result_ty)
+    {
+        return Ok(ClangStmtSkeleton::Unsupported {
+            reason: format!(
+                "compound assignment compute types must match target type: target={}, result={}, compute_lhs={}, compute_result={}",
+                target_ty.canonical, result_ty.canonical, compute_lhs_ty.canonical, compute_result_ty.canonical
+            ),
+        });
+    }
+    let preserve_integral_casts = preserves_integral_operand_casts(&op);
+
+    Ok(ClangStmtSkeleton::CompoundAssign {
+        target,
+        op,
+        value: expr_skeleton_from_ast_with_options(value, preserve_integral_casts)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_type_field(
+    stmt: &Value,
+    field: &str,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    stmt.get(field)
+        .and_then(|value| string_field(value, "qualType"))
+        .ok_or_else(|| ClangFrontendError {
+            kind: "invalid_compound_assignment_operator".to_string(),
+            message: format!("CompoundAssignOperator is missing {field}.qualType"),
+        })
+        .and_then(|qual_type| type_from_qual_type(&qual_type))
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_types_match(lhs: &ClangTypeSkeleton, rhs: &ClangTypeSkeleton) -> bool {
+    lhs.canonical == rhs.canonical && lhs.kind == rhs.kind
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1705,6 +1771,9 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             value: lower_expr(value)?,
             source_span: None,
         }),
+        ClangStmtSkeleton::CompoundAssign { target, op, value } => {
+            lower_compound_assign_stmt(target, op, value)
+        }
         ClangStmtSkeleton::If {
             condition,
             then_body,
@@ -1742,6 +1811,39 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
             message: reason.clone(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_compound_assign_stmt(
+    target: &ClangExprSkeleton,
+    op: &ClangBinaryOperator,
+    value: &ClangExprSkeleton,
+) -> Result<IrStmt, ClangFrontendError> {
+    let ClangExprSkeleton::DeclRef { name, ty } = target else {
+        return Err(ClangFrontendError {
+            kind: "unsupported_compound_assignment_target".to_string(),
+            message: "compound assignment target must be a simple variable".to_string(),
+        });
+    };
+    let target_ty = lower_type(ty)?;
+    let target = IrExpr::Var {
+        name: name.clone(),
+        ty: target_ty.clone(),
+        source_span: None,
+    };
+    let value = IrExpr::Binary {
+        op: lower_binary_operator(op),
+        lhs: Box::new(target.clone()),
+        rhs: Box::new(lower_expr(value)?),
+        ty: target_ty,
+        source_span: None,
+    };
+
+    Ok(IrStmt::Assign {
+        target,
+        value,
+        source_span: None,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1832,6 +1934,32 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::Unsupported { node, reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_expr".to_string(),
             message: format!("{node}: {reason}"),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn compound_assignment_operator_from_opcode(
+    opcode: Option<&str>,
+) -> Result<ClangBinaryOperator, ClangFrontendError> {
+    match opcode {
+        Some("+=") => Ok(ClangBinaryOperator::Add),
+        Some("-=") => Ok(ClangBinaryOperator::Sub),
+        Some("*=") => Ok(ClangBinaryOperator::Mul),
+        Some("/=") => Ok(ClangBinaryOperator::Div),
+        Some("%=") => Ok(ClangBinaryOperator::Mod),
+        Some("&=") => Ok(ClangBinaryOperator::BitAnd),
+        Some("|=") => Ok(ClangBinaryOperator::BitOr),
+        Some("^=") => Ok(ClangBinaryOperator::BitXor),
+        Some("<<=") => Ok(ClangBinaryOperator::Shl),
+        Some(">>=") => Ok(ClangBinaryOperator::Shr),
+        Some(opcode) => Err(ClangFrontendError {
+            kind: "unsupported_compound_assignment_operator".to_string(),
+            message: format!("compound assignment opcode {opcode} is outside the current skeleton"),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "invalid_compound_assignment_operator".to_string(),
+            message: "CompoundAssignOperator is missing opcode".to_string(),
         }),
     }
 }
@@ -2451,6 +2579,49 @@ mod tests {
             args.as_slice(),
             [IrExpr::Var { name, .. }] if name == "value"
         ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch() {
+        let stmt = serde_json::json!({
+            "kind": "CompoundAssignOperator",
+            "opcode": "+=",
+            "type": { "qualType": "unsigned char" },
+            "computeLHSType": { "qualType": "int" },
+            "computeResultType": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "unsigned char" },
+                    "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "x"
+                    }
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "y"
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("compound assignment skeleton");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected compute-type mismatch to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("compound assignment compute types must match target type"));
     }
 
     #[test]

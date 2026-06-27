@@ -7092,3 +7092,74 @@ English mirror summary:
 - `if (left && right)` now emits a Rust bool condition such as `if (left != 0i32 && right != 0i32)`.
 - `while ((left < 3) || (right != 0))` emits a Rust bool condition while reusing comparison condition emission.
 - Support is intentionally limited to `if` / `while` conditions with C `int` logical result type. Value-position short-circuit, full usual scalar conversions, pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, function pointers, volatile/hardware register semantics, and semantic acceptance still fail closed.
+
+## 103. 2026-06-27 clang-lowered simple scalar compound assignment family
+
+本轮继续按多智能体并行推进“不要太窄”的核心语法面扩展。只读线程分别复核了 compound assignment、ForStmt 和 ConditionalOperator / `?:`。主线程按 TDD 选择最适合这一轮的宽切片：standalone simple scalar compound assignment family。结论：`+=`、`-=`、`*=`、`/=`、`%=`、`&=`、`|=`、`^=`、`<<=`、`>>=` 现在可以从真实 clang AST 的 `CompoundAssignOperator` 进入 typed IR，并 desugar 成现有 `IrStmt::Assign { value: Binary(...) }`。这不是完整 C compound assignment，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `CompoundAssign { target, op, value }`。
+  - `stmt_skeleton_from_ast()` 新增 `CompoundAssignOperator` 分支。
+  - 新增 `compound_assignment_operator_from_opcode()`，把 `+=` / `-=` / `*=` / `/=` / `%=` / `&=` / `|=` / `^=` / `<<=` / `>>=` 映射到已有 `ClangBinaryOperator`。
+  - 新增 `compound_assignment_type_field()` 和 `compound_assignment_types_match()`。
+  - `compound_assign_stmt_skeleton_from_ast()` 要求：
+    - 恰好两个 child；
+    - LHS 是 simple `DeclRefExpr`；
+    - clang `type`、`computeLHSType`、`computeResultType` 都和 target 类型一致。
+  - `lower_compound_assign_stmt()` 只把 simple variable target 降成 `x = x op rhs` 的 typed IR；非简单 target fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_scalar_compound_assignment_family`，覆盖 10 种 opcode。
+  - 新增 `clang_lowering_skeleton_rejects_compound_assignment_non_var_target`，拒绝 `*p += 1` 这类非简单变量 target。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled`，实际跑 `value += 1; ... value >>= 1;`。
+- `crates/c2r-translator/src/clang_frontend.rs` unit tests
+  - 新增 `stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch`，锁住 `unsigned char x; x += y;` 这种 compute type 为 `int` 的 promotion/truncation 场景。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch -- --nocapture
+```
+
+红灯表现：
+- 新 skeleton 测试先编译失败于 `ClangStmtSkeleton::CompoundAssign` 不存在。
+- compute type safety test 先失败为错误放行 `unsigned char += int`，生成了 `CompoundAssign`，而不是 `Unsupported`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+```
+
+聚焦结果：
+- compute type mismatch 单测通过。
+- `compound_assignment` filter 6 条通过。
+- 真实 clang AST gate 打开后同 6 条实际运行通过，覆盖真实 `CompoundAssignOperator`。
+
+当前边界：
+- 可以说：standalone simple scalar variable target 的 10 种 compound assignment 现在可由 clang AST lowering 进入 `GenericTypedIr` candidate。
+- 可以说：真实 clang AST 中这些语法是 `CompoundAssignOperator`，不是 `BinaryOperator "+="`。
+- 不应说：支持 value-position `(x += y)`、`if (x += y)`、call argument compound assignment、`*p += y`、`a[i] += y`、`s.f += y`、`p->f += y`、compute type 与 target type 不一致的 promotion/truncation、pointer arithmetic、float、volatile、复杂 RHS side effect、完整 usual conversions 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续“更宽语法面”优先级：
+  1. assignment RHS implicit integral cast preservation；
+  2. pure scalar `ConditionalOperator` / `?:`，但必须新增 `IrExpr::Conditional` 并保护 lazy arm 求值；
+  3. `ForStmt`，但最好先引入 block/scope 或明确更窄的作用域 fail-closed 规则，避免 `continue` / init scope 语义偏差。
+
+English mirror summary:
+
+- Added clang-lowered simple scalar compound assignment family support for `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, and `>>=`.
+- Real clang emits these as `CompoundAssignOperator` nodes. The translator now maps them to typed IR assignments of the form `x = x op rhs`.
+- The support is intentionally limited to standalone statements with simple scalar variable targets, and clang `type`, `computeLHSType`, and `computeResultType` must all match the target type.
+- Non-variable targets, value-position compound assignment, promotion/truncation compute-type mismatches, pointer arithmetic, floating-point, volatile, side-effect-heavy RHS, full usual conversions, and semantic acceptance still fail closed.

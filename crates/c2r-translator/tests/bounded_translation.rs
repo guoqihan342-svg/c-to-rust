@@ -7445,6 +7445,141 @@ fn clang_lowering_skeleton_maps_bitxor_bitnot_assignment() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let cases = [
+        (ClangBinaryOperator::Add, IrBinOp::Add, 1, "1"),
+        (ClangBinaryOperator::Sub, IrBinOp::Sub, 2, "2"),
+        (ClangBinaryOperator::Mul, IrBinOp::Mul, 3, "3"),
+        (ClangBinaryOperator::Div, IrBinOp::Div, 4, "4"),
+        (ClangBinaryOperator::Mod, IrBinOp::Mod, 5, "5"),
+        (ClangBinaryOperator::BitAnd, IrBinOp::BitAnd, 7, "7"),
+        (ClangBinaryOperator::BitOr, IrBinOp::BitOr, 8, "8"),
+        (ClangBinaryOperator::BitXor, IrBinOp::BitXor, 9, "9"),
+        (ClangBinaryOperator::Shl, IrBinOp::Shl, 1, "1"),
+        (ClangBinaryOperator::Shr, IrBinOp::Shr, 1, "1"),
+    ];
+    let mut body = Vec::new();
+    for (op, _, value, spelling) in &cases {
+        body.push(ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::DeclRef {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+            op: op.clone(),
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: *value,
+                spelling: spelling.to_string(),
+                ty: int_ty.clone(),
+            },
+        });
+    }
+    body.push(ClangStmtSkeleton::Return {
+        value: Some(ClangExprSkeleton::DeclRef {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }),
+    });
+    let skeleton = ClangFunctionSkeleton {
+        name: "compound_family".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body,
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower scalar compound assignment family");
+
+    for (stmt, (_, expected_op, _, _)) in ir.body.iter().take(cases.len()).zip(cases.iter()) {
+        let IrStmt::Assign { target, value, .. } = stmt else {
+            panic!("expected desugared assignment, got {stmt:?}");
+        };
+        assert!(matches!(target, IrExpr::Var { name, .. } if name == "value"));
+        let IrExpr::Binary { op, lhs, rhs, .. } = value else {
+            panic!("expected compound assignment binary value, got {value:?}");
+        };
+        assert_eq!(op, expected_op);
+        assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+        assert!(matches!(rhs.as_ref(), IrExpr::LitInt { .. }));
+    }
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar compound assignment family");
+    assert!(rust.contains("pub fn compound_family(mut value: i32) -> i32"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = (value - 2i32);"));
+    assert!(rust.contains("value = (value * 3i32);"));
+    assert!(rust.contains("value = (value / 4i32);"));
+    assert!(rust.contains("value = (value % 5i32);"));
+    assert!(rust.contains("value = (value & 7i32);"));
+    assert!(rust.contains("value = (value | 8i32);"));
+    assert!(rust.contains("value = (value ^ 9i32);"));
+    assert!(rust.contains("value = (value << 1i32);"));
+    assert!(rust.contains("value = (value >> 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-clang-compound-family", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_compound_assignment_non_var_target() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_ptr_ty = ClangTypeSkeleton {
+        spelled: "int *".to_string(),
+        canonical: "int *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(int_ty.clone()),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_compound_target".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: int_ptr_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Deref {
+                ptr: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: int_ptr_ty,
+                }),
+                ty: int_ty.clone(),
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty,
+            },
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("compound assignment must reject non-var targets");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error
+        .message
+        .contains("compound assignment target must be a simple variable"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_bitand_array_index_expr() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -11745,6 +11880,78 @@ fn clang_ast_dump_emits_short_circuit_if_condition_when_enabled() {
     assert!(rust.contains("pub fn both_nonzero(left: i32, right: i32) -> i32"));
     assert!(rust.contains("if (left != 0i32 && right != 0i32) {"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-short-circuit", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-compound-assignment-family");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("compound_family.c");
+    fs::write(
+        &source_file,
+        "int compound_family(int value) { value += 1; value -= 2; value *= 3; value /= 4; value %= 5; value &= 7; value |= 8; value ^= 9; value <<= 1; value >>= 1; return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "compound_family");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    assert_eq!(function.body.len(), 11, "{:?}", function.body);
+    for (stmt, expected_op) in function.body.iter().take(10).zip([
+        IrBinOp::Add,
+        IrBinOp::Sub,
+        IrBinOp::Mul,
+        IrBinOp::Div,
+        IrBinOp::Mod,
+        IrBinOp::BitAnd,
+        IrBinOp::BitOr,
+        IrBinOp::BitXor,
+        IrBinOp::Shl,
+        IrBinOp::Shr,
+    ]) {
+        let IrStmt::Assign { target, value, .. } = stmt else {
+            panic!("expected desugared compound assignment, got {stmt:?}");
+        };
+        assert!(matches!(target, IrExpr::Var { name, .. } if name == "value"));
+        assert!(
+            matches!(value, IrExpr::Binary { op, .. } if *op == expected_op),
+            "{value:?}"
+        );
+    }
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit scalar compound assignments from real clang AST");
+    assert!(rust.contains("pub fn compound_family(mut value: i32) -> i32"));
+    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = (value - 2i32);"));
+    assert!(rust.contains("value = (value * 3i32);"));
+    assert!(rust.contains("value = (value / 4i32);"));
+    assert!(rust.contains("value = (value % 5i32);"));
+    assert!(rust.contains("value = (value & 7i32);"));
+    assert!(rust.contains("value = (value | 8i32);"));
+    assert!(rust.contains("value = (value ^ 9i32);"));
+    assert!(rust.contains("value = (value << 1i32);"));
+    assert!(rust.contains("value = (value >> 1i32);"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-compound-family", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
