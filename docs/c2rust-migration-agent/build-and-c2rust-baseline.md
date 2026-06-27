@@ -37,7 +37,7 @@ bear -- make clean all
 
 Competition environment profile:
 
-- Profile: `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`
+- Profile: `config/competition-env/environment.json`
 - Ubuntu 24.04.4, gcc/g++ 13.3.0, GNU Make 4.3.
 - Go is not installed.
 - CMake is not found, so default competition build capture and C oracle paths must not require CMake.

@@ -8054,3 +8054,110 @@ English mirror summary:
 - Inc/dec clang JSON must carry an explicit boolean `isPostfix` field; missing or non-bool metadata fails closed.
 - Tightened the Huawei competition environment self-check for full Ubuntu `24.04.4 LTS (Noble Numbat)` and Bisheng/OpenJDK Java provenance.
 - Full translator gate passes with real clang enabled: 48 lib tests, 336 bounded translation tests, and 0 doc-tests.
+
+## 117. 2026-06-27 typed IR mutable pointer output writes and standalone competition config
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，并按用户补充把比赛环境配置独立放到 `config/competition-env/`。三个只读子智能体分别评估了 mutable pointer write、nested direct calls、generic inc/dec value semantics；结论是 pointer output write 最贴近当前 P0 memory-model 缺口，nested call 可作为后续快刀，generic value-position inc/dec 暂不做泛化。第 116 节中“下一刀优先 mutable pointer write”的建议已被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `mutable_pointer_slice_element_type()` 和 `emit_assigned_param_type()`：只有函数参数作为写目标出现时，`T *out` 才发射为 `mut out: &mut [T]`；未使用或只读的 non-const pointer 仍 fail closed。
+  - `emit_assignment_target()` 现在支持 mutable pointer 写目标：
+    - `*out = value; -> out[0usize] = value;`
+    - `out[i] = value; -> out[i as usize] = value;`
+    - `*(out+i) = value;` / `*(i+out) = value; -> out[i as usize] = value;`
+  - pointer-add 写 offset 复用 readonly offset read 的无副作用整数 index 边界：只接受 integer literal、var、cast；call、inc/dec、deref、binary compound index 等继续 fail closed。
+  - definite-assignment 和 assigned-var 收集补上 `Deref` 写目标，因此 `*out` / `*(out+i)` 能把 `out` 识别为需要 `&mut [T]` 的参数。
+  - 未声明 deref pointer 的旧负例仍 fail closed，但诊断从泛化的“assign target must be Var...”变成更具体的 `deref assignment pointer ptr is not declared`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_mutable_pointer_deref_assignment_as_mut_slice_zero_index`
+    - `typed_ir_emits_mutable_pointer_index_assignment`
+    - `typed_ir_emits_mutable_pointer_add_index_deref_assignment`
+  - 新增 clang-lowered skeleton 正测：
+    - `typed_ir_emits_mutable_pointer_index_assignment_from_clang_lowered_ir`
+    - `typed_ir_emits_mutable_pointer_add_index_deref_assignment_from_clang_lowered_ir`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_mutable_pointer_index_assignment_when_enabled`
+    - `clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled`
+  - 新增/保留负测：`const T *` 写入、mutable pointer read、复杂 offset、未使用 mutable pointer param、readonly pointer offset call index 等继续 fail closed。
+
+比赛环境配置改动：
+- 新增 `config/competition-env/` 作为默认独立配置入口：
+  - `environment.json`
+  - `README.md` / `README.en.md`
+  - `env.sh`
+  - `toolchain-check.sh`
+  - `apt/sources.list`
+  - `pip/pip.conf`
+  - `npm/.npmrc`
+  - `cargo/config.toml`
+  - `rust/rust-toolchain.toml`
+- `scripts/run-full-regression.ps1` 默认 `-EnvironmentProfile` 改为 `config/competition-env/environment.json`。
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 保留为历史 compatibility entrypoint，并在 `environment.json` 中声明 canonical path；README 中英文均已说明新默认路径。
+- `validation/l3-template/config-profile.example.json` 示例 profile path 改为 `config/competition-env/environment.json`，示例 rust/cargo 版本改为 `1.96.0`。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `docs/c2rust-migration-agent/full-regression-runner.md`
+- `docs/c2rust-migration-agent/build-and-c2rust-baseline.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+- `validation/README.md`
+- `validation/gates.md`
+
+红灯已观察：
+```powershell
+cargo test --features typed-ir typed_ir_emits_mutable_pointer --test bounded_translation
+```
+
+旧实现失败于：
+- `stmt[0].assign target must be Var or local fixed array Index`
+- `param out has pointer type int * is unsupported`
+
+focused 验证：
+```powershell
+cargo test --features typed-ir typed_ir_emits_mutable_pointer --test bounded_translation
+cargo test --features "typed-ir clang-frontend" mutable_pointer --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "typed-ir clang-frontend" mutable_pointer --test bounded_translation -- --nocapture
+```
+
+focused 结果：mutable pointer filter 下 10 条测试通过，包含 direct typed IR、clang-lowered skeleton、真实 clang AST smoke 和 fail-closed 边界。
+
+完整验证：
+```powershell
+python -m json.tool config\competition-env\environment.json > $null
+python -m json.tool validation\environment-profiles\huawei-competition-ubuntu-24.04\environment.json > $null
+python -m json.tool validation\l3-template\config-profile.example.json > $null
+bash -n config/competition-env/env.sh; bash -n config/competition-env/toolchain-check.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+cargo fmt -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "clang-frontend typed-ir clang-lowering-report" -- --nocapture
+git diff --check
+```
+
+完整验证结果：
+- config/profile JSON 校验通过。
+- shell syntax 校验通过。
+- `scripts/run-full-regression.ps1` PowerShell parser 静态检查通过。
+- `cargo fmt --check` 通过。
+- 完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 345 passed，doc-tests 0 passed。
+- `git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：函数参数 `T *out` 在作为写目标出现时，可经 direct typed IR、clang-lowered skeleton 和真实 clang AST 进入 `GenericTypedIr`，生成可编译 Rust `&mut [T]` slice assignment candidate。
+- 可以说：支持的写形态是 `*out`、`out[i]`、`*(out+i)` / `*(i+out)`，元素类型必须是当前支持的整数标量，offset 必须是无副作用整数 literal/var/cast。
+- 不应说：已支持 mutable pointer read、任意 pointer arithmetic、complex offset、compound/update write、nullable pointer write、pointer escape、多 mutable pointer alias/noalias 证明、volatile/hardware register、宏副作用或 semantic acceptance。
+- 后续建议：下一刀优先 nested pure direct calls 或 standalone typed clang inc/dec statement；并行推进 struct/alias memory model 设计，避免把 `&mut [T]` 输出写误认为完整 C pointer ownership 模型。
+
+English mirror summary:
+
+- Added narrow mutable integer pointer output writes through the generic typed IR emitter.
+- Function parameter `T *out` emits as `&mut [T]` only when it is used as a write target.
+- Supported write forms are `*out`, `out[i]`, and `*(out+i)` / `*(i+out)`, emitted as Rust slice assignments.
+- Direct typed IR, clang-lowered skeleton, real clang AST smoke, and fail-closed boundary tests cover the new path.
+- Added standalone competition environment config under `config/competition-env/` and moved default validation/profile references to that path while keeping the old validation profile as a compatibility entrypoint.
+- Full translator gate passes with real clang enabled: 48 lib tests, 345 bounded translation tests, and 0 doc-tests.

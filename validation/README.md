@@ -20,7 +20,8 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `l3-template/`: reusable L3 evidence template, checklist, schema, and example for bounded C/Rust semantic-equivalence claims.
 - `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
 - `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
-- `environment-profiles/huawei-competition-ubuntu-24.04/`: machine-readable competition environment profile, Huawei mirror configs, and a toolchain self-check script.
+- `../config/competition-env/`: default standalone competition environment profile, Huawei mirror configs, and a toolchain self-check script.
+- `environment-profiles/huawei-competition-ubuntu-24.04/`: compatibility copy for older validation evidence and scripts.
 - `pointer-graph-template/`: reusable pointer dependency graph template for pointer-bearing L2/L3 migration slices.
 - `test-translation-template/`: reusable code-test translation manifest template for mapping C tests, fixtures, or oracle expectations to Rust tests and invalidation keys.
 
@@ -37,7 +38,7 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 ## Competition Environment Profile
 
-The default competition profile is `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
+The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The compatibility profile under `validation/environment-profiles/huawei-competition-ubuntu-24.04/` is kept for older evidence references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
 
 ## Real Source Slice Extraction
 

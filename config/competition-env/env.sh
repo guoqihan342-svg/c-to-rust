@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export COMPETITION_ENV_PROFILE_ID="huawei-competition-ubuntu-24.04"
-export COMPETITION_ENV_PROFILE_PATH="validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"
+export COMPETITION_ENV_PROFILE_PATH="config/competition-env/environment.json"
 export MAVEN_HOME="/usr/local/maven3"
 export PATH="${MAVEN_HOME}/bin:${PATH}"
 

@@ -36,7 +36,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide.
-- `../../validation/environment-profiles/huawei-competition-ubuntu-24.04/`: competition environment entrypoint covering Ubuntu 24.04.4, Rust 1.96.0, Python 3.12.3, Node 24.13.0, Huawei mirrors, Go/CMake absence boundaries, and the self-check script.
+- `../../config/competition-env/`: competition environment entrypoint covering Ubuntu 24.04.4, Rust 1.96.0, Python 3.12.3, Node 24.13.0, Huawei mirrors, Go/CMake absence boundaries, and the self-check script.
 
 ## Quick Use
 

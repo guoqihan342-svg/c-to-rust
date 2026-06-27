@@ -1,0 +1,8 @@
+[source.crates-io]
+replace-with = "huawei"
+
+[source.huawei]
+registry = "sparse+http://rust.inhuawei.com/crates.io-index/"
+
+[net]
+git-fetch-with-cli = true

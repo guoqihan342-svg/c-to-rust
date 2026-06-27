@@ -18,7 +18,7 @@ On Ubuntu, run the same script with the current PowerShell executable, usually `
 pwsh -File ./scripts/run-full-regression.ps1 \
   -Rounds 1 \
   -StressLoops 10000 \
-  -EnvironmentProfile validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+  -EnvironmentProfile config/competition-env/environment.json
 ```
 
 This runs:

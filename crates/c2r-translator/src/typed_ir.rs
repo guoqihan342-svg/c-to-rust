@@ -489,6 +489,9 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
+    } else if assigned_vars.contains(&param.name) {
+        emit_assigned_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else {
         emit_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
@@ -500,6 +503,14 @@ fn emit_param(
         ""
     };
     Ok(format!("{mut_prefix}{name}: {ty}"))
+}
+
+fn emit_assigned_param_type(ty: &IrType) -> Result<String, String> {
+    if let Some(element_ty) = mutable_pointer_slice_element_type(ty) {
+        let element_ty = emit_scalar_type(element_ty)?;
+        return Ok(format!("&mut [{element_ty}]"));
+    }
+    emit_param_type(ty)
 }
 
 fn emit_param_type(ty: &IrType) -> Result<String, String> {
@@ -1071,15 +1082,18 @@ fn emit_assignment_target<'a>(
         IrExpr::Index {
             base, index, ty, ..
         } => {
-            let target =
-                emit_local_array_index_assignment_target(base, index, ty, symbols, context)?;
+            let target = emit_index_assignment_target(base, index, ty, symbols, context)?;
+            Ok((target, ty))
+        }
+        IrExpr::Deref { ptr, ty, .. } => {
+            let target = emit_mutable_pointer_deref_assignment_target(ptr, ty, symbols, context)?;
             Ok((target, ty))
         }
         _ => Err("assign target must be Var or local fixed array Index".to_string()),
     }
 }
 
-fn emit_local_array_index_assignment_target(
+fn emit_index_assignment_target(
     base: &IrExpr,
     index: &IrExpr,
     ty: &IrType,
@@ -1108,12 +1122,14 @@ fn emit_local_array_index_assignment_target(
             type_label(base_ty)
         ));
     }
-    let element_ty = fixed_integer_array_element_type(base_ty).ok_or_else(|| {
-        format!(
-            "assign index base {base_name} has unsupported type {}",
-            type_label(base_ty)
-        )
-    })?;
+    let element_ty = fixed_integer_array_element_type(base_ty)
+        .or_else(|| mutable_pointer_slice_element_type(base_ty))
+        .ok_or_else(|| {
+            format!(
+                "assign index base {base_name} has unsupported type {}",
+                type_label(base_ty)
+            )
+        })?;
     let element_ty = emit_scalar_type(element_ty)
         .map_err(|detail| format!("assign index element has {detail}"))?;
     let result_ty =
@@ -1135,6 +1151,128 @@ fn emit_local_array_index_assignment_target(
     let index = emit_expr(index, symbols, context)
         .map_err(|detail| format!("assign index operand {detail}"))?;
     Ok(format!("{base}[{index} as usize]"))
+}
+
+fn emit_mutable_pointer_deref_assignment_target(
+    ptr: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if let Some(target) =
+        emit_mutable_pointer_add_deref_assignment_target(ptr, ty, symbols, context)?
+    {
+        return Ok(target);
+    }
+    let IrExpr::Var {
+        name: ptr_name,
+        ty: ptr_ty,
+        ..
+    } = ptr
+    else {
+        return Err("deref assignment pointer must be Var".to_string());
+    };
+    if !symbols.contains(ptr_name) {
+        return Err(format!(
+            "deref assignment pointer {ptr_name} is not declared"
+        ));
+    }
+    if context.is_nullable_pointer_param(ptr_name) {
+        return Err(format!(
+            "nullable pointer param {ptr_name} cannot be dereference-assigned in the bounded emitter"
+        ));
+    }
+    let element_ty = mutable_pointer_slice_element_type(ptr_ty).ok_or_else(|| {
+        format!(
+            "deref assignment pointer {ptr_name} has unsupported type {}",
+            type_label(ptr_ty)
+        )
+    })?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("deref assignment element has {detail}"))?;
+    let deref_ty =
+        emit_scalar_type(ty).map_err(|detail| format!("deref assignment result has {detail}"))?;
+    if deref_ty != element_ty {
+        return Err(format!(
+            "deref assignment result type {deref_ty} does not match pointer element type {element_ty}"
+        ));
+    }
+    let ptr_name = emit_identifier(ptr_name, "deref assignment pointer")?;
+    Ok(format!("{ptr_name}[0usize]"))
+}
+
+fn emit_mutable_pointer_add_deref_assignment_target(
+    ptr: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Binary {
+        op: IrBinOp::Add,
+        lhs,
+        rhs,
+        ty: add_ty,
+        ..
+    } = ptr
+    else {
+        return Ok(None);
+    };
+    let Some((base, index)) = mutable_pointer_add_operands(lhs, rhs) else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("deref pointer add assignment base must be Var".to_string());
+    };
+    if add_ty != base_ty {
+        return Err(format!(
+            "deref pointer add assignment result type {} does not match base type {}",
+            type_label(add_ty),
+            type_label(base_ty)
+        ));
+    }
+    if !symbols.contains(base_name) {
+        return Err(format!(
+            "deref pointer add assignment base {base_name} is not declared"
+        ));
+    }
+    if context.is_nullable_pointer_param(base_name) {
+        return Err(format!(
+            "nullable pointer param {base_name} cannot be offset-dereference-assigned in the bounded emitter"
+        ));
+    }
+    let element_ty = mutable_pointer_slice_element_type(base_ty).ok_or_else(|| {
+        format!(
+            "deref pointer add assignment base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let element_ty = emit_scalar_type(element_ty)
+        .map_err(|detail| format!("deref assignment element has {detail}"))?;
+    let deref_ty =
+        emit_scalar_type(ty).map_err(|detail| format!("deref assignment result has {detail}"))?;
+    if deref_ty != element_ty {
+        return Err(format!(
+            "deref assignment result type {deref_ty} does not match pointer element type {element_ty}"
+        ));
+    }
+    let index_ty = expr_type(index)
+        .ok_or_else(|| "deref pointer add index type is unsupported".to_string())?;
+    if !is_integer_type(index_ty) {
+        return Err(format!(
+            "deref pointer add index type {} is unsupported",
+            type_label(index_ty)
+        ));
+    }
+    validate_readonly_pointer_add_index_expr(index)?;
+    let base = emit_identifier(base_name, "deref pointer add assignment base")?;
+    let index = emit_expr(index, symbols, context)
+        .map_err(|detail| format!("deref pointer add index {detail}"))?;
+    Ok(Some(format!("{base}[{index} as usize]")))
 }
 
 fn emit_postfix_decrement_while_loop(
@@ -1499,6 +1637,25 @@ fn readonly_pointer_add_operands<'a>(
         }
         (Some(lhs_ty), Some(rhs_ty))
             if is_integer_type(lhs_ty) && readonly_pointer_slice_element_type(rhs_ty).is_some() =>
+        {
+            Some((rhs, lhs))
+        }
+        _ => None,
+    }
+}
+
+fn mutable_pointer_add_operands<'a>(
+    lhs: &'a IrExpr,
+    rhs: &'a IrExpr,
+) -> Option<(&'a IrExpr, &'a IrExpr)> {
+    match (expr_type(lhs), expr_type(rhs)) {
+        (Some(lhs_ty), Some(rhs_ty))
+            if mutable_pointer_slice_element_type(lhs_ty).is_some() && is_integer_type(rhs_ty) =>
+        {
+            Some((lhs, rhs))
+        }
+        (Some(lhs_ty), Some(rhs_ty))
+            if is_integer_type(lhs_ty) && mutable_pointer_slice_element_type(rhs_ty).is_some() =>
         {
             Some((rhs, lhs))
         }
@@ -2782,6 +2939,11 @@ fn validate_definite_assignment_target(
                 .map_err(|detail| format!("assign index operand {detail}"))?;
             Ok(None)
         }
+        IrExpr::Deref { ptr, .. } => {
+            validate_definite_assignment_expr(ptr, state)
+                .map_err(|detail| format!("assign deref pointer {detail}"))?;
+            Ok(None)
+        }
         _ => Err("assign target must be Var or local fixed array Index".to_string()),
     }
 }
@@ -3639,6 +3801,23 @@ fn assigned_var_name_from_target(target: &IrExpr) -> Option<&String> {
             IrExpr::Var { name, .. } => Some(name),
             _ => None,
         },
+        IrExpr::Deref { ptr, .. } => pointer_write_base_name_from_ptr(ptr),
+        _ => None,
+    }
+}
+
+fn pointer_write_base_name_from_ptr(ptr: &IrExpr) -> Option<&String> {
+    match ptr {
+        IrExpr::Var { name, .. } => Some(name),
+        IrExpr::Binary {
+            op: IrBinOp::Add,
+            lhs,
+            rhs,
+            ..
+        } => mutable_pointer_add_operands(lhs, rhs).and_then(|(base, _)| match base {
+            IrExpr::Var { name, .. } => Some(name),
+            _ => None,
+        }),
         _ => None,
     }
 }
@@ -3702,6 +3881,15 @@ fn is_integer_type(ty: &IrType) -> bool {
 fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
     match &ty.kind {
         IrTypeKind::Pointer { pointee } if pointee.is_const && is_integer_type(pointee) => {
+            Some(pointee.as_ref())
+        }
+        _ => None,
+    }
+}
+
+fn mutable_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } if !pointee.is_const && is_integer_type(pointee) => {
             Some(pointee.as_ref())
         }
         _ => None,

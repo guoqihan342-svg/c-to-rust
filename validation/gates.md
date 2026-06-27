@@ -34,7 +34,7 @@ Pass criteria:
 
 - Commit is pinned.
 - Build dependencies and versions are recorded.
-- Environment profile path and hash are recorded when the run targets the competition/evaluation host, for example `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`.
+- Environment profile path and hash are recorded when the run targets the competition/evaluation host, for example `config/competition-env/environment.json`.
 - Native C build command exits 0.
 - Native smoke test command exits 0.
 - Evidence includes stdout/stderr paths, command exit codes, tool versions, and elapsed time.
@@ -103,7 +103,7 @@ Config profile is a traceability and invalidation gate, not a full macro solver.
 
 中文：config profile 是追溯与缓存失效门禁，不是完整宏求解器。profile 变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
-Competition environment profile is a toolchain and mirror provenance gate. A change to `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`, or a run performed under a different host/toolchain profile, invalidates build, oracle, replay, cache, performance, and summary claims unless those artifacts are regenerated or explicitly marked as non-competition evidence.
+Competition environment profile is a toolchain and mirror provenance gate. A change to `config/competition-env/environment.json`, or a run performed under a different host/toolchain profile, invalidates build, oracle, replay, cache, performance, and summary claims unless those artifacts are regenerated or explicitly marked as non-competition evidence. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json` path is a compatibility reference, not the new default.
 
 Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
 

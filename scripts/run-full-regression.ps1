@@ -15,7 +15,7 @@ param(
     [switch] $SkipLongStress,
     [switch] $RequireCleanEvidence,
     [switch] $ProbeRemoteCatalog,
-    [string] $EnvironmentProfile = "validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"
+    [string] $EnvironmentProfile = "config/competition-env/environment.json"
 )
 
 $ErrorActionPreference = "Stop"

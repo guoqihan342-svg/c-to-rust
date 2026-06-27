@@ -1333,6 +1333,242 @@ fn typed_ir_rejects_const_pointer_index_assignment() {
     assert!(error.reason.contains("unsupported type"));
 }
 
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_pointer_deref_assignment_as_mut_slice_zero_index() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_first".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_deref(ir_var("out", mutable_i32_ptr), i32_ty.clone()),
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable pointer deref assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_first(mut out: &mut [i32], value: i32)"));
+    assert!(rust.contains("out[0usize] = value;"));
+    assert_rust_snippet_compiles("typed-ir-mutable-pointer-deref-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_pointer_index_assignment() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_at".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("out", mutable_i32_ptr)),
+                    index: Box::new(ir_var("i", usize_ty)),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable pointer index assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_at(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles("typed-ir-mutable-pointer-index-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_pointer_add_index_deref_assignment() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ptr_plus_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("out", mutable_i32_ptr.clone()),
+        ir_var("i", usize_ty.clone()),
+        mutable_i32_ptr.clone(),
+    );
+    let ir = IrFunction {
+        name: "store_at_offset".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_deref(ptr_plus_index, i32_ty.clone()),
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit mutable pointer add-index deref assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_at_offset(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles("typed-ir-mutable-pointer-add-index-deref-assignment", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_const_pointer_deref_assignment() {
+    let i32_ty = ir_i32();
+    let const_i32_ptr = ir_pointer(
+        "const int *",
+        "const int *",
+        ir_const(i32_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "bad_const_store".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "out".to_string(),
+            ty: const_i32_ptr.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Assign {
+            target: ir_deref(ir_var("out", const_i32_ptr), i32_ty.clone()),
+            value: ir_lit(1, "1", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("const pointer deref assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("deref assignment pointer out"));
+    assert!(error.reason.contains("unsupported type"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_pointer_complex_offset_assignment() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let complex_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("i", usize_ty.clone()),
+        ir_lit(1, "1", usize_ty.clone()),
+        usize_ty.clone(),
+    );
+    let ptr_plus_complex_index = ir_binary(
+        IrBinOp::Add,
+        ir_var("out", mutable_i32_ptr.clone()),
+        complex_index,
+        mutable_i32_ptr.clone(),
+    );
+    let ir = IrFunction {
+        name: "bad_complex_store".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr,
+                source_span: None,
+            },
+            IrParam {
+                name: "i".to_string(),
+                ty: usize_ty,
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: ir_deref(ptr_plus_complex_index, i32_ty.clone()),
+            value: ir_lit(1, "1", i32_ty),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("complex pointer offset assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("deref pointer add index cannot use compound expression"));
+}
+
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 fn typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir() {
@@ -1544,6 +1780,182 @@ fn typed_ir_emits_local_fixed_array_index_assignment_from_clang_lowered_ir() {
     assert!(rust.contains("table[i as usize] = value;"));
     assert!(rust.contains("return table[i as usize];"));
     assert_rust_snippet_compiles("clang-lowered-local-fixed-array-index-assignment", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_mutable_pointer_index_assignment_from_clang_lowered_ir() {
+    let i32_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let usize_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let mutable_i32_ptr = ClangTypeSkeleton {
+        spelled: "int *".to_string(),
+        canonical: "int *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(i32_ty.clone()),
+        },
+    };
+    let out_ref = || ClangExprSkeleton::DeclRef {
+        name: "out".to_string(),
+        ty: mutable_i32_ptr.clone(),
+    };
+    let index_ref = || ClangExprSkeleton::DeclRef {
+        name: "i".to_string(),
+        ty: usize_ty.clone(),
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "store_at".to_string(),
+        return_type: ClangTypeSkeleton {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: ClangTypeKind::Void,
+        },
+        params: vec![
+            ClangParamSkeleton {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+            },
+            ClangParamSkeleton {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Assign {
+            target: ClangExprSkeleton::Index {
+                base: Box::new(out_ref()),
+                index: Box::new(index_ref()),
+                ty: i32_ty.clone(),
+            },
+            value: ClangExprSkeleton::DeclRef {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+            },
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower mutable pointer index assignment");
+    let [IrStmt::Assign { target, .. }] = ir.body.as_slice() else {
+        panic!("expected pointer index assignment, got {:?}", ir.body);
+    };
+    assert!(matches!(target, IrExpr::Index { .. }));
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit mutable pointer index assignment from clang-lowered IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_at(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles("clang-lowered-mutable-pointer-index-assignment", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn typed_ir_emits_mutable_pointer_add_index_deref_assignment_from_clang_lowered_ir() {
+    let i32_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let usize_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let mutable_i32_ptr = ClangTypeSkeleton {
+        spelled: "int *".to_string(),
+        canonical: "int *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(i32_ty.clone()),
+        },
+    };
+    let out_ref = || ClangExprSkeleton::DeclRef {
+        name: "out".to_string(),
+        ty: mutable_i32_ptr.clone(),
+    };
+    let index_ref = || ClangExprSkeleton::DeclRef {
+        name: "i".to_string(),
+        ty: usize_ty.clone(),
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "store_at_offset".to_string(),
+        return_type: ClangTypeSkeleton {
+            spelled: "void".to_string(),
+            canonical: "void".to_string(),
+            kind: ClangTypeKind::Void,
+        },
+        params: vec![
+            ClangParamSkeleton {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+            },
+            ClangParamSkeleton {
+                name: "i".to_string(),
+                ty: usize_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::Assign {
+            target: ClangExprSkeleton::Deref {
+                ptr: Box::new(ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Add,
+                    lhs: Box::new(out_ref()),
+                    rhs: Box::new(index_ref()),
+                    ty: mutable_i32_ptr.clone(),
+                }),
+                ty: i32_ty.clone(),
+            },
+            value: ClangExprSkeleton::DeclRef {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+            },
+        }],
+    };
+
+    let ir =
+        lower_function_skeleton(&skeleton).expect("lower mutable pointer add-deref assignment");
+    let [IrStmt::Assign { target, .. }] = ir.body.as_slice() else {
+        panic!("expected pointer add-deref assignment, got {:?}", ir.body);
+    };
+    assert!(matches!(target, IrExpr::Deref { .. }));
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit mutable pointer add-deref assignment from clang-lowered IR");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn store_at_offset(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles(
+        "clang-lowered-mutable-pointer-add-index-deref-assignment",
+        rust,
+    );
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3640,7 +4052,7 @@ fn typed_ir_rejects_while_with_non_var_assignment_target() {
     assert!(error.reason.contains("stmt[0].while body[0]"));
     assert!(error
         .reason
-        .contains("assign target must be Var or local fixed array Index"));
+        .contains("deref assignment pointer ptr is not declared"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -6827,7 +7239,7 @@ fn typed_ir_rejects_if_with_non_var_assignment_target() {
     assert!(error.reason.contains("stmt[0].if else[0]"));
     assert!(error
         .reason
-        .contains("assign target must be Var or local fixed array Index"));
+        .contains("deref assignment pointer ptr is not declared"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -15579,6 +15991,107 @@ uint64_t id_u64(uint64_t value) { return value; }\n",
         assert!(rust.contains("return value;"), "{rust:?}");
         assert_rust_snippet_compiles(&format!("typed-ir-real-clang-{function_name}"), &rust);
     }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_mutable_pointer_index_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-pointer-index-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_pointer_store.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\nvoid store_at(int *out, size_t i, int value) { out[i] = value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "store_at");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, .. }] = function.body.as_slice() else {
+        panic!(
+            "expected mutable pointer index assignment, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Index { .. }));
+
+    let rust = emit_rust_from_ir(function)
+        .expect("emit mutable pointer index assignment from real clang AST");
+    assert!(rust.contains("pub fn store_at(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-mutable-pointer-index-assignment",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-pointer-add-deref-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_pointer_store.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\nvoid store_at_offset(int *out, size_t i, int value) { *(out + i) = value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "store_at_offset");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { target, .. }] = function.body.as_slice() else {
+        panic!(
+            "expected mutable pointer add-deref assignment, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Deref { .. }));
+
+    let rust = emit_rust_from_ir(function)
+        .expect("emit mutable pointer add-deref assignment from real clang AST");
+    assert!(rust.contains("pub fn store_at_offset(mut out: &mut [i32], i: usize, value: i32)"));
+    assert!(rust.contains("out[i as usize] = value;"));
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-mutable-pointer-add-deref-assignment",
+        &rust,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

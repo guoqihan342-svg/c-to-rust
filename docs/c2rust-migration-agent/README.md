@@ -36,7 +36,7 @@
 - `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
 - `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档。
-- `../../validation/environment-profiles/huawei-competition-ubuntu-24.04/`：比赛环境配置入口，记录 Ubuntu 24.04.4、Rust 1.96.0、Python 3.12.3、Node 24.13.0、华为镜像源、Go/CMake 缺失边界和自检脚本。
+- `../../config/competition-env/`：比赛环境配置入口，记录 Ubuntu 24.04.4、Rust 1.96.0、Python 3.12.3、Node 24.13.0、华为镜像源、Go/CMake 缺失边界和自检脚本。
 
 ## 快速使用
 
