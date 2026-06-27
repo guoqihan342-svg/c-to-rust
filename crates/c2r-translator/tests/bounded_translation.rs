@@ -15392,6 +15392,230 @@ fn clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-record-field-inc-dec-statements");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("record_field_inc_dec.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint bump_point_x(struct point p) { p.x++; ++p.x; p.x--; --p.x; return p.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "bump_point_x");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { .. }, IrStmt::Assign { .. }, IrStmt::Assign { .. }, IrStmt::Assign { .. }, IrStmt::Return { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected four record field inc/dec assignments followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit record field inc/dec statements");
+    assert!(rust.contains("pub fn bump_point_x(mut p: Point) -> i32"));
+    assert_eq!(rust.matches("p.x = (p.x + 1i32);").count(), 2);
+    assert_eq!(rust.matches("p.x = (p.x - 1i32);").count(), 2);
+    assert!(rust.contains("return p.x;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-record-field-inc-dec", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-arrow-record-field-inc-dec");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_arrow_record_field_inc_dec.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint bad_arrow_record_field_inc_dec(struct point *p) { p->x++; return 0; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_arrow_record_field_inc_dec",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("arrow member targets require pointer/record ownership evidence")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-record-field-inc-dec-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_record_field_inc_dec_return.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint bad_record_field_inc_dec_return(struct point p) { return p.x++; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_record_field_inc_dec_return",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error =
+        emit_rust_from_ir(function).expect_err("record field inc/dec return must fail closed");
+    assert!(error.reason.contains("stmt[0].return expr"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-record-field-inc-dec-for-step");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_record_field_inc_dec_for_step.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint bad_record_field_inc_dec_for_step(struct point p, int limit) { for (int i = 0; i < limit; p.x++) { i++; } return p.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_record_field_inc_dec_for_step",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("record field targets are unsupported outside standalone statements")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-nested-record-field-inc-dec");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_nested_record_field_inc_dec.c");
+    fs::write(
+        &source_file,
+        "struct inner { int x; };\nstruct outer { struct inner inner; int y; };\nint bad_nested_record_field_inc_dec(struct outer p) { p.inner.x++; return p.inner.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_nested_record_field_inc_dec",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("record field target must have a direct record variable base")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_static_const_integer_array_global_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");

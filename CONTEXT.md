@@ -8895,3 +8895,82 @@ English mirror summary:
 - The generic typed IR shape emits `p.x = (p.x + value);` and marks the by-value record parameter mutable.
 - `p->x`, pointer/alias-sensitive field writes, field update/inc-dec, C record layout/ABI claims, and semantic acceptance still fail closed.
 - Verification: targeted TDD red/green test, compound/record filters, `--all-features`, full real-clang bounded translation, OpenSpec strict validation, and `git diff --check` all pass, with only Windows LF-to-CRLF warnings from `git diff --check`.
+
+## 128. 2026-06-28 by-value record dot-field inc/dec statements
+
+本轮继续按多智能体推进 P1 record 字段写入子集，不写 FlashDB/crc32 特例。只读代理结论一致：`p->x` 仍需要 pointer/record ownership、non-null/lifetime/alignment、alias/effect 和 pointer graph read/write evidence；value-position `p.x++` 需要表达式旧值/新值语义和副作用排序证明；更安全的切口是 standalone statement 中表达式值被丢弃的 direct by-value record dot-field inc/dec。完成切口是：`struct point { int x; int y; }; int bump_point_x(struct point p) { p.x++; ++p.x; p.x--; --p.x; return p.x; }` 现在可从真实 clang AST lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate：
+
+```rust
+pub fn bump_point_x(mut p: Point) -> i32 {
+    p.x = (p.x + 1i32);
+    p.x = (p.x + 1i32);
+    p.x = (p.x - 1i32);
+    p.x = (p.x - 1i32);
+    return p.x;
+}
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `inc_dec_stmt_skeleton_from_ast()` 不再只接受 simple `DeclRef` target，而是复用新 helper `inc_dec_assignment_target_type()` 判断 inc/dec assignment target。
+  - helper 接受 simple integer variable 和 standalone statement 中的 direct by-value record dot-field integer target。
+  - `Member { is_arrow: true }` 以缺少 pointer/record ownership evidence 为由 fail closed。
+  - dot-field target 要求 base 是直接 `DeclRef` record 变量；嵌套 base、非 record base、deref/index/复杂 target 继续 fail closed。
+  - `ForStmt` step 仍只接受 simple scalar variable inc/dec；record-field inc/dec step 显式 fail closed，避免把 loop step 顺序和字段副作用边界混入本切口。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST 正测：`clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke：
+    - `clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled`
+    - `clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled`
+    - `clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled`
+    - `clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled`
+  - 正测断言 4 个字段 assignment 加 return，并验证生成 Rust snippet 可编译。
+- `crates/c2r-translator/src/clang_frontend.rs` 单元测试新增：
+  - `stmt_skeleton_from_ast_accepts_record_field_inc_dec_statement_as_assignment`
+  - `stmt_skeleton_from_ast_rejects_record_field_inc_dec_arrow_target`
+  - `for_step_stmt_skeleton_from_ast_rejects_record_field_inc_dec_step`
+  - `stmt_skeleton_from_ast_rejects_record_field_inc_dec_nested_base`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record_field_inc_dec -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
+openspec validate --all --strict
+rustfmt --check --edition 2021 crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs
+git diff --check
+```
+
+结果：
+
+- TDD 红测先失败于 `statement inc/dec target must be a simple variable`，实现后通过。
+- `record_field_inc_dec` filter：4 个 lib 单元测试 + 5 个真实 clang bounded tests 通过。
+- `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- 显式真实 clang bounded translation：395 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
+- `openspec validate --all --strict`：38/38 passed。
+- 定向 `rustfmt --check`：exit 0。
+- `git diff --check`：exit 0，仅报告 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：standalone statement 中的 direct by-value record dot-field integer `p.x++` / `++p.x` / `p.x--` / `--p.x` 现在可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 value-position `p.x++`、return/call/condition 中的字段 inc/dec、`ForStmt` step 中 record-field inc/dec、`p->x++`、nested/complex base、pointer/alias-sensitive 字段写、record layout/ABI 等价、volatile/hardware register 或完整 C inc/dec 表达式语义。
+- 后续建议：如果继续 record，下一刀更适合 pointer-aware readonly `const struct T *p -> p->scalar_field` evidence 契约和红测；如果继续字段更新，需要先设计 value-position inc/dec 旧值语义、副作用排序和 alias gate，而不是直接泛化 helper。
+
+English mirror summary:
+
+- Added by-value record dot-field inc/dec candidate generation for standalone value-discarded statements such as `p.x++`, `++p.x`, `p.x--`, and `--p.x`.
+- Clang statement lowering now accepts simple integer variables and direct by-value record dot-field integer targets; arrow members, nested bases, complex targets, and record-field `ForStmt` steps still fail closed.
+- Real clang smoke covers positive statement lowering, arrow-member rejection, value-position return rejection, record-field `ForStmt` step rejection, and nested-base rejection.
+- This remains candidate generation only. `p->x++`, value-position field inc/dec, pointer/alias-sensitive field writes, C record layout/ABI claims, and semantic acceptance still fail closed.

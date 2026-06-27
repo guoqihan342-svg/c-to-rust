@@ -1029,17 +1029,15 @@ fn inc_dec_stmt_skeleton_from_ast(
         };
         return Ok(ClangStmtSkeleton::Unsupported { reason });
     };
-    let ClangExprSkeleton::DeclRef {
-        name: target_name,
-        ty: target_ty,
-    } = target.as_ref()
-    else {
-        return Ok(ClangStmtSkeleton::Unsupported {
-            reason: format!("{context} inc/dec target must be a simple variable"),
-        });
-    };
+    let target_ty = match inc_dec_assignment_target_type(target.as_ref(), context) {
+        Ok(target_ty) => target_ty,
+        Err(reason) => {
+            return Ok(ClangStmtSkeleton::Unsupported { reason });
+        }
+    }
+    .clone();
     if !matches!(&target_ty.kind, ClangTypeKind::Integer { .. })
-        || !compound_assignment_types_match(target_ty, &ty)
+        || !compound_assignment_types_match(&target_ty, &ty)
     {
         return Ok(ClangStmtSkeleton::Unsupported {
             reason: format!(
@@ -1053,16 +1051,10 @@ fn inc_dec_stmt_skeleton_from_ast(
         ClangIncDecOperator::Dec => ClangBinaryOperator::Sub,
     };
     Ok(ClangStmtSkeleton::Assign {
-        target: ClangExprSkeleton::DeclRef {
-            name: target_name.clone(),
-            ty: target_ty.clone(),
-        },
+        target: target.as_ref().clone(),
         value: ClangExprSkeleton::Binary {
             op: bin_op,
-            lhs: Box::new(ClangExprSkeleton::DeclRef {
-                name: target_name.clone(),
-                ty: target_ty.clone(),
-            }),
+            lhs: target,
             rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
                 value: 1,
                 spelling: "1".to_string(),
@@ -1071,6 +1063,47 @@ fn inc_dec_stmt_skeleton_from_ast(
             ty: target_ty.clone(),
         },
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn inc_dec_assignment_target_type<'a>(
+    target: &'a ClangExprSkeleton,
+    context: &str,
+) -> Result<&'a ClangTypeSkeleton, String> {
+    match target {
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ty),
+        ClangExprSkeleton::Member { is_arrow: true, .. } => Err(format!(
+            "{context} inc/dec arrow member targets require pointer/record ownership evidence"
+        )),
+        ClangExprSkeleton::Member {
+            base,
+            ty,
+            is_arrow: false,
+            ..
+        } => {
+            if context != "statement" {
+                return Err(format!(
+                    "{context} inc/dec record field targets are unsupported outside standalone statements"
+                ));
+            }
+            match base.as_ref() {
+                ClangExprSkeleton::DeclRef { ty: base_ty, .. }
+                    if matches!(&base_ty.kind, ClangTypeKind::Record { .. }) =>
+                {
+                    Ok(ty)
+                }
+                ClangExprSkeleton::DeclRef { .. } => Err(format!(
+                    "{context} inc/dec record field target base must be a record variable"
+                )),
+                _ => Err(format!(
+                    "{context} inc/dec record field target must have a direct record variable base"
+                )),
+            }
+        }
+        _ => Err(format!(
+            "{context} inc/dec target must be a simple variable or by-value record field"
+        )),
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3828,6 +3861,157 @@ mod tests {
                 ClangExprSkeleton::IntegerLiteral { value: 1, .. }
             ));
         }
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_accepts_record_field_inc_dec_statement_as_assignment() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct point" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("record field inc/dec skeleton");
+
+        let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+            panic!("expected record field inc/dec assignment, got {skeleton:?}");
+        };
+        assert!(
+            matches!(&target, ClangExprSkeleton::Member { field, is_arrow: false, .. } if field == "x"),
+            "expected dot-field assignment target, got {target:?}"
+        );
+        let ClangExprSkeleton::Binary { op, lhs, rhs, .. } = value else {
+            panic!("expected binary assignment value, got {value:?}");
+        };
+        assert_eq!(op, ClangBinaryOperator::Add);
+        assert!(
+            matches!(lhs.as_ref(), ClangExprSkeleton::Member { field, is_arrow: false, .. } if field == "x"),
+            "expected dot-field binary lhs, got {lhs:?}"
+        );
+        assert!(matches!(
+            rhs.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_record_field_inc_dec_arrow_target() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct point *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("record arrow inc/dec skeleton");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected arrow field inc/dec to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("arrow member targets require pointer/record ownership evidence"));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_record_field_inc_dec_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct point" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = inc_dec_for_step_skeleton_from_ast(&stmt).expect("record field for step");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected record field inc/dec for step to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("unsupported outside standalone statements"));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_record_field_inc_dec_nested_base() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "MemberExpr",
+                            "name": "inner",
+                            "isArrow": false,
+                            "type": { "qualType": "struct inner" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "struct outer" },
+                                    "referencedDecl": { "name": "p" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("nested record field inc/dec");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected nested record field inc/dec to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("must have a direct record variable base"));
     }
 
     #[test]
