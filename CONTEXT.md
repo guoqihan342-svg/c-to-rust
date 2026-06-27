@@ -8599,3 +8599,65 @@ English mirror summary:
 - `struct point p; return p.x;` now emits a minimal Rust `Point` struct plus `return p.x;` as a candidate.
 - Pointer member access `p->x`, record params with no modeled field use, field writes, record layout/ABI claims, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
 - Direct typed IR, full bounded translation, and real clang AST positive/negative smoke tests pass.
+
+## 124. 2026-06-28 by-value record dot-field assignment support
+
+本轮继续扩 generic typed IR emitter 的通用 record 能力，不写 FlashDB/crc32 特例。目标是把上一节的按值 record dot-field read 往前推进一小步：支持简单 `p.x = value; return p.x;` 这种 by-value record 字段赋值 candidate，但仍不打开 pointer `->`、alias-sensitive 字段写、compound/update 字段写或 record layout/ABI 语义。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_assignment_target()` 新增 `IrExpr::Member` 赋值目标分支，复用 `emit_member_expr()` 的窄化 guard。
+  - `validate_definite_assignment_target()` 接受 member 赋值目标并验证 base 表达式。
+  - `assigned_var_name_from_target()` 识别 member base 变量，使 `p.x = value` 能把按值 record 参数发射为 `mut p: Point`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：`typed_ir_emits_record_value_field_assignment`。
+  - 新增 direct typed IR 负测：`typed_ir_rejects_record_arrow_field_assignment`。
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_struct_field_assignment_when_enabled`。
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_value_field_assignment --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_assignment --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_field_assignment_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- direct typed IR field assignment 正例：1 passed。
+- direct typed IR arrow field assignment 负例：1 passed。
+- 真实 clang AST struct field assignment 正例：1 passed，并通过 rustc snippet smoke。
+- `record` filter：12 passed。
+- `bounded_translation` with `typed-ir clang-frontend`：357 passed。
+- `--all-features`：52 个 lib tests + 358 个 bounded tests + doc tests 通过。
+- OpenSpec 全量 strict：38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF warning。
+
+边界：
+
+- 可以说：按值 record 参数的 dot-field read 和简单 dot-field assignment 已能从真实 clang AST 进入 typed IR，并生成可编译 Rust candidate。
+- 可以说：`p.x = value` 会把 Rust 参数标为 `mut p: Point`，并只复用最小 Rust struct candidate shape。
+- 不应说：已支持 C record layout/ABI 等价、无字段使用的 record 参数、`p->x`、compound/update 字段写、pointer/alias-sensitive 字段写、nested/anonymous record、union、bitfield、非标量字段、record local/return、struct array、address-taken record、alias write、volatile field 或 semantic acceptance。
+- 后续建议：下一刀优先做 record local/return 最小模型或 pointer-aware record access 设计；后者必须先绑定 alias/ownership/effect evidence，不能直接把 `->` 翻译成 Rust field access。
+
+English mirror summary:
+
+- Added narrow by-value record dot-field assignment support to the generic typed IR emitter.
+- `struct point p; p.x = value; return p.x;` now emits a minimal Rust `Point` struct, `mut p: Point`, `p.x = value;`, and `return p.x;` as a candidate.
+- Pointer member access `p->x`, compound/update field writes, pointer/alias-sensitive field writes, record layout/ABI claims, record locals/returns, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
+- Direct typed IR, real clang AST smoke, full bounded translation, all-features tests, OpenSpec, and whitespace checks pass.

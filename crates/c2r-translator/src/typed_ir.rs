@@ -1378,7 +1378,20 @@ fn emit_assignment_target<'a>(
             let target = emit_mutable_pointer_deref_assignment_target(ptr, ty, symbols, context)?;
             Ok((target, ty))
         }
-        _ => Err("assign target must be Var or local fixed array Index".to_string()),
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+            ..
+        } => {
+            let target = emit_member_expr(base, field, ty, *is_arrow, symbols)?;
+            Ok((target, ty))
+        }
+        _ => Err(
+            "assign target must be Var, local fixed array Index, pointer Deref, or by-value record Member"
+                .to_string(),
+        ),
     }
 }
 
@@ -3318,7 +3331,15 @@ fn validate_definite_assignment_target(
                 .map_err(|detail| format!("assign deref pointer {detail}"))?;
             Ok(None)
         }
-        _ => Err("assign target must be Var or local fixed array Index".to_string()),
+        IrExpr::Member { base, .. } => {
+            validate_definite_assignment_expr(base, state)
+                .map_err(|detail| format!("assign member base {detail}"))?;
+            Ok(None)
+        }
+        _ => Err(
+            "assign target must be Var, local fixed array Index, pointer Deref, or by-value record Member"
+                .to_string(),
+        ),
     }
 }
 
@@ -4188,6 +4209,10 @@ fn assigned_var_name_from_target(target: &IrExpr) -> Option<&String> {
             _ => None,
         },
         IrExpr::Deref { ptr, .. } => pointer_write_base_name_from_ptr(ptr),
+        IrExpr::Member { base, .. } => match base.as_ref() {
+            IrExpr::Var { name, .. } => Some(name),
+            _ => None,
+        },
         _ => None,
     }
 }

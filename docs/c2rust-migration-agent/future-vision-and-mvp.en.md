@@ -113,7 +113,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] Support real function slices from libuv, zlib-ng, and other projects
 - [ ] Select 5+ projects from `validation/projects.json`, pushing at least one named function slice per project: project-level L1 native baseline + slice-level L2/L3 evidence
 - [ ] Explicit model for usual arithmetic conversions
-- [ ] Struct field writes (with alias/noalias proof)
+- [ ] Pointer/alias-sensitive struct field writes (with alias/noalias proof; simple by-value `p.x = value` is already in the typed IR candidate subset)
 - [ ] Nested structs / anonymous structs
 - [ ] Bitfields (at least common patterns)
 - [ ] Macro expansion tracking
@@ -143,7 +143,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P1: Expand syntax and memory-model coverage
 
-- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: prioritize record field writes, minimal record local/return modeling, pointer-aware record access design, and tests.
+- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: prioritize minimal record local/return modeling, pointer-aware record access, compound/update field write design, and tests.
 - [ ] Design alias/noalias and pointer escape modeling: split readonly slices, mutable out slices, nullable pointers, unknown alias, and volatile/hardware registers into provable paths and L4 refusal paths.
 - [ ] Finish integer conversion discipline: every clang `ImplicitCastExpr`, integer promotion, usual arithmetic conversion, and narrowing/truncation must become explicit in the IR.
 - [ ] Expand control flow: send `switch`/`goto` through CFG evidence and a fail-closed classifier first, then consider relooper and Rust candidates.

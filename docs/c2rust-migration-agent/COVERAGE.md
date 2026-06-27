@@ -28,7 +28,7 @@
 | `_Bool` | 不支持 | 未建模 |
 | `enum` | 不支持 | 未建模 |
 | `union` | 不支持 | 未建模 |
-| `struct` (按值传递) | 窄支持 | 仅 dot-field read，无 field write、嵌套、匿名 |
+| `struct` (按值传递) | 窄支持 | dot-field read 和简单 dot-field assignment；无 `->`、compound/update field write、嵌套、匿名 |
 
 ## 声明与初始化
 
@@ -64,7 +64,7 @@
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
 | `p[i]` (array subscript) | 窄支持 | readonly pointer slice 或 local/global array |
 | `p->field` (arrow member) | 不支持 | pointer/record ownership 未建模 |
-| `p.field` (dot member read) | 窄支持 | 仅按值 record dot-field read |
+| `p.field` (dot member access) | 窄支持 | 仅按值 record dot-field read 和简单 `p.field = value`；pointer/alias-sensitive field write 仍不支持 |
 | `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
 | `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
 | `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |

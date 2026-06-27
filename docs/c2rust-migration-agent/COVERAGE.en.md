@@ -28,7 +28,7 @@ This document honestly lists C language constructs that are "currently supported
 | `_Bool` | Unsupported | Not modeled |
 | `enum` | Unsupported | Not modeled |
 | `union` | Unsupported | Not modeled |
-| `struct` (by-value) | Narrow | Dot-field read only; no field write, nesting, anonymous |
+| `struct` (by-value) | Narrow | Dot-field read and simple dot-field assignment; no `->`, compound/update field writes, nesting, anonymous |
 
 ## Declarations and Initialization
 
@@ -64,7 +64,7 @@ This document honestly lists C language constructs that are "currently supported
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
 | `p->field` (arrow member) | Unsupported | Pointer/record ownership not modeled |
-| `p.field` (dot member read) | Narrow | By-value record dot-field read only |
+| `p.field` (dot member access) | Narrow | By-value record dot-field read and simple `p.field = value` only; pointer/alias-sensitive field writes remain unsupported |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |
