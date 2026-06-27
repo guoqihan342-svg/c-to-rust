@@ -4,14 +4,14 @@
 
 ## 1. 当前仓库与路径
 
-- 当前应继续工作的本地路径：`C:\Users\Administrator\Documents\c-to-rust-flashdb`
+- 当前应继续工作的本地路径：`F:\agent\crustpaper\0625ctr`
 - GitHub 仓库：`https://github.com/guoqihan342-svg/c-to-rust`
 - 当前分支：`codex/flashdb-rust-skeleton`
 - 当前远端分支：`origin/codex/flashdb-rust-skeleton`
 - 最近已推送提交：
-  - `3d12e65c5599441e9886acb29c8ac40f196d7b22`
-  - message: `Add C2Rust baseline route evidence pipeline`
-- 注意：`C:\Users\Administrator\Documents\c-to-rust` 是早期或主工作区路径，当前这轮 FlashDB/C2Rust pipeline 工作不要误切回那里继续开发，除非用户明确要求。
+  - `8dd4b4f8ed2867b1477e2582666c6fb78a7eebcc`
+  - message: `Add typed IR continue and competition env profile`
+- 注意：`C:\Users\Administrator\Documents\c-to-rust` 和 `C:\Users\Administrator\Documents\c-to-rust-flashdb` 是早期工作区路径，当前这轮 C2Rust pipeline 工作不要误切回那里继续开发，除非用户明确要求。
 - C2Rust 参考源码路径：`F:\agent\c2rust-master`
   - 这是参考项目和潜在工具链来源。
   - 当前工作区没有确认可直接调用的 `c2rust` 可执行文件。
@@ -7919,3 +7919,66 @@ English mirror summary:
 - Added direct typed IR and real clang smoke coverage for while continue, for continue step ordering, nested-loop targeting, and non-loop fail-closed behavior.
 - Added `validation/environment-profiles/huawei-competition-ubuntu-24.04/` as the single competition environment profile, including mirrors, tool versions, Go/CMake absence, and shell self-checks.
 - Full translator gate passes with real clang enabled: 43 lib tests, 330 bounded translation tests, and 0 doc-tests.
+
+## 115. 2026-06-27 narrow DoStmt / do-while typed IR support
+
+本轮继续按多智能体推进 `c2r-translator` 的通用语法面。三个只读子智能体分别复核 typed IR emitter、clang frontend lowering 和文档/验证路线；结论一致：当前下一刀最合适的是 `DoStmt` / `do-while`，因为它复用现有 condition emitter、loop-body `break` / `continue` 语义和 clang AST 入口，同时比 `switch` / `goto` 的 CFG/relooper 问题更可控。第 114 节中“`do-while` 仍未支持”的边界被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::DoWhile { body, condition, source_span }`。
+  - `LoopContext` 新增 `DoWhile { condition }`，用于 body 内 `continue` 的正确 lowering。
+  - `DoWhile` 发射为 Rust `loop { ... if !(condition) { break; } }`，保留 C `do-while` body 至少执行一次的形态。
+  - `DoWhile` body 中的 `continue` 会先发射同一个 condition break check，再发射 Rust `continue;`，避免 Rust `continue` 直接跳回 loop 顶部而跳过 C 的尾部 condition。
+  - definite-assignment、byte cursor source、post-increment byte read、nullable pointer collect/validate、assigned var 推断等只读遍历补上 `DoWhile` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::DoWhile`。
+  - `stmt_skeleton_from_ast()` 支持 `DoStmt`。
+  - 新增 `do_stmt_skeleton_from_ast()`，按 clang JSON 的 `[body, condition]` 子节点顺序 lowering。
+  - `lower_stmt()` 将 skeleton `DoWhile` lowering 成 typed IR `IrStmt::DoWhile`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `DoWhile`：decl type mapping、call expression evidence、statement label/kind、CFG edge、pointer cursor source 和 post-increment deref evidence。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 测试：
+    - `typed_ir_emits_scalar_do_while_with_condition_check_after_body`
+    - `typed_ir_do_while_continue_checks_condition_before_continuing`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_typed_ir_do_while_when_enabled`
+
+红灯已观察：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir do_while -- --nocapture
+```
+
+旧实现失败于：
+- `no variant named DoWhile found for enum IrStmt`
+- `DoStmt` 不在 clang skeleton lowering 中
+
+focused 验证已通过：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir do_while -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report do_while -- --nocapture
+```
+
+focused 结果：3 个 do-while 测试通过；`clang-lowering-report` feature 下也通过，说明 evidence/report 的枚举穷尽分支已补齐。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+
+边界：
+- 可以说：窄化 clang `DoStmt` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：`do-while` body 至少执行一次；尾部 condition 复用当前 `emit_condition_expr()` 支持的整数 truthiness、comparison、logical-not、readonly deref 等子集。
+- 可以说：`do-while` body 中的 `continue` 会先检查 condition，再继续下一轮。
+- 不应说：已支持完整 C loop control-flow semantics、`switch`、`goto`、condition 中 call/inc/dec/side effect、复杂 label/fallthrough/relooper、semantic acceptance 或任意 do-while condition。
+- 后续建议：下一刀可按只读子智能体建议选 mutable pointer write 到 `&mut [T]` 的受限 lowering、nested pure direct call、step-position prefix inc/dec，或继续设计 `switch` / `goto`。
+
+English mirror summary:
+
+- Added narrow `DoStmt` / `do-while` support through clang skeleton, typed IR, and the generic emitter.
+- `DoStmt` lowers to `IrStmt::DoWhile`; the emitter produces Rust `loop { ... if !(condition) { break; } }`.
+- A `continue` inside a `DoWhile` body emits the same condition break check before Rust `continue;`, preserving C `do-while` condition semantics.
+- Added direct typed IR coverage and a real clang AST smoke test for the do-while path.
+- This is still candidate generation only. `switch`, `goto`, full loop control-flow semantics, side-effecting conditions, and semantic acceptance remain fail-closed.

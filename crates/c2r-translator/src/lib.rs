@@ -591,6 +591,9 @@ fn record_ir_decl_type_mappings(
             typed_ir::IrStmt::While { body, .. } => {
                 record_ir_decl_type_mappings(body, profile, result);
             }
+            typed_ir::IrStmt::DoWhile { body, .. } => {
+                record_ir_decl_type_mappings(body, profile, result);
+            }
             typed_ir::IrStmt::For {
                 init, step, body, ..
             } => {
@@ -631,6 +634,16 @@ fn record_ir_call_expression_evidence(
             }
             typed_ir::IrStmt::While { body, .. } => {
                 record_ir_call_expression_evidence(body, result);
+            }
+            typed_ir::IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                record_ir_call_expression_evidence(body, result);
+                record_ir_call_expression_evidence_for_expr(
+                    condition,
+                    "do_while_condition",
+                    result,
+                );
             }
             typed_ir::IrStmt::For {
                 init, step, body, ..
@@ -894,6 +907,7 @@ fn ir_statement_label(statement: &typed_ir::IrStmt) -> String {
         typed_ir::IrStmt::Assign { target, .. } => format!("assign {}", ir_expr_label(target)),
         typed_ir::IrStmt::If { .. } => "if".to_string(),
         typed_ir::IrStmt::While { .. } => "while".to_string(),
+        typed_ir::IrStmt::DoWhile { .. } => "do_while".to_string(),
         typed_ir::IrStmt::For { .. } => "for".to_string(),
         typed_ir::IrStmt::Return { .. } => "return".to_string(),
         typed_ir::IrStmt::Break { .. } => "break".to_string(),
@@ -934,6 +948,7 @@ fn ir_statement_kind_labels(statements: &[typed_ir::IrStmt]) -> Vec<String> {
                 typed_ir::IrStmt::Assign { .. } => "assignment",
                 typed_ir::IrStmt::If { .. } => "if",
                 typed_ir::IrStmt::While { .. } => "while",
+                typed_ir::IrStmt::DoWhile { .. } => "do_while",
                 typed_ir::IrStmt::For { .. } => "for",
                 typed_ir::IrStmt::Return { .. } => "return",
                 typed_ir::IrStmt::Break { .. } => "break",
@@ -954,6 +969,7 @@ fn ir_cfg_edges(statements: &[typed_ir::IrStmt]) -> Vec<String> {
         .filter_map(|(index, statement)| match statement {
             typed_ir::IrStmt::If { .. } => Some(format!("entry->if-{index}")),
             typed_ir::IrStmt::While { .. } => Some(format!("entry->while-{index}")),
+            typed_ir::IrStmt::DoWhile { .. } => Some(format!("entry->do-while-{index}")),
             typed_ir::IrStmt::For { .. } => Some(format!("entry->for-{index}")),
             typed_ir::IrStmt::Return { .. } => Some(format!("entry->return-{index}")),
             _ => None,
@@ -1032,6 +1048,9 @@ fn collect_ir_pointer_cursor_sources(
             typed_ir::IrStmt::While { body, .. } => {
                 collect_ir_pointer_cursor_sources(body, cursor_sources);
             }
+            typed_ir::IrStmt::DoWhile { body, .. } => {
+                collect_ir_pointer_cursor_sources(body, cursor_sources);
+            }
             typed_ir::IrStmt::For {
                 init, step, body, ..
             } => {
@@ -1089,6 +1108,12 @@ fn collect_ir_post_increment_deref_vars_from_stmts(
             } => {
                 collect_ir_post_increment_deref_vars_from_expr(condition, vars);
                 collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+            }
+            typed_ir::IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
             }
             typed_ir::IrStmt::For {
                 init,

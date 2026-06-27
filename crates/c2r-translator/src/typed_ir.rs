@@ -181,6 +181,11 @@ pub enum IrStmt {
         body: Vec<IrStmt>,
         source_span: Option<SourceSpan>,
     },
+    DoWhile {
+        body: Vec<IrStmt>,
+        condition: IrExpr,
+        source_span: Option<SourceSpan>,
+    },
     For {
         init: Vec<IrStmt>,
         condition: Option<IrExpr>,
@@ -650,6 +655,7 @@ fn emit_array_literal(
 enum LoopContext<'a> {
     None,
     While,
+    DoWhile { condition: &'a IrExpr },
     For { step: &'a IrStmt },
 }
 
@@ -779,6 +785,16 @@ fn emit_stmt(
         IrStmt::Continue { .. } => match loop_context {
             LoopContext::None => Err("continue outside loop".to_string()),
             LoopContext::While => Ok(format!("{indent}continue;\n")),
+            LoopContext::DoWhile { condition } => {
+                let condition_break = emit_do_while_condition_break(
+                    condition,
+                    indent_level,
+                    symbols,
+                    context,
+                    "continue condition",
+                )?;
+                Ok(format!("{condition_break}{indent}continue;\n"))
+            }
             LoopContext::For { step } => {
                 validate_for_step_stmt(step)?;
                 let mut step_symbols = symbols.clone();
@@ -876,6 +892,9 @@ fn emit_stmt(
             block.push_str(&format!("{indent}}}\n"));
             Ok(block)
         }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => emit_do_while_stmt(body, condition, return_type, indent_level, symbols, context),
         IrStmt::For {
             init,
             condition,
@@ -896,6 +915,57 @@ fn emit_stmt(
             Err(format!("unsupported statement {node}: {reason}"))
         }
     }
+}
+
+fn emit_do_while_stmt(
+    body: &[IrStmt],
+    condition: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let indent = "    ".repeat(indent_level);
+    let mut loop_symbols = symbols.clone();
+    let mut block = String::new();
+    block.push_str(&format!("{indent}loop {{\n"));
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+            LoopContext::DoWhile { condition },
+        )
+        .map_err(|detail| format!("do while body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+    block.push_str(&emit_do_while_condition_break(
+        condition,
+        indent_level + 1,
+        symbols,
+        context,
+        "condition",
+    )?);
+    block.push_str(&format!("{indent}}}\n"));
+    Ok(block)
+}
+
+fn emit_do_while_condition_break(
+    condition: &IrExpr,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<String, String> {
+    let condition = emit_condition_expr(condition, symbols, context)
+        .map_err(|detail| format!("do while {path} {detail}"))?;
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    Ok(format!(
+        "{indent}if !({condition}) {{\n{inner_indent}break;\n{indent}}}\n"
+    ))
 }
 
 fn emit_for_stmt(
@@ -2655,6 +2725,15 @@ fn validate_definite_assignment_stmt(
             validate_definite_assignment_labeled_body(body, &mut body_state, "while body")?;
             Ok(())
         }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            let mut body_state = state.clone();
+            validate_definite_assignment_labeled_body(body, &mut body_state, "do while body")?;
+            validate_definite_assignment_expr(condition, &body_state)
+                .map_err(|detail| format!("do while condition {detail}"))?;
+            Ok(())
+        }
         IrStmt::For {
             init,
             condition,
@@ -2877,6 +2956,9 @@ fn collect_byte_cursor_sources_from_body(
             IrStmt::While { body, .. } => {
                 collect_byte_cursor_sources_from_body(body, cursor_sources);
             }
+            IrStmt::DoWhile { body, .. } => {
+                collect_byte_cursor_sources_from_body(body, cursor_sources);
+            }
             IrStmt::For {
                 init, step, body, ..
             } => {
@@ -2964,6 +3046,12 @@ fn stmt_has_post_increment_byte_read(stmt: &IrStmt, cursor: &str) -> bool {
         } => {
             expr_has_post_increment_byte_read(condition, cursor)
                 || body_has_post_increment_byte_read(body, cursor)
+        }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            body_has_post_increment_byte_read(body, cursor)
+                || expr_has_post_increment_byte_read(condition, cursor)
         }
         IrStmt::For {
             init,
@@ -3135,6 +3223,20 @@ fn collect_nullable_pointer_params_from_body(
                 );
                 collect_nullable_pointer_params_from_body(
                     body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_nullable_pointer_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+                collect_nullable_pointer_params_from_expr(
+                    condition,
                     readonly_pointer_params,
                     nullable_params,
                 );
@@ -3340,6 +3442,14 @@ fn validate_nullable_pointer_param_uses_in_stmt(
                 validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
             }
         }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            for stmt in body {
+                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            }
+            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+        }
         IrStmt::For {
             init,
             condition,
@@ -3475,6 +3585,22 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
             }
             IrStmt::While {
                 condition, body, ..
+            } => {
+                if let IrExpr::IncDec {
+                    target,
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ..
+                } = condition
+                {
+                    if let IrExpr::Var { name, .. } = target.as_ref() {
+                        assigned_vars.insert(name.clone());
+                    }
+                }
+                collect_assigned_vars_from_body(body, assigned_vars);
+            }
+            IrStmt::DoWhile {
+                body, condition, ..
             } => {
                 if let IrExpr::IncDec {
                     target,

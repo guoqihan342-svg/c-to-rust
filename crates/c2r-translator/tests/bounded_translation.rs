@@ -3219,6 +3219,120 @@ fn typed_ir_emits_continue_in_scalar_while_body() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_scalar_do_while_with_condition_check_after_body() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "do_countdown".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::DoWhile {
+                body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Sub,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                condition: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar do-while");
+
+    assert!(rust.contains("pub fn do_countdown(mut value: i32) -> i32"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(rust.contains("if !(value != 0i32) {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-do-while", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_do_while_continue_checks_condition_before_continuing() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "do_skip_large".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::DoWhile {
+                body: vec![
+                    IrStmt::Assign {
+                        target: ir_var("value", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Sub,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(1, "1", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                    IrStmt::If {
+                        condition: ir_binary(
+                            IrBinOp::Gt,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(3, "3", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        then_body: vec![IrStmt::Continue { source_span: None }],
+                        else_body: vec![],
+                        source_span: None,
+                    },
+                    IrStmt::Assign {
+                        target: ir_var("value", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Sub,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(1, "1", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                ],
+                condition: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit do-while continue");
+
+    assert!(rust.contains("pub fn do_skip_large(mut value: i32) -> i32"));
+    assert!(rust.contains(
+        "if (value > 3i32) {\n            if !(value != 0i32) {\n                break;\n            }\n            continue;"
+    ));
+    assert_eq!(rust.matches("if !(value != 0i32) {").count(), 2, "{rust:?}");
+    assert_rust_snippet_compiles("typed-ir-do-while-continue", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_for_emits_continue_after_step_in_body() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -12944,6 +13058,56 @@ fn clang_ast_dump_emits_typed_ir_while_continue_when_enabled() {
     assert!(rust.contains("while value != 0i32 {"));
     assert!(rust.contains("continue;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-while-continue", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_typed_ir_do_while_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typed-ir-do-while");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("do_countdown.c");
+    fs::write(
+        &source_file,
+        "int do_countdown(int value) { do { value = value - 1; } while (value); return value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "do_countdown");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::DoWhile { body, .. }, IrStmt::Return { .. }] = function.body.as_slice() else {
+        panic!(
+            "expected do-while followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(body.as_slice(), [IrStmt::Assign { .. }]));
+
+    let rust = emit_rust_from_ir(function).expect("emit typed IR do-while from real clang AST");
+    assert!(rust.contains("pub fn do_countdown(mut value: i32) -> i32"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(rust.contains("if !(value != 0i32) {"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-do-while", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

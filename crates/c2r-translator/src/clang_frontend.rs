@@ -173,6 +173,10 @@ pub enum ClangStmtSkeleton {
         condition: ClangExprSkeleton,
         body: Vec<ClangStmtSkeleton>,
     },
+    DoWhile {
+        body: Vec<ClangStmtSkeleton>,
+        condition: ClangExprSkeleton,
+    },
     For {
         init: Vec<ClangStmtSkeleton>,
         condition: Option<ClangExprSkeleton>,
@@ -848,6 +852,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("CompoundAssignOperator") => compound_assign_stmt_skeleton_from_ast(stmt),
         Some("IfStmt") => if_stmt_skeleton_from_ast(stmt),
         Some("WhileStmt") => while_stmt_skeleton_from_ast(stmt),
+        Some("DoStmt") => do_stmt_skeleton_from_ast(stmt),
         Some("ForStmt") => for_stmt_skeleton_from_ast(stmt),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
             expr: expr_skeleton_from_ast(stmt)?,
@@ -1195,6 +1200,21 @@ fn while_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clang
     Ok(ClangStmtSkeleton::While {
         condition: expr_skeleton_from_ast(condition)?,
         body: stmt_body_skeleton_from_ast(body)?,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn do_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
+    let children = inner(stmt);
+    let [body, condition] = children else {
+        return Err(ClangFrontendError {
+            kind: "invalid_do_stmt".to_string(),
+            message: "DoStmt must have body and condition".to_string(),
+        });
+    };
+    Ok(ClangStmtSkeleton::DoWhile {
+        body: stmt_body_skeleton_from_ast(body)?,
+        condition: expr_skeleton_from_ast(condition)?,
     })
 }
 
@@ -2110,6 +2130,14 @@ fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
                 .iter()
                 .map(lower_stmt)
                 .collect::<Result<Vec<_>, ClangFrontendError>>()?,
+            source_span: None,
+        }),
+        ClangStmtSkeleton::DoWhile { body, condition } => Ok(IrStmt::DoWhile {
+            body: body
+                .iter()
+                .map(lower_stmt)
+                .collect::<Result<Vec<_>, ClangFrontendError>>()?,
+            condition: lower_expr(condition)?,
             source_span: None,
         }),
         ClangStmtSkeleton::For {
