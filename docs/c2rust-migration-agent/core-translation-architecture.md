@@ -23,7 +23,7 @@ flowchart TD
     scalar decl/assign/if/while,
     narrow scalar-integer ops: binary + - * / % & ^ >>, signed unary -
     (candidate generation only),
-    comparison conditions,
+    condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     const pointer slices,
     readonly global const integer arrays,
@@ -94,7 +94,7 @@ generic typed IR emission 现在覆盖：
 - scalar declaration、assignment、return、`if`、`while`；
 - 标量整数二元表达式 `+`、`-`、`*`、`/`、`%`、`&`、`^`、`>>`；
 - signed 标量整数 unary minus `-value`；
-- 只允许出现在条件中的 comparison expression；
+- comparison expression 的条件位置和窄 value-position：`if` / `while` 条件继续发 Rust bool condition；`return x > 0`、`out = x == y`、`int ok = x != 0` 等 value-position 生成 C `int` 0/1 materialization；
 - logical not `!expr` 的条件位置和窄 value-position：`if (!value)` / `while (!value)` 生成 `value == 0`，`!(value > 0)` 生成反转后的 comparison condition；`return !value`、assignment RHS 和 declaration initializer 等 value-position 生成 C `int` 0/1 materialization，例如 `if value == 0 { 1i32 } else { 0i32 }`；
 - 来自 clang AST 的 initialized scalar local；
 - 来自 clang AST 的无大括号 `if` / `while` body；
@@ -112,11 +112,12 @@ generic typed IR emission 现在覆盖：
 - 当前只是候选生成链路能生成并编译 Rust，并且 route/profile 已绑定 candidate provenance；raw string crc32 byte-cursor 输入现在保持 fail-closed。真实 FlashDB slice 的 semantic acceptance 仍需要完整 validation gates。
 - `*`、`/`、`%` 只表示窄化标量整数 candidate generation。不能据此声明支持除零、全部 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity 或指针算术；除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才可进入 semantic acceptance 讨论。
 - signed unary minus 也只是窄化 candidate generation。它要求 operand/result 是同一个 signed integer scalar type；unsigned 或 wrapping 取负、浮点取负、指针算术、复合 `-=`、以及 `-2147483648` 这类 literal 边界仍未建模，必须继续 fail closed。
+- comparison expression 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖窄化标量整数比较和 C `int` 0/1 materialization；pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||`、完整 usual scalar conversions 和 semantic acceptance 继续 fail closed。
 - logical not 只是 candidate generation，条件位置和窄 value-position 都保持 `semantic_pass=false`。当前只覆盖整数零比较、反转 comparison condition，以及 C `int` 0/1 结果 materialization；它不是完整 C unary `!`，operand 含 call、inc/dec、未建模 deref/side effect、pointer null test、float truthiness、unsupported type、短路逻辑或完整 usual scalar conversions 时继续 fail closed。
 - 复杂函数指针、未建模 alias write、volatile/硬件寄存器、宏副作用和跨线程/中断语义仍应 fail closed 或进入更高路线。
 
 ## 下一步实现切口
 
-1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；下一小步候选是 value-position comparison expression 的 C `int` 0/1 结果语义，例如 `return x > 0`、`out = x == y`、`int ok = x != 0`，但 pointer/deref/call 副作用、unsigned/wrapping 算术、完整 usual scalar conversions 和完整 C unary/binary 语义在 typed rules 明确前继续 fail closed。
+1. 继续用红测优先扩展 generic typed IR 的标量表达式覆盖；value-position comparison expression 已进入窄化 candidate generation 覆盖，当前仅代表条件位置 + 窄 value-position C `int` 0/1 materialization；后续切口仍需单独设计，并继续让 pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
 2. 对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
 3. 保留 raw string crc32 byte-cursor fail-closed 回归测试，避免 `crc32_update_byte()` 模板或 `crc32-byte-cursor-loop` rule 被重新引入。

@@ -923,6 +923,9 @@ fn emit_expr(
         IrExpr::Binary {
             op, lhs, rhs, ty, ..
         } => {
+            if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)? {
+                return Ok(expr);
+            }
             let op = emit_binary_op(op)?;
             validate_binary_operand_types(op, lhs, rhs, ty)?;
             let lhs = emit_expr(lhs, symbols, context)
@@ -1074,6 +1077,14 @@ fn emit_expr_with_prelude(
         IrExpr::Binary {
             op, lhs, rhs, ty, ..
         } => {
+            if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)
+                .map_err(|detail| format!("{path} {detail}"))?
+            {
+                return Ok(EmittedExpr {
+                    prelude: String::new(),
+                    expr,
+                });
+            }
             let op = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
             validate_binary_operand_types(op, lhs, rhs, ty)
                 .map_err(|detail| format!("{path} {detail}"))?;
@@ -1654,16 +1665,55 @@ fn emit_comparison_condition_expr(
         op, lhs, rhs, ty, ..
     } = expr
     {
-        if let Ok(op) = emit_comparison_op(op) {
-            validate_comparison_condition_types(lhs, rhs, ty, op)?;
-            let lhs = emit_expr(lhs, symbols, context)
-                .map_err(|detail| format!("comparison lhs {detail}"))?;
-            let rhs = emit_expr(rhs, symbols, context)
-                .map_err(|detail| format!("comparison rhs {detail}"))?;
-            return Ok(Some(format!("({lhs} {op} {rhs})")));
-        }
+        return emit_comparison_condition_from_parts(op, lhs, rhs, ty, symbols, context);
     }
     Ok(None)
+}
+
+fn emit_comparison_condition_from_parts(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Ok(op) = emit_comparison_op(op) else {
+        return Ok(None);
+    };
+    if let Some(callee) = find_call_callee(lhs).or_else(|| find_call_callee(rhs)) {
+        return Err(format!(
+            "comparison operand call expression {callee} is unsupported"
+        ));
+    }
+    validate_comparison_condition_types(lhs, rhs, result_ty, op)?;
+    let lhs =
+        emit_expr(lhs, symbols, context).map_err(|detail| format!("comparison lhs {detail}"))?;
+    let rhs =
+        emit_expr(rhs, symbols, context).map_err(|detail| format!("comparison rhs {detail}"))?;
+    Ok(Some(format!("({lhs} {op} {rhs})")))
+}
+
+fn emit_comparison_value_expr(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Some(condition) =
+        emit_comparison_condition_from_parts(op, lhs, rhs, result_ty, symbols, context)?
+    else {
+        return Ok(None);
+    };
+    let one = emit_integer_literal(1, result_ty)
+        .map_err(|detail| format!("comparison true literal {detail}"))?;
+    let zero = emit_integer_literal(0, result_ty)
+        .map_err(|detail| format!("comparison false literal {detail}"))?;
+    Ok(Some(format!(
+        "(if {condition} {{ {one} }} else {{ {zero} }})"
+    )))
 }
 
 fn emit_logical_not_condition_expr(
@@ -1742,6 +1792,8 @@ fn validate_comparison_condition_types(
             type_label(result_ty)
         ));
     }
+    reject_comparison_cast_operand(lhs, "lhs")?;
+    reject_comparison_cast_operand(rhs, "rhs")?;
     let lhs_ty = expr_type(lhs).ok_or_else(|| "comparison lhs type is unsupported".to_string())?;
     let rhs_ty = expr_type(rhs).ok_or_else(|| "comparison rhs type is unsupported".to_string())?;
     let lhs_ty =
@@ -1754,6 +1806,16 @@ fn validate_comparison_condition_types(
         Err(format!(
             "comparison operand types must match for {op}: lhs={lhs_ty}, rhs={rhs_ty}"
         ))
+    }
+}
+
+fn reject_comparison_cast_operand(expr: &IrExpr, side: &str) -> Result<(), String> {
+    if matches!(expr, IrExpr::Cast { .. }) {
+        Err(format!(
+            "comparison {side} cast operand is unsupported until usual conversions are modeled"
+        ))
+    } else {
+        Ok(())
     }
 }
 

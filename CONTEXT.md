@@ -6420,3 +6420,80 @@ English mirror summary:
 - Operand zero literals use the operand type, while the outer result remains C `int`; for example an `unsigned char` operand emits `value == 0u8` with `1i32` / `0i32` results.
 - This is candidate generation only and keeps `semantic_pass=false`. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, full usual scalar conversions, or semantic acceptance.
 - FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 93. 2026-06-27 value-position comparison through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR comparison emitter、clang lowering 现状、文档同步点和验证风险；主线程按 TDD 把窄 value-position comparison expression 的 C `int` 0/1 结果语义接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_expr()` 和 `emit_expr_with_prelude()` 现在识别 comparison `IrExpr::Binary` 的 value-position。
+  - 新增 `emit_comparison_condition_from_parts()`，让 condition-position 和 value-position comparison 共用同一套 scalar comparison 校验与 Rust bool condition 生成。
+  - 新增 `emit_comparison_value_expr()`，把 `return x > 0`、assignment RHS、declaration initializer 里的 comparison materialize 为 `(if condition { 1i32 } else { 0i32 })`，保持 C `int` 0/1 语义。
+  - `if` / `while` 条件里的 comparison 仍发射 Rust bool condition，不额外 materialize 成整数。
+  - comparison result type 必须是 C `int`；pointer comparison、float/unsupported comparison、mixed-width/unsigned conversions、comparison cast operand、call/inc/dec/deref side-effect operands、short-circuit `&&` / `||` 继续 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - comparison lowering 本身没有 production 改动；既有 clang AST lowering 已经能把真实 TU 中的 `>`, `==`, `!=` comparison lowering 成 result type 为 `int` 的 typed IR binary expression。
+  - 额外修复 `clang-frontend` feature 单独编译时的 dry-run 路径：`normalized_path(path: &Path)` 需要无条件导入 `std::path::Path`，否则 `--emit-clang-dry-run` 会在该 feature 组合下编译失败。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试：return value、assignment RHS、declaration initializer、`u8` operand comparison result、logical-not operand 嵌套 materialization。
+  - 新增 fail-closed 测试：call operand、inc/dec operand、deref operand、pointer operand、float/unsupported operand、mismatched operand types、mismatched operand widths、non-C-int result type、comparison cast operand、short-circuit logical ops、`*p++ == 0` 这类需要 prelude 的 byte-read operand，以及 condition-position 的 pointer/unsupported/deref/short-circuit 边界。
+  - 新增 clang skeleton 测试：comparison return value、declaration initializer、assignment RHS。
+  - 新增 gated real clang smoke：真实 C `return x > 0`、decl initializer、assignment value 的 comparison AST lowering。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report comparison -- --nocapture
+```
+
+红灯表现：
+- value-position comparison 正向用例失败于 `binary op ... is unsupported`。
+- 新增 fail-closed 用例在实现前只能得到旧的 generic unsupported 错误，无法给出具体边界原因。
+
+已跑过的聚焦绿灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report comparison -- --nocapture
+```
+
+聚焦结果：PASS，`comparison` filter 下 1 个 lib test + 40 个 bounded translation tests 通过。
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 个 lib tests + 238 个 bounded translation tests + doc-tests 通过。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_comparison -- --nocapture`: PASS，4 个真实 clang comparison AST smoke tests 实际运行并通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend clang_dry_run -- --nocapture`: PASS，2 个 clang dry-run tests 通过。
+- `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact -v`: PASS。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-frontend -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: extra full-regression smoke run `20260627T001827Z` reached step 31/35 and failed on pre-existing `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json` hash drift: declared c_oracle sha256 `2b7f57daca9a5bd905235c52f9fad96bd6e7abf67fda1bf4b94eaf261717e5ea`, actual `6003d05f935938f737445396fa5ae104cfccd08fd14a1a692dfb3a82f5e792f3`. This is outside the current commit whitelist and `validation/evidence/**` remains unstaged.
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄 value-position comparison expression 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`return x > 0`、`out = x == y`、declaration initializer 和 `u8` scalar operand 的 comparison result 会生成 C `int` 0/1，而不是 Rust bool value。
+- 可以说：`if` / `while` 中的 comparison 仍生成 Rust bool condition。
+- 不应说：已经支持完整 C comparison expression、pointer comparison、float comparison、mixed-width/unsigned conversions、comparison cast operand、short-circuit `&&` / `||`、call/deref/inc/dec side-effect operands、usual arithmetic conversions 或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 本轮额外修了 `clang-frontend` dry-run feature 编译缺口；它只保证 `--emit-clang-dry-run` feature 组合能编译并写出 dry-run artifact，不改变 comparison lowering 语义。
+- 本节已经 supersede 第 92 节末尾“下一小步建议 value-position comparison”的历史建议；后续继续按最新编号章节读取。
+
+下一步建议：
+- 下一小步核心翻译切口建议继续沿 scalar expression 覆盖面推进，但不要把 short-circuit、usual arithmetic conversions 或 pointer/null comparison 混进同一刀；这些需要单独设计 fail-closed 边界和 oracle。
+- 如果要提高真实项目覆盖率，优先补 typed IR 的 casts/usual conversions 观测与 fail-closed 分类，再决定哪些转换可以安全 deterministic emit。
+
+English mirror summary:
+
+- Narrow value-position comparison expressions now flow through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `emit_expr()` and `emit_expr_with_prelude()` support comparison `IrExpr::Binary` values by materializing C `int` 0/1 as `(if condition { 1i32 } else { 0i32 })`, not as Rust bool values.
+- `if` / `while` comparison conditions still emit Rust bool conditions.
+- This slice did not need comparison-lowering production changes in `clang_frontend.rs`; existing lowering already maps real `>`, `==`, and `!=` AST nodes to typed IR binary expressions with C `int` result type. It also fixes a separate `clang-frontend` dry-run feature compile gap by importing `std::path::Path` unconditionally.
+- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C comparison semantics, pointer comparison, floating-point comparison, mixed-width/unsigned conversions, comparison cast operands, short-circuit `&&` / `||`, call/deref/inc/dec side-effect operands, usual arithmetic conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.

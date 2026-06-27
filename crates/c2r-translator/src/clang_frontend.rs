@@ -1,6 +1,12 @@
-use std::{collections::BTreeMap, env, error::Error, fmt, path::PathBuf};
 #[cfg(feature = "typed-ir")]
-use std::{path::Path, process::Command};
+use std::process::Command;
+use std::{
+    collections::BTreeMap,
+    env,
+    error::Error,
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "typed-ir")]

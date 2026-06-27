@@ -23,7 +23,7 @@ flowchart TD
     scalar decl/assign/if/while,
     narrow scalar-integer ops: binary + - * / % & ^ >>, signed unary -
     (candidate generation only),
-    comparison conditions,
+    condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     const pointer slices,
     readonly global const integer arrays,
@@ -94,7 +94,7 @@ Generic typed IR emission now covers:
 - scalar declarations, assignment, return, `if`, and `while`;
 - scalar integer binary expressions `+`, `-`, `*`, `/`, `%`, `&`, `^`, and `>>`;
 - signed scalar integer unary minus `-value`;
-- comparison expressions only in conditions;
+- comparison expressions in conditions and narrow value positions: `if` / `while` conditions emit Rust bool conditions, while value positions such as `return x > 0`, `out = x == y`, and `int ok = x != 0` materialize C `int` 0/1 results;
 - logical not `!expr` in conditions and narrow value positions: `if (!value)` / `while (!value)` emit `value == 0`, `!(value > 0)` emits a negated comparison condition, and value positions such as `return !value`, assignment RHS, or declaration initializer emit C `int` 0/1 materialization such as `if value == 0 { 1i32 } else { 0i32 }`;
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;
@@ -112,11 +112,12 @@ Still incomplete:
 - The current work proves candidate generation plus rustc smoke and binds candidate provenance into route/profile evidence; raw string crc32 byte-cursor input now stays fail-closed. It is not semantic acceptance for the real FlashDB slice.
 - `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 - Signed unary minus is also narrow candidate generation only. It requires the operand and result to be the same signed integer scalar type; unsigned or wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, and literal edge cases such as `-2147483648` remain outside this subset until modeled explicitly.
+- Comparison expressions are candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers narrow scalar-integer comparisons and C `int` 0/1 materialization; pointer comparison, floating-point comparison, mixed-width/unsigned conversions, comparison cast operands, side-effect operands, short-circuit `&&` / `||`, full usual scalar conversions, and semantic acceptance still fail closed.
 - Logical not is candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers integer zero checks, negated comparison conditions, and C `int` 0/1 materialization; it is not full C unary `!`, and operands containing calls, inc/dec, unmodeled deref/side effects, pointer null tests, floating-point truthiness, unsupported types, short-circuit logic, or full usual scalar conversions still fail closed.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR scalar expression coverage with red tests first; the next narrow candidate is value-position comparison expressions with C `int` 0/1 result semantics, for example `return x > 0`, `out = x == y`, or `int ok = x != 0`, while pointer/deref/call side effects, unsigned/wrapping arithmetic, full usual scalar conversions, and full C unary/binary semantics remain fail-closed until typed rules exist.
+1. Keep extending generic typed IR scalar expression coverage with red tests first; value-position comparison expressions are now covered by narrow candidate generation for conditions plus narrow value-position C `int` 0/1 materialization. Later implementation cuts still need separate design, and pointer comparison, floating-point comparison, mixed-width/unsigned conversions, comparison cast operands, side-effect operands, short-circuit `&&` / `||`, and semantic acceptance must continue to fail closed.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

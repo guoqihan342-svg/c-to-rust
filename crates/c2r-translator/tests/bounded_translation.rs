@@ -2631,11 +2631,11 @@ fn typed_ir_emits_scalar_if_with_comparison_condition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_emits_scalar_if_with_casted_comparison_literal() {
+fn typed_ir_rejects_comparison_condition_with_cast_operand() {
     let i32_ty = ir_i32();
     let u32_ty = ir_u32();
     let ir = IrFunction {
-        name: "adjust_unsigned_positive".to_string(),
+        name: "bad_cmp_condition_cast".to_string(),
         return_type: u32_ty.clone(),
         params: vec![IrParam {
             name: "value".to_string(),
@@ -2676,12 +2676,14 @@ fn typed_ir_emits_scalar_if_with_casted_comparison_literal() {
         source_span: None,
     };
 
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar if casted comparison literal");
+    let error = emit_rust_from_ir(&ir).expect_err("comparison cast operand must fail closed");
 
-    assert!(rust.contains("pub fn adjust_unsigned_positive(mut value: u32) -> u32"));
-    assert!(rust.contains("if (value > (0i32 as u32)) {"));
-    assert!(rust.contains("value = (value + 1u32);"));
-    assert_rust_snippet_compiles("typed-ir-scalar-if-casted-comparison", &rust);
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error.reason.contains("comparison rhs"));
+    assert!(error.reason.contains("cast operand is unsupported"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2926,7 +2928,7 @@ fn typed_ir_emits_scalar_if_with_logical_not_comparison_condition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_comparison_expression_outside_condition() {
+fn typed_ir_emits_comparison_return_value_as_c_int() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "positive_as_int".to_string(),
@@ -2948,13 +2950,608 @@ fn typed_ir_rejects_comparison_expression_outside_condition() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("comparison outside condition must fail closed");
+    let emitted = emit_rust_from_ir(&ir).expect("emit comparison return value as C int");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn positive_as_int(value: i32) -> i32"));
+    assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
+    assert!(!rust.contains("return (value > 0i32);"));
+    assert_rust_snippet_compiles("typed-ir-comparison-return-value", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_comparison_assignment_value_as_c_int() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "cmp_assign".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: ir_var("left", i32_ty.clone()),
+                value: ir_binary(
+                    IrBinOp::Neq,
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("left", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit comparison assignment value as C int");
+
+    assert!(rust.contains("pub fn cmp_assign(mut left: i32, right: i32) -> i32"));
+    assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
+    assert!(rust.contains("return left;"));
+    assert_rust_snippet_compiles("typed-ir-comparison-assignment-value", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_comparison_decl_initializer_as_c_int() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "cmp_init".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "out".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("out", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit comparison decl initializer as C int");
+
+    assert!(rust.contains("pub fn cmp_init(left: i32, right: i32) -> i32"));
+    assert!(rust.contains("let mut out: i32 = (if (left == right) { 1i32 } else { 0i32 });"));
+    assert!(rust.contains("return out;"));
+    assert_rust_snippet_compiles("typed-ir-comparison-decl-initializer", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_u8_comparison_return_value_as_c_int() {
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let ir = IrFunction {
+        name: "byte_is_above".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u8_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Gt,
+                ir_var("value", u8_ty.clone()),
+                ir_lit(127, "127", u8_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit u8 comparison return value as C int");
+
+    assert!(rust.contains("pub fn byte_is_above(value: u8) -> i32"));
+    assert!(rust.contains("return (if (value > 127u8) { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-u8-comparison-return-value", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_call_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_cmp_call".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![ir_var("value", i32_ty.clone())],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison call operand must fail closed");
 
     assert!(error
         .reason
         .contains("outside the current typed IR emitter subset"));
     assert!(error.reason.contains("return expr"));
-    assert!(error.reason.contains("binary op Gt is unsupported"));
+    assert!(error
+        .reason
+        .contains("comparison operand call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_incdec_operand() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_cmp_incdec_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison incdec operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error.reason.contains("comparison lhs"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_deref_operand() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_cmp_deref_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                IrExpr::Deref {
+                    ptr: Box::new(ir_var("ptr", ptr_ty)),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison deref operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error.reason.contains("comparison lhs"));
+    assert!(error.reason.contains("deref expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_pointer_operand() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_cmp_pointer_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_var("left", ptr_ty.clone()),
+                ir_var("right", ptr_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison pointer operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("comparison lhs has pointer type int * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_unsupported_operand_type() {
+    let i32_ty = ir_i32();
+    let unsupported_ty = IrType {
+        spelled: "float".to_string(),
+        canonical: "float".to_string(),
+        kind: IrTypeKind::Unsupported {
+            reason: "floating type is outside typed IR subset".to_string(),
+        },
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_cmp_float_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_var("left", unsupported_ty.clone()),
+                ir_var("right", unsupported_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("comparison unsupported operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error.reason.contains(
+        "comparison lhs has unsupported type float: floating type is outside typed IR subset"
+    ));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_mismatched_operand_types() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_cmp_mismatch_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_var("left", i32_ty.clone()),
+                ir_var("right", u32_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("comparison mismatched operands must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("comparison operand types must match for =="));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_mismatched_operand_widths() {
+    let i16_ty = ir_integer("short", "short", true, 16);
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_cmp_width_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: i16_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_var("left", i32_ty.clone()),
+                ir_var("right", i16_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison width mismatch must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("comparison operand types must match for =="));
+    assert!(error.reason.contains("lhs=i32"));
+    assert!(error.reason.contains("rhs=i16"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_non_int_result_type() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_cmp_result_value".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(0, "0", i32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison result type must be C int");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("comparison result type must be C int"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_short_circuit_ops() {
+    for (op, name) in [
+        (IrBinOp::LogAnd, "bad_cmp_short_circuit_and"),
+        (IrBinOp::LogOr, "bad_cmp_short_circuit_or"),
+    ] {
+        let i32_ty = ir_i32();
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![
+                IrParam {
+                    name: "left".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "right".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+            ],
+            body: vec![IrStmt::Return {
+                value: Some(ir_binary(
+                    op,
+                    ir_var("left", i32_ty.clone()),
+                    ir_var("right", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+
+        let error =
+            emit_rust_from_ir(&ir).expect_err("short-circuit value expression must fail closed");
+
+        assert!(
+            error
+                .reason
+                .contains("outside the current typed IR emitter subset"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("return expr"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("binary op Log"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("is unsupported"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_cast_operand() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_cmp_value_cast".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Gt,
+                ir_var("value", u32_ty.clone()),
+                IrExpr::Cast {
+                    target: u32_ty,
+                    expr: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    implicit: true,
+                    source_span: None,
+                },
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison cast operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error.reason.contains("comparison rhs"));
+    assert!(error.reason.contains("cast operand is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_value_comparison_with_post_increment_byte_read_operand() {
+    let i32_ty = ir_i32();
+    let u8_ty = ir_u8();
+    let const_u8_ptr = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(u8_ty.clone()),
+        false,
+    );
+    let byte_read = IrExpr::Deref {
+        ptr: Box::new(IrExpr::IncDec {
+            target: Box::new(ir_var("p", const_u8_ptr.clone())),
+            op: IrIncDecOp::Inc,
+            prefix: false,
+            ty: const_u8_ptr.clone(),
+            source_span: None,
+        }),
+        ty: u8_ty.clone(),
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_cmp_byte_read_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: const_u8_ptr,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Eq,
+                byte_read,
+                ir_lit(0, "0", u8_ty),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("comparison byte-read operand must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("return expr"));
+    assert!(error.reason.contains("comparison lhs"));
+    assert!(error.reason.contains("deref expression is unsupported"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3050,6 +3647,209 @@ fn typed_ir_rejects_comparison_condition_with_non_int_result_type() {
     assert!(error
         .reason
         .contains("comparison result type must be C int"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_comparison_condition_with_pointer_operand() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_cmp_pointer_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("left", ptr_ty.clone()),
+                    ir_var("right", ptr_ty),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer comparison condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error
+        .reason
+        .contains("comparison lhs has pointer type int * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_comparison_condition_with_unsupported_operand_type() {
+    let i32_ty = ir_i32();
+    let unsupported_ty = IrType {
+        spelled: "float".to_string(),
+        canonical: "float".to_string(),
+        kind: IrTypeKind::Unsupported {
+            reason: "floating type is outside typed IR subset".to_string(),
+        },
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bad_cmp_float_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("left", unsupported_ty.clone()),
+                    ir_var("right", unsupported_ty),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("unsupported comparison condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error.reason.contains(
+        "comparison lhs has unsupported type float: floating type is outside typed IR subset"
+    ));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_comparison_condition_with_deref_operand() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_cmp_deref_condition".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    IrExpr::Deref {
+                        ptr: Box::new(ir_var("ptr", ptr_ty)),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_lit(0, "0", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("deref comparison condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].if condition"));
+    assert!(error.reason.contains("comparison lhs"));
+    assert!(error.reason.contains("deref expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_comparison_condition_short_circuit_ops() {
+    for (op, name) in [
+        (IrBinOp::LogAnd, "bad_cmp_condition_short_circuit_and"),
+        (IrBinOp::LogOr, "bad_cmp_condition_short_circuit_or"),
+    ] {
+        let i32_ty = ir_i32();
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![
+                IrParam {
+                    name: "left".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "right".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+            ],
+            body: vec![
+                IrStmt::If {
+                    condition: ir_binary(
+                        op,
+                        ir_var("left", i32_ty.clone()),
+                        ir_var("right", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    then_body: vec![],
+                    else_body: vec![],
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).expect_err("short-circuit condition must fail closed");
+
+        assert!(
+            error
+                .reason
+                .contains("outside the current typed IR emitter subset"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("stmt[0].if condition"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("binary op Log"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("is unsupported"),
+            "{name} produced unexpected error: {}",
+            error.reason
+        );
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3948,10 +4748,10 @@ fn typed_ir_emits_logical_not_as_comparison_condition_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_value_comparison_with_logical_not_operand() {
+fn typed_ir_emits_value_comparison_with_logical_not_operand_as_c_int() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
-        name: "bad_logical_not_value_comparison".to_string(),
+        name: "logical_not_value_comparison".to_string(),
         return_type: i32_ty.clone(),
         params: vec![IrParam {
             name: "value".to_string(),
@@ -3970,14 +4770,14 @@ fn typed_ir_rejects_value_comparison_with_logical_not_operand() {
         source_span: None,
     };
 
-    let error =
-        emit_rust_from_ir(&ir).expect_err("value-position comparison must remain fail closed");
+    let rust =
+        emit_rust_from_ir(&ir).expect("emit value comparison with logical not operand as C int");
 
-    assert!(error
-        .reason
-        .contains("outside the current typed IR emitter subset"));
-    assert!(error.reason.contains("return expr"));
-    assert!(error.reason.contains("binary op Eq is unsupported"));
+    assert!(rust.contains("pub fn logical_not_value_comparison(value: i32) -> i32"));
+    assert!(rust.contains(
+        "return (if ((if value == 0i32 { 1i32 } else { 0i32 }) == 1i32) { 1i32 } else { 0i32 });"
+    ));
+    assert_rust_snippet_compiles("typed-ir-logical-not-value-comparison", &rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -5734,6 +6534,198 @@ fn clang_lowering_skeleton_maps_comparison_if_condition() {
     let rust = emit_rust_from_ir(&ir).expect("emit comparison if from lowered IR");
     assert!(rust.contains("if (value > 0i32) {"));
     assert_rust_snippet_compiles("typed-ir-clang-if-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_comparison_return_value() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "positive_as_int".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::Return {
+            value: Some(ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Gt,
+                lhs: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty,
+            }),
+        }],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower comparison return value");
+
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary {
+            op: IrBinOp::Gt, ..
+        }),
+        ..
+    }] = ir.body.as_slice()
+    else {
+        panic!("expected comparison return, got {:?}", ir.body);
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit comparison return from lowered IR");
+    assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-clang-return-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_comparison_decl_initializer() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "cmp_init".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "left".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "right".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "out".to_string(),
+                ty: int_ty.clone(),
+                init: Some(ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Eq,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "left".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "right".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty.clone(),
+                }),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "out".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower comparison decl initializer");
+
+    let [IrStmt::Decl {
+        init: Some(IrExpr::Binary {
+            op: IrBinOp::Eq, ..
+        }),
+        ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!(
+            "expected comparison decl initializer followed by return, got {:?}",
+            ir.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit comparison decl initializer from lowered IR");
+    assert!(rust.contains("let mut out: i32 = (if (left == right) { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-clang-decl-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_comparison_assignment_value() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "cmp_assign".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "left".to_string(),
+                ty: int_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "right".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::Assign {
+                target: ClangExprSkeleton::DeclRef {
+                    name: "left".to_string(),
+                    ty: int_ty.clone(),
+                },
+                value: ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Neq,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "left".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "right".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty.clone(),
+                },
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "left".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower comparison assignment value");
+
+    let [IrStmt::Assign {
+        value: IrExpr::Binary {
+            op: IrBinOp::Neq, ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = ir.body.as_slice()
+    else {
+        panic!(
+            "expected comparison assignment followed by return, got {:?}",
+            ir.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit comparison assignment from lowered IR");
+    assert!(rust.contains("pub fn cmp_assign(mut left: i32, right: i32) -> i32"));
+    assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-clang-assign-comparison", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -8575,6 +9567,161 @@ fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
     assert!(rust.contains("value = (value + 1i32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_comparison_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-comparison-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("positive_as_int.c");
+    fs::write(
+        &source_file,
+        "int positive_as_int(int value) { return value > 0; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "positive_as_int");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary {
+            op: IrBinOp::Gt, ..
+        }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected comparison return, got {:?}", function.body);
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit comparison return from real clang AST");
+    assert!(rust.contains("pub fn positive_as_int(value: i32) -> i32"));
+    assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-return-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_comparison_decl_initializer_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-comparison-decl");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("cmp_init.c");
+    fs::write(
+        &source_file,
+        "int cmp_init(int left, int right) { int out = left == right; return out; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "cmp_init");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        init: Some(IrExpr::Binary {
+            op: IrBinOp::Eq, ..
+        }),
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected comparison decl initializer followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust =
+        emit_rust_from_ir(function).expect("emit comparison decl initializer from real clang AST");
+    assert!(rust.contains("pub fn cmp_init(left: i32, right: i32) -> i32"));
+    assert!(rust.contains("let mut out: i32 = (if (left == right) { 1i32 } else { 0i32 });"));
+    assert!(rust.contains("return out;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-decl-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-comparison-assign");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("cmp_assign.c");
+    fs::write(
+        &source_file,
+        "int cmp_assign(int left, int right) { left = left != right; return left; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "cmp_assign");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign {
+        value: IrExpr::Binary {
+            op: IrBinOp::Neq, ..
+        },
+        ..
+    }, IrStmt::Return { .. }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected comparison assignment followed by return, got {:?}",
+            function.body
+        );
+    };
+
+    let rust = emit_rust_from_ir(function).expect("emit comparison assignment from real clang AST");
+    assert!(rust.contains("pub fn cmp_assign(mut left: i32, right: i32) -> i32"));
+    assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
+    assert!(rust.contains("return left;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-assign-comparison", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
