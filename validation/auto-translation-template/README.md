@@ -15,6 +15,8 @@ This directory defines evidence contracts for bounded automatic translation and 
 - 中文：自动翻译 fixture 如果要被当前 `--require-semantic-pass` 直接验证，必须把 `c2rust_baseline`、`route_decision`、`validation_profile` 三类证据落盘并写入 auto manifest、L3 evidence manifest、final verification 和 cache metadata。测试 helper 临时补字段不能作为可提交 evidence。
 - Generated validation profiles must bind the default competition environment profile through `competition_environment.profile_id`, `path`, and `sha256`; cache metadata must carry the matching `competition_environment_identity` in `cache_input_fields`.
 - 中文：新生成的 validation profile 必须通过 `competition_environment.profile_id`、`path` 和 `sha256` 绑定默认比赛环境 profile；cache metadata 必须在 `cache_input_fields` 中写入一致的 `competition_environment_identity`。
+- Newly generated pointer graphs use schema v2. If pointer effects make the slice alias-sensitive, the validator requires `effect_graph`; cache metadata must include `effect_graph_identity` in `cache_input_fields`.
+- 中文：新生成的 pointer graph 使用 schema v2。若指针 effect 让 slice 进入 alias-sensitive 状态，validator 会要求 `effect_graph`；cache metadata 必须在 `cache_input_fields` 中包含 `effect_graph_identity`。
 
 ## Alias Gate Summary
 
@@ -25,6 +27,10 @@ English: `translation_summary.alias_gate` carries the translator's current alias
 English: if the alias decision changes, cache metadata must invalidate the Rust draft, C oracle binding, Rust replay, diff, unsafe evidence, final verification, and summary.
 
 中文：如果 alias 决策变化，cache metadata 必须让 Rust draft、C oracle 绑定、Rust replay、diff、unsafe evidence、final verification 和 summary 失效或重新审核。
+
+English: effect graph identity is part of the same cache boundary. If read/write effect counts, participating pointer nodes, alias-sensitive status, or the final alias-gate decision changes, generated candidates and downstream evidence must be regenerated or explicitly reviewed.
+
+中文：effect graph identity 属于同一个缓存边界。只要 read/write effect 数量、参与的 pointer node、alias-sensitive 状态或最终 alias-gate decision 变化，生成候选和下游 evidence 都必须重新生成或显式复核。
 
 ## Rules
 

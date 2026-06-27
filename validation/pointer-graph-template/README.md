@@ -32,6 +32,10 @@ English: pointer-bearing slices must distinguish pointer topology from memory ef
 
 中文：含指针的 slice 不能只记录“有哪些指针”，还要记录“这些指针读写了什么”。`pointer_nodes[*].read_effects` 和 `pointer_nodes[*].write_effects` 描述局部读写面；`effect_graph` 描述结构化 effect 节点以及数据、控制、别名关系。当同一个 slice 同时存在指针读和指针写，并且无法证明 noalias 时，必须记录 `alias_contract`、`alias_risks`、`alias_sets` 和 `safe_boundary_preconditions`。
 
+English: newly generated pointer graph artifacts use `schema_version=2`. For v2 alias-sensitive read/write pointer graphs, `effect_graph` is required and must include read effects, write effects, and alias-risk edges such as `requires_noalias` or `may_alias`. Historical v1 artifacts may omit this field, but they must not be treated as the current generated format.
+
+中文：新生成的 pointer graph artifact 使用 `schema_version=2`。v2 的 alias-sensitive 指针读写图必须包含 `effect_graph`，并记录 read effects、write effects，以及 `requires_noalias` 或 `may_alias` 等 alias-risk 边。历史 v1 artifact 可以缺少该字段，但不能被当作当前生成格式。
+
 English: this is still evidence, not a whole-program alias solver. `complete_alias_safety=false` is expected unless a later proof or gate can justify a stronger claim.
 
 中文：这些字段仍然是证据契约，不是全程序 alias 求解器。除非后续有更强证明或门禁，默认应保持 `complete_alias_safety=false`，不能声称完整 alias safety。
@@ -54,5 +58,5 @@ English: this is still evidence, not a whole-program alias solver. `complete_ali
 ## Files
 
 - `pointer-graph.schema.json`: schema for pointer graph evidence.
-- `pointer-graph.example.json`: FlashDB-style example graph for a KVDB visible-behavior slice.
+- `pointer-graph.example.json`: schema v2 FlashDB-style example graph for a KVDB visible-behavior slice.
 - `checklist.md`: review checklist before translation or L3 reporting.

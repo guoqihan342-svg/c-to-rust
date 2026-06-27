@@ -91,6 +91,7 @@ flowchart TD
   - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
   - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
   - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 typed IR route signal；如果当前 slice 是 scalar-only 且 `token_cost=0`，它走 L0 deterministic candidate route；否则 generated typed IR 仍至少是 L1 signal。`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件、`alias_blocked`、`requires_noalias_contract` 和未知 pointer ownership floor 仍优先；typed IR provenance 会保留在 rationale 中，但不能覆盖这些风险 floor。
+  - 新生成的 pointer graph 使用 `schema_version=2`。alias-sensitive 指针读写图会写入 `alias_contract`、`alias_risks`、`alias_sets`、`safe_boundary_preconditions` 和结构化 `effect_graph`；cache metadata 同步写入 `effect_graph_identity`。validator 对 v2 alias-sensitive evidence 要求 read/write effects 和每个 alias risk 对应的 `requires_noalias` 或 `may_alias` 边，legacy v1 artifact 可缺省该字段。
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` 对旧 route/profile evidence 保持可选，避免破坏 legacy fixtures。
   - 一旦出现 `candidate_generation.typed_ir`，schema 只允许 `GenericTypedIr` / `Unsupported` 两条 typed IR route，并要求 `semantic_pass=false`。

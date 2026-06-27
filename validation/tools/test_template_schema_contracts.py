@@ -29,6 +29,7 @@ class TemplateSchemaContractTests(unittest.TestCase):
         schema = load_json(schema_path)
         example = load_json(example_path)
 
+        self.assertEqual(example["schema_version"], 2)
         for field in [
             "alias_contract",
             "alias_risks",

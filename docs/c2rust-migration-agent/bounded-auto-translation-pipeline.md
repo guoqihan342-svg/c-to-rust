@@ -15,7 +15,7 @@
 
 1. 选择已通过 L1 native validation 的目标和函数 slice。
 2. 规范化 slice spec 与 build profile，记录 include paths、defines、target triple/ABI、compiler command 来源、preprocessing mode、tool versions 和 clang-backed type extraction 是否可用。
-3. 生成或刷新 `l3-<slice>-context-pack.json`、`l3-<slice>-type-map.json`、`l3-<slice>-cfg.json`、`l3-<slice>-pointer-graph.json`。
+3. 生成或刷新 `l3-<slice>-context-pack.json`、`l3-<slice>-type-map.json`、`l3-<slice>-cfg.json`、`l3-<slice>-pointer-graph.json`。新生成的 pointer graph 使用 `schema_version=2`；只要 slice 同时存在指针读写并触发 alias-sensitive gate，`effect_graph` 必须记录 read/write effects 和每个 alias risk 对应的 `requires_noalias` 或 `may_alias` 边。
 4. 翻译器只对支持 C 子集生成 Rust draft，并写入 `l3-<slice>-auto-translation-plan.json` 与 `l3-<slice>-auto-translation-events.jsonl`。
 5. 从同一个 fixture contract 生成 C oracle harness draft 和 Rust replay test draft；无法映射输入/输出时标记 blocked。
 6. 运行 `cargo check --message-format=json`。失败时写 `l3-<slice>-rust-check.json`，再生成 PatchPlan，默认最多 3 轮局部自愈。
@@ -52,7 +52,7 @@ MVP 只支持边界明确、可证据化的函数 slice：
 
 Rust-facing public API 默认不得暴露 raw pointer。指针相关 draft 的低层 IR 可以保留 raw pointer 或内部 FFI boundary，但对外必须优先使用 safe wrapper、validated buffer、newtype 或明确隔离的 internal layer。只有 slice contract 记录了 reviewed exception 时，公共边界才允许 raw pointer。
 
-safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointer 到 safe wrapper 的提升都必须写入 pointer graph 和 unsafe ledger，说明 read/write effect、alias 假设、len companion、nullability、ownership/lifetime 边界和覆盖测试。
+safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointer 到 safe wrapper 的提升都必须写入 pointer graph 和 unsafe ledger，说明 read/write effect、alias 假设、len companion、nullability、ownership/lifetime 边界和覆盖测试。`auto_migrate.py` 生成的 v2 pointer graph 会把 `effect_graph` 纳入 cache invalidation；对应 cache metadata 也必须包含 `effect_graph_identity`，避免 effect/alias 证据变化后复用旧候选。
 
 ## Unsafe ledger 规则
 
@@ -69,7 +69,7 @@ safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointe
 - 任意 C99/C11 都能自动翻译。
 - Rust draft 编译通过就等于语义等价。
 - byte-for-byte flash image layout、GC/clean、sector rollover、power-loss、capacity pressure、async/multithreading、性能保持或未列入 fixture 的行为。
-- pointer graph 是全程序 alias proof；它只是上下文与风险边界证据。
+- pointer graph 是全程序 alias proof；它只是上下文与风险边界证据。v2 `effect_graph` 能证明“当前候选记录了哪些 effect 和 alias-risk 边”，不能替代 C oracle、Rust replay、unsafe ledger 或完整 alias solver。
 
 ## 外部方案的采纳、修正和推迟
 

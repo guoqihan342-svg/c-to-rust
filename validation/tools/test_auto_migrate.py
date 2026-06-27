@@ -2976,8 +2976,14 @@ class AutoMigrateTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
+            cache = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-auto-cache-metadata.json").read_text(
+                    encoding="utf-8"
+                )
+            )
 
             self.assertIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["schema_version"], 2)
             self.assertEqual(pointer_graph["alias_sets"][0]["id"], "alias-set-1")
             self.assertEqual(pointer_graph["alias_sets"][0]["members"], ["values", "out"])
             self.assertEqual(pointer_graph["alias_sets"][0]["relationship"], "unknown_overlap")
@@ -2992,6 +2998,36 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(pointer_graph["alias_risks"][0]["gate_decision"], "requires_noalias_contract")
             self.assertIn("values", pointer_graph["alias_risks"][0]["pointer_nodes"])
             self.assertIn("out", pointer_graph["alias_risks"][0]["pointer_nodes"])
+            effect_graph = pointer_graph["effect_graph"]
+            read_effect = next(
+                effect
+                for effect in effect_graph["effects"]
+                if effect["pointer_node"] == "values"
+                and effect["kind"] == "read"
+                and effect["expression"] == "values[i]"
+            )
+            write_effect = next(
+                effect
+                for effect in effect_graph["effects"]
+                if effect["pointer_node"] == "out"
+                and effect["kind"] == "write"
+                and effect["expression"] == "out[i]"
+            )
+            self.assertTrue(
+                any(
+                    edge["from_effect"] == read_effect["id"]
+                    and edge["to_effect"] == write_effect["id"]
+                    and edge["relationship"] == "requires_noalias"
+                    for edge in effect_graph["edges"]
+                )
+            )
+            self.assertEqual(effect_graph["summary"]["reads"], ["values"])
+            self.assertEqual(effect_graph["summary"]["writes"], ["out"])
+            self.assertTrue(effect_graph["summary"]["alias_sensitive"])
+            self.assertEqual(
+                effect_graph["summary"]["alias_gate_decision"],
+                "requires_noalias_contract",
+            )
             self.assertTrue(
                 any(
                     item["kind"] == "noalias"
@@ -3009,6 +3045,11 @@ class AutoMigrateTests(unittest.TestCase):
                 "requires_noalias_contract",
             )
             self.assertFalse(manifest["claim_boundary"]["alias_gate"]["complete_alias_safety"])
+            self.assertIn("effect_graph", pointer_graph["cache_invalidation_keys"])
+            self.assertIn("effect_graph_identity", cache["cache_input_fields"])
+            self.assertEqual(cache["effect_graph_identity"]["alias_sensitive"], True)
+            self.assertEqual(cache["effect_graph_identity"]["read_effect_count"], 2)
+            self.assertEqual(cache["effect_graph_identity"]["write_effect_count"], 2)
 
     def test_output_only_pointer_write_does_not_trigger_input_output_alias_risk(self) -> None:
         spec = {
@@ -3066,10 +3107,25 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             self.assertNotIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["schema_version"], 2)
             self.assertEqual(pointer_graph["alias_sets"], [])
             self.assertEqual(pointer_graph["alias_risks"], [])
             self.assertEqual(pointer_graph["alias_contract"]["decision"], "not_applicable")
             self.assertFalse(pointer_graph["alias_contract"]["requires_noalias"])
+            effect_graph = pointer_graph["effect_graph"]
+            self.assertFalse(any(effect["kind"] == "read" for effect in effect_graph["effects"]))
+            self.assertTrue(
+                any(
+                    effect["pointer_node"] == "out"
+                    and effect["kind"] == "write"
+                    and effect["expression"] == "out[i]"
+                    for effect in effect_graph["effects"]
+                )
+            )
+            self.assertEqual(effect_graph["summary"]["reads"], [])
+            self.assertEqual(effect_graph["summary"]["writes"], ["out"])
+            self.assertFalse(effect_graph["summary"]["alias_sensitive"])
+            self.assertEqual(effect_graph["summary"]["alias_gate_decision"], "not_applicable")
             self.assertEqual(plan["translation_summary"]["alias_gate"]["decision"], "not_applicable")
             self.assertEqual(manifest["claim_boundary"]["alias_gate"]["decision"], "not_applicable")
 
@@ -3116,6 +3172,14 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(identity["alias_gate_identity"]["risk_count"], 1)
             self.assertFalse(identity["alias_gate_identity"]["aliasing_proven"])
             self.assertTrue(identity["alias_gate_identity"]["requires_noalias"])
+            self.assertIn("effect_graph_identity", identity)
+            self.assertEqual(identity["effect_graph_identity"]["read_effect_count"], 2)
+            self.assertEqual(identity["effect_graph_identity"]["write_effect_count"], 2)
+            self.assertTrue(identity["effect_graph_identity"]["alias_sensitive"])
+            self.assertEqual(
+                identity["effect_graph_identity"]["alias_gate_decision"],
+                "requires_noalias_contract",
+            )
             self.assertEqual(identity["c2rust_baseline_identity"]["status"], "missing")
             self.assertEqual(identity["route_decision_identity"]["status"], "missing")
             self.assertEqual(identity["validation_profile_identity"]["status"], "missing")

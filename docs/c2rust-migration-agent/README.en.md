@@ -36,7 +36,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, two-route typed IR candidate model, candidate_generation evidence schema, clang-lowered direct-call evidence, external direct-callee binding validator, and typed IR legacy cleanup boundary.
 - `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
-- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide.
+- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide, including pointer graph v2, `effect_graph`, alias-gate cache identity, and validation-gate rules.
 - `../../config/competition-env/`: competition environment entrypoint covering Ubuntu 24.04.4, Rust 1.96.0, Python 3.12.3, Node 24.13.0, Huawei mirrors, Go/CMake absence boundaries, and the self-check script.
 
 ## Quick Use

@@ -184,6 +184,9 @@ def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
             if risk_nodes not in precondition_sets:
                 raise SystemExit(f"alias gate evidence missing matching noalias precondition in {pointer_graph_path}")
 
+    if int(pointer_graph.get("schema_version", 1)) >= 2:
+        validate_alias_sensitive_effect_graph(pointer_graph, alias_risks, pointer_graph_path, decision)
+
     plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
     plan = load_json(plan_path)
     if "alias_gate" not in plan.get("translation_summary", {}):
@@ -204,6 +207,69 @@ def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
     final = load_json(final_path)
     if "alias_gate" not in final:
         raise SystemExit(f"alias gate evidence missing final_verification.alias_gate in {final_path}")
+
+
+def validate_alias_sensitive_effect_graph(
+    pointer_graph: dict[str, Any],
+    alias_risks: list[dict[str, Any]],
+    pointer_graph_path: Path,
+    decision: str,
+) -> None:
+    effect_graph = pointer_graph.get("effect_graph")
+    if not isinstance(effect_graph, dict):
+        raise SystemExit(f"alias-sensitive pointer graph schema v2 requires effect_graph in {pointer_graph_path}")
+    effects = effect_graph.get("effects")
+    edges = effect_graph.get("edges")
+    if not isinstance(effects, list) or not isinstance(edges, list):
+        raise SystemExit(f"effect_graph effects/edges must be arrays in {pointer_graph_path}")
+
+    read_effect_ids_by_node: dict[str, set[str]] = {}
+    write_effect_ids_by_node: dict[str, set[str]] = {}
+    for effect in effects:
+        if not isinstance(effect, dict):
+            continue
+        effect_id = str(effect.get("id", ""))
+        node_id = str(effect.get("pointer_node", ""))
+        if not effect_id or not node_id:
+            continue
+        if effect.get("kind") == "read":
+            read_effect_ids_by_node.setdefault(node_id, set()).add(effect_id)
+        if effect.get("kind") == "write":
+            write_effect_ids_by_node.setdefault(node_id, set()).add(effect_id)
+    if not read_effect_ids_by_node or not write_effect_ids_by_node:
+        raise SystemExit(f"effect_graph requires read and write effects for alias-sensitive graph in {pointer_graph_path}")
+
+    summary = effect_graph.get("summary", {})
+    if not isinstance(summary, dict):
+        raise SystemExit(f"effect_graph summary missing in {pointer_graph_path}")
+    if summary.get("alias_sensitive") is not True:
+        raise SystemExit(f"effect_graph summary.alias_sensitive=true required in {pointer_graph_path}")
+    if summary.get("alias_gate_decision") != decision:
+        raise SystemExit(f"effect_graph alias gate decision drift in {pointer_graph_path}")
+
+    edge_keys = {
+        (
+            str(edge.get("from_effect", "")),
+            str(edge.get("to_effect", "")),
+            str(edge.get("relationship", "")),
+        )
+        for edge in edges
+        if isinstance(edge, dict)
+    }
+    for risk in alias_risks:
+        members = [str(item) for item in risk.get("pointer_nodes", []) if item]
+        relationship = "requires_noalias" if risk.get("requires_noalias") else "may_alias"
+        covered = False
+        for read_node in members:
+            for write_node in members:
+                if read_node == write_node:
+                    continue
+                for read_effect_id in read_effect_ids_by_node.get(read_node, set()):
+                    for write_effect_id in write_effect_ids_by_node.get(write_node, set()):
+                        if (read_effect_id, write_effect_id, relationship) in edge_keys:
+                            covered = True
+        if not covered:
+            raise SystemExit(f"effect_graph missing alias risk edge for {members} in {pointer_graph_path}")
 
 
 def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:

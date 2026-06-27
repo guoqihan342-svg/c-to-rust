@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
 COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"
+POINTER_GRAPH_SCHEMA_VERSION = 2
 CACHE_INPUT_FIELDS = [
     "source_commit",
     "source_file_hashes",
@@ -34,6 +35,7 @@ CACHE_INPUT_FIELDS = [
     "translator_manifest_sha256",
     "command_arguments",
     "alias_gate_identity",
+    "effect_graph_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
     "validation_profile_identity",
@@ -797,10 +799,15 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     pointer_triggers = ["pointer_parameter"] if pointer_nodes else ["none"]
     if alias_gate["is_alias_sensitive"]:
         pointer_triggers.append("alias_sensitive_state")
-    pointer_cache_keys = cache_keys(spec, slice_spec_path) + alias_gate["cache_invalidation_keys"]
+    effect_graph = effect_graph_from_pointer_nodes(pointer_nodes, alias_gate)
+    pointer_cache_keys = (
+        cache_keys(spec, slice_spec_path)
+        + alias_gate["cache_invalidation_keys"]
+        + ["effect_graph", f"effect_graph_sha256={sha256_json(effect_graph)}"]
+    )
     pointer_status = "recorded" if pointer_nodes else "not_applicable"
     pointer_payload = {
-        "schema_version": 1,
+        "schema_version": POINTER_GRAPH_SCHEMA_VERSION,
         "target_id": target_id,
         "slice_id": slice_id,
         "level": "L3",
@@ -824,6 +831,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "alias_risks": alias_gate["alias_risks"],
                 "alias_contract": alias_gate["alias_contract"],
                 "safe_boundary_preconditions": alias_gate["safe_boundary_preconditions"],
+                "effect_graph": effect_graph,
                 "pointer_decisions": pointer_decisions(pointer_nodes),
                 "rust_mapping": [
                     {
@@ -4532,6 +4540,94 @@ def alias_gate_from_pointer_graph(evidence_dir: Path, slice_id: str) -> dict[str
     }
 
 
+def effect_graph_from_pointer_nodes(
+    pointer_nodes: list[dict[str, Any]],
+    alias_gate: dict[str, Any],
+) -> dict[str, Any]:
+    effects: list[dict[str, Any]] = []
+    read_effect_ids_by_node: dict[str, list[str]] = {}
+    write_effect_ids_by_node: dict[str, list[str]] = {}
+
+    for node in pointer_nodes:
+        node_id = str(node.get("id", ""))
+        if not node_id:
+            continue
+        for raw_effect in node.get("read_effects", []):
+            expression = pointer_effect_expression(raw_effect)
+            if not expression:
+                continue
+            effect_id = f"effect-{len(effects) + 1}"
+            effects.append(
+                {
+                    "id": effect_id,
+                    "pointer_node": node_id,
+                    "kind": "read",
+                    "expression": expression,
+                    "source": "pointer_nodes.read_effects",
+                }
+            )
+            read_effect_ids_by_node.setdefault(node_id, []).append(effect_id)
+        for raw_effect in node.get("write_effects", []):
+            expression = pointer_effect_expression(raw_effect)
+            if not expression:
+                continue
+            effect_id = f"effect-{len(effects) + 1}"
+            effects.append(
+                {
+                    "id": effect_id,
+                    "pointer_node": node_id,
+                    "kind": "write",
+                    "expression": expression,
+                    "source": "pointer_nodes.write_effects",
+                }
+            )
+            write_effect_ids_by_node.setdefault(node_id, []).append(effect_id)
+
+    edges: list[dict[str, Any]] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+    for risk in alias_gate.get("alias_risks", []):
+        members = [str(item) for item in risk.get("pointer_nodes", []) if item]
+        relationship = "requires_noalias" if risk.get("requires_noalias") else "may_alias"
+        for read_node in members:
+            for write_node in members:
+                if read_node == write_node:
+                    continue
+                for read_effect_id in read_effect_ids_by_node.get(read_node, []):
+                    for write_effect_id in write_effect_ids_by_node.get(write_node, []):
+                        key = (read_effect_id, write_effect_id, relationship)
+                        if key in seen_edges:
+                            continue
+                        seen_edges.add(key)
+                        edges.append(
+                            {
+                                "from_effect": read_effect_id,
+                                "to_effect": write_effect_id,
+                                "relationship": relationship,
+                                "evidence": f"{risk.get('id', 'alias-risk')} covers {read_node}/{write_node}",
+                            }
+                        )
+
+    return {
+        "effects": effects,
+        "edges": edges,
+        "summary": {
+            "reads": sorted(read_effect_ids_by_node),
+            "writes": sorted(write_effect_ids_by_node),
+            "read_count": sum(len(values) for values in read_effect_ids_by_node.values()),
+            "write_count": sum(len(values) for values in write_effect_ids_by_node.values()),
+            "external_state": [],
+            "alias_sensitive": bool(alias_gate.get("is_alias_sensitive", False)),
+            "alias_gate_decision": alias_gate.get("summary", {}).get("decision", "unknown"),
+        },
+    }
+
+
+def pointer_effect_expression(raw_effect: Any) -> str:
+    if isinstance(raw_effect, dict):
+        return str(raw_effect.get("expression", "")).strip()
+    return str(raw_effect).strip()
+
+
 def fixture_path(spec: dict[str, Any]) -> str:
     fixture = spec.get("fixture_contract", {})
     return fixture.get("path") or fixture.get("input") or "unknown-fixture"
@@ -4796,13 +4892,14 @@ def cache_identity(
             "auto_translation_plan": 1,
             "cfg": 1,
             "evidence_manifest": 1,
-            "pointer_graph": 1,
+            "pointer_graph": POINTER_GRAPH_SCHEMA_VERSION,
             "type_map": 1,
         },
         "translator_version": "0.1.0",
         "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
         "command_arguments": command_arguments,
         "alias_gate_identity": alias_gate_identity(spec),
+        "effect_graph_identity": effect_graph_identity(spec),
         "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
         "route_decision_identity": artifact_cache_identity(route_decision),
         "validation_profile_identity": artifact_cache_identity(validation_profile),
@@ -4856,6 +4953,38 @@ def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dic
 
 def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
     pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
+    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
+    return {
+        "decision": gate["summary"]["decision"],
+        "risk_count": gate["summary"].get("risk_count", 0),
+        "risk_level": gate["summary"]["risk_level"],
+        "aliasing_proven": bool(pointer_contract.get("aliasing_proven", False)),
+        "requires_noalias": bool(gate["summary"]["requires_noalias"]),
+        "precondition_count": len(gate["safe_boundary_preconditions"]),
+        "alias_set_count": len(gate["alias_sets"]),
+    }
+
+
+def effect_graph_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
+    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
+    graph = effect_graph_from_pointer_nodes(pointer_nodes, gate)
+    summary = graph["summary"]
+    return {
+        "schema_version": POINTER_GRAPH_SCHEMA_VERSION,
+        "sha256": sha256_json(graph),
+        "read_effect_count": summary["read_count"],
+        "write_effect_count": summary["write_count"],
+        "read_nodes": summary["reads"],
+        "write_nodes": summary["writes"],
+        "alias_sensitive": summary["alias_sensitive"],
+        "alias_gate_decision": summary["alias_gate_decision"],
+    }
+
+
+def pointer_nodes_from_pointer_contract(pointer_contract: dict[str, Any]) -> list[dict[str, Any]]:
     pointer_nodes = []
     for item in pointer_contract.get("input_buffers", []):
         pointer_nodes.append(
@@ -4881,17 +5010,7 @@ def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
                 "write_effects": item.get("write_effects", []),
             }
         )
-
-    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
-    return {
-        "decision": gate["summary"]["decision"],
-        "risk_count": gate["summary"].get("risk_count", 0),
-        "risk_level": gate["summary"]["risk_level"],
-        "aliasing_proven": bool(pointer_contract.get("aliasing_proven", False)),
-        "requires_noalias": bool(gate["summary"]["requires_noalias"]),
-        "precondition_count": len(gate["safe_boundary_preconditions"]),
-        "alias_set_count": len(gate["alias_sets"]),
-    }
+    return pointer_nodes
 
 
 def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:

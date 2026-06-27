@@ -36,7 +36,7 @@
 - `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 `clang_frontend -> typed IR + globals -> translation_route -> validation` 架构、核心代码地图、两路线 typed IR candidate model、candidate_generation evidence schema、clang-lowered direct-call evidence、external direct-callee binding validator 和 typed IR legacy cleanup 边界。
 - `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
 - `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
-- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档。
+- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档，包含 pointer graph v2、`effect_graph`、alias gate cache identity 和验证门禁说明。
 - `../../config/competition-env/`：比赛环境配置入口，记录 Ubuntu 24.04.4、Rust 1.96.0、Python 3.12.3、Node 24.13.0、华为镜像源、Go/CMake 缺失边界和自检脚本。
 
 ## 快速使用

@@ -2784,6 +2784,129 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("alias gate", result.stderr + result.stdout)
 
+    def test_rejects_v2_read_write_pointer_graph_missing_effect_graph(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-copy-i32-ptr-arith.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            pointer_graph_path = (
+                out_root
+                / "demo"
+                / "auto-translation"
+                / "copy-i32-ptr-arith"
+                / "l3-copy-i32-ptr-arith-pointer-graph.json"
+            )
+            pointer_graph = json.loads(pointer_graph_path.read_text(encoding="utf-8"))
+            pointer_graph["schema_version"] = 2
+            pointer_graph.pop("effect_graph", None)
+            pointer_graph_path.write_text(json.dumps(pointer_graph), encoding="utf-8")
+            self._refresh_route_source_artifact_ref(
+                pointer_graph_path.parent,
+                "copy-i32-ptr-arith",
+                "pointer_graph",
+                pointer_graph_path,
+                "recorded",
+            )
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "copy-i32-ptr-arith",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("effect_graph", result.stderr + result.stdout)
+
+    def test_allows_legacy_v1_read_write_pointer_graph_without_effect_graph(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-copy-i32-ptr-arith.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            pointer_graph_path = (
+                out_root
+                / "demo"
+                / "auto-translation"
+                / "copy-i32-ptr-arith"
+                / "l3-copy-i32-ptr-arith-pointer-graph.json"
+            )
+            pointer_graph = json.loads(pointer_graph_path.read_text(encoding="utf-8"))
+            pointer_graph["schema_version"] = 1
+            pointer_graph.pop("effect_graph", None)
+            pointer_graph_path.write_text(json.dumps(pointer_graph), encoding="utf-8")
+            self._refresh_route_source_artifact_ref(
+                pointer_graph_path.parent,
+                "copy-i32-ptr-arith",
+                "pointer_graph",
+                pointer_graph_path,
+                "recorded",
+            )
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "copy-i32-ptr-arith",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
     def _write_call_expression_external_callee_spec(self, tmp_path: Path) -> Path:
         spec = json.loads(
             (REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json").read_text(

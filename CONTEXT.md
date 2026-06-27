@@ -8167,7 +8167,7 @@ English mirror summary:
 本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 117 节建议的 nested pure direct call 快刀，并把用户补充的比赛环境约束核对到独立配置目录。四个只读子智能体分别给出结论：
 - nested direct call：建议只放开“一层、一个、整个实参就是 direct call”，保留 deeper / multiple sibling / condition call / side-effect argument fail-closed。
 - standalone typed clang inc/dec statement：当前真实 clang AST 还不支持普通 `value++; ++value;` statement；下一刀应复用 `ForStmt` step 的 inc/dec-to-Assign helper，只放开 statement value-discarded 场景。
-- alias/memory model：mutable pointer output write 仍缺 noalias/ownership/length/effect graph 证明；下一阶段应先补 struct/alias memory model OpenSpec 和 pointer/slice evidence schema。
+- alias/memory model：mutable pointer output write 仍缺 noalias/ownership/length/effect graph 证明；下一阶段应先补 struct/alias memory model OpenSpec 和 pointer/slice evidence schema。本条关于 effect graph 生成的缺口已被第 122 节 supersede；完整 pointer ownership model 仍未完成。
 - 比赛环境配置：`config/competition-env/` 已完整匹配用户给出的 Ubuntu 24.04.4、kernel、Huawei mirrors、Python/Node/Java/Maven/Rust/GCC/Make 和 Go/CMake 缺失事实；validation 侧目录只是 compatibility entrypoint。
 
 核心翻译改动：
@@ -8243,7 +8243,7 @@ git diff --check
 - 可以说：generic typed IR 现在支持一层单个 nested direct call argument，例如 `return outer(inner(value));`，并且 direct typed IR、真实 clang AST 和 rustc snippet smoke 均已覆盖。
 - 可以说：这个支持仍是 candidate generation，不是外部 callee semantic acceptance；external callee 仍需要现有 call evidence/signature/source binding 以及完整 validation gates。
 - 不应说：已支持 function pointer call、任意 nested call、多个 sibling nested call、condition 中 call、复杂 call side effect、call argument 中 inc/dec/deref、full C argument evaluation semantics 或 semantic acceptance。
-- 后续建议：下一刀优先 standalone typed clang inc/dec statement；并行推进 struct/alias memory model OpenSpec + pointer/slice evidence schema，避免 mutable pointer output write 误扩张成完整 C pointer ownership 模型。
+- 后续建议：下一刀优先 standalone typed clang inc/dec statement；并行推进 struct/alias memory model OpenSpec + pointer/slice evidence schema，避免 mutable pointer output write 误扩张成完整 C pointer ownership 模型。该 schema/effect graph 对齐已由第 120 和第 122 节推进完成，完整 pointer ownership model 仍未完成。
 
 English mirror summary:
 
@@ -8346,7 +8346,7 @@ English mirror summary:
 
 - 本次 schema 先保持 additive，不强制迁移所有历史 evidence。
 - 新模板能表达 alias/memory/effect 字段；运行时 validator 继续对新生成的 alias-sensitive evidence fail-closed。
-- `effect_graph` 已进入模板和 example，但暂不要求所有现有 generated evidence 必填；后续应先让 `auto_migrate.py` 生成 effect graph，再收紧条件 required。
+- `effect_graph` 已进入模板和 example，但本节暂不要求所有现有 generated evidence 必填；第 122 节已让 `auto_migrate.py` 生成 v2 `effect_graph`，并对 alias-sensitive v2 evidence 收紧条件 required。
 
 验证：
 
@@ -8379,8 +8379,8 @@ git diff --check
 
 下一步建议：
 
-- 让 `auto_migrate.py` 生成真实 `effect_graph`，然后把 alias-sensitive pointer graph schema 从“能表达字段”收紧到“条件 required”。
-- 后续再扩 struct/field access emitter；在 effect graph 和 alias gate 没生成前，不要把 mutable pointer output write 扩张成完整 C pointer ownership 模型。
+- 第 122 节已让 `auto_migrate.py` 生成真实 `effect_graph`，并把 alias-sensitive pointer graph v2 从“能表达字段”收紧到“条件 required”。
+- 后续再扩 struct/field access emitter；不要把当前 effect graph / alias gate 误读成完整 C pointer ownership 模型。
 
 English mirror summary:
 
@@ -8455,7 +8455,7 @@ python -m unittest validation.tools.test_validate_auto_translation_evidence
 
 下一步建议：
 
-- 回到 section 120 的主线：让 `auto_migrate.py` 为 alias-sensitive pointer graph 生成真实 `effect_graph`，再把 validator/schema 从“字段可表达”收紧到“新生成 alias-sensitive evidence 条件必填”。
+- section 120 的 effect graph 主线已在第 122 节完成：`auto_migrate.py` 为新生成 pointer graph 写入 v2 `effect_graph`，validator 对 alias-sensitive v2 evidence 条件必填。
 - `validation/tools/run_wave2_l1.py` 后续可加 competition profile guard：默认比赛环境下把 CMake/Go 项目标为 non-default environment required，而不是误当默认 gate。
 
 English mirror summary:
@@ -8464,4 +8464,74 @@ English mirror summary:
 - Fixed the machine-readable C++ compiler key from `gpp` to `g++` in both the default and compatibility profile copies.
 - Added tests for the exact competition baseline and profile-directory synchronization.
 - Added schema and validator checks for `competition_environment` and `competition_environment_identity`.
-- Updated bilingual docs and recorded the next step: generate real `effect_graph` for alias-sensitive pointer evidence.
+- Updated bilingual docs; section 122 completes the real `effect_graph` generation path for alias-sensitive pointer evidence.
+
+## 122. 2026-06-27 pointer graph v2 effect graph generation and validator gate
+
+本轮继续 section 120/121 的 alias/memory-model 主线，把 `effect_graph` 从“模板字段”推进到“新生成 evidence 的真实内容和门禁”。核心目标不是扩大 C pointer 翻译语义，而是让 mutable/read pointer slice 的候选生成有可审计的 effect/alias 证据，并让缓存和 validator 能发现证据漂移。
+
+核心改动：
+
+- `validation/tools/auto_migrate.py`
+  - 新增 `POINTER_GRAPH_SCHEMA_VERSION = 2`，新生成 pointer graph 使用 `schema_version=2`。
+  - 从 `pointer_nodes[*].read_effects` / `write_effects` 生成结构化 `effect_graph.effects`。
+  - 从 `alias_risks[*].pointer_nodes` 生成 alias-risk edges；`requires_noalias=true` 时写 `relationship=requires_noalias`，否则写 `may_alias`。
+  - `pointer_graph.cache_invalidation_keys` 纳入 `effect_graph` 和 `effect_graph_sha256=...`。
+  - `cache_identity()` 新增 `effect_graph_identity`，记录 schema version、graph hash、read/write effect counts、参与 pointer nodes、alias-sensitive 状态和最终 alias gate decision。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 对 `schema_version>=2` 的 alias-sensitive read/write pointer graph 条件要求 `effect_graph`。
+  - 要求 effect graph 同时包含 read effects 和 write effects。
+  - 要求 `summary.alias_sensitive=true` 且 `summary.alias_gate_decision` 与 alias contract decision 一致。
+  - 要求每个 alias risk 都能在 effect graph 中找到对应的 `requires_noalias` 或 `may_alias` 边。
+  - legacy v1 pointer graph 仍可缺省 `effect_graph`，避免破坏历史 evidence。
+- 测试：
+  - auto-migrate 正例覆盖 alias-sensitive read/write graph、output-only pointer write graph 和 cache identity。
+  - validator 负例覆盖 v2 alias-sensitive graph 缺 `effect_graph` 必须拒绝。
+  - validator 兼容例覆盖 legacy v1 read/write graph 缺 `effect_graph` 仍允许。
+  - template schema contract 固定 pointer graph example 必须是 `schema_version=2`。
+- 中英文文档同步：
+  - `validation/pointer-graph-template/README.md`
+  - `validation/pointer-graph-template/checklist.md`
+  - `validation/auto-translation-template/README.md`
+  - `validation/auto-translation-template/checklist.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+
+已验证：
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate
+python -m unittest validation.tools.test_validate_auto_translation_evidence
+python -m json.tool validation/pointer-graph-template/pointer-graph.schema.json > $null
+python -m json.tool validation/pointer-graph-template/pointer-graph.example.json > $null
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `test_template_schema_contracts`: 4 passed。
+- `test_auto_migrate`: 64 passed。
+- `test_validate_auto_translation_evidence`: 69 passed。
+- pointer graph schema/example JSON parse 通过。
+- OpenSpec 全量 strict 校验 38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
+
+后续建议：
+
+- 下一刀再考虑 struct/field access 或更宽 pointer ownership model；不要把 v2 effect graph 误当完整 alias solver。
+- 如果继续加宽 mutable pointer read/write 翻译，必须先让新的 pointer effect 进入 `effect_graph_identity` 和 validator 风险边覆盖。
+- `validation/tools/run_wave2_l1.py` 可后续加 competition profile guard：比赛默认环境没有 Go/CMake 时，把相关 target 标成 non-default environment required。
+
+English mirror summary:
+
+- Newly generated pointer graphs now use schema v2 and carry a real structured `effect_graph`.
+- Alias-sensitive v2 read/write pointer graphs are validator-required to contain read effects, write effects, and alias-risk edges.
+- Cache metadata now carries `effect_graph_identity`, so changed effect or alias evidence invalidates generated candidates.
+- Legacy v1 pointer graph artifacts remain compatible when they omit `effect_graph`.
+- Focused and full auto-migrate, validator, template schema, JSON, OpenSpec, and whitespace checks pass.
