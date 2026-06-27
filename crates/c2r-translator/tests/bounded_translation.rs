@@ -22,7 +22,7 @@ use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
     emit_rust_from_ir, emit_rust_from_ir_with_globals, IrBinOp, IrExpr, IrFunction, IrGlobal,
-    IrGlobalInit, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, IrUnOp,
+    IrGlobalInit, IrIncDecOp, IrParam, IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp,
 };
 use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;
@@ -176,6 +176,30 @@ fn ir_record(name: &str) -> IrType {
         canonical: format!("struct {name}"),
         kind: IrTypeKind::Record {
             name: name.to_string(),
+            fields: None,
+        },
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_record_with_fields(name: &str, fields: Vec<(&str, IrType)>) -> IrType {
+    IrType {
+        spelled: format!("struct {name}"),
+        canonical: format!("struct {name}"),
+        kind: IrTypeKind::Record {
+            name: name.to_string(),
+            fields: Some(
+                fields
+                    .into_iter()
+                    .map(|(name, ty)| IrRecordField {
+                        name: name.to_string(),
+                        ty,
+                    })
+                    .collect(),
+            ),
         },
         is_const: false,
         width_bits: None,
@@ -921,6 +945,93 @@ fn typed_ir_rejects_record_return_value_without_complete_field_model() {
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(error.reason.contains("record type point is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_record_return_value_with_complete_field_inventory() {
+    let point_ty = ir_record_with_fields("point", vec![("x", ir_i32()), ("y", ir_u32())]);
+    let ir = IrFunction {
+        name: "identity_point".to_string(),
+        return_type: point_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("p", point_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit whole-record return with field inventory");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"));
+    assert!(rust.contains("pub x: i32"));
+    assert!(rust.contains("pub y: u32"));
+    assert!(rust.contains("pub fn identity_point(p: Point) -> Point"));
+    assert!(rust.contains("return p;"));
+    assert_rust_snippet_compiles("typed-ir-record-return-complete-field-inventory", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_return_value_with_non_scalar_field_inventory() {
+    let child_ty = ir_record("child");
+    let point_ty = ir_record_with_fields("point", vec![("child", child_ty)]);
+    let ir = IrFunction {
+        name: "identity_point".to_string(),
+        return_type: point_ty.clone(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("p", point_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("whole-record return with non-scalar fields must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("record point field child has record type child is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_record_return_value_with_mismatched_field_inventory() {
+    let return_ty = ir_record_with_fields("point", vec![("x", ir_i32()), ("y", ir_i32())]);
+    let value_ty = ir_record_with_fields("point", vec![("x", ir_i32())]);
+    let ir = IrFunction {
+        name: "identity_point".to_string(),
+        return_type: return_ty,
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: value_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("p", value_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("same-name records with different field inventory must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("field inventory"), "{:?}", error);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -16968,7 +17079,7 @@ fn clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_struct_return_value_when_enabled() {
+fn clang_ast_dump_emits_struct_return_value_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -16999,8 +17110,291 @@ fn clang_ast_dump_rejects_struct_return_value_when_enabled() {
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    let error = emit_rust_from_ir(function).expect_err("whole-record return must fail closed");
-    assert!(error.reason.contains("record type point is unsupported"));
+    let emitted =
+        emit_rust_from_ir(function).expect("emit whole-record return from real clang AST");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn identity_point(p: Point) -> Point"),
+        "{rust}"
+    );
+    assert!(rust.contains("return p;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-real-clang-struct-return-value", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_bitfield_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-bitfield");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_bitfield.c");
+    fs::write(
+        &source_file,
+        "struct bits { unsigned int a:3; int b; };\nstruct bits identity_bits(struct bits p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_bits");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("bitfield records must fail closed");
+    assert!(
+        error.reason.contains("record bits has no modeled fields")
+            || error.reason.contains("record type bits is unsupported")
+            || error.reason.contains("bitfield"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_volatile_field_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-volatile-field");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_volatile_field.c");
+    fs::write(
+        &source_file,
+        "struct state { volatile int flag; int value; };\nstruct state identity_state(struct state p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_state");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("volatile fields must fail closed");
+    assert!(
+        error.reason.contains("record state has no modeled fields")
+            || error.reason.contains("record type state is unsupported")
+            || error.reason.contains("volatile"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_packed_record_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-packed");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_packed.c");
+    fs::write(
+        &source_file,
+        "struct __attribute__((packed)) packed_point { int x; int y; };\nstruct packed_point identity_packed(struct packed_point p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_packed");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("packed records must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("record packed_point has no modeled fields")
+            || error.reason.contains("packed"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_packed_field_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-packed-field");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_packed_field.c");
+    fs::write(
+        &source_file,
+        "struct packed_field_point { int x __attribute__((packed)); int y; };\n\
+         struct packed_field_point identity_packed_field(struct packed_field_point p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "identity_packed_field",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function).expect_err("packed fields must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("record packed_field_point has no modeled fields")
+            || error
+                .reason
+                .contains("record type packed_field_point is unsupported")
+            || error.reason.contains("packed"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_duplicate_tag_name_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-duplicate-tag");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_duplicate_tag.c");
+    fs::write(
+        &source_file,
+        "int seed(void) { struct bits { int a; int b; } local; return 0; }\n\
+         struct bits { unsigned int a:3; int b; };\n\
+         struct bits identity_bits(struct bits p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_bits");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function)
+        .expect_err("duplicate tag names must not reuse another record inventory");
+    assert!(
+        error.reason.contains("record bits has no modeled fields")
+            || error.reason.contains("record type bits is unsupported")
+            || error.reason.contains("bitfield")
+            || error.reason.contains("duplicate"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-struct-return-self-pointer");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("struct_return_self_pointer.c");
+    fs::write(
+        &source_file,
+        "struct node { struct node *next; int value; };\n\
+         struct node identity_node(struct node p) { return p; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "identity_node");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error =
+        emit_rust_from_ir(function).expect_err("self-referential pointer fields must fail closed");
+    assert!(
+        error.reason.contains("record node has no modeled fields")
+            || error.reason.contains("record type node is unsupported")
+            || error.reason.contains("pointer type"),
+        "{:?}",
+        error
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

@@ -917,7 +917,7 @@ fn ir_c_type(ty: &typed_ir::IrType) -> String {
             }
         }
         typed_ir::IrTypeKind::Array { element, .. } => format!("{}[]", ir_c_type(element)),
-        typed_ir::IrTypeKind::Record { name } => format!("struct {name}"),
+        typed_ir::IrTypeKind::Record { name, .. } => format!("struct {name}"),
         typed_ir::IrTypeKind::Function => "function".to_string(),
         typed_ir::IrTypeKind::Unsupported { reason } => format!("unsupported:{reason}"),
         _ => ty.canonical.clone(),
@@ -3928,6 +3928,7 @@ mod clang_lowered_ir_evidence_tests {
             canonical: name.to_string(),
             kind: IrTypeKind::Record {
                 name: name.to_string(),
+                fields: None,
             },
             is_const: false,
             width_bits: None,

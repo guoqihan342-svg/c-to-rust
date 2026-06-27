@@ -8731,3 +8731,78 @@ English mirror summary:
 - `struct point q = p; q = r; return q.x;` now emits a minimal Rust `Point` struct plus `let mut q: Point = p; q = r; return q.x;` as a candidate.
 - Whole-record return, uninitialized record locals, `p->x`, pointer/alias-sensitive field access, record layout/ABI claims, compound literals, designated initializers, unions/bitfields/volatile fields, and semantic acceptance still fail closed.
 - Verification now passes after the value-type compatibility fix: `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation` passed 367/367 tests; `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features` passed 52 lib tests, 368 bounded tests, and doc tests; `openspec validate --all --strict` passed 38/38 items; `git diff --check` reported only Windows LF-to-CRLF warnings.
+
+## 126. 2026-06-28 complete record field inventory and whole-record return candidates
+
+本轮继续按多智能体推进 P1 record 子集。两个只读代理结论一致：`p->x` 不应直接放开，因为它需要 readonly struct pointer、non-null/lifetime/alignment、pointer graph read effect、alias/effect gate 和 record ownership 证据；whole-record return 也不能只改 emitter，必须先有完整字段清单。本节完成的切口是：从真实 clang AST 的唯一具名完整 `RecordDecl` / `FieldDecl` 提取直接标量字段清单，并仅在该清单存在时允许 by-value whole-record return candidate，例如 `struct point { int x; int y; }; struct point identity_point(struct point p) { return p; }`。复审后又收紧了两个边界：同名 tag 不复用字段清单，自引用/指针字段不会递归展开，而是 fail closed。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrRecordField`，`IrTypeKind::Record` 现在可携带 `fields: Option<Vec<IrRecordField>>`。
+  - `emit_record_definitions()` 会把 return type 中的完整字段清单并入 Rust struct 定义；字段访问路径仍可沿用实际访问字段的最小候选形状。record 参数本身不会单独打开完整 struct 定义。
+  - `emit_return_type()` 只在 record type 带完整字段清单时允许发射 `-> Point`；无字段清单的 whole-record return 继续 fail closed。
+  - record 字段仍必须由 `emit_scalar_type()` 支持；非标量字段继续 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 真实 clang AST dump 路径新增 `record_inventory_from_ast()`，从唯一具名、完整、非 implicit、非 packed 的 `struct RecordDecl` 中收集直接标量 `FieldDecl`。
+  - bitfield、volatile field、匿名/嵌套 record、同名 tag、self-pointer field、unsupported/non-scalar field type 不进入完整字段清单。
+  - lowering 完成后把字段清单 attach 到 `IrFunction` 的 return type、decl、expr 等直接类型位置；不沿 pointer/array/字段类型递归展开，避免自引用 record 在 emitter 前栈溢出。
+- `crates/c2r-translator/src/lib.rs`
+  - 更新 `IrTypeKind::Record` 匹配和测试 helper，兼容新增 `fields` 字段。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_record_return_value_with_complete_field_inventory`
+  - 新增 direct typed IR 负测：
+    - `typed_ir_rejects_record_return_value_with_non_scalar_field_inventory`
+    - `typed_ir_rejects_record_return_value_with_mismatched_field_inventory`
+  - 将真实 clang AST whole-record return smoke 从拒绝改成正测：
+    - `clang_ast_dump_emits_struct_return_value_when_enabled`
+  - 新增真实 clang AST fail-closed smoke：
+    - `clang_ast_dump_rejects_struct_return_value_with_bitfield_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_volatile_field_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_packed_record_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_packed_field_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_duplicate_tag_name_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_return_value_with_complete_field_inventory --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_return_value_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" struct_return --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+```
+
+结果：
+
+- `typed_ir_emits_record_return_value_with_complete_field_inventory` 通过，生成 `pub struct Point { pub x: i32, pub y: u32 }` 和 `pub fn identity_point(p: Point) -> Point`。
+- 真实 clang AST `identity_point()` 正例通过，并证明未访问字段 `y` 也来自完整 `RecordDecl` / `FieldDecl` 清单。
+- `struct_return` filter：7 passed。
+- `record` filter：22 passed。
+- `--all-features`：52 个 lib tests + 377 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend` full bounded translation：376 passed；本次设置了 `C2R_RUN_CLANG_AST_TESTS=1` 和 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`，真实 clang smoke 实际执行。
+
+边界：
+
+- 可以说：唯一具名完整直接标量字段清单存在时，by-value whole-record return 可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、`p->x`、record pointer/alias-sensitive access、compound/update 字段写、record pointer writes、同名 tag、self-pointer field、bitfield、volatile/packed record、union、匿名/嵌套 record、非标量字段、struct array 或 address-taken record。
+- 后续建议：下一刀如果继续 record，应优先做 pointer-aware readonly `const struct T *p -> p->scalar_field` 的 evidence 契约和红测；必须先补 pointer graph read effect、non-null/lifetime/alignment preconditions、alias/effect gate 和 fail-closed matrix。
+
+English mirror summary:
+
+- Added unique named complete direct scalar record field inventory to typed IR and real clang AST lowering.
+- Whole-record by-value return is now a candidate only when that unique complete scalar inventory exists.
+- Duplicate tags, self-pointer fields, bitfields, volatile fields, packed records, non-scalar fields, `p->x`, pointer/alias-sensitive record access, layout/ABI claims, and semantic acceptance still fail closed.
+- Verification: record filter, struct-return regression tests, `--all-features`, and full real-clang bounded translation pass. `openspec validate --all --strict` passed 38/38. `git diff --check` reported only Windows LF-to-CRLF warnings.

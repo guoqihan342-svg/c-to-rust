@@ -28,7 +28,7 @@
 | `_Bool` | 不支持 | 未建模 |
 | `enum` | 不支持 | 未建模 |
 | `union` | 不支持 | 未建模 |
-| `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、本地 by-value copy；无 `->`、whole-record return、compound/update field write、bitfield、volatile field、嵌套、匿名 |
+| `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；无 `->`、compound/update field write、嵌套、匿名 |
 
 ## 声明与初始化
 
@@ -78,7 +78,7 @@
 | 逗号表达式 | 不支持 | |
 | 赋值表达式 (value-position) | 不支持 | 仅 statement |
 | compound assignment (value-position) | 不支持 | 仅 statement |
-| whole-record return | 不支持 | 缺完整 field/layout model |
+| whole-record return | 窄支持 | 仅唯一具名 `RecordDecl`/`FieldDecl` 字段清单且全部直接字段为受支持标量时作为 candidate；同名 tag、bitfield、volatile/packed/self-pointer/non-scalar field 继续 fail closed；不是 layout/ABI proof |
 
 ## 语句与控制流
 
@@ -159,5 +159,5 @@
 4. **bitwise/shift**：不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
 5. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
 6. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
-7. **record/struct**：当前 struct definition 是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；bitfield、volatile field、union、packed/nested/anonymous record 仍 fail closed。
+7. **record/struct**：dot-field 路径的 struct definition 仍是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；whole-record return 的完整字段清单路径会拒绝同名 tag、bitfield、volatile/packed、自引用指针和非标量字段；union、nested/anonymous record 仍 fail closed。
 8. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。

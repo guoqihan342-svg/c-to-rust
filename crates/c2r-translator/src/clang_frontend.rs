@@ -52,8 +52,8 @@ use serde_json::Value;
 
 #[cfg(feature = "typed-ir")]
 use crate::typed_ir::{
-    IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam, IrStmt, IrType,
-    IrTypeKind, IrUnOp,
+    IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam, IrRecordField,
+    IrStmt, IrType, IrTypeKind, IrUnOp,
 };
 use crate::{SliceSpec, SourceSpanRef};
 
@@ -508,12 +508,14 @@ fn lower_function_and_globals_from_clang_ast_dump_with_arguments(
     function_name: &str,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let ast = clang_ast_dump_json(clang_path, arguments)?;
+    let record_inventory = record_inventory_from_ast(&ast);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
     let skeleton = function_skeleton_from_ast(function)?;
-    let function_ir = lower_function_skeleton(&skeleton)?;
+    let mut function_ir = lower_function_skeleton(&skeleton)?;
+    attach_record_inventory_to_function(&mut function_ir, &record_inventory);
     let globals = readonly_globals_from_ast(&ast)?;
 
     Ok(LoweredFunctionWithGlobals {
@@ -2652,7 +2654,10 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
         ClangTypeKind::Record { name } => Ok(IrType {
             spelled: ty.spelled.clone(),
             canonical: ty.canonical.clone(),
-            kind: IrTypeKind::Record { name: name.clone() },
+            kind: IrTypeKind::Record {
+                name: name.clone(),
+                fields: None,
+            },
             is_const: clang_type_is_const(ty),
             width_bits: None,
             source_span: None,
@@ -2685,6 +2690,276 @@ fn inner(node: &Value) -> &[Value] {
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or(&[])
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_inventory_from_ast(ast: &Value) -> BTreeMap<String, Vec<IrRecordField>> {
+    let mut records = BTreeMap::new();
+    collect_record_inventory_from_ast(ast, &mut records);
+    records
+        .into_iter()
+        .filter_map(|(name, fields)| fields.map(|fields| (name, fields)))
+        .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn collect_record_inventory_from_ast(
+    node: &Value,
+    records: &mut BTreeMap<String, Option<Vec<IrRecordField>>>,
+) {
+    if let Some((name, fields)) = record_inventory_entry_from_record_decl(node) {
+        match records.entry(name) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(fields);
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                entry.insert(None);
+            }
+        }
+    }
+    for child in inner(node) {
+        collect_record_inventory_from_ast(child, records);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_inventory_entry_from_record_decl(
+    node: &Value,
+) -> Option<(String, Option<Vec<IrRecordField>>)> {
+    if string_field(node, "kind").as_deref() != Some("RecordDecl")
+        || string_field(node, "tagUsed").as_deref() != Some("struct")
+        || node.get("completeDefinition").and_then(Value::as_bool) != Some(true)
+        || node.get("isImplicit").and_then(Value::as_bool) == Some(true)
+    {
+        return None;
+    }
+    let name = string_field(node, "name")?;
+    if !is_simple_c_identifier(&name) {
+        return None;
+    }
+    if inner(node)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("PackedAttr"))
+    {
+        return Some((name, None));
+    }
+
+    let mut fields = Vec::new();
+    for child in inner(node) {
+        match string_field(child, "kind").as_deref() {
+            Some("FieldDecl") => {
+                let Some(field) = record_field_from_field_decl(child) else {
+                    return Some((name, None));
+                };
+                fields.push(field);
+            }
+            Some("RecordDecl") => return Some((name, None)),
+            _ => {}
+        }
+    }
+    if fields.is_empty() {
+        return Some((name, None));
+    }
+    Some((name, Some(fields)))
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_field_from_field_decl(field: &Value) -> Option<IrRecordField> {
+    if field.get("isBitfield").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    if inner(field)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("PackedAttr"))
+    {
+        return None;
+    }
+    let name = string_field(field, "name")?;
+    if !is_simple_c_identifier(&name) {
+        return None;
+    }
+    let qual_type = field
+        .get("type")
+        .and_then(|value| string_field(value, "qualType"))?;
+    if qual_type.split_whitespace().any(|part| part == "volatile") {
+        return None;
+    }
+    let clang_ty = type_from_qual_type(&qual_type).ok()?;
+    let ty = lower_type(&clang_ty).ok()?;
+    if !matches!(ty.kind, IrTypeKind::Integer { .. }) {
+        return None;
+    }
+    Some(IrRecordField { name, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn attach_record_inventory_to_function(
+    function: &mut IrFunction,
+    inventory: &BTreeMap<String, Vec<IrRecordField>>,
+) {
+    attach_record_inventory_to_type(&mut function.return_type, inventory);
+    for stmt in &mut function.body {
+        attach_record_inventory_to_stmt(stmt, inventory);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn attach_record_inventory_to_stmt(
+    stmt: &mut IrStmt,
+    inventory: &BTreeMap<String, Vec<IrRecordField>>,
+) {
+    match stmt {
+        IrStmt::Decl { ty, init, .. } => {
+            attach_record_inventory_to_type(ty, inventory);
+            if let Some(init) = init {
+                attach_record_inventory_to_expr(init, inventory);
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            attach_record_inventory_to_expr(target, inventory);
+            attach_record_inventory_to_expr(value, inventory);
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            attach_record_inventory_to_expr(condition, inventory);
+            for stmt in then_body {
+                attach_record_inventory_to_stmt(stmt, inventory);
+            }
+            for stmt in else_body {
+                attach_record_inventory_to_stmt(stmt, inventory);
+            }
+        }
+        IrStmt::While {
+            condition, body, ..
+        }
+        | IrStmt::DoWhile {
+            condition, body, ..
+        } => {
+            attach_record_inventory_to_expr(condition, inventory);
+            for stmt in body {
+                attach_record_inventory_to_stmt(stmt, inventory);
+            }
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            for stmt in init {
+                attach_record_inventory_to_stmt(stmt, inventory);
+            }
+            if let Some(condition) = condition {
+                attach_record_inventory_to_expr(condition, inventory);
+            }
+            if let Some(step) = step {
+                attach_record_inventory_to_stmt(step, inventory);
+            }
+            for stmt in body {
+                attach_record_inventory_to_stmt(stmt, inventory);
+            }
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                attach_record_inventory_to_expr(value, inventory);
+            }
+        }
+        IrStmt::Expr { expr, .. } => attach_record_inventory_to_expr(expr, inventory),
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn attach_record_inventory_to_expr(
+    expr: &mut IrExpr,
+    inventory: &BTreeMap<String, Vec<IrRecordField>>,
+) {
+    match expr {
+        IrExpr::LitInt { ty, .. }
+        | IrExpr::NullPtr { ty, .. }
+        | IrExpr::Var { ty, .. }
+        | IrExpr::Binary { ty, .. }
+        | IrExpr::Unary { ty, .. }
+        | IrExpr::Conditional { ty, .. }
+        | IrExpr::Index { ty, .. }
+        | IrExpr::ArrayLiteral { ty, .. }
+        | IrExpr::Call { ty, .. }
+        | IrExpr::Member { ty, .. }
+        | IrExpr::IncDec { ty, .. }
+        | IrExpr::Deref { ty, .. }
+        | IrExpr::AddrOf { ty, .. } => attach_record_inventory_to_type(ty, inventory),
+        IrExpr::Cast { target, .. } => attach_record_inventory_to_type(target, inventory),
+        IrExpr::Unsupported { .. } => {}
+    }
+
+    match expr {
+        IrExpr::Binary { lhs, rhs, .. } => {
+            attach_record_inventory_to_expr(lhs, inventory);
+            attach_record_inventory_to_expr(rhs, inventory);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => attach_record_inventory_to_expr(operand, inventory),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            attach_record_inventory_to_expr(condition, inventory);
+            attach_record_inventory_to_expr(then_expr, inventory);
+            attach_record_inventory_to_expr(else_expr, inventory);
+        }
+        IrExpr::Index { base, index, .. } => {
+            attach_record_inventory_to_expr(base, inventory);
+            attach_record_inventory_to_expr(index, inventory);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                attach_record_inventory_to_expr(element, inventory);
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                attach_record_inventory_to_expr(arg, inventory);
+            }
+        }
+        IrExpr::Member { base, .. } => attach_record_inventory_to_expr(base, inventory),
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn attach_record_inventory_to_type(
+    ty: &mut IrType,
+    inventory: &BTreeMap<String, Vec<IrRecordField>>,
+) {
+    match &mut ty.kind {
+        IrTypeKind::Pointer { .. } | IrTypeKind::Array { .. } => {}
+        IrTypeKind::Record { name, fields } => {
+            if fields.is_none() {
+                if let Some(record_fields) = inventory.get(name) {
+                    *fields = Some(record_fields.clone());
+                }
+            }
+        }
+        IrTypeKind::Void
+        | IrTypeKind::Integer { .. }
+        | IrTypeKind::Function
+        | IrTypeKind::Unsupported { .. } => {}
+    }
 }
 
 #[cfg(feature = "typed-ir")]

@@ -143,7 +143,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P1: Expand syntax and memory-model coverage
 
-- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: initialized record local copy is now in the candidate subset; next prioritize whole-record return with a complete field/layout model, pointer-aware record access, compound/update field write design, and tests.
+- [ ] Keep expanding the generic typed IR emitter instead of restoring crc32/FlashDB special cases: initialized record local copy and whole-record return with unique named complete direct scalar field inventory are now in the candidate subset; next prioritize pointer-aware record access, compound/update field write design, and stronger layout/ABI evidence.
 - [ ] Design alias/noalias and pointer escape modeling: split readonly slices, mutable out slices, nullable pointers, unknown alias, and volatile/hardware registers into provable paths and L4 refusal paths.
 - [ ] Finish integer conversion discipline: every clang `ImplicitCastExpr`, integer promotion, usual arithmetic conversion, and narrowing/truncation must become explicit in the IR.
 - [ ] Expand control flow: send `switch`/`goto` through CFG evidence and a fail-closed classifier first, then consider relooper and Rust candidates.

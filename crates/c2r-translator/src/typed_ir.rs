@@ -104,6 +104,12 @@ pub struct IrType {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IrRecordField {
+    pub name: String,
+    pub ty: IrType,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum IrTypeKind {
     Void,
     Integer {
@@ -119,6 +125,7 @@ pub enum IrTypeKind {
     },
     Record {
         name: String,
+        fields: Option<Vec<IrRecordField>>,
     },
     Function,
     Unsupported {
@@ -595,7 +602,7 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_value_type(ty: &IrType) -> Result<String, String> {
-    if let IrTypeKind::Record { name } = &ty.kind {
+    if let IrTypeKind::Record { name, .. } = &ty.kind {
         return emit_record_type_name(name);
     }
     emit_scalar_type(ty)
@@ -614,8 +621,9 @@ fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
 
 fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
     let mut records: Vec<(&str, Vec<RecordFieldUse<'_>>)> = Vec::new();
+    add_record_type_inventory(&mut records, &function.return_type)?;
     for param in &function.params {
-        if let IrTypeKind::Record { name } = &param.ty.kind {
+        if let IrTypeKind::Record { name, .. } = &param.ty.kind {
             ensure_record_entry(&mut records, name);
         }
     }
@@ -634,6 +642,23 @@ fn ensure_record_entry<'a>(records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>
         return;
     }
     records.push((name, Vec::new()));
+}
+
+fn add_record_type_inventory<'a>(
+    records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
+    ty: &'a IrType,
+) -> Result<(), String> {
+    let IrTypeKind::Record {
+        name,
+        fields: Some(fields),
+    } = &ty.kind
+    else {
+        return Ok(());
+    };
+    for field in fields {
+        add_record_field_use(records, name, &field.name, &field.ty)?;
+    }
+    Ok(())
 }
 
 fn add_record_field_use<'a>(
@@ -771,7 +796,7 @@ fn collect_record_field_uses_from_expr<'a>(
             let IrExpr::Var { ty: base_ty, .. } = base.as_ref() else {
                 return Err("member expression base must be a record variable".to_string());
             };
-            let IrTypeKind::Record { name } = &base_ty.kind else {
+            let IrTypeKind::Record { name, .. } = &base_ty.kind else {
                 return Err(format!(
                     "member expression base has unsupported type {}",
                     type_label(base_ty)
@@ -873,6 +898,11 @@ fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
 fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
     if is_void_type(ty) {
         Ok(None)
+    } else if let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &ty.kind
+    {
+        emit_value_type(ty).map(Some)
     } else {
         emit_scalar_type(ty).map(Some)
     }
@@ -901,7 +931,7 @@ fn emit_scalar_type(ty: &IrType) -> Result<String, String> {
             Err(format!("pointer type {} is unsupported", type_label(ty)))
         }
         IrTypeKind::Array { .. } => Err(format!("array type {} is unsupported", type_label(ty))),
-        IrTypeKind::Record { name } => Err(format!("record type {name} is unsupported")),
+        IrTypeKind::Record { name, .. } => Err(format!("record type {name} is unsupported")),
         IrTypeKind::Function => Err(format!("function type {} is unsupported", type_label(ty))),
         IrTypeKind::Unsupported { reason } => {
             Err(format!("unsupported type {}: {reason}", type_label(ty)))
@@ -2710,6 +2740,7 @@ fn validate_expr_matches_type(
     context: &str,
 ) -> Result<(), String> {
     let actual_ty = expr_type(expr).ok_or_else(|| format!("{context} type is unsupported"))?;
+    validate_record_value_type_matches(actual_ty, expected_ty, context)?;
     let expected = emit_value_type(expected_ty)
         .map_err(|detail| format!("{context} expected type has {detail}"))?;
     let actual = emit_value_type(actual_ty).map_err(|detail| format!("{context} has {detail}"))?;
@@ -2719,6 +2750,43 @@ fn validate_expr_matches_type(
         ))
     } else {
         Ok(())
+    }
+}
+
+fn validate_record_value_type_matches(
+    actual_ty: &IrType,
+    expected_ty: &IrType,
+    context: &str,
+) -> Result<(), String> {
+    let (
+        IrTypeKind::Record {
+            name: actual_name,
+            fields: actual_fields,
+        },
+        IrTypeKind::Record {
+            name: expected_name,
+            fields: expected_fields,
+        },
+    ) = (&actual_ty.kind, &expected_ty.kind)
+    else {
+        return Ok(());
+    };
+    if actual_name != expected_name {
+        return Err(format!(
+            "{context} record type {actual_name} does not match expected record type {expected_name}"
+        ));
+    }
+    let Some(expected_fields) = expected_fields else {
+        return Ok(());
+    };
+    match actual_fields {
+        Some(actual_fields) if actual_fields == expected_fields => Ok(()),
+        Some(_) => Err(format!(
+            "{context} record field inventory does not match expected record type {expected_name}"
+        )),
+        None => Err(format!(
+            "{context} record type {actual_name} lacks field inventory required by expected record type {expected_name}"
+        )),
     }
 }
 
