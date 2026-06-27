@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::clang_frontend;
 #[cfg(feature = "clang-lowering-report")]
 use crate::typed_ir;
-use crate::{SliceSpec, TranslationResult};
+use crate::{legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationResult};
 
 pub(crate) fn write_json_file(
     out_dir: &Path,
@@ -172,6 +172,55 @@ pub(crate) fn write_core_translation_artifacts(
             &result.rust_code,
         )?,
     ])
+}
+
+pub fn write_translation_artifacts(
+    spec: &SliceSpec,
+    out_dir: &Path,
+) -> Result<ArtifactManifest, Box<dyn Error>> {
+    fs::create_dir_all(out_dir)?;
+    #[cfg(feature = "clang-lowering-report")]
+    let result = translate_slice_with_optional_clang_lowered_ir(spec);
+    #[cfg(not(feature = "clang-lowering-report"))]
+    let result = translate_slice(spec);
+    let prefix = format!("l3-{}", spec.slice_id);
+    let status = if result.errors.is_empty() {
+        "generated"
+    } else {
+        "blocked"
+    };
+
+    let artifacts = write_core_translation_artifacts(spec, &result, out_dir, &prefix, status)?;
+    #[cfg(feature = "clang-frontend")]
+    let artifacts = {
+        let mut artifacts = artifacts;
+        artifacts.push(write_clang_dry_run_artifact(spec, out_dir, &prefix)?);
+        artifacts
+    };
+    #[cfg(feature = "clang-lowering-report")]
+    let artifacts = {
+        let mut artifacts = artifacts;
+        artifacts.push(write_clang_lowering_report_artifact(
+            spec, out_dir, &prefix,
+        )?);
+        artifacts
+    };
+
+    Ok(ArtifactManifest {
+        target_id: spec.target_id.clone(),
+        slice_id: spec.slice_id.clone(),
+        status: status.to_string(),
+        artifact_paths: artifacts
+            .into_iter()
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .collect(),
+    })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> TranslationResult {
+    crate::clang_lowered_translation::try_translate_slice_with_clang_lowered_ir(spec)
+        .unwrap_or_else(|| translate_slice(spec))
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -480,6 +529,44 @@ mod core_translation_artifact_tests {
         assert_eq!(blocked["status"], "blocked");
         assert_eq!(blocked["blocked"][0]["kind"], "unsupported_syntax");
         assert_eq!(blocked["blocked"][0]["source_span"], "switch");
+    }
+
+    #[test]
+    fn write_translation_artifacts_public_orchestration_stays_in_artifacts_module() {
+        let spec = SliceSpec {
+            target_id: "demo-target".to_string(),
+            slice_id: "artifact-orchestration".to_string(),
+            source_commit: "abcdef0".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            function_name: "identity".to_string(),
+            c_source: "int identity(int value) { return value; }".to_string(),
+            ..SliceSpec::default()
+        };
+        let out_dir = unique_out_dir("artifact-orchestration");
+
+        let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+        let mut expected_artifact_count = 8;
+        if cfg!(feature = "clang-frontend") {
+            expected_artifact_count += 1;
+        }
+        if cfg!(feature = "clang-lowering-report") {
+            expected_artifact_count += 1;
+        }
+
+        assert_eq!(manifest.status, "generated");
+        assert_eq!(manifest.artifact_paths.len(), expected_artifact_count);
+        assert!(out_dir
+            .join("l3-artifact-orchestration-rust-draft.rs")
+            .exists());
+        #[cfg(feature = "clang-frontend")]
+        assert!(out_dir
+            .join("l3-artifact-orchestration-clang-dry-run.json")
+            .exists());
+        #[cfg(feature = "clang-lowering-report")]
+        assert!(out_dir
+            .join("l3-artifact-orchestration-clang-lowering-report.json")
+            .exists());
     }
 }
 

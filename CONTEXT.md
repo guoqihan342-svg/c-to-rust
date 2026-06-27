@@ -9410,3 +9410,69 @@ English mirror summary:
 - Kept `write_translation_artifacts` in `lib.rs` as the public artifact facade and preserved feature-gated clang optional artifact behavior.
 - Preserved generated Rust behavior, type-map/CFG/pointer-graph evidence behavior, manifest behavior, feature gates, and semantic claim boundaries.
 - Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
+
+## 136. 2026-06-28 P0 write_translation_artifacts orchestration split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，把 `write_translation_artifacts()` public orchestration 移入 `artifacts.rs`。这仍然是行为保持重构：不新增 C 语法翻译能力，不改变 crate root public API，不改变 artifact 文件名、artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+核心改动：
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `pub fn write_translation_artifacts(...)`，负责建目录、选择默认/clang-lowered translation result、写 8 个核心 artifacts、追加 optional clang dry-run / lowering-report artifacts，并返回 `ArtifactManifest`。
+  - 同步迁入私有 helper `translate_slice_with_optional_clang_lowered_ir()`；它只服务 `clang-lowering-report` feature 下的 artifact orchestration。
+  - 新增模块边界测试 `core_translation_artifact_tests::write_translation_artifacts_public_orchestration_stays_in_artifacts_module`。
+- `crates/c2r-translator/src/lib.rs`
+  - 改为 `pub use artifacts::write_translation_artifacts;`，继续保持 `c2r_translator::write_translation_artifacts` 外部路径兼容。
+  - 当前约 69 行，只保留 module declarations、public re-export 和两个模块边界测试。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 69 行，并把 `write_translation_artifacts` public orchestration 拆分列为已完成子项；P0 总项仍保持未完成。
+
+TDD 证据：
+- 红测先失败于 `cannot find function write_translation_artifacts in this scope`，证明 orchestration 尚未在 `artifacts.rs` 模块内。
+- 迁移后同一测试通过，并确认默认 feature 下仍只写 8 个核心 artifact。
+- 后续 feature matrix 暴露测试断言过窄：`clang-frontend` 会追加 dry-run artifact，`clang-lowering-report` 会追加 dry-run + lowering-report artifact；测试已改为按 feature 期待 8/9/10 个 artifact，并显式检查 optional artifact 文件存在。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml write_translation_artifacts_public_orchestration_stays_in_artifacts_module
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+- artifact orchestration 模块边界红绿测试通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：4 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：5 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：4 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：53 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/clang optional route/profile/cache opt-in 定向测试：6/6 passed。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+- 可以说：`write_translation_artifacts()` public orchestration 已从 `lib.rs` 拆到 `artifacts.rs`，crate root public API 保持兼容。
+- 可以说：`lib.rs` 现在基本只剩 crate root module/re-export surface。
+- 不应说：P0 全部完成、CLI/manifest orchestration 已完全模块化、generic typed IR route 已拆完、新增任何 C 语法翻译能力、或任何 candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Moved `write_translation_artifacts` public orchestration into `artifacts.rs`.
+- Kept the crate-root public API compatible through `pub use artifacts::write_translation_artifacts`.
+- Preserved default artifacts, optional clang artifacts, manifest status behavior, feature gates, Python opt-in behavior, and semantic claim boundaries.
+- Added a module-boundary red/green test proving the orchestration now lives in the artifacts module.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
