@@ -782,7 +782,7 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
             ..
         } => {
             let op = if *is_arrow { "->" } else { "." };
-            format!("{}{}{}", ir_expr_source_text(base), op, field)
+            format!("{}{}{}", ir_member_base_source_text(base), op, field)
         }
         typed_ir::IrExpr::ArrayLiteral { elements, .. } => format!(
             "[{}]",
@@ -813,6 +813,18 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::Deref { ptr, .. } => format!("*{}", ir_expr_source_text(ptr)),
         typed_ir::IrExpr::AddrOf { operand, .. } => format!("&{}", ir_expr_source_text(operand)),
         typed_ir::IrExpr::Unsupported { node, .. } => format!("unsupported({node})"),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn ir_member_base_source_text(base: &typed_ir::IrExpr) -> String {
+    let source = ir_expr_source_text(base);
+    match base {
+        typed_ir::IrExpr::Var { .. }
+        | typed_ir::IrExpr::Call { .. }
+        | typed_ir::IrExpr::Index { .. }
+        | typed_ir::IrExpr::Member { .. } => source,
+        _ => format!("({source})"),
     }
 }
 
@@ -3844,7 +3856,7 @@ fn translate_expr(expr: &str) -> String {
 mod clang_lowered_ir_evidence_tests {
     use super::*;
     use crate::typed_ir::{
-        IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan,
+        IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan,
     };
 
     fn test_profile() -> BuildProfile {
@@ -3906,6 +3918,19 @@ mod clang_lowered_ir_evidence_tests {
             },
             is_const,
             width_bits: Some(64),
+            source_span: None,
+        }
+    }
+
+    fn record_ty(name: &str) -> IrType {
+        IrType {
+            spelled: name.to_string(),
+            canonical: name.to_string(),
+            kind: IrTypeKind::Record {
+                name: name.to_string(),
+            },
+            is_const: false,
+            width_bits: None,
             source_span: None,
         }
     }
@@ -4001,6 +4026,71 @@ mod clang_lowered_ir_evidence_tests {
             "assignment"
         );
         assert_eq!(result.plan.call_expressions[2].statement_context, "return");
+    }
+
+    #[test]
+    fn clang_lowered_ir_parenthesizes_complex_member_source_text() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let ptr_ty = pointer_ty("struct point *", "struct point *", record_ty("point"), false);
+        let member = IrExpr::Member {
+            base: Box::new(IrExpr::Deref {
+                ptr: Box::new(var("p", ptr_ty)),
+                ty: record_ty("point"),
+                source_span: None,
+            }),
+            field: "x".to_string(),
+            ty: i32_ty,
+            is_arrow: false,
+            source_span: None,
+        };
+
+        assert_eq!(ir_expr_source_text(&member), "(*p).x");
+    }
+
+    #[test]
+    fn clang_lowered_ir_records_call_inside_member_base() {
+        let i32_ty = signed_ty("int", "int", 32);
+        let point_ty = record_ty("point");
+        let function = IrFunction {
+            name: "member_call".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![param("value", i32_ty.clone())],
+            body: vec![IrStmt::Return {
+                value: Some(call(
+                    "helper",
+                    vec![IrExpr::Member {
+                        base: Box::new(call("obj_factory", Vec::new(), point_ty)),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: false,
+                        source_span: None,
+                    }],
+                    i32_ty,
+                )),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "member-call".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "member_call".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        assert_eq!(result.plan.call_expressions.len(), 2);
+        assert_eq!(result.plan.call_expressions[0].callee, "helper");
+        assert_eq!(
+            result.plan.call_expressions[0].source_expression,
+            "helper(obj_factory().x)"
+        );
+        assert_eq!(result.plan.call_expressions[1].callee, "obj_factory");
+        assert_eq!(result.plan.call_expressions[1].source_expression, "obj_factory()");
     }
 
     #[test]
@@ -4240,6 +4330,82 @@ mod clang_lowered_ir_evidence_tests {
         assert!(buf.read_effects.is_empty(), "{:?}", buf.read_effects);
         assert!(
             !buf.boundary_decisions
+                .contains(&"byte_cursor_post_increment_read".to_string()),
+            "{:?}",
+            buf.boundary_decisions
+        );
+    }
+
+    #[test]
+    fn clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base() {
+        let u32_ty = unsigned_ty("uint32_t", "unsigned int", 32);
+        let u8_ty = unsigned_ty("uint8_t", "unsigned char", 8);
+        let const_u8_ptr = pointer_ty(
+            "const uint8_t *",
+            "const unsigned char *",
+            u8_ty.clone(),
+            true,
+        );
+        let const_void_ptr = pointer_ty("const void *", "const void *", void_ty(true), true);
+        let function = IrFunction {
+            name: "member_cursor".to_string(),
+            return_type: u32_ty.clone(),
+            params: vec![param("buf", const_void_ptr.clone())],
+            body: vec![
+                IrStmt::Assign {
+                    target: var("cursor", const_u8_ptr.clone()),
+                    value: IrExpr::Cast {
+                        target: const_u8_ptr.clone(),
+                        expr: Box::new(var("buf", const_void_ptr)),
+                        implicit: false,
+                        source_span: None,
+                    },
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(IrExpr::Member {
+                        base: Box::new(IrExpr::Deref {
+                            ptr: Box::new(IrExpr::IncDec {
+                                target: Box::new(var("cursor", const_u8_ptr.clone())),
+                                op: IrIncDecOp::Inc,
+                                prefix: false,
+                                ty: const_u8_ptr,
+                                source_span: None,
+                            }),
+                            ty: record_ty("byte_record"),
+                            source_span: None,
+                        }),
+                        field: "value".to_string(),
+                        ty: u32_ty,
+                        is_arrow: false,
+                        source_span: None,
+                    }),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "member-cursor".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "member_cursor".to_string(),
+            build_profile: test_profile(),
+            ..SliceSpec::default()
+        };
+        let mut result = TranslationResult::default();
+
+        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
+
+        let buf = result
+            .pointer_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "buf")
+            .expect("buf pointer node");
+        assert_eq!(buf.read_effects, vec!["*p++"]);
+        assert!(
+            buf.boundary_decisions
                 .contains(&"byte_cursor_post_increment_read".to_string()),
             "{:?}",
             buf.boundary_decisions
