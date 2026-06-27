@@ -26,6 +26,7 @@ flowchart TD
     condition + narrow value-position comparisons,
     condition + narrow value-position logical !,
     const pointer slices,
+    readonly pointer NULL checks,
     readonly global const integer arrays,
     local fixed integer array reads/writes,
     table index via slice param or global,
@@ -43,6 +44,7 @@ flowchart TD
   - Converts skeleton nodes into typed IR.
   - Also collects top-level `static const` fixed-length integer array initializers as `ClangLoweringReport.globals: Vec<IrGlobal>`.
   - It also lowers local fixed-length integer-array `InitListExpr` nodes into `IrExpr::ArrayLiteral`, limited to one-dimensional integer arrays whose initializer element count exactly matches the array length and whose elements are pure integer literals or integer casts around integer literals.
+  - It lowers clang `NullToPointer` casts around integer zero into a typed IR null pointer literal for narrow pointer-parameter presence checks.
   - Important functions: `lower_function_from_clang_ast_dump_report`, `lower_function_from_clang_parse_spec_report`, `readonly_globals_from_ast`, `readonly_global_from_toplevel_var_decl`, `integer_literal_init_list_values`, `expr_skeleton_from_ast_with_options`, `init_list_expr_skeleton_from_ast`, `lower_stmt`, `lower_expr`.
 - `crates/c2r-translator/src/typed_ir.rs`
   - Defines `IrFunction`, `IrStmt`, `IrExpr`, `IrType`, `IrGlobal`, and `IrGlobalInit`.
@@ -50,6 +52,7 @@ flowchart TD
   - `emit_rust_from_ir_with_globals(function, globals)` is the main entrypoint for the clang lowering path and returns `EmittedRust { rust, route }`.
   - The generic emitter now emits readonly global integer arrays as Rust `const` items and supports table indexing such as `CRC32_TABLE[...]`.
   - The generic emitter also supports typed IR local fixed-length integer array literals, index reads, and local array element assignment, emitting Rust local `[T; N]` arrays and `let mut` when an element is written.
+  - The generic emitter supports a narrow readonly pointer null-presence surface: `const int *values; return values != NULL;` becomes `values: Option<&[i32]>` plus `.is_some()`. The same nullable parameter is rejected if it is used outside direct null comparisons.
   - The typed IR legacy crc32 matcher, canned emitter, and `DeprecatedLegacyCrc32` fallback have been removed. A crc32 IR without modeled globals now fails closed instead of silently using a template.
 - `crates/c2r-translator/src/translation_route.rs`
   - Defines route metadata for typed IR candidate generation.
@@ -99,6 +102,7 @@ Generic typed IR emission now covers:
 - initialized scalar locals from clang AST;
 - no-brace `if` / `while` bodies from clang AST;
 - readonly integer pointer parameters as Rust slices, for example `const uint32_t *table -> table: &[u32]`;
+- readonly integer pointer parameter null-presence checks, for example `const int *values; return values != NULL; -> values: Option<&[i32]>` and `values.is_some()`; the nullable parameter must be used only in direct `== NULL` / `!= NULL` comparisons;
 - `static const` readonly integer array initializers as Rust `const`, for example `crc32_table[] -> const CRC32_TABLE: [u32; 256]`;
 - clang-lowered typed IR local fixed-length integer array literals, index reads, and element writes, for example `uint32_t table[3] = {1,2,3}; table[i] = value; return table[i]; -> let mut table: [u32; 3] = ...; table[i as usize] = value;`; only initializer elements canonicalized by clang AST to pure integer literals/casts are supported, and writes must target a declared local fixed-length integer array. Partial-initializer zero fill, nested arrays, struct arrays, non-literal or side-effecting initializers, VLAs, incomplete arrays, writes to readonly global arrays, writes to const pointer slices, and array-to-pointer decay still fail closed;
 - `const void *buf` as `&[u8]` only when a proven `const uint8_t *p` cursor and byte read exist;
@@ -113,12 +117,12 @@ Still incomplete:
 - `*`, `/`, and `%` are narrow scalar-integer candidate generation only. They do not claim division-by-zero support, full C arithmetic, floating-point arithmetic, complete usual arithmetic conversions, overflow/UB parity, or pointer arithmetic. Division/modulo can only move toward semantic acceptance when the non-zero divisor is established by a literal, fixture input domain, or slice contract.
 - Bitwise OR / left shift are narrow scalar-integer candidate generation only. Current `|` requires both operands and the result to share one scalar integer type, and `<<` follows the shift rule requiring lhs/result type agreement; this does not claim full C bitwise/shift semantics, usual arithmetic conversions, invalid shift counts, signed shift/overflow UB parity, pointer arithmetic, or semantic acceptance.
 - Signed unary minus is also narrow candidate generation only. It requires the operand and result to be the same signed integer scalar type; unsigned or wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, and literal edge cases such as `-2147483648` remain outside this subset until modeled explicitly.
-- Comparison expressions are candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers narrow scalar-integer comparisons, C `int` 0/1 materialization, and comparison operands with integral casts whose source and target are supported integer types and whose post-cast operand types match exactly. Pointer comparison, floating-point comparison, mixed-width/unsigned conversions that are not aligned by an explicit integer cast, side-effect operands, short-circuit `&&` / `||`, full usual scalar conversions, and semantic acceptance still fail closed.
-- Logical not is candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers integer zero checks, negated comparison conditions, and C `int` 0/1 materialization; it is not full C unary `!`, and operands containing calls, inc/dec, unmodeled deref/side effects, pointer null tests, floating-point truthiness, unsupported types, short-circuit logic, or full usual scalar conversions still fail closed.
+- Comparison expressions are candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers narrow scalar-integer comparisons, C `int` 0/1 materialization, comparison operands with integral casts whose source and target are supported integer types and whose post-cast operand types match exactly, and readonly integer pointer-parameter null presence checks. Arbitrary pointer comparison, floating-point comparison, mixed-width/unsigned conversions that are not aligned by an explicit integer cast, side-effect operands, short-circuit `&&` / `||`, pointer truthiness, pointer null checks followed by dereference/index use, full usual scalar conversions, and semantic acceptance still fail closed.
+- Logical not is candidate generation only, and both condition positions and narrow value positions keep `semantic_pass=false`. Current support covers integer zero checks, negated comparison conditions, and C `int` 0/1 materialization; it is not full C unary `!`, and operands containing calls, inc/dec, unmodeled deref/side effects, pointer truthiness, pointer null checks outside the narrow readonly pointer-parameter presence surface, floating-point truthiness, unsupported types, short-circuit logic, or full usual scalar conversions still fail closed.
 - Complex function pointers, unmodeled alias writes, volatile/hardware registers, macro side effects, and cross-thread/interrupt semantics should still fail closed or route higher.
 
 ## Next Implementation Cut
 
-1. Keep extending generic typed IR scalar expression coverage with red tests first; the better next cut is explicit usual-conversion classification, not mixing short-circuit logic, pointer/null comparison, or full C shift semantics into the same slice. Pointer comparison, floating-point comparison, unmodeled mixed-width conversions, side-effect operands, short-circuit `&&` / `||`, and semantic acceptance must continue to fail closed.
+1. Keep extending generic typed IR coverage with red tests first. Good next cuts are readonly pointer dereference read `*p -> p[0]`, simple scalar compound assignment lowering, or explicit usual-conversion classification as separate slices. Arbitrary pointer comparison, floating-point comparison, unmodeled mixed-width conversions, side-effect operands, short-circuit `&&` / `||`, and semantic acceptance must continue to fail closed.
 2. Run full C/Rust oracle, negative diff, unsafe ledger, and final verification for the real FlashDB crc32 slice.
 3. Keep the raw string crc32 byte-cursor fail-closed regression coverage so the `crc32_update_byte()` template and `crc32-byte-cursor-loop` rule are not reintroduced.

@@ -179,6 +179,14 @@ fn ir_var(name: &str, ty: IrType) -> IrExpr {
 }
 
 #[cfg(feature = "typed-ir")]
+fn ir_null_ptr(ty: IrType) -> IrExpr {
+    IrExpr::NullPtr {
+        ty,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_lit(value: u64, spelling: &str, ty: IrType) -> IrExpr {
     IrExpr::LitInt {
         value,
@@ -3274,6 +3282,39 @@ fn typed_ir_rejects_value_comparison_with_pointer_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_value_comparison_with_null_pointer_operand() {
+    let i32_ty = ir_i32();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let ptr_ty = ir_pointer("const int *", "const int *", const_i32_ty, false);
+    let ir = IrFunction {
+        name: "has_values".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Neq,
+                ir_var("values", ptr_ty.clone()),
+                ir_null_ptr(ptr_ty),
+                i32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit null pointer value comparison");
+
+    assert!(rust.contains("pub fn has_values(values: Option<&[i32]>) -> i32"));
+    assert!(rust.contains("return (if values.is_some() { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-null-pointer-value-comparison", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_value_comparison_with_unsupported_operand_type() {
     let i32_ty = ir_i32();
     let unsupported_ty = IrType {
@@ -3775,6 +3816,105 @@ fn typed_ir_rejects_comparison_condition_with_pointer_operand() {
     assert!(error
         .reason
         .contains("comparison lhs has pointer type int * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_comparison_condition_with_null_pointer_operand() {
+    let i32_ty = ir_i32();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let ptr_ty = ir_pointer("const int *", "const int *", const_i32_ty, false);
+    let ir = IrFunction {
+        name: "zero_if_missing".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("values", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(1, "1", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit null pointer condition comparison");
+
+    assert!(rust.contains("pub fn zero_if_missing(values: Option<&[i32]>) -> i32"));
+    assert!(rust.contains("if values.is_none() {"));
+    assert!(rust.contains("return 0i32;"));
+    assert!(rust.contains("return 1i32;"));
+    assert_rust_snippet_compiles("typed-ir-null-pointer-condition-comparison", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_nullable_pointer_use_after_null_check() {
+    let i32_ty = ir_i32();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let ptr_ty = ir_pointer("const int *", "const int *", const_i32_ty, false);
+    let ir = IrFunction {
+        name: "bad_nullable_use".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Neq,
+                    ir_var("values", ptr_ty.clone()),
+                    ir_null_ptr(ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(IrExpr::Index {
+                        base: Box::new(ir_var("values", ptr_ty.clone())),
+                        index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("nullable pointer follow-up use must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error
+        .reason
+        .contains("nullable pointer param values is only supported in null comparisons"));
 }
 
 #[cfg(feature = "typed-ir")]
@@ -9918,6 +10058,63 @@ fn clang_ast_dump_emits_comparison_return_value_when_enabled() {
     assert!(rust.contains("pub fn positive_as_int(value: i32) -> i32"));
     assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
     assert_rust_snippet_compiles("typed-ir-real-clang-return-comparison", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-null-pointer-comparison-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("has_values.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\nint has_values(const int *values) { return values != NULL; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "has_values");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Binary {
+                op: IrBinOp::Neq,
+                rhs,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected null pointer comparison return, got {:?}",
+            function.body
+        );
+    };
+    assert!(matches!(rhs.as_ref(), IrExpr::NullPtr { .. }));
+
+    let rust = emit_rust_from_ir(function)
+        .expect("emit null pointer comparison return from real clang AST");
+    assert!(rust.contains("pub fn has_values(values: Option<&[i32]>) -> i32"));
+    assert!(rust.contains("return (if values.is_some() { 1i32 } else { 0i32 });"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-return-null-pointer-comparison", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

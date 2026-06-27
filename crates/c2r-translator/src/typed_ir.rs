@@ -81,6 +81,10 @@ pub enum IrExpr {
         ty: IrType,
         source_span: Option<SourceSpan>,
     },
+    NullPtr {
+        ty: IrType,
+        source_span: Option<SourceSpan>,
+    },
     Var {
         name: String,
         ty: IrType,
@@ -233,6 +237,7 @@ struct EmitContext {
     assigned_vars: HashSet<String>,
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
+    nullable_pointer_params: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -259,6 +264,8 @@ impl EmitContext {
                 byte_slice_params.insert(source.clone());
             }
         }
+        let nullable_pointer_params =
+            collect_nullable_pointer_params(&function.body, &function.params)?;
         let mut readonly_globals = HashMap::new();
         for global in globals {
             if readonly_globals
@@ -275,6 +282,7 @@ impl EmitContext {
             assigned_vars,
             byte_slice_params,
             byte_cursor_sources,
+            nullable_pointer_params,
             readonly_globals,
         })
     }
@@ -289,6 +297,10 @@ impl EmitContext {
 
     fn is_byte_slice_param(&self, name: &str) -> bool {
         self.byte_slice_params.contains(name)
+    }
+
+    fn is_nullable_pointer_param(&self, name: &str) -> bool {
+        self.nullable_pointer_params.contains(name)
     }
 
     fn readonly_global(&self, name: &str) -> Option<&IrGlobal> {
@@ -389,7 +401,10 @@ fn emit_param(
     assigned_vars: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    let ty = if context.is_byte_slice_param(&param.name) {
+    let ty = if context.is_nullable_pointer_param(&param.name) {
+        emit_nullable_pointer_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
     } else {
         emit_param_type(&param.ty)
@@ -410,6 +425,17 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         return Ok(format!("&[{element_ty}]"));
     }
     emit_scalar_type(ty)
+}
+
+fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
+    let Some(element_ty) = readonly_pointer_slice_element_type(ty) else {
+        return Err(format!(
+            "nullable pointer param type {} is unsupported",
+            type_label(ty)
+        ));
+    };
+    let element_ty = emit_scalar_type(element_ty)?;
+    Ok(format!("Option<&[{element_ty}]>"))
 }
 
 fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
@@ -909,6 +935,9 @@ fn emit_expr(
 ) -> Result<String, String> {
     match expr {
         IrExpr::LitInt { value, ty, .. } => emit_integer_literal(*value, ty),
+        IrExpr::NullPtr { .. } => {
+            Err("null pointer literal is only supported in pointer null comparisons".to_string())
+        }
         IrExpr::Var { name, ty, .. } => {
             if let Some(global) = context.readonly_global(name) {
                 validate_global_expr_type(global, ty)?;
@@ -1017,6 +1046,9 @@ fn validate_bounded_call_arg(expr: &IrExpr) -> Result<(), String> {
             emit_scalar_type(ty)?;
             Ok(())
         }
+        IrExpr::NullPtr { .. } => {
+            Err("null pointer call arguments are outside the bounded call subset".to_string())
+        }
         IrExpr::Binary { lhs, rhs, .. } => {
             validate_bounded_call_arg(lhs)?;
             validate_bounded_call_arg(rhs)
@@ -1062,7 +1094,10 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         IrExpr::IncDec { target, .. } => find_call_callee(target),
         IrExpr::Deref { ptr, .. } => find_call_callee(ptr),
         IrExpr::AddrOf { operand, .. } => find_call_callee(operand),
-        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => None,
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => None,
     }
 }
 
@@ -1688,6 +1723,11 @@ fn emit_comparison_condition_from_parts(
             "comparison operand call expression {callee} is unsupported"
         ));
     }
+    if let Some(condition) =
+        emit_null_pointer_comparison_condition(op, lhs, rhs, result_ty, symbols, context)?
+    {
+        return Ok(Some(condition));
+    }
     validate_comparison_condition_types(lhs, rhs, result_ty, op)?;
     let lhs =
         emit_expr(lhs, symbols, context).map_err(|detail| format!("comparison lhs {detail}"))?;
@@ -1771,6 +1811,11 @@ fn emit_negated_comparison_condition_expr(
     } = expr
     {
         if let Ok(negated_op) = emit_negated_comparison_op(op) {
+            if let Some(condition) =
+                emit_null_pointer_comparison_condition(negated_op, lhs, rhs, ty, symbols, context)?
+            {
+                return Ok(Some(condition));
+            }
             validate_comparison_condition_types(lhs, rhs, ty, negated_op)?;
             let lhs = emit_expr(lhs, symbols, context)
                 .map_err(|detail| format!("logical not operand comparison lhs {detail}"))?;
@@ -1780,6 +1825,43 @@ fn emit_negated_comparison_condition_expr(
         }
     }
     Ok(None)
+}
+
+fn emit_null_pointer_comparison_condition(
+    op: &str,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let Some((name, pointer_ty)) = null_pointer_comparison_var(lhs, rhs) else {
+        return Ok(None);
+    };
+    if !context.is_nullable_pointer_param(name) {
+        return Ok(None);
+    }
+    if !is_c_int_type(result_ty) {
+        return Err(format!(
+            "comparison result type must be C int, got {}",
+            type_label(result_ty)
+        ));
+    }
+    if !symbols.contains(name) {
+        return Err(format!("nullable pointer param {name} is not declared"));
+    }
+    readonly_pointer_slice_element_type(pointer_ty).ok_or_else(|| {
+        format!(
+            "nullable pointer param {name} has unsupported type {}",
+            type_label(pointer_ty)
+        )
+    })?;
+    let name = emit_identifier(name, "nullable pointer param")?;
+    match op {
+        "==" => Ok(Some(format!("{name}.is_none()"))),
+        "!=" => Ok(Some(format!("{name}.is_some()"))),
+        _ => Ok(None),
+    }
 }
 
 fn validate_comparison_condition_types(
@@ -2044,7 +2126,10 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
             .iter()
             .any(|arg| expr_has_post_increment_byte_read(arg, cursor)),
         IrExpr::IncDec { target, .. } => expr_has_post_increment_byte_read(target, cursor),
-        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => false,
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => false,
     }
 }
 
@@ -2066,7 +2151,309 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         }
         IrExpr::Call { args, .. } => args.iter().map(count_post_increment_byte_reads).sum(),
         IrExpr::IncDec { target, .. } => count_post_increment_byte_reads(target),
-        IrExpr::LitInt { .. } | IrExpr::Var { .. } | IrExpr::Unsupported { .. } => 0,
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => 0,
+    }
+}
+
+fn collect_nullable_pointer_params(
+    body: &[IrStmt],
+    params: &[IrParam],
+) -> Result<HashSet<String>, String> {
+    let readonly_pointer_params = params
+        .iter()
+        .filter(|param| readonly_pointer_slice_element_type(&param.ty).is_some())
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect::<HashMap<_, _>>();
+    let mut nullable_params = HashSet::new();
+    collect_nullable_pointer_params_from_body(body, &readonly_pointer_params, &mut nullable_params);
+    for stmt in body {
+        validate_nullable_pointer_param_uses_in_stmt(stmt, &nullable_params)?;
+    }
+    Ok(nullable_params)
+}
+
+fn collect_nullable_pointer_params_from_body(
+    body: &[IrStmt],
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    nullable_params: &mut HashSet<String>,
+) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_nullable_pointer_params_from_expr(
+                        init,
+                        readonly_pointer_params,
+                        nullable_params,
+                    );
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
+                collect_nullable_pointer_params_from_expr(
+                    target,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+                collect_nullable_pointer_params_from_expr(
+                    value,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_nullable_pointer_params_from_expr(
+                    condition,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+                collect_nullable_pointer_params_from_body(
+                    then_body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+                collect_nullable_pointer_params_from_body(
+                    else_body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_nullable_pointer_params_from_expr(
+                    condition,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+                collect_nullable_pointer_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_nullable_pointer_params_from_expr(
+                        value,
+                        readonly_pointer_params,
+                        nullable_params,
+                    );
+                }
+            }
+            IrStmt::Expr { expr, .. } => {
+                collect_nullable_pointer_params_from_expr(
+                    expr,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+            IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn collect_nullable_pointer_params_from_expr(
+    expr: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    nullable_params: &mut HashSet<String>,
+) {
+    if let IrExpr::Binary {
+        op: IrBinOp::Eq | IrBinOp::Neq,
+        lhs,
+        rhs,
+        ..
+    } = expr
+    {
+        if let Some((name, pointer_ty)) = null_pointer_comparison_var(lhs, rhs) {
+            if readonly_pointer_params
+                .get(name)
+                .is_some_and(|param_ty| *param_ty == pointer_ty)
+            {
+                nullable_params.insert(name.to_string());
+            }
+        }
+    }
+    match expr {
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_nullable_pointer_params_from_expr(
+                lhs,
+                readonly_pointer_params,
+                nullable_params,
+            );
+            collect_nullable_pointer_params_from_expr(
+                rhs,
+                readonly_pointer_params,
+                nullable_params,
+            );
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => collect_nullable_pointer_params_from_expr(
+            operand,
+            readonly_pointer_params,
+            nullable_params,
+        ),
+        IrExpr::Index { base, index, .. } => {
+            collect_nullable_pointer_params_from_expr(
+                base,
+                readonly_pointer_params,
+                nullable_params,
+            );
+            collect_nullable_pointer_params_from_expr(
+                index,
+                readonly_pointer_params,
+                nullable_params,
+            );
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_nullable_pointer_params_from_expr(
+                    element,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_nullable_pointer_params_from_expr(
+                    arg,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
+            }
+        }
+        IrExpr::IncDec { target, .. } => collect_nullable_pointer_params_from_expr(
+            target,
+            readonly_pointer_params,
+            nullable_params,
+        ),
+        IrExpr::Deref { ptr, .. } => {
+            collect_nullable_pointer_params_from_expr(ptr, readonly_pointer_params, nullable_params)
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+fn validate_nullable_pointer_param_uses_in_stmt(
+    stmt: &IrStmt,
+    nullable_params: &HashSet<String>,
+) -> Result<(), String> {
+    if nullable_params.is_empty() {
+        return Ok(());
+    }
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                validate_nullable_pointer_param_uses_in_expr(init, nullable_params)?;
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(target, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+            for stmt in then_body {
+                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            }
+            for stmt in else_body {
+                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            }
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            validate_nullable_pointer_param_uses_in_expr(condition, nullable_params)?;
+            for stmt in body {
+                validate_nullable_pointer_param_uses_in_stmt(stmt, nullable_params)?;
+            }
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                validate_nullable_pointer_param_uses_in_expr(value, nullable_params)?;
+            }
+        }
+        IrStmt::Expr { expr, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(expr, nullable_params)?;
+        }
+        IrStmt::Unsupported { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_nullable_pointer_param_uses_in_expr(
+    expr: &IrExpr,
+    nullable_params: &HashSet<String>,
+) -> Result<(), String> {
+    if let IrExpr::Binary {
+        op: IrBinOp::Eq | IrBinOp::Neq,
+        lhs,
+        rhs,
+        ..
+    } = expr
+    {
+        if null_pointer_comparison_var(lhs, rhs)
+            .is_some_and(|(name, _)| nullable_params.contains(name))
+        {
+            return Ok(());
+        }
+    }
+    match expr {
+        IrExpr::Var { name, .. } if nullable_params.contains(name) => Err(format!(
+            "nullable pointer param {name} is only supported in null comparisons"
+        )),
+        IrExpr::Binary { lhs, rhs, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(lhs, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(rhs, nullable_params)
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(operand, nullable_params)
+        }
+        IrExpr::Index { base, index, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(base, nullable_params)?;
+            validate_nullable_pointer_param_uses_in_expr(index, nullable_params)
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                validate_nullable_pointer_param_uses_in_expr(element, nullable_params)?;
+            }
+            Ok(())
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                validate_nullable_pointer_param_uses_in_expr(arg, nullable_params)?;
+            }
+            Ok(())
+        }
+        IrExpr::IncDec { target, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(target, nullable_params)
+        }
+        IrExpr::Deref { ptr, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(ptr, nullable_params)
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => Ok(()),
     }
 }
 
@@ -2134,6 +2521,7 @@ fn assigned_var_name_from_target(target: &IrExpr) -> Option<&String> {
 fn expr_type(expr: &IrExpr) -> Option<&IrType> {
     match expr {
         IrExpr::LitInt { ty, .. }
+        | IrExpr::NullPtr { ty, .. }
         | IrExpr::Var { ty, .. }
         | IrExpr::Binary { ty, .. }
         | IrExpr::Unary { ty, .. }
@@ -2145,6 +2533,39 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::AddrOf { ty, .. } => Some(ty),
         IrExpr::Cast { target, .. } => Some(target),
         IrExpr::Unsupported { .. } => None,
+    }
+}
+
+fn null_pointer_comparison_var<'a>(
+    lhs: &'a IrExpr,
+    rhs: &'a IrExpr,
+) -> Option<(&'a str, &'a IrType)> {
+    match (lhs, rhs) {
+        (
+            IrExpr::Var {
+                name,
+                ty: pointer_ty,
+                ..
+            },
+            IrExpr::NullPtr { ty: null_ty, .. },
+        ) if matches!(pointer_ty.kind, IrTypeKind::Pointer { .. })
+            && matches!(null_ty.kind, IrTypeKind::Pointer { .. }) =>
+        {
+            Some((name.as_str(), pointer_ty))
+        }
+        (
+            IrExpr::NullPtr { ty: null_ty, .. },
+            IrExpr::Var {
+                name,
+                ty: pointer_ty,
+                ..
+            },
+        ) if matches!(pointer_ty.kind, IrTypeKind::Pointer { .. })
+            && matches!(null_ty.kind, IrTypeKind::Pointer { .. }) =>
+        {
+            Some((name.as_str(), pointer_ty))
+        }
+        _ => None,
     }
 }
 

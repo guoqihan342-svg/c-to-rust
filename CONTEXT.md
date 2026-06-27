@@ -6784,3 +6784,79 @@ English mirror summary:
 - This unlocks real clang `uint32_t value; if (value > 0)` lowering into `if (value > (0i32 as u32)) {`.
 - This remains candidate generation only and keeps `semantic_pass=false`.
 - It is not full usual arithmetic/scalar conversion support. Pointer/floating-point comparisons, unmodeled mixed-width conversions, side-effect operands, short-circuit logic, and semantic acceptance still fail closed.
+
+## 98. 2026-06-27 readonly pointer NULL presence candidate
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 binary cast operand、pointer/null comparison、logical `&&`/`||`、赋值/复合赋值、pointer/index lowering 和文档边界；主线程按 TDD 选择了最小可落地的 readonly pointer NULL presence 切片。结论：FlashDB 仍只是用例，本切片不是 crc32 专用代码，也不是完整 pointer comparison；它只把真实 clang 中常见的 `const int *values; return values != NULL;` 这类 presence check 从 fail-closed 推进到 `GenericTypedIr` candidate。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrExpr::NullPtr`，作为 typed IR 的 null pointer literal。
+  - `EmitContext` 新增 `nullable_pointer_params`，只在参数是 readonly integer pointer 且只出现在直接 `== NULL` / `!= NULL` comparison 时启用。
+  - nullable 参数发射为 `Option<&[T]>`；`ptr == NULL` 发射 `.is_none()`，`ptr != NULL` 发射 `.is_some()`。
+  - 如果同一个 nullable pointer 参数在 null check 后继续出现在 index/deref/普通表达式中，直接 fail closed，避免生成 `Option<&[T]>` 后又写出 `values[0]` 这种错误 Rust。
+  - pointer-pointer comparison、非 readonly integer pointer、pointer truthiness、任意 pointer relational comparison、null check 后流敏 unwrap、deref/index 使用、call/inc/dec side-effect operand 继续 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `NullPtr`。
+  - `ImplicitCastExpr` / `CStyleCastExpr` 的 `castKind=NullToPointer` 且 operand 为整数 0 时，lower 成 typed IR null pointer literal。
+  - 真实 clang 对 `NULL` 宏会产生 `CStyleCastExpr NullToPointer`，本轮 real clang smoke 覆盖了这条路径。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_value_comparison_with_null_pointer_operand`
+    - `typed_ir_emits_comparison_condition_with_null_pointer_operand`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_nullable_pointer_use_after_null_check`
+  - 新增真实 clang gated smoke：
+    - `clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled`
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --features typed-ir null_pointer
+```
+
+红灯表现：测试期望 `IrExpr::NullPtr`，旧代码编译失败于 `no variant named NullPtr found for enum IrExpr`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --features typed-ir null_pointer
+cargo test --features typed-ir nullable_pointer
+cargo test --features "typed-ir clang-frontend" null_to_pointer
+cargo test --features "typed-ir clang-frontend" null_pointer
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled -- --nocapture
+```
+
+聚焦结果：
+- `null_pointer` direct/gated 编译路径通过。
+- `nullable_pointer` fail-closed 负测通过。
+- clang skeleton `NullToPointer` lowering 单测通过。
+- 真实 clang AST smoke 实际运行通过；真实 `NULL` 宏路径是 `CStyleCastExpr NullToPointer`。
+
+当前边界：
+- 可以说：readonly integer pointer 参数的直接 `== NULL` / `!= NULL` presence check 现在可以进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：该参数会变成 `Option<&[T]>`，presence check 会变成 `.is_none()` / `.is_some()`。
+- 不应说：已经支持完整 pointer comparison、pointer truthiness、null check 后流敏 unwrap、nullable slice indexing、mutable pointer、pointer arithmetic、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+
+下一步建议：
+- 继续最终验证、白名单提交并推送本切片。
+- 后续核心切片优先级可按子线程结论排：readonly pointer deref read `*p -> p[0]`、简单标量 compound assignment `+=` lowering、`&&`/`||` 短路逻辑窄化支持、binary cast operand 默认覆盖测试/real clang smoke。
+- 对 `codex/translator-strengthening-analysis.md` 的方案评价：它的“验证体系强、翻译器能力追不上”判断仍有道理，但其中“先装 clang / typed IR 指针类型基础不足”的部分已被本分支后续进展部分 supersede；后续应把方案里的 P0 改成继续扩 typed IR emitter 的泛化子集，而不是回到 raw string recipe。
+
+English mirror summary:
+
+- Added a narrow readonly pointer NULL-presence typed IR candidate path.
+- `NullToPointer` casts from clang now lower into `IrExpr::NullPtr`.
+- `const int *values; return values != NULL;` emits as `pub fn has_values(values: Option<&[i32]>) -> i32` plus `values.is_some()`.
+- Nullable pointer parameters are allowed only in direct `== NULL` / `!= NULL` comparisons; use after the null check still fails closed.
+- This remains candidate generation only and keeps `semantic_pass=false`.
+- It is not arbitrary pointer comparison, pointer truthiness, flow-sensitive unwrap, nullable indexing, pointer arithmetic, alias semantics, or semantic acceptance.

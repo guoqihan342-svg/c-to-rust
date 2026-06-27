@@ -688,6 +688,7 @@ fn record_ir_call_expression_evidence_for_expr(
             record_ir_call_expression_evidence_for_expr(operand, statement_context, result);
         }
         typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::NullPtr { .. }
         | typed_ir::IrExpr::Var { .. }
         | typed_ir::IrExpr::Unsupported { .. } => {}
     }
@@ -698,6 +699,7 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
     match expr {
         typed_ir::IrExpr::Var { name, .. } => name.clone(),
         typed_ir::IrExpr::LitInt { spelling, .. } => spelling.clone(),
+        typed_ir::IrExpr::NullPtr { .. } => "NULL".to_string(),
         typed_ir::IrExpr::Binary { op, lhs, rhs, .. } => format!(
             "({} {} {})",
             ir_expr_source_text(lhs),
@@ -863,6 +865,7 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
     match expr {
         typed_ir::IrExpr::Var { name, .. } => name.clone(),
         typed_ir::IrExpr::LitInt { spelling, .. } => spelling.clone(),
+        typed_ir::IrExpr::NullPtr { .. } => "null_ptr".to_string(),
         typed_ir::IrExpr::Binary { op, .. } => format!("{op:?}"),
         typed_ir::IrExpr::Unary { op, .. } => format!("{op:?}"),
         typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
@@ -1083,6 +1086,7 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
             collect_ir_post_increment_deref_vars_from_expr(operand, vars);
         }
         typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::NullPtr { .. }
         | typed_ir::IrExpr::Var { .. }
         | typed_ir::IrExpr::Unsupported { .. } => {}
     }

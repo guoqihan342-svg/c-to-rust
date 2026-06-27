@@ -188,6 +188,9 @@ pub enum ClangExprSkeleton {
         spelling: String,
         ty: ClangTypeSkeleton,
     },
+    NullPtr {
+        ty: ClangTypeSkeleton,
+    },
     Binary {
         op: ClangBinaryOperator,
         lhs: Box<ClangExprSkeleton>,
@@ -997,6 +1000,9 @@ fn expr_skeleton_from_ast_with_options(
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
             let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+            if string_field(expr, "castKind").as_deref() == Some("NullToPointer") {
+                return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
+            }
             if preserve_integral_casts && is_integral_conversion_cast_expr(expr) {
                 return Ok(ClangExprSkeleton::Cast {
                     target: expr_type(expr)?,
@@ -1193,6 +1199,15 @@ fn expr_skeleton_from_ast_with_options(
             })
         }
         Some("CStyleCastExpr") => {
+            if string_field(expr, "castKind").as_deref() == Some("NullToPointer") {
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_cast_expr".to_string(),
+                    message: "CStyleCastExpr is missing operand".to_string(),
+                })?;
+                let operand =
+                    expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+                return null_pointer_skeleton_from_cast(expr, &operand, "CStyleCastExpr");
+            }
             if !matches!(
                 string_field(expr, "castKind").as_deref(),
                 Some("BitCast" | "IntegralCast" | "IntegralPromotion")
@@ -1231,6 +1246,31 @@ fn expr_skeleton_from_ast_with_options(
             message: "clang expression node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn null_pointer_skeleton_from_cast(
+    expr: &Value,
+    operand: &ClangExprSkeleton,
+    node: &str,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let target = expr_type(expr)?;
+    if !matches!(target.kind, ClangTypeKind::Pointer { .. }) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: node.to_string(),
+            reason: format!(
+                "castKind NullToPointer target {} is outside the current clang lowering skeleton",
+                target.spelled
+            ),
+        });
+    }
+    if !matches!(operand, ClangExprSkeleton::IntegerLiteral { value: 0, .. }) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: node.to_string(),
+            reason: "castKind NullToPointer without integer zero operand is outside the current clang lowering skeleton".to_string(),
+        });
+    }
+    Ok(ClangExprSkeleton::NullPtr { ty: target })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1402,6 +1442,9 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
 fn bounded_call_arg_rejection_reason(expr: &ClangExprSkeleton) -> Option<String> {
     match expr {
         ClangExprSkeleton::DeclRef { .. } | ClangExprSkeleton::IntegerLiteral { .. } => None,
+        ClangExprSkeleton::NullPtr { .. } => {
+            Some("call arguments cannot use null pointer value semantics".to_string())
+        }
         ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs)
             .or_else(|| bounded_call_arg_rejection_reason(rhs)),
         ClangExprSkeleton::Unary { operand, .. }
@@ -1713,6 +1756,10 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             ty: lower_type(ty)?,
             source_span: None,
         }),
+        ClangExprSkeleton::NullPtr { ty } => Ok(IrExpr::NullPtr {
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
         ClangExprSkeleton::Binary { op, lhs, rhs, ty } => Ok(IrExpr::Binary {
             op: lower_binary_operator(op),
             lhs: Box::new(lower_expr(lhs)?),
@@ -1955,6 +2002,67 @@ mod tests {
             };
             assert_eq!(op, expected);
         }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_null_to_pointer_comparison() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "!=",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "const int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "const int *" },
+                            "referencedDecl": { "name": "values" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "NullToPointer",
+                    "type": { "qualType": "const int *" },
+                    "inner": [
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "0"
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("null pointer comparison skeleton");
+        let ir = lower_expr(&skeleton).expect("lower null pointer comparison skeleton");
+
+        let IrExpr::Binary {
+            op, lhs, rhs, ty, ..
+        } = ir
+        else {
+            panic!("expected IR comparison, got {ir:?}");
+        };
+        assert_eq!(op, IrBinOp::Neq);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            lhs.as_ref(),
+            IrExpr::Var { name, .. } if name == "values"
+        ));
+        assert!(matches!(
+            rhs.as_ref(),
+            IrExpr::NullPtr { ty, .. } if matches!(ty.kind, IrTypeKind::Pointer { .. })
+        ));
     }
 
     #[test]
