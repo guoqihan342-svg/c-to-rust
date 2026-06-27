@@ -39,6 +39,8 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide, including pointer graph v2, `effect_graph`, alias-gate cache identity, and validation-gate rules.
 - `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`: detailed design document for L0-L4 route decisions, evidence flow topology, and validation gates, explaining route decisions, validation profiles, candidate routes, alias risk floors, fail-closed principles, and evidence reference chain consistency.
+- `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`: future vision and MVP roadmap, including the three-layer IR design (Semantic IR / Control IR / Typed Value IR) and phased plan.
+- `COVERAGE.md` / `COVERAGE.en.md`: current typed IR + clang frontend + generic emitter C construct support/unsupport inventory, honestly listing supported and explicitly rejected C language features.
 - `../../config/competition-env/`: competition environment entrypoint covering Ubuntu 24.04.4, Rust 1.96.0, Python 3.12.3, Node 24.13.0, Huawei mirrors, Go/CMake absence boundaries, and the self-check script.
 
 ## Quick Use

@@ -1,0 +1,161 @@
+# C 构造覆盖清单
+
+本文诚实列出当前 typed IR + clang frontend + generic emitter 管线"已支持"和"显式不支持"的 C 语言构造。英文镜像见 `COVERAGE.en.md`。
+
+> 原则：坦诚的边界比夸大的 demo 可信。本文件由最新代码状态手动整理，若有疏漏以 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed 测试为准。
+
+## 类型系统
+
+| C 类型 | 状态 | 说明 |
+|--------|------|------|
+| `int` | 已支持 | 映射为 `i32`，signed 32-bit |
+| `unsigned int` / `uint32_t` | 已支持 | 映射为 `u32`，unsigned 32-bit |
+| `uint8_t` / `unsigned char` | 已支持 | 映射为 `u8` |
+| `int8_t` / `signed char` | 已支持 | 映射为 `i8` |
+| `int16_t` | 已支持 | 映射为 `i16` |
+| `uint16_t` | 已支持 | 映射为 `u16` |
+| `int64_t` / `uint64_t` | 已支持 | 映射为 `i64` / `u64` |
+| `size_t` (clang canonical) | 已支持 | 映射为 `usize` |
+| `void` | 已支持 | return type 和 pointer pointee |
+| `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
+| `const T *` (readonly integer pointer) | 窄支持 | 映射为 `&[T]`，只读 |
+| `T *` (mutable output pointer) | 窄支持 | 仅在作为写目标时映射为 `&mut [T]` |
+| `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
+| `short` / `unsigned short` | 不支持 | target-dependent spelling，拒绝 |
+| `long` / `unsigned long` | 不支持 | target ABI 宽度推断未建模 |
+| `long long` / `unsigned long long` | 不支持 | 如不是 typedef alias，拒绝 |
+| `float` / `double` / `long double` | 不支持 | 浮点类型完全未支持 |
+| `_Bool` | 不支持 | 未建模 |
+| `enum` | 不支持 | 未建模 |
+| `union` | 不支持 | 未建模 |
+| `struct` (按值传递) | 窄支持 | 仅 dot-field read，无 field write、嵌套、匿名 |
+
+## 声明与初始化
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| 单变量标量声明 + 初始化 | 已支持 | `int x = 1;` |
+| 单变量无初始化 | 窄支持 | 仅在读取前有赋值证明时支持 |
+| 多声明 `int a = 1, b = 2;` | 已支持 | compound body 和 for-init |
+| `const` 局部变量 | 未显式支持 | clang 降级至 non-const |
+| `static` 局部变量 | 不支持 | 需要静态存储模型 |
+| `extern` 声明 | 不支持 | 需要跨文件模型 |
+| compound literal | 不支持 | `(struct point){1, 2}` |
+| designated initializer | 不支持 | `.x = 1, .y = 2` |
+
+## 表达式
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| 整数字面量 | 已支持 | 含 unsigned suffix |
+| 变量引用 | 已支持 | 局部变量和参数 |
+| `+` `-` `*` `/` `%` | 已支持 | 标量整数，要求 operand 同型 |
+| `&` `\|` `^` `<<` `>>` | 已支持 | 标量整数，要求 operand 同型 |
+| `~` (bitwise not) | 已支持 | |
+| `-value` (unary minus) | 窄支持 | 仅 signed integer |
+| `!expr` (logical not) | 窄支持 | 条件和 value-position C int 0/1 |
+| `==` `!=` `<` `<=` `>` `>=` | 窄支持 | 条件和 value-position C int 0/1 |
+| `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
+| `?:` (conditional) | 窄支持 | 仅纯整数 value-position |
+| 整数 cast (显式/隐式) | 窄支持 | clang-proven integral cast，source/target 同为支持整数 |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee |
+| 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
+| `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
+| `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
+| `p[i]` (array subscript) | 窄支持 | readonly pointer slice 或 local/global array |
+| `p->field` (arrow member) | 不支持 | pointer/record ownership 未建模 |
+| `p.field` (dot member read) | 窄支持 | 仅按值 record dot-field read |
+| `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
+| `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
+| `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |
+| `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
+| `&x` (address-of) | 不支持 | |
+| `sizeof` | 不支持 | |
+| `_Alignof` | 不支持 | |
+| `(type){init}` compound literal | 不支持 | |
+| 函数指针 | 不支持 | |
+| 逗号表达式 | 不支持 | |
+| 赋值表达式 (value-position) | 不支持 | 仅 statement |
+| compound assignment (value-position) | 不支持 | 仅 statement |
+
+## 语句与控制流
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| 表达式语句 | 已支持 | `value++;` |
+| `return` (with/without value) | 已支持 | |
+| `if` / `if-else` | 已支持 | 含 comparison condition |
+| `while` | 已支持 | 含 postfix `size--` |
+| `do-while` | 已支持 | |
+| `for` (scoped) | 窄支持 | init/condition/step 为简单形式 |
+| `break` | 窄支持 | 仅在 loop body 内 |
+| `continue` | 窄支持 | 仅在 loop body 内 |
+| `switch` | 不支持 | 需 CFG + relooper |
+| `goto` | 不支持 | 需 CFG + relooper |
+| label | 不支持 | |
+| `case` / `default` | 不支持 | |
+
+## 数组
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| 局部固定长度整数数组声明 | 窄支持 | `uint32_t table[3] = {1, 2, 3};` |
+| 局部数组下标读 | 窄支持 | `table[i]` |
+| 局部数组下标写 | 窄支持 | `table[i] = value;` |
+| 全局 const 整数数组 | 窄支持 | `static const uint32_t table[] = {...};` |
+| 全局数组下标读 | 窄支持 | `CRC32_TABLE[index as usize]` |
+| 全局数组下标写 | 不支持 | readonly global |
+| 变长数组 (VLA) | 不支持 | |
+| 不完整数组 (无 initializer) | 不支持 | |
+| array-to-pointer decay | 不支持 | 未建模 |
+| 多维数组 | 不支持 | |
+| 数组作为函数参数 | 不支持 | 由 pointer lowering 间接覆盖部分场景 |
+
+## 指针
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| `const T *` readonly slice | 窄支持 | 参数上的只读访问 |
+| `T *` mutable output slice | 窄支持 | 参数上的只写访问 |
+| `*p` deref read | 窄支持 | readonly pointer only |
+| `*(p+i)` bounded offset deref | 窄支持 | readonly, integer offset |
+| `*out = v` deref write | 窄支持 | mutable pointer only |
+| `out[i] = v` index write | 窄支持 | mutable pointer only |
+| `*(out+i) = v` offset write | 窄支持 | mutable pointer, integer offset |
+| `p == NULL` / `p != NULL` | 窄支持 | readonly pointer presence check |
+| pointer arithmetic (general) | 不支持 | 仅 bounded offset read/write |
+| pointer subtraction | 不支持 | |
+| pointer comparison (general) | 不支持 | 仅 NULL 比较 |
+| void pointer (general) | 不支持 | 仅 proven byte cursor 场景 |
+| 函数指针 | 不支持 | |
+| double/triple pointer | 不支持 | `T **` |
+| pointer cast (non-integer) | 不支持 | |
+| `const T *` write | 不支持 | |
+| mutable pointer read | 不支持 | 仅有写证明的 pointer 不能读 |
+| nullable pointer deref after check | 不支持 | null check 后不能继续使用 |
+
+## 预处理器
+
+| 构造 | 状态 | 说明 |
+|------|------|------|
+| `#include` | 间接支持 | clang 预处理后 AST 不保留 |
+| `#define` 简单常量 | 间接支持 | clang 展开 |
+| `#define` 宏函数 | 不支持 | clang 展开后语义不可逆 |
+| `#ifdef` / `#if` | 间接支持 | 由 build profile defines 控制 |
+
+## C 标准库
+
+| 函数/头文件 | 状态 | 说明 |
+|-------------|------|------|
+| 任何标准库函数 | 不支持 | 无 stub / extern callee 证明 |
+
+## 关键边界说明
+
+1. **所有 typed IR 成功生成都是 candidate generation，不表示 semantic pass。** `semantic_pass=false` 始终为真，直到独立 validation gates 接受 exact draft。
+2. **旧 crc32 特例模板和 string recognizer crc32 路径已删除。** 不能恢复。
+3. **除法/取模**：只有在 divisor 非零由 literal 或 fixture contract 约束时，才能进入后续 semantic gate 讨论。
+4. **bitwise/shift**：不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
+5. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
+6. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
+7. **record/struct**：当前 struct definition 是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof。
+8. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。

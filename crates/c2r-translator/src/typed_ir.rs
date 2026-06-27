@@ -1,3 +1,56 @@
+//! Typed IR: intermediate representation for C semantics and a generic Rust emitter.
+//!
+//! # IR Layering (Target Architecture)
+//!
+//! The long-term goal is a three-layer IR that separates concerns:
+//!
+//! **Layer 1: Semantic IR (most important)** — preserves C semantics. Does not do Rust
+//! inference. Does not produce candidates. Only answers: "what does this C code do in
+//! the C abstract machine?" All implicit conversions, pointer arithmetic, and UB markers
+//! are preserved here.
+//!
+//! **Layer 2: Control IR** — if/loop/goto/switch with explicit CFG. Every control flow
+//! edge carries an explicit condition. `break`/`continue` are CFG edges, not ad-hoc
+//! handling. A relooper can recover structured control flow from arbitrary CFG.
+//!
+//! **Layer 3: Typed Value IR** — integer/pointer/struct/array with explicit casts only.
+//! All implicit conversions from Layer 1 become explicit `Cast` nodes here. Pointer
+//! arithmetic is decomposed into element access. Array-to-pointer decay is explicit.
+//!
+//! **Lowering layer** (not yet a separate module): converts from Semantic IR to a Rust
+//! candidate. Every lowering rule must be provable. When lowering fails, the reason is
+//! recorded fail-closed. IR must not "decide how Rust should be written", only "describe
+//! what C is".
+//!
+//! # Current State
+//!
+//! The current typed IR combines aspects of all three layers. `IrExpr` and `IrStmt`
+//! represent a mix of C-level semantics (e.g., `Cast { implicit }`) and Rust-level
+//! lowering decisions (e.g., `const void *` mapped directly to `&[u8]` in certain
+//! contexts). This is acceptable for P0 but will be separated into distinct layers
+//! in future phases.
+//!
+//! # Generic Emitter Boundaries
+//!
+//! The `emit_*` family of functions in this module implements a conservative,
+//! narrow-subset generic Rust emitter. Key boundaries:
+//!
+//! - Only integer scalar types are fully supported (i8/u8/i16/u16/i32/u32/i64/u64/usize).
+//! - Floating-point, enum, union, function pointer, and general pointer types fail closed.
+//! - Control flow: `if`/`while`/`for`/`do-while`/`break`/`continue` with narrow conditions.
+//!   `switch`/`goto` fail closed.
+//! - Declarations: scalar locals with optional init; local fixed arrays; multi-decl.
+//! - Expressions: arithmetic, bitwise, comparison, logical-not, short-circuit, conditional,
+//!   direct calls, narrow deref/index/member reads, narrow mutable pointer writes.
+//! - See `docs/c2rust-migration-agent/COVERAGE.md` for the complete supported/unsupported inventory.
+//!
+//! # Fail-Closed Principle
+//!
+//! When the emitter encounters an IR node it cannot safely emit, it returns `IrEmitError`
+//! with a specific reason. It never guesses or silently falls back. The old crc32 canned
+//! matcher and template have been deleted; projects like FlashDB crc32 must go through
+//! clang-lowered typed IR + readonly globals + generic emitter.
+
 use crate::translation_route::{generic_typed_ir_route, unsupported_route, EmittedRust};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -131,6 +184,13 @@ pub enum IrExpr {
         callee: String,
         args: Vec<IrExpr>,
         ty: IrType,
+        source_span: Option<SourceSpan>,
+    },
+    Member {
+        base: Box<IrExpr>,
+        field: String,
+        ty: IrType,
+        is_arrow: bool,
         source_span: Option<SourceSpan>,
     },
     IncDec {
@@ -270,6 +330,12 @@ struct EmitContext {
 struct EmittedExpr {
     prelude: String,
     expr: String,
+}
+
+#[derive(Clone, Debug)]
+struct RecordFieldUse<'a> {
+    name: &'a str,
+    ty: &'a IrType,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -458,6 +524,13 @@ fn emit_scalar_rust_from_ir_with_globals(
     if !globals.is_empty() {
         rust.push('\n');
     }
+    let record_definitions = emit_record_definitions(function)?;
+    for definition in &record_definitions {
+        rust.push_str(definition);
+    }
+    if !record_definitions.is_empty() {
+        rust.push('\n');
+    }
     rust.push_str(&format!("pub fn {function_name}({params})"));
     if let Some(return_type) = return_type {
         rust.push_str(&format!(" -> {}", return_type));
@@ -518,6 +591,9 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         let element_ty = emit_scalar_type(element_ty)?;
         return Ok(format!("&[{element_ty}]"));
     }
+    if let IrTypeKind::Record { name } = &ty.kind {
+        return emit_record_type_name(name);
+    }
     emit_scalar_type(ty)
 }
 
@@ -530,6 +606,219 @@ fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
     };
     let element_ty = emit_scalar_type(element_ty)?;
     Ok(format!("Option<&[{element_ty}]>"))
+}
+
+fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
+    let mut records: Vec<(&str, Vec<RecordFieldUse<'_>>)> = Vec::new();
+    for param in &function.params {
+        if let IrTypeKind::Record { name } = &param.ty.kind {
+            ensure_record_entry(&mut records, name);
+        }
+    }
+    for stmt in &function.body {
+        collect_record_field_uses_from_stmt(stmt, &mut records)?;
+    }
+
+    records
+        .into_iter()
+        .map(|(name, fields)| emit_record_definition(name, &fields))
+        .collect()
+}
+
+fn ensure_record_entry<'a>(records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>, name: &'a str) {
+    if records.iter().any(|(record_name, _)| *record_name == name) {
+        return;
+    }
+    records.push((name, Vec::new()));
+}
+
+fn add_record_field_use<'a>(
+    records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
+    record_name: &'a str,
+    field_name: &'a str,
+    field_ty: &'a IrType,
+) -> Result<(), String> {
+    ensure_record_entry(records, record_name);
+    let Some((_, fields)) = records.iter_mut().find(|(name, _)| *name == record_name) else {
+        return Err(format!("record {record_name} was not registered"));
+    };
+    if let Some(existing) = fields.iter().find(|field| field.name == field_name) {
+        if existing.ty == field_ty {
+            return Ok(());
+        }
+        return Err(format!(
+            "record {record_name} field {field_name} has inconsistent types {} and {}",
+            type_label(existing.ty),
+            type_label(field_ty)
+        ));
+    }
+    fields.push(RecordFieldUse {
+        name: field_name,
+        ty: field_ty,
+    });
+    Ok(())
+}
+
+fn emit_record_definition(name: &str, fields: &[RecordFieldUse<'_>]) -> Result<String, String> {
+    if fields.is_empty() {
+        return Err(format!("record {name} has no modeled fields"));
+    }
+    let rust_name = emit_record_type_name(name)?;
+    let mut definition = String::new();
+    definition.push_str("#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n");
+    definition.push_str(&format!("pub struct {rust_name} {{\n"));
+    for field in fields {
+        let field_name = emit_identifier(field.name, "record field")?;
+        let field_ty = emit_scalar_type(field.ty)
+            .map_err(|detail| format!("record {name} field {} has {detail}", field.name))?;
+        definition.push_str(&format!("    pub {field_name}: {field_ty},\n"));
+    }
+    definition.push_str("}\n");
+    Ok(definition)
+}
+
+fn collect_record_field_uses_from_stmt<'a>(
+    stmt: &'a IrStmt,
+    records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
+) -> Result<(), String> {
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                collect_record_field_uses_from_expr(init, records)?;
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            collect_record_field_uses_from_expr(target, records)?;
+            collect_record_field_uses_from_expr(value, records)?;
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_record_field_uses_from_expr(condition, records)?;
+            for stmt in then_body {
+                collect_record_field_uses_from_stmt(stmt, records)?;
+            }
+            for stmt in else_body {
+                collect_record_field_uses_from_stmt(stmt, records)?;
+            }
+        }
+        IrStmt::While {
+            condition, body, ..
+        }
+        | IrStmt::DoWhile {
+            condition, body, ..
+        } => {
+            collect_record_field_uses_from_expr(condition, records)?;
+            for stmt in body {
+                collect_record_field_uses_from_stmt(stmt, records)?;
+            }
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            for stmt in init {
+                collect_record_field_uses_from_stmt(stmt, records)?;
+            }
+            if let Some(condition) = condition {
+                collect_record_field_uses_from_expr(condition, records)?;
+            }
+            if let Some(step) = step {
+                collect_record_field_uses_from_stmt(step, records)?;
+            }
+            for stmt in body {
+                collect_record_field_uses_from_stmt(stmt, records)?;
+            }
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                collect_record_field_uses_from_expr(value, records)?;
+            }
+        }
+        IrStmt::Expr { expr, .. } => collect_record_field_uses_from_expr(expr, records)?,
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+    Ok(())
+}
+
+fn collect_record_field_uses_from_expr<'a>(
+    expr: &'a IrExpr,
+    records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
+) -> Result<(), String> {
+    match expr {
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+            ..
+        } => {
+            if *is_arrow {
+                return Err(
+                    "arrow member expressions are outside the typed IR record subset".to_string(),
+                );
+            }
+            let IrExpr::Var { ty: base_ty, .. } = base.as_ref() else {
+                return Err("member expression base must be a record variable".to_string());
+            };
+            let IrTypeKind::Record { name } = &base_ty.kind else {
+                return Err(format!(
+                    "member expression base has unsupported type {}",
+                    type_label(base_ty)
+                ));
+            };
+            add_record_field_use(records, name, field, ty)?;
+            collect_record_field_uses_from_expr(base, records)?;
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_record_field_uses_from_expr(lhs, records)?;
+            collect_record_field_uses_from_expr(rhs, records)?;
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => {
+            collect_record_field_uses_from_expr(operand, records)?;
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_record_field_uses_from_expr(condition, records)?;
+            collect_record_field_uses_from_expr(then_expr, records)?;
+            collect_record_field_uses_from_expr(else_expr, records)?;
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_record_field_uses_from_expr(base, records)?;
+            collect_record_field_uses_from_expr(index, records)?;
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_record_field_uses_from_expr(element, records)?;
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_record_field_uses_from_expr(arg, records)?;
+            }
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+    Ok(())
 }
 
 fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
@@ -1437,6 +1726,13 @@ fn emit_expr(
         IrExpr::Index {
             base, index, ty, ..
         } => emit_index_expr(base, index, ty, symbols, context),
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+            ..
+        } => emit_member_expr(base, field, ty, *is_arrow, symbols),
         IrExpr::ArrayLiteral { .. } => Err(
             "array literal expression is only supported as a declaration initializer".to_string(),
         ),
@@ -1495,6 +1791,39 @@ fn emit_readonly_pointer_deref_expr(
     }
     let ptr_name = emit_identifier(ptr_name, "deref pointer")?;
     Ok(format!("{ptr_name}[0usize]"))
+}
+
+fn emit_member_expr(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    is_arrow: bool,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    if is_arrow {
+        return Err("arrow member expressions are outside the typed IR record subset".to_string());
+    }
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("member expression base must be a record variable".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!("member base {base_name} is not declared"));
+    }
+    if !matches!(base_ty.kind, IrTypeKind::Record { .. }) {
+        return Err(format!(
+            "member base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        ));
+    }
+    emit_scalar_type(ty).map_err(|detail| format!("member field {field} has {detail}"))?;
+    let base_name = emit_identifier(base_name, "member base")?;
+    let field = emit_identifier(field, "member field")?;
+    Ok(format!("{base_name}.{field}"))
 }
 
 fn emit_readonly_pointer_add_deref_expr(
@@ -1609,6 +1938,9 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
         }
         IrExpr::Index { .. } => {
             Err("deref pointer add index cannot use index expression".to_string())
+        }
+        IrExpr::Member { .. } => {
+            Err("deref pointer add index cannot use member expression".to_string())
         }
         IrExpr::AddrOf { .. } => {
             Err("deref pointer add index cannot use address-of expression".to_string())
@@ -1729,6 +2061,9 @@ fn validate_bounded_call_arg(
             validate_bounded_call_arg(base, false)?;
             validate_bounded_call_arg(index, false)
         }
+        IrExpr::Member { .. } => {
+            Err("member access call arguments are outside the bounded call subset".to_string())
+        }
         IrExpr::ArrayLiteral { .. } => {
             Err("array literal arguments are outside the bounded call subset".to_string())
         }
@@ -1784,6 +2119,7 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         IrExpr::Index { base, index, .. } => {
             find_call_callee(base).or_else(|| find_call_callee(index))
         }
+        IrExpr::Member { base, .. } => find_call_callee(base),
         IrExpr::ArrayLiteral { elements, .. } => elements.iter().find_map(find_call_callee),
         IrExpr::IncDec { target, .. } => find_call_callee(target),
         IrExpr::Deref { ptr, .. } => find_call_callee(ptr),
@@ -2614,6 +2950,7 @@ fn expr_has_inc_dec(expr: &IrExpr) -> bool {
                 || expr_has_inc_dec(else_expr)
         }
         IrExpr::Index { base, index, .. } => expr_has_inc_dec(base) || expr_has_inc_dec(index),
+        IrExpr::Member { base, .. } => expr_has_inc_dec(base),
         IrExpr::ArrayLiteral { elements, .. } => elements.iter().any(expr_has_inc_dec),
         IrExpr::Call { args, .. } => args.iter().any(expr_has_inc_dec),
         IrExpr::Deref { ptr, .. } => expr_has_inc_dec(ptr),
@@ -2649,6 +2986,7 @@ fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
         IrExpr::Index { base, index, .. } => {
             expr_has_assign_or_comma(base) || expr_has_assign_or_comma(index)
         }
+        IrExpr::Member { base, .. } => expr_has_assign_or_comma(base),
         IrExpr::ArrayLiteral { elements, .. } => elements.iter().any(expr_has_assign_or_comma),
         IrExpr::Call { args, .. } => args.iter().any(expr_has_assign_or_comma),
         IrExpr::IncDec { target, .. } => expr_has_assign_or_comma(target),
@@ -3022,6 +3360,8 @@ fn validate_definite_assignment_expr(
             validate_definite_assignment_expr(index, state)
                 .map_err(|detail| format!("index operand {detail}"))
         }
+        IrExpr::Member { base, .. } => validate_definite_assignment_expr(base, state)
+            .map_err(|detail| format!("member base {detail}")),
         IrExpr::ArrayLiteral { elements, .. } => {
             for (index, element) in elements.iter().enumerate() {
                 validate_definite_assignment_expr(element, state)
@@ -3298,6 +3638,7 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
             expr_has_post_increment_byte_read(base, cursor)
                 || expr_has_post_increment_byte_read(index, cursor)
         }
+        IrExpr::Member { base, .. } => expr_has_post_increment_byte_read(base, cursor),
         IrExpr::Call { args, .. } => args
             .iter()
             .any(|arg| expr_has_post_increment_byte_read(arg, cursor)),
@@ -3335,6 +3676,7 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         IrExpr::Index { base, index, .. } => {
             count_post_increment_byte_reads(base) + count_post_increment_byte_reads(index)
         }
+        IrExpr::Member { base, .. } => count_post_increment_byte_reads(base),
         IrExpr::Call { args, .. } => args.iter().map(count_post_increment_byte_reads).sum(),
         IrExpr::IncDec { target, .. } => count_post_increment_byte_reads(target),
         IrExpr::LitInt { .. }
@@ -3568,6 +3910,11 @@ fn collect_nullable_pointer_params_from_expr(
                 nullable_params,
             );
         }
+        IrExpr::Member { base, .. } => collect_nullable_pointer_params_from_expr(
+            base,
+            readonly_pointer_params,
+            nullable_params,
+        ),
         IrExpr::ArrayLiteral { elements, .. } => {
             for element in elements {
                 collect_nullable_pointer_params_from_expr(
@@ -3727,6 +4074,9 @@ fn validate_nullable_pointer_param_uses_in_expr(
             validate_nullable_pointer_param_uses_in_expr(base, nullable_params)?;
             validate_nullable_pointer_param_uses_in_expr(index, nullable_params)
         }
+        IrExpr::Member { base, .. } => {
+            validate_nullable_pointer_param_uses_in_expr(base, nullable_params)
+        }
         IrExpr::ArrayLiteral { elements, .. } => {
             for element in elements {
                 validate_nullable_pointer_param_uses_in_expr(element, nullable_params)?;
@@ -3869,6 +4219,7 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::Index { ty, .. }
         | IrExpr::ArrayLiteral { ty, .. }
         | IrExpr::Call { ty, .. }
+        | IrExpr::Member { ty, .. }
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => Some(ty),
@@ -4048,6 +4399,39 @@ fn emit_global_const_identifier(name: &str) -> Result<String, String> {
             .is_some_and(|character| character.is_ascii_digit())
     {
         return Err(format!("global identifier {name:?} is unsupported"));
+    }
+    Ok(output)
+}
+
+fn emit_record_type_name(name: &str) -> Result<String, String> {
+    if !is_rust_identifier(name) || is_rust_keyword(name) {
+        return Err(format!("record type name {name:?} is unsupported"));
+    }
+    let mut output = String::new();
+    let mut uppercase_next = true;
+    for character in name.chars() {
+        if character == '_' {
+            uppercase_next = true;
+            continue;
+        }
+        if !character.is_ascii_alphanumeric() {
+            return Err(format!("record type name {name:?} is unsupported"));
+        }
+        if uppercase_next {
+            output.push(character.to_ascii_uppercase());
+            uppercase_next = false;
+        } else {
+            output.push(character);
+        }
+    }
+    if output.is_empty()
+        || output
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+        || is_rust_keyword(&output)
+    {
+        return Err(format!("record type name {name:?} is unsupported"));
     }
     Ok(output)
 }

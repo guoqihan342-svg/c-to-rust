@@ -39,6 +39,8 @@
 - `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
 - `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档，包含 pointer graph v2、`effect_graph`、alias gate cache identity 和验证门禁说明。
 - `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`：L0-L4 路由决策、证据流拓扑和验证门禁的详细设计文档，解释 route decision、validation profile、candidate route、alias risk floor、fail-closed 原则和证据引用链一致性。
+- `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`：未来愿景与 MVP 路线，包含 IR 三层设计（Semantic IR / Control IR / Typed Value IR）和分阶段计划。
+- `COVERAGE.md` / `COVERAGE.en.md`：当前 typed IR + clang frontend + generic emitter 的 C 构造支持/不支持清单，坦诚列出已支持和显式拒绝的 C 语言特性。
 - `../../config/competition-env/`：比赛环境配置入口，记录 Ubuntu 24.04.4、Rust 1.96.0、Python 3.12.3、Node 24.13.0、华为镜像源、Go/CMake 缺失边界和自检脚本。
 
 

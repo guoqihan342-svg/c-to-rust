@@ -1,3 +1,41 @@
+//! Clang AST frontend: parse real `clang -ast-dump=json` output and lower to typed IR.
+//!
+//! # Architecture
+//!
+//! The clang frontend operates in three stages:
+//!
+//! 1. **AST dump parse**: invokes `clang -Xclang -ast-dump=json -fsyntax-only` on a real
+//!    C translation unit, producing JSON that describes every AST node.
+//!
+//! 2. **Skeleton lowering**: the JSON is lowered into a compact `Clang*Skeleton` tree.
+//!    This is a narrow, deliberately conservative mapping. Only AST nodes that the current
+//!    translator understands are accepted; everything else returns an `Unsupported` skeleton
+//!    with a specific fail-closed reason (e.g., "WhileStmt without condition is outside
+//!    the current clang lowering skeleton").
+//!
+//! 3. **Typed IR conversion**: skeleton nodes are converted into `typed_ir::Ir*` data
+//!    structures, which feed into the generic Rust emitter or evidence recording.
+//!
+//! # Key Design Principles
+//!
+//! - **Fail-closed**: any unsupported AST node or type produces a structured error, never
+//!   a silent fallback. Errors carry `kind` (e.g., `unsupported_clang_stmt`) and a message.
+//! - **AST-driven, not string-driven**: the legacy string matcher for crc32 has been deleted.
+//!   All forward Rust generation for FlashDB crc32 now goes through this clang frontend.
+//! - **The frontend does not decide Rust semantics**: it lowers C AST into typed IR.
+//!   The typed IR emitter decides what Rust to emit. The validation pipeline decides
+//!   whether the result is correct.
+//! - **Type mapping is conservative**: only fixed-width integer typedef aliases (int8_t
+//!   through uint64_t) and `signed char` are mapped to typed IR integer types. Target-
+//!   dependent spellings like `short`, `long long`, plain `char`, and plain `long` are
+//!   explicitly unsupported.
+//!
+//! # Coverage
+//!
+//! See `docs/c2rust-migration-agent/COVERAGE.md` for the full supported/unsupported
+//! C construct inventory. The `expr_skeleton_from_ast` and `stmt_skeleton_from_ast`
+//! functions are the primary entry points for expression and statement lowering.
+
 #[cfg(feature = "typed-ir")]
 use std::process::Command;
 use std::{
@@ -139,6 +177,9 @@ pub enum ClangTypeKind {
         element: Box<ClangTypeSkeleton>,
         len: Option<usize>,
     },
+    Record {
+        name: String,
+    },
     Unsupported {
         reason: String,
     },
@@ -256,6 +297,12 @@ pub enum ClangExprSkeleton {
         callee: String,
         args: Vec<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
+    },
+    Member {
+        base: Box<ClangExprSkeleton>,
+        field: String,
+        ty: ClangTypeSkeleton,
+        is_arrow: bool,
     },
     Unsupported {
         node: String,
@@ -1461,6 +1508,29 @@ fn expr_skeleton_from_ast_with_options(
                 ty: expr_type(expr)?,
             })
         }
+        Some("MemberExpr") => {
+            let base = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                kind: "invalid_member_expr".to_string(),
+                message: "MemberExpr is missing base operand".to_string(),
+            })?;
+            let field = string_field(expr, "name").ok_or_else(|| ClangFrontendError {
+                kind: "invalid_member_expr".to_string(),
+                message: "MemberExpr is missing name".to_string(),
+            })?;
+            let is_arrow = expr
+                .get("isArrow")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            Ok(ClangExprSkeleton::Member {
+                base: Box::new(expr_skeleton_from_ast_with_options(
+                    base,
+                    preserve_integral_casts,
+                )?),
+                field,
+                ty: expr_type(expr)?,
+                is_arrow,
+            })
+        }
         Some("InitListExpr") => init_list_expr_skeleton_from_ast(expr),
         Some("CallExpr") => call_expr_skeleton_from_ast(expr, preserve_integral_casts),
         Some("UnaryOperator") => {
@@ -1838,6 +1908,9 @@ fn bounded_call_arg_rejection_reason(
             bounded_call_arg_rejection_reason(base, false)
                 .or_else(|| bounded_call_arg_rejection_reason(index, false))
         }
+        ClangExprSkeleton::Member { .. } => {
+            Some("member access call arguments are outside the bounded call subset".to_string())
+        }
         ClangExprSkeleton::ArrayLiteral { .. } => {
             Some("array initializer lists are outside the bounded call subset".to_string())
         }
@@ -1998,6 +2071,18 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 len,
             },
         });
+    }
+    if let Some(name) = trimmed.strip_prefix("struct ") {
+        let name = name.trim();
+        if is_simple_c_identifier(name) {
+            return Ok(ClangTypeSkeleton {
+                spelled: trimmed.to_string(),
+                canonical: trimmed.to_string(),
+                kind: ClangTypeKind::Record {
+                    name: name.to_string(),
+                },
+            });
+        }
     }
 
     match trimmed {
@@ -2331,6 +2416,7 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
         | IrExpr::Index { ty, .. }
         | IrExpr::ArrayLiteral { ty, .. }
         | IrExpr::Call { ty, .. }
+        | IrExpr::Member { ty, .. }
         | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
         IrExpr::Cast { target, .. } => ir_types_match_for_clang(target, expected),
         IrExpr::Unsupported { .. } => false,
@@ -2432,6 +2518,18 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
                 .map(lower_expr)
                 .collect::<Result<Vec<_>, ClangFrontendError>>()?,
             ty: lower_type(ty)?,
+            source_span: None,
+        }),
+        ClangExprSkeleton::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+        } => Ok(IrExpr::Member {
+            base: Box::new(lower_expr(base)?),
+            field: field.clone(),
+            ty: lower_type(ty)?,
+            is_arrow: *is_arrow,
             source_span: None,
         }),
         ClangExprSkeleton::Unsupported { node, reason } => Err(ClangFrontendError {
@@ -2551,6 +2649,14 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             width_bits: None,
             source_span: None,
         }),
+        ClangTypeKind::Record { name } => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Record { name: name.clone() },
+            is_const: clang_type_is_const(ty),
+            width_bits: None,
+            source_span: None,
+        }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_type".to_string(),
             message: reason.clone(),
@@ -2561,6 +2667,16 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
 #[cfg(feature = "typed-ir")]
 fn clang_type_is_const(ty: &ClangTypeSkeleton) -> bool {
     ty.spelled.trim_start().starts_with("const ")
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_simple_c_identifier(text: &str) -> bool {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
 #[cfg(feature = "typed-ir")]
