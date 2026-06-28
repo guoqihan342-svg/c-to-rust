@@ -333,6 +333,64 @@
     },
     {
       "kind": "FunctionDecl",
+      "name": "sizeof_value_bytes",
+      "type": {
+        "qualType": "size_t (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "sizeof",
+                  "argType": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          },
+                          "type": {
+                            "qualType": "int"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
       "name": "alignof_int_bytes",
       "type": {
         "qualType": "size_t (void)"

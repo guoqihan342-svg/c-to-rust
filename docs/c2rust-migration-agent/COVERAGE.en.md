@@ -75,7 +75,7 @@ This document honestly lists C language constructs that are "currently supported
 | `p->field++` / `--p->field` (statement) | Narrow | Direct single-pointer mutable record pointer scalar field target only; lowered as value-discarded assignment desugar, not raw inc/dec value semantics |
 | `*p++` (byte cursor post-increment) | Narrow | Only in proven byte cursor context |
 | `&x` (address-of) | Unsupported | |
-| `sizeof` | Narrow | Supports only clang `UnaryExprOrTypeTraitExpr` type operands whose operand type is an ABI-bound integer type or a complete fixed-size integer array type, such as `sizeof(int)`, `sizeof(long)`, `sizeof(size_t)`, and `sizeof(int[3])`; lowers to a `size_t`/`usize` integer literal and requires the result to fit the target `size_t` width; expression operands like `sizeof(x)`, incomplete/VLA arrays, record/struct layout, object operands, packing, and alignment remain fail-closed |
+| `sizeof` | Narrow | Supports clang `UnaryExprOrTypeTraitExpr` ABI-bound integer type operands, complete fixed-size integer-array type operands, and expression operands that carry `argType.qualType`, such as `sizeof(int)`, `sizeof(long)`, `sizeof(size_t)`, `sizeof(int[3])`, and `sizeof(value)`; lowers to a `size_t`/`usize` integer literal and requires the result to fit the target `size_t` width; expression operands without `argType`, incomplete/VLA arrays, record/struct layout, object operands that need layout evidence, packing, and alignment remain fail-closed |
 | `_Alignof` | Unsupported | clang `_Alignof(type)` fails closed explicitly; the current target profile carries width evidence, not an alignment/layout profile, so alignment must not be guessed |
 | `(type){init}` compound literal | Unsupported | |
 | Function pointer | Unsupported | |

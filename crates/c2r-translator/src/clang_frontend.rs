@@ -2049,18 +2049,21 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             reason: format!("{name} requires explicit alignment/lowering support"),
         });
     }
-    if expr.get("inner").is_some() {
-        return Err(ClangFrontendError {
-            kind: "unsupported_sizeof_operand".to_string(),
-            message: "sizeof expression operand requires explicit value/type semantic lowering before typed IR lowering".to_string(),
-        });
-    }
     let arg_qual_type = expr
         .get("argType")
         .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| ClangFrontendError {
-            kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
-            message: "sizeof type operand is missing argType.qualType".to_string(),
+            kind: if expr.get("inner").is_some() {
+                "unsupported_sizeof_operand".to_string()
+            } else {
+                "invalid_unary_expr_or_type_trait_expr".to_string()
+            },
+            message: if expr.get("inner").is_some() {
+                "sizeof expression operand requires clang argType.qualType before typed IR lowering"
+                    .to_string()
+            } else {
+                "sizeof type operand is missing argType.qualType".to_string()
+            },
         })?;
     let arg_type = type_from_qual_type(&arg_qual_type)?;
     if !matches!(
@@ -6656,7 +6659,18 @@ mod tests {
     }
 
     #[test]
-    fn sizeof_expression_operand_stays_fail_closed_even_with_arg_type() {
+    fn sizeof_expression_operand_lowers_with_arg_type_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
             "type": {"qualType": "size_t"},
@@ -6675,14 +6689,16 @@ mod tests {
             ]
         });
 
-        let error =
-            expr_skeleton_from_ast(&expr).expect_err("sizeof expression operand must fail closed");
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof expression argType should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof(value) should lower through argType");
 
-        assert_eq!(error.kind, "unsupported_sizeof_operand");
-        assert!(
-            error.message.contains("expression operand"),
-            "unexpected error: {error:?}"
-        );
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected sizeof(value) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 4);
+        assert_eq!(ty.spelled, "size_t");
     }
 
     #[test]

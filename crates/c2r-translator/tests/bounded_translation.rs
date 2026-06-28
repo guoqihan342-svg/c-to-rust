@@ -439,6 +439,43 @@ fn clang_ast_fixture_replays_sizeof_int_with_target_abi_profile() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_sizeof_expression_with_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "sizeof_value_bytes",
+        Some(&target_abi),
+    )
+    .expect("lower sizeof(value) fixture with target ABI profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from sizeof(value) fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn sizeof_value_bytes(value: i32) -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 4usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-sizeof-expression", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_sizeof_int_array_with_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"
