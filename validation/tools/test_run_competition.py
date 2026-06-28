@@ -213,6 +213,8 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertIn("--repo-root", extract_command)
             self.assertIn("--source-file src/demo.c", extract_command)
             self.assertIn("--function extracted_slice", extract_command)
+            self.assertIn("--source-commit abc123", extract_command)
+            self.assertIn("--compiler-command-source compile_commands.json", extract_command)
             self.assertIn("--include-path include", extract_command)
             self.assertIn("--define DEMO=1", extract_command)
             auto_migrate_command = next(text for text in command_texts if "auto_migrate.py" in text)
@@ -290,6 +292,10 @@ class RunCompetitionTests(unittest.TestCase):
                 "demo",
                 "--slice-id",
                 "direct-slice",
+                "--source-commit",
+                "abc123",
+                "--compiler-command-source",
+                "compile_commands.json",
                 "--include-path",
                 "include",
                 "--define",
@@ -310,8 +316,36 @@ class RunCompetitionTests(unittest.TestCase):
         self.assertEqual(extraction["function"], "direct_slice")
         self.assertEqual(extraction["target_id"], "demo")
         self.assertEqual(extraction["slice_id"], "direct-slice")
+        self.assertEqual(extraction["source_commit"], "abc123")
+        self.assertEqual(extraction["compiler_command_source"], "compile_commands.json")
         self.assertEqual(extraction["include_paths"], ["include"])
         self.assertEqual(extraction["defines"], ["DIRECT=1"])
+
+    def test_main_rejects_incomplete_direct_extraction_cli_args(self) -> None:
+        module = load_runner_module()
+        original_argv = sys.argv
+        try:
+            sys.argv = [
+                "run_competition.py",
+                "--source-file",
+                "src/direct.c",
+                "--function",
+                "direct_slice",
+                "--target-id",
+                "demo",
+                "--slice-id",
+                "direct-slice",
+            ]
+
+            stderr = io.StringIO()
+            with self.assertRaises(SystemExit) as raised:
+                with contextlib.redirect_stderr(stderr):
+                    module.main()
+        finally:
+            sys.argv = original_argv
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("direct extraction args require --source-repo-root", stderr.getvalue())
 
     def test_runner_counts_extract_failure_as_slice_failure_and_logs_it(self) -> None:
         module = load_runner_module()
