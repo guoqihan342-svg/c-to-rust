@@ -9737,3 +9737,53 @@ English mirror summary:
 - Kept fail-closed behavior for complex RHS/targets, nullable mutable pointers, multi-pointer functions, `return p->field`, `p->field++`, value-position compound assignment, layout/ABI claims, and semantic acceptance.
 - Extended clang skeleton and real clang AST lowering to admit direct mutable record pointer arrow compound targets while applying the same simple-RHS record-field guard used for by-value `p.x += value`.
 - Updated the Chinese and English MVP backlog to mark this narrow compound write path as supported while keeping mutable read-after-write, alias/noalias proof, field inc-dec, and broader pointer ownership modeling open.
+
+## 142. 2026-06-28 P1 narrow mutable record pointer field read-after-write
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写后读路径。两个只读代理确认：clang lowering 已能把 `p->x = value; return p->x;` 解析成 `Assign(Member arrow)` + `Return(Member arrow)`，主要缺口在 typed IR emitter；同时必须避免把整个 `struct T *p` 的一般 field read 打开。主线实现为字段级、顺序敏感的窄 candidate：只有同一个 direct scalar field 在当前路径之前已经 definite written，才允许读取。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `DefiniteAssignmentState` 新增 mutable record pointer field 状态，按 `(base, field)` 追踪已 definite written 的字段，而不是只按参数 `p` 放开。
+  - `validate_definite_assignment()` 现在返回通过校验的 mutable record pointer read field 集合，并写回 `EmitContext.mutable_record_pointer_read_fields`。
+  - assignment target 是 direct mutable record pointer field 时，先校验 RHS，再把该 `(p, field)` 标记为已写；`p->x += value` 仍通过上一节的 compound 专用逻辑跳过自身 lhs 旧值读取。
+  - `if` 分支后只保留 before 已写或 then/else 两边都写过的字段；`while`/`for`/`do while` 不把循环体内写入提升为循环后的 definite write。
+  - `emit_member_expr()` 先尝试 `emit_mutable_record_pointer_member_expr()`：只有 base 是已声明 direct `Var(p)`、`p` 通过 single-pointer mutable write gate、field 是 scalar、且 validator 已登记该 `(p, field)` 可读时，才发射 `p.field`；否则继续走 readonly record pointer 路径或 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将 `typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment` 改为正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment`，覆盖 `p->x = value; return p->x;`。
+  - 新增 direct typed IR 负例：read-before-write、maybe-write 后读取、写 `x` 后读 `y`。
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled`。
+  - 新增真实 clang AST 负例：`clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled`。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 single-pointer gate 下同字段 definite write 后的 mutable `p->scalar_field` read 已进入 typed IR candidate 子集；后续仍优先做多 pointer alias/noalias proof、value-position/复杂 target/field inc-dec、path-sensitive mutable field definite assignment 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_before_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_maybe_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_different_field_read_after_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR 写后读正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR read-before-write、maybe-write 后读取、写 `x` 后读 `y` 负例：均 1 passed，错误原因包含 `mutable record pointer field p.<field> is read before definite assignment`。
+- 复合赋值回归 `p->x += value`：1 passed。
+- 真实 clang AST 写后读正例/读前写负例：均 1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`。
+
+边界：
+- 可以说：single-pointer gate 下 direct mutable record pointer scalar field 在同字段 definite write 后可以读取，例如 `p->x = value; return p->x;` 生成 `p: &mut T` 和 `return p.x;`。
+- 可以说：这是字段级 definite assignment，不是通用 alias/noalias proof，也不是完整 C object model。
+- 不应说：已支持未写先读、maybe-write 后读取、跨循环/复杂 path condition 后读取、多 pointer alias/noalias、nullable mutable pointer、复杂 base、field pointer arithmetic、non-scalar field、`p->field++`、value-position compound assignment、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field read-after-write candidate path.
+- `struct T *p; p->scalar_field = value; return p->scalar_field;` now emits `p: &mut T`, `p.scalar_field = value;`, and `return p.scalar_field;` only when the same direct scalar field has been definitely written earlier on the current path.
+- The definite-write state is field-level: `p->x = value; return p->y;` still fails closed.
+- Reads before writes and reads after maybe-writes still fail closed; loop/body writes are not promoted to post-loop definite writes.
+- Updated Chinese and English MVP backlog to move this narrow read-after-write path into the supported typed IR candidate subset while keeping broader alias/noalias and path-sensitive ownership work open.

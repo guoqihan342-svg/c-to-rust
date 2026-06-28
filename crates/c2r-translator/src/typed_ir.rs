@@ -331,6 +331,7 @@ struct EmitContext {
     byte_cursor_sources: HashMap<String, String>,
     nullable_pointer_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
+    mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -346,15 +347,30 @@ struct RecordFieldUse<'a> {
     ty: &'a IrType,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct MutableRecordPointerFieldKey {
+    base: String,
+    field: String,
+}
+
 #[derive(Clone, Debug, Default)]
 struct DefiniteAssignmentState {
     declared: HashSet<String>,
     initialized: HashSet<String>,
+    mutable_record_pointer_write_params: HashSet<String>,
+    mutable_record_pointer_fields: HashSet<MutableRecordPointerFieldKey>,
+    validated_mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
 }
 
 impl DefiniteAssignmentState {
-    fn from_function_and_globals(function: &IrFunction, globals: &[IrGlobal]) -> Self {
+    fn from_function_and_globals(
+        function: &IrFunction,
+        globals: &[IrGlobal],
+        context: &EmitContext,
+    ) -> Self {
         let mut state = Self::default();
+        state.mutable_record_pointer_write_params =
+            context.mutable_record_pointer_write_params.clone();
         for param in &function.params {
             state.declared.insert(param.name.clone());
             state.initialized.insert(param.name.clone());
@@ -392,6 +408,25 @@ impl DefiniteAssignmentState {
         if !self.initialized.contains(name) {
             return Err(format!("var {name} is read before assignment"));
         }
+        Ok(())
+    }
+
+    fn assign_mutable_record_pointer_field(&mut self, key: MutableRecordPointerFieldKey) {
+        self.mutable_record_pointer_fields.insert(key);
+    }
+
+    fn require_mutable_record_pointer_field_initialized(
+        &mut self,
+        key: &MutableRecordPointerFieldKey,
+    ) -> Result<(), String> {
+        if !self.mutable_record_pointer_fields.contains(key) {
+            return Err(format!(
+                "mutable record pointer field {}.{} is read before definite assignment",
+                key.base, key.field
+            ));
+        }
+        self.validated_mutable_record_pointer_read_fields
+            .insert(key.clone());
         Ok(())
     }
 }
@@ -435,6 +470,7 @@ impl EmitContext {
             byte_cursor_sources,
             nullable_pointer_params,
             mutable_record_pointer_write_params,
+            mutable_record_pointer_read_fields: HashSet::new(),
             readonly_globals,
         })
     }
@@ -457,6 +493,14 @@ impl EmitContext {
 
     fn is_mutable_record_pointer_write_param(&self, name: &str) -> bool {
         self.mutable_record_pointer_write_params.contains(name)
+    }
+
+    fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {
+        self.mutable_record_pointer_read_fields
+            .contains(&MutableRecordPointerFieldKey {
+                base: name.to_string(),
+                field: field.to_string(),
+            })
     }
 
     fn readonly_global(&self, name: &str) -> Option<&IrGlobal> {
@@ -521,8 +565,9 @@ fn emit_scalar_rust_from_ir_with_globals(
     if return_type.is_some() && !ends_with_return_value(&function.body) {
         return Err("non-void function must end with a return value".to_string());
     }
-    let context = EmitContext::from_function_and_globals(function, globals)?;
-    validate_definite_assignment(function, globals)?;
+    let mut context = EmitContext::from_function_and_globals(function, globals)?;
+    context.mutable_record_pointer_read_fields =
+        validate_definite_assignment(function, globals, &context)?;
     let function_name = emit_identifier(&function.name, "function")?;
     let params = function
         .params
@@ -2092,6 +2137,11 @@ fn emit_member_expr(
     context: &EmitContext,
 ) -> Result<String, String> {
     if is_arrow {
+        if let Some(expr) =
+            emit_mutable_record_pointer_member_expr(base, field, ty, symbols, context)?
+        {
+            return Ok(expr);
+        }
         return emit_readonly_record_pointer_member_expr(base, field, ty, symbols, context);
     }
     let IrExpr::Var {
@@ -2115,6 +2165,45 @@ fn emit_member_expr(
     let base_name = emit_identifier(base_name, "member base")?;
     let field = emit_identifier(field, "member field")?;
     Ok(format!("{base_name}.{field}"))
+}
+
+fn emit_mutable_record_pointer_member_expr(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Ok(None);
+    };
+    if !context.is_mutable_record_pointer_write_param(base_name) {
+        return Ok(None);
+    }
+    if !symbols.contains(base_name) {
+        return Err(format!("arrow member base {base_name} is not declared"));
+    }
+    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "arrow member base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_scalar_type(ty)
+        .map_err(|detail| format!("mutable arrow member field {field} has {detail}"))?;
+    if !context.is_mutable_record_pointer_read_field(base_name, field) {
+        return Err(format!(
+            "mutable record pointer field {base_name}.{field} lacks definite assignment evidence"
+        ));
+    }
+    let base_name = emit_identifier(base_name, "mutable arrow member base")?;
+    let field = emit_identifier(field, "mutable arrow member field")?;
+    Ok(Some(format!("{base_name}.{field}")))
 }
 
 fn emit_readonly_record_pointer_member_expr(
@@ -3518,9 +3607,14 @@ fn ends_with_return_value(body: &[IrStmt]) -> bool {
     matches!(body.last(), Some(IrStmt::Return { value: Some(_), .. }))
 }
 
-fn validate_definite_assignment(function: &IrFunction, globals: &[IrGlobal]) -> Result<(), String> {
-    let mut state = DefiniteAssignmentState::from_function_and_globals(function, globals);
-    validate_definite_assignment_body(&function.body, &mut state)
+fn validate_definite_assignment(
+    function: &IrFunction,
+    globals: &[IrGlobal],
+    context: &EmitContext,
+) -> Result<HashSet<MutableRecordPointerFieldKey>, String> {
+    let mut state = DefiniteAssignmentState::from_function_and_globals(function, globals, context);
+    validate_definite_assignment_body(&function.body, &mut state)?;
+    Ok(state.validated_mutable_record_pointer_read_fields)
 }
 
 fn validate_definite_assignment_body(
@@ -3559,11 +3653,22 @@ fn validate_definite_assignment_stmt(
             state.declare(name, init.is_some())
         }
         IrStmt::Assign { target, value, .. } => {
+            let mutable_record_pointer_target =
+                mutable_record_pointer_field_key_for_definite_assignment(target, state)?;
             let assigned_var = validate_definite_assignment_target(target, state)?;
-            validate_definite_assignment_expr(value, state)
-                .map_err(|detail| format!("assign value {detail}"))?;
+            match &mutable_record_pointer_target {
+                Some(target_key) => {
+                    validate_definite_assignment_assign_value(value, state, target_key)
+                        .map_err(|detail| format!("assign value {detail}"))?
+                }
+                None => validate_definite_assignment_expr(value, state)
+                    .map_err(|detail| format!("assign value {detail}"))?,
+            }
             if let Some(name) = assigned_var {
                 state.assign(&name)?;
+            }
+            if let Some(key) = mutable_record_pointer_target {
+                state.assign_mutable_record_pointer_field(key);
             }
             Ok(())
         }
@@ -3601,6 +3706,24 @@ fn validate_definite_assignment_stmt(
                 })
                 .cloned()
                 .collect();
+            state.mutable_record_pointer_fields = before
+                .mutable_record_pointer_fields
+                .iter()
+                .chain(then_state.mutable_record_pointer_fields.iter())
+                .chain(else_state.mutable_record_pointer_fields.iter())
+                .filter(|key| {
+                    before.mutable_record_pointer_fields.contains(*key)
+                        || (then_state.mutable_record_pointer_fields.contains(*key)
+                            && else_state.mutable_record_pointer_fields.contains(*key))
+                })
+                .cloned()
+                .collect();
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(then_state.validated_mutable_record_pointer_read_fields);
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(else_state.validated_mutable_record_pointer_read_fields);
             Ok(())
         }
         IrStmt::While {
@@ -3610,6 +3733,9 @@ fn validate_definite_assignment_stmt(
                 .map_err(|detail| format!("while condition {detail}"))?;
             let mut body_state = state.clone();
             validate_definite_assignment_labeled_body(body, &mut body_state, "while body")?;
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(body_state.validated_mutable_record_pointer_read_fields);
             Ok(())
         }
         IrStmt::DoWhile {
@@ -3617,8 +3743,11 @@ fn validate_definite_assignment_stmt(
         } => {
             let mut body_state = state.clone();
             validate_definite_assignment_labeled_body(body, &mut body_state, "do while body")?;
-            validate_definite_assignment_expr(condition, &body_state)
+            validate_definite_assignment_expr(condition, &mut body_state)
                 .map_err(|detail| format!("do while condition {detail}"))?;
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(body_state.validated_mutable_record_pointer_read_fields);
             Ok(())
         }
         IrStmt::For {
@@ -3634,15 +3763,27 @@ fn validate_definite_assignment_stmt(
                     .map_err(|detail| format!("for init[{index}] {detail}"))?;
             }
             if let Some(condition) = condition {
-                validate_definite_assignment_expr(condition, &loop_state)
+                validate_definite_assignment_expr(condition, &mut loop_state)
                     .map_err(|detail| format!("for condition {detail}"))?;
             }
+            let loop_reads = loop_state
+                .validated_mutable_record_pointer_read_fields
+                .clone();
             let mut body_state = loop_state.clone();
             validate_definite_assignment_labeled_body(body, &mut body_state, "for body")?;
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(loop_reads);
+            state
+                .validated_mutable_record_pointer_read_fields
+                .extend(body_state.validated_mutable_record_pointer_read_fields);
             if let Some(step) = step {
                 let mut step_state = loop_state;
                 validate_definite_assignment_stmt(step, &mut step_state)
                     .map_err(|detail| format!("for step {detail}"))?;
+                state
+                    .validated_mutable_record_pointer_read_fields
+                    .extend(step_state.validated_mutable_record_pointer_read_fields);
             }
             Ok(())
         }
@@ -3652,7 +3793,7 @@ fn validate_definite_assignment_stmt(
 
 fn validate_definite_assignment_target(
     target: &IrExpr,
-    state: &DefiniteAssignmentState,
+    state: &mut DefiniteAssignmentState,
 ) -> Result<Option<String>, String> {
     match target {
         IrExpr::Var { name, ty, .. } if should_track_definite_assignment_type(ty) => {
@@ -3686,9 +3827,25 @@ fn validate_definite_assignment_target(
     }
 }
 
+fn validate_definite_assignment_assign_value(
+    value: &IrExpr,
+    state: &mut DefiniteAssignmentState,
+    target_key: &MutableRecordPointerFieldKey,
+) -> Result<(), String> {
+    if let IrExpr::Binary { lhs, rhs, .. } = value {
+        if mutable_record_pointer_field_key_for_definite_assignment(lhs, state)?.as_ref()
+            == Some(target_key)
+        {
+            return validate_definite_assignment_expr(rhs, state)
+                .map_err(|detail| format!("binary rhs {detail}"));
+        }
+    }
+    validate_definite_assignment_expr(value, state)
+}
+
 fn validate_definite_assignment_expr(
     expr: &IrExpr,
-    state: &DefiniteAssignmentState,
+    state: &mut DefiniteAssignmentState,
 ) -> Result<(), String> {
     match expr {
         IrExpr::Var { name, ty, .. } if should_track_definite_assignment_type(ty) => {
@@ -3724,8 +3881,16 @@ fn validate_definite_assignment_expr(
             validate_definite_assignment_expr(index, state)
                 .map_err(|detail| format!("index operand {detail}"))
         }
-        IrExpr::Member { base, .. } => validate_definite_assignment_expr(base, state)
-            .map_err(|detail| format!("member base {detail}")),
+        IrExpr::Member { base, .. } => {
+            validate_definite_assignment_expr(base, state)
+                .map_err(|detail| format!("member base {detail}"))?;
+            if let Some(key) =
+                mutable_record_pointer_field_key_for_definite_assignment(expr, state)?
+            {
+                state.require_mutable_record_pointer_field_initialized(&key)?;
+            }
+            Ok(())
+        }
         IrExpr::ArrayLiteral { elements, .. } => {
             for (index, element) in elements.iter().enumerate() {
                 validate_definite_assignment_expr(element, state)
@@ -3748,6 +3913,43 @@ fn validate_definite_assignment_expr(
             .map_err(|detail| format!("address-of operand {detail}")),
         IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => Ok(()),
     }
+}
+
+fn mutable_record_pointer_field_key_for_definite_assignment(
+    expr: &IrExpr,
+    state: &DefiniteAssignmentState,
+) -> Result<Option<MutableRecordPointerFieldKey>, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow: true,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name, ty: base_ty, ..
+    } = base.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !state.mutable_record_pointer_write_params.contains(name) {
+        return Ok(None);
+    }
+    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "mutable record pointer field {name}.{field} has unsupported base type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_scalar_type(ty)
+        .map_err(|detail| format!("mutable record pointer field {name}.{field} has {detail}"))?;
+    Ok(Some(MutableRecordPointerFieldKey {
+        base: name.clone(),
+        field: field.clone(),
+    }))
 }
 
 fn should_track_definite_assignment_type(ty: &IrType) -> bool {

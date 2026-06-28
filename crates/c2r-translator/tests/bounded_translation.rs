@@ -1523,12 +1523,13 @@ fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_compl
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment() {
+fn typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment() {
     let i32_ty = ir_i32();
-    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ty =
+        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
     let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
     let ir = IrFunction {
-        name: "bad_set_then_read_point_x".to_string(),
+        name: "set_then_read_point_x".to_string(),
         return_type: i32_ty.clone(),
         params: vec![
             IrParam {
@@ -1568,14 +1569,218 @@ fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment() {
         source_span: None,
     };
 
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit mutable record pointer field read after assignment");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn set_then_read_point_x(mut p: &mut Point, value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-field-read-after-write",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_before_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_read_then_set_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "old".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("old", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
     let error = emit_rust_from_ir(&ir)
-        .expect_err("mutable record pointer read must stay fail-closed after assignment");
+        .expect_err("mutable record pointer field read before assignment must fail closed");
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(
         error
             .reason
-            .contains("arrow member base p has unsupported type struct point *"),
+            .contains("mutable record pointer field p.x is read before definite assignment"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_maybe_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_maybe_set_then_read_point_x".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Gt,
+                    ir_var("value", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Assign {
+                    target: IrExpr::Member {
+                        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    },
+                    value: ir_var("value", i32_ty.clone()),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer field read after maybe-assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable record pointer field p.x is read before definite assignment"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_different_field_read_after_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty =
+        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_set_x_read_y".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "y".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable record pointer different field read must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable record pointer field p.y is read before definite assignment"),
         "{:?}",
         error
     );
@@ -19150,6 +19355,109 @@ fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enab
     );
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-mutable-arrow-member-assignment", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-read-after-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_record_pointer_field_read_after_assignment.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint set_then_read_point_x(struct point *p, int value) { p->x = value; return p->x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "set_then_read_point_x",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit mutable record pointer field read after assignment from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn set_then_read_point_x(mut p: &mut Point, value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-mutable-record-pointer-field-read-after-assignment",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-read-before-assignment");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("mutable_record_pointer_field_read_before_assignment.c");
+    fs::write(
+        &source_file,
+        "struct point { int x; int y; };\nint read_then_set_point_x(struct point *p, int value) { int old = p->x; p->x = value; return old; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "read_then_set_point_x",
+    );
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir(function)
+        .expect_err("mutable record pointer field read before assignment must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("mutable record pointer field p.x is read before definite assignment"),
+        "{:?}",
+        error
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
