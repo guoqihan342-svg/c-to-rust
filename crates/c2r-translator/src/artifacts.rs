@@ -302,6 +302,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
                 "status": "not_available",
                 "candidate_route": null,
                 "readonly_globals": [],
+                "runtime_preconditions": [],
                 "rust_draft_generated": false,
                 "semantic_pass": false,
                 "reason": "clang_parse_spec_error",
@@ -343,6 +344,7 @@ fn typed_ir_candidate_evidence(
             "status": "not_available",
             "candidate_route": null,
             "readonly_globals": readonly_globals,
+            "runtime_preconditions": [],
             "rust_draft_generated": false,
             "semantic_pass": false,
             "reason": "function_ir_missing",
@@ -354,6 +356,7 @@ fn typed_ir_candidate_evidence(
             "status": "generated",
             "candidate_route": emitted.route,
             "readonly_globals": readonly_globals,
+            "runtime_preconditions": runtime_precondition_summary(function_ir),
             "rust_draft_generated": true,
             "semantic_pass": false,
         }),
@@ -361,11 +364,281 @@ fn typed_ir_candidate_evidence(
             "status": "unsupported",
             "candidate_route": error.route,
             "readonly_globals": readonly_globals,
+            "runtime_preconditions": [],
             "rust_draft_generated": false,
             "semantic_pass": false,
             "unsupported_reason": error.reason,
         }),
     }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn runtime_precondition_summary(function_ir: &typed_ir::IrFunction) -> Vec<serde_json::Value> {
+    let mut preconditions = Vec::new();
+    collect_stmt_runtime_preconditions(&function_ir.body, &mut preconditions);
+    preconditions
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_stmt_runtime_preconditions(
+    stmts: &[typed_ir::IrStmt],
+    preconditions: &mut Vec<serde_json::Value>,
+) {
+    for stmt in stmts {
+        match stmt {
+            typed_ir::IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_expr_runtime_preconditions(init, preconditions);
+                }
+            }
+            typed_ir::IrStmt::Assign { target, value, .. } => {
+                collect_expr_runtime_preconditions(target, preconditions);
+                collect_expr_runtime_preconditions(value, preconditions);
+            }
+            typed_ir::IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_expr_runtime_preconditions(condition, preconditions);
+                collect_stmt_runtime_preconditions(then_body, preconditions);
+                collect_stmt_runtime_preconditions(else_body, preconditions);
+            }
+            typed_ir::IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_expr_runtime_preconditions(condition, preconditions);
+                collect_stmt_runtime_preconditions(body, preconditions);
+            }
+            typed_ir::IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_stmt_runtime_preconditions(body, preconditions);
+                collect_expr_runtime_preconditions(condition, preconditions);
+            }
+            typed_ir::IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                collect_stmt_runtime_preconditions(init, preconditions);
+                if let Some(condition) = condition {
+                    collect_expr_runtime_preconditions(condition, preconditions);
+                }
+                if let Some(step) = step {
+                    collect_stmt_runtime_preconditions(std::slice::from_ref(step), preconditions);
+                }
+                collect_stmt_runtime_preconditions(body, preconditions);
+            }
+            typed_ir::IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_expr_runtime_preconditions(value, preconditions);
+                }
+            }
+            typed_ir::IrStmt::Expr { expr, .. } => {
+                collect_expr_runtime_preconditions(expr, preconditions);
+            }
+            typed_ir::IrStmt::Break { .. }
+            | typed_ir::IrStmt::Continue { .. }
+            | typed_ir::IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_expr_runtime_preconditions(
+    expr: &typed_ir::IrExpr,
+    preconditions: &mut Vec<serde_json::Value>,
+) {
+    match expr {
+        typed_ir::IrExpr::Binary {
+            op,
+            lhs,
+            rhs,
+            ty,
+            source_span,
+        } => {
+            collect_expr_runtime_preconditions(lhs, preconditions);
+            collect_expr_runtime_preconditions(rhs, preconditions);
+            collect_binary_runtime_preconditions(op, ty, source_span, preconditions);
+        }
+        typed_ir::IrExpr::Unary { operand, .. } => {
+            collect_expr_runtime_preconditions(operand, preconditions);
+        }
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_expr_runtime_preconditions(condition, preconditions);
+            collect_expr_runtime_preconditions(then_expr, preconditions);
+            collect_expr_runtime_preconditions(else_expr, preconditions);
+        }
+        typed_ir::IrExpr::Cast { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            collect_expr_runtime_preconditions(base, preconditions);
+            collect_expr_runtime_preconditions(index, preconditions);
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_expr_runtime_preconditions(element, preconditions);
+            }
+        }
+        typed_ir::IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_expr_runtime_preconditions(arg, preconditions);
+            }
+        }
+        typed_ir::IrExpr::Member { base, .. } => {
+            collect_expr_runtime_preconditions(base, preconditions);
+        }
+        typed_ir::IrExpr::IncDec { target, .. } => {
+            collect_expr_runtime_preconditions(target, preconditions);
+        }
+        typed_ir::IrExpr::Deref { ptr, .. } => {
+            collect_expr_runtime_preconditions(ptr, preconditions);
+        }
+        typed_ir::IrExpr::AddrOf { operand, .. } => {
+            collect_expr_runtime_preconditions(operand, preconditions);
+        }
+        typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::NullPtr { .. }
+        | typed_ir::IrExpr::Var { .. }
+        | typed_ir::IrExpr::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn collect_binary_runtime_preconditions(
+    op: &typed_ir::IrBinOp,
+    ty: &typed_ir::IrType,
+    source_span: &Option<typed_ir::SourceSpan>,
+    preconditions: &mut Vec<serde_json::Value>,
+) {
+    if !is_integer_type(ty) {
+        return;
+    }
+    let signed = is_signed_integer_type(ty);
+    match op {
+        typed_ir::IrBinOp::Add if signed => preconditions.push(runtime_precondition(
+            "signed_add_no_overflow",
+            "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+            op,
+            ty,
+            source_span,
+        )),
+        typed_ir::IrBinOp::Sub if signed => preconditions.push(runtime_precondition(
+            "signed_sub_no_overflow",
+            "C signed subtraction must not overflow unless the slice contract declares a wrapping profile",
+            op,
+            ty,
+            source_span,
+        )),
+        typed_ir::IrBinOp::Mul if signed => preconditions.push(runtime_precondition(
+            "signed_mul_no_overflow",
+            "C signed multiplication must not overflow unless the slice contract declares a wrapping profile",
+            op,
+            ty,
+            source_span,
+        )),
+        typed_ir::IrBinOp::Div => {
+            preconditions.push(runtime_precondition(
+                "division_divisor_nonzero",
+                "C division requires a non-zero divisor",
+                op,
+                ty,
+                source_span,
+            ));
+            if signed {
+                preconditions.push(runtime_precondition(
+                    "signed_division_no_overflow",
+                    "C signed division must not evaluate MIN / -1 unless the slice contract models that UB boundary",
+                    op,
+                    ty,
+                    source_span,
+                ));
+            }
+        }
+        typed_ir::IrBinOp::Mod => {
+            preconditions.push(runtime_precondition(
+                "modulo_divisor_nonzero",
+                "C modulo requires a non-zero divisor",
+                op,
+                ty,
+                source_span,
+            ));
+            if signed {
+                preconditions.push(runtime_precondition(
+                    "signed_modulo_no_overflow",
+                    "C signed modulo must not evaluate MIN % -1 unless the slice contract models that UB boundary",
+                    op,
+                    ty,
+                    source_span,
+                ));
+            }
+        }
+        typed_ir::IrBinOp::Shl | typed_ir::IrBinOp::Shr => {
+            preconditions.push(runtime_precondition(
+                "shift_count_in_range",
+                "C shift count must be nonnegative and smaller than the shifted integer width",
+                op,
+                ty,
+                source_span,
+            ));
+        }
+        _ => {}
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn runtime_precondition(
+    code: &str,
+    detail: &str,
+    op: &typed_ir::IrBinOp,
+    ty: &typed_ir::IrType,
+    source_span: &Option<typed_ir::SourceSpan>,
+) -> serde_json::Value {
+    json!({
+        "code": code,
+        "detail": detail,
+        "ir_node": format!("IrExpr::Binary.{op:?}"),
+        "type": type_summary(ty),
+        "source_span": source_span,
+    })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn type_summary(ty: &typed_ir::IrType) -> serde_json::Value {
+    match &ty.kind {
+        typed_ir::IrTypeKind::Integer { signed, width } => json!({
+            "spelled": ty.spelled,
+            "canonical": ty.canonical,
+            "kind": "integer",
+            "signed": signed,
+            "width": width,
+        }),
+        _ => json!({
+            "spelled": ty.spelled,
+            "canonical": ty.canonical,
+            "kind": "unsupported",
+        }),
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn is_integer_type(ty: &typed_ir::IrType) -> bool {
+    matches!(ty.kind, typed_ir::IrTypeKind::Integer { .. })
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn is_signed_integer_type(ty: &typed_ir::IrType) -> bool {
+    matches!(ty.kind, typed_ir::IrTypeKind::Integer { signed: true, .. })
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -632,7 +905,10 @@ mod clang_lowering_report_artifact_tests {
     use serde_json::Value;
 
     use super::*;
-    use crate::BuildProfile;
+    use crate::{
+        typed_ir::{IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind},
+        BuildProfile,
+    };
 
     fn unique_out_dir(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -654,6 +930,137 @@ mod clang_lowering_report_artifact_tests {
             compiler_command_source: "unit-test".to_string(),
             clang_available: true,
         }
+    }
+
+    fn int_type(name: &str, signed: bool, width: u16) -> IrType {
+        IrType {
+            spelled: name.to_string(),
+            canonical: name.to_string(),
+            kind: IrTypeKind::Integer { signed, width },
+            is_const: false,
+            width_bits: Some(width),
+            source_span: None,
+        }
+    }
+
+    fn var(name: &str, ty: &IrType) -> IrExpr {
+        IrExpr::Var {
+            name: name.to_string(),
+            ty: ty.clone(),
+            source_span: None,
+        }
+    }
+
+    fn lit(value: u64, spelling: &str, ty: &IrType) -> IrExpr {
+        IrExpr::LitInt {
+            value,
+            spelling: spelling.to_string(),
+            ty: ty.clone(),
+            source_span: None,
+        }
+    }
+
+    fn binary(op: IrBinOp, lhs: IrExpr, rhs: IrExpr, ty: &IrType) -> IrExpr {
+        IrExpr::Binary {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            ty: ty.clone(),
+            source_span: None,
+        }
+    }
+
+    #[test]
+    fn typed_ir_candidate_evidence_records_runtime_preconditions() {
+        let i32_ty = int_type("int", true, 32);
+        let u32_ty = int_type("uint32_t", false, 32);
+        let function = IrFunction {
+            name: "preconditioned".to_string(),
+            return_type: u32_ty.clone(),
+            params: vec![
+                IrParam {
+                    name: "value".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "divisor".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "bits".to_string(),
+                    ty: u32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "count".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+            ],
+            body: vec![
+                IrStmt::Decl {
+                    name: "sum".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(binary(
+                        IrBinOp::Add,
+                        var("value", &i32_ty),
+                        lit(1, "1", &i32_ty),
+                        &i32_ty,
+                    )),
+                    source_span: None,
+                },
+                IrStmt::Decl {
+                    name: "quotient".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(binary(
+                        IrBinOp::Div,
+                        var("sum", &i32_ty),
+                        var("divisor", &i32_ty),
+                        &i32_ty,
+                    )),
+                    source_span: None,
+                },
+                IrStmt::Decl {
+                    name: "remainder".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(binary(
+                        IrBinOp::Mod,
+                        var("quotient", &i32_ty),
+                        var("divisor", &i32_ty),
+                        &i32_ty,
+                    )),
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(binary(
+                        IrBinOp::Shl,
+                        var("bits", &u32_ty),
+                        var("count", &i32_ty),
+                        &u32_ty,
+                    )),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+
+        let evidence = typed_ir_candidate_evidence(Some(&function), &[]);
+        let codes = evidence["runtime_preconditions"]
+            .as_array()
+            .expect("runtime precondition evidence")
+            .iter()
+            .map(|item| item["code"].as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(evidence["status"], "generated");
+        assert!(codes.contains(&"signed_add_no_overflow"));
+        assert!(codes.contains(&"division_divisor_nonzero"));
+        assert!(codes.contains(&"signed_division_no_overflow"));
+        assert!(codes.contains(&"modulo_divisor_nonzero"));
+        assert!(codes.contains(&"signed_modulo_no_overflow"));
+        assert!(codes.contains(&"shift_count_in_range"));
     }
 
     #[test]
@@ -682,6 +1089,13 @@ mod clang_lowering_report_artifact_tests {
         assert_eq!(value["claim_boundary"]["affects_manifest_status"], false);
         assert_eq!(value["claim_boundary"]["affects_semantic_pass"], false);
         assert_eq!(value["typed_ir_candidate"]["status"], "not_available");
+        assert_eq!(
+            value["typed_ir_candidate"]["runtime_preconditions"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
         assert_eq!(
             value["typed_ir_candidate"]["reason"],
             "clang_parse_spec_error"

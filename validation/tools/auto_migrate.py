@@ -3141,6 +3141,7 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
             "candidate_route": None,
             "readonly_globals": [],
             "readonly_globals_identity": readonly_globals_identity([]),
+            "runtime_preconditions": [],
             "rust_draft_generated": False,
             "semantic_pass": False,
         }
@@ -3154,6 +3155,7 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
             "candidate_route": None,
             "readonly_globals": [],
             "readonly_globals_identity": readonly_globals_identity([]),
+            "runtime_preconditions": [],
             "rust_draft_generated": False,
             "semantic_pass": False,
             "reason": "typed_ir_candidate_missing",
@@ -3162,12 +3164,16 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
     readonly_globals = candidate.get("readonly_globals", [])
     if not isinstance(readonly_globals, list):
         readonly_globals = []
+    runtime_preconditions = candidate.get("runtime_preconditions", [])
+    if not isinstance(runtime_preconditions, list):
+        runtime_preconditions = []
     binding = {
         "status": str(candidate.get("status", "unknown")),
         "source_artifact": evidence_ref(report_path, str(report.get("status", "recorded"))),
         "candidate_route": candidate.get("candidate_route"),
         "readonly_globals": readonly_globals,
         "readonly_globals_identity": readonly_globals_identity(readonly_globals),
+        "runtime_preconditions": runtime_preconditions,
         "rust_draft_generated": bool(candidate.get("rust_draft_generated", False)),
         "semantic_pass": False,
     }

@@ -1428,6 +1428,9 @@ def validate_typed_ir_candidate_binding(
         raise SystemExit(f"typed IR candidate report cannot claim semantic_pass in {report_path}")
 
     readonly_globals = report_candidate.get("readonly_globals", [])
+    runtime_preconditions = report_candidate.get("runtime_preconditions", [])
+    if not isinstance(runtime_preconditions, list):
+        runtime_preconditions = []
     expected = {
         "status": report_candidate.get("status"),
         "candidate_route": report_candidate.get("candidate_route"),
@@ -1443,6 +1446,7 @@ def validate_typed_ir_candidate_binding(
             else [],
             "sha256": sha256_json(readonly_globals if isinstance(readonly_globals, list) else []),
         },
+        "runtime_preconditions": runtime_preconditions,
         "rust_draft_generated": bool(report_candidate.get("rust_draft_generated", False)),
         "semantic_pass": False,
     }
@@ -1455,6 +1459,7 @@ def validate_typed_ir_candidate_binding(
         "candidate_route": typed_ir.get("candidate_route"),
         "readonly_globals": typed_ir.get("readonly_globals", []),
         "readonly_globals_identity": typed_ir.get("readonly_globals_identity"),
+        "runtime_preconditions": typed_ir.get("runtime_preconditions", []),
         "rust_draft_generated": bool(typed_ir.get("rust_draft_generated", False)),
         "semantic_pass": typed_ir.get("semantic_pass"),
     }

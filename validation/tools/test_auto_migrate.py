@@ -1254,6 +1254,14 @@ class AutoMigrateTests(unittest.TestCase):
                                     "value_count": 256,
                                 }
                             ],
+                            "runtime_preconditions": [
+                                {
+                                    "code": "shift_count_in_range",
+                                    "detail": "shift count must stay within the lhs integer width",
+                                    "ir_node": "IrExpr::Binary.Shl",
+                                    "source_span": None,
+                                }
+                            ],
                             "rust_draft_generated": True,
                             "semantic_pass": False,
                         },
@@ -1287,9 +1295,17 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(typed_ir["readonly_globals_identity"]["names"], ["crc32_table"])
             self.assertEqual(typed_ir["readonly_globals"][0]["name"], "crc32_table")
             self.assertEqual(typed_ir["readonly_globals"][0]["array_len"], 256)
+            self.assertEqual(
+                typed_ir["runtime_preconditions"][0]["code"],
+                "shift_count_in_range",
+            )
             self.assertTrue(typed_ir["rust_draft_generated"])
             self.assertFalse(typed_ir["semantic_pass"])
             self.assertEqual(profile["candidate_generation"]["typed_ir"]["candidate_route"]["route"], "GenericTypedIr")
+            self.assertEqual(
+                profile["candidate_generation"]["typed_ir"]["runtime_preconditions"],
+                typed_ir["runtime_preconditions"],
+            )
             self.assertFalse(profile["generated_draft_semantic_pass"])
 
     def test_generated_zero_token_scalar_typed_ir_candidate_routes_l0(self) -> None:

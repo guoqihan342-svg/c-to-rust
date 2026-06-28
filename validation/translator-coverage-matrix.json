@@ -174,6 +174,8 @@
         "signed add/sub/mul runtime precondition",
         "non-literal divisor/modulo runtime precondition",
         "non-literal shift-count runtime precondition",
+        "clang-lowering-report typed_ir_candidate.runtime_preconditions evidence",
+        "route/profile typed_ir runtime_preconditions binding",
         "literal divisor zero refusal",
         "literal shift count refusal",
         "signed right shift refusal"
@@ -224,11 +226,27 @@
             {
               "name": "generic and unsupported route assertions for scalar arithmetic",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "route/profile typed_ir runtime_preconditions binding",
+              "path": "validation/tools/test_auto_migrate.py"
+            },
+            {
+              "name": "typed_ir runtime_preconditions drift rejection",
+              "path": "validation/tools/test_validate_auto_translation_evidence.py"
             }
           ]
         }
       },
       "positive_cases": [
+        {
+          "name": "typed_ir_candidate_evidence_records_runtime_preconditions",
+          "path": "crates/c2r-translator/src/artifacts.rs"
+        },
+        {
+          "name": "test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence",
+          "path": "validation/tools/test_auto_migrate.py"
+        },
         {
           "name": "typed_ir_runs_unsigned_add_with_wrapping_semantics",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"

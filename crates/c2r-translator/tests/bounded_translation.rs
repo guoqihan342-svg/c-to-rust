@@ -23801,6 +23801,11 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
         report["typed_ir_candidate"]["readonly_globals"][0]["value_count"],
         256
     );
+    assert!(report["typed_ir_candidate"]["runtime_preconditions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|precondition| precondition["code"] == "shift_count_in_range"));
     assert!(rust.contains("const CRC32_TABLE: [u32; 256] = [0u32, 0u32"));
     assert!(
         rust.contains("pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], mut size: usize) -> u32")
