@@ -89,6 +89,7 @@
 - **clang 前端**: 真实 `fdb_calc_crc32` 已能经 clang AST dump → skeleton → typed IR → global table → Rust draft 生成 `GenericTypedIr` candidate
 - **FlashDB crc32**: accepted evidence 已通过 semantic pass（L4 authoritative 路径），generated draft 仍是 candidate
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
+- **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；这还不是带 score/hard gate 的完整多候选 router。
 
 ## 核心目录
 

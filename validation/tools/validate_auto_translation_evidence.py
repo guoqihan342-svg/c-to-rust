@@ -1358,6 +1358,7 @@ def validate_typed_ir_candidate_binding(
     profile_candidate_generation = profile.get("candidate_generation")
     if profile_candidate_generation != route_candidate_generation:
         raise SystemExit("validation_profile.candidate_generation must match route_decision.candidate_generation")
+    validate_candidate_selection_record(route_candidate_generation)
 
     typed_ir = route_candidate_generation.get("typed_ir")
     if not isinstance(typed_ir, dict):
@@ -1433,6 +1434,70 @@ def validate_typed_ir_candidate_binding(
         actual["unsupported_reason"] = typed_ir.get("unsupported_reason")
     if actual != expected:
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
+
+
+def validate_candidate_selection_record(candidate_generation: dict[str, Any]) -> None:
+    candidate_set = candidate_generation.get("candidate_set")
+    selected_candidate_id = candidate_generation.get("selected_candidate_id")
+    selection_policy = candidate_generation.get("selection_policy")
+    c2rust_baseline = candidate_generation.get("c2rust_baseline")
+    if (
+        candidate_set is None
+        and selected_candidate_id is None
+        and selection_policy is None
+        and c2rust_baseline is None
+    ):
+        return
+
+    if selection_policy is not None:
+        if not isinstance(selection_policy, dict):
+            raise SystemExit("route_decision.candidate_generation.selection_policy must be an object")
+        if selection_policy.get("semantic_acceptance") is not False:
+            raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim semantic_acceptance")
+        if selection_policy.get("full_router") is not False:
+            raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim full_router")
+
+    if candidate_set is None:
+        if selected_candidate_id is not None or c2rust_baseline is not None:
+            raise SystemExit("route_decision.candidate_generation.candidate_set missing for candidate selection record")
+        return
+    if not isinstance(candidate_set, list):
+        raise SystemExit("route_decision.candidate_generation.candidate_set must be a list")
+
+    candidates_by_id: dict[str, dict[str, Any]] = {}
+    for index, candidate in enumerate(candidate_set):
+        if not isinstance(candidate, dict):
+            raise SystemExit(f"route_decision.candidate_generation.candidate_set[{index}] must be an object")
+        candidate_id = candidate.get("candidate_id")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            raise SystemExit(f"route_decision.candidate_generation.candidate_set[{index}].candidate_id missing")
+        if candidate_id in candidates_by_id:
+            raise SystemExit(f"route_decision.candidate_generation.candidate_set duplicate candidate_id {candidate_id}")
+        if candidate.get("semantic_pass") is not False:
+            raise SystemExit(
+                f"route_decision.candidate_generation.candidate_set[{candidate_id}] cannot claim semantic_pass"
+            )
+        candidates_by_id[candidate_id] = candidate
+
+    if selected_candidate_id is not None:
+        if not isinstance(selected_candidate_id, str) or selected_candidate_id not in candidates_by_id:
+            raise SystemExit(
+                "route_decision.candidate_generation.selected_candidate_id must reference candidate_set"
+            )
+
+    c2rust_candidate = candidates_by_id.get("c2rust-baseline")
+    if c2rust_candidate is not None and c2rust_candidate.get("correctness_role") != "candidate_context_only":
+        raise SystemExit(
+            "route_decision.candidate_generation.candidate_set[c2rust-baseline].correctness_role "
+            "must be candidate_context_only"
+        )
+    if c2rust_baseline is not None:
+        if not isinstance(c2rust_baseline, dict):
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline must be an object")
+        if c2rust_candidate is None:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
+        if c2rust_baseline != c2rust_candidate:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
 
 
 def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:

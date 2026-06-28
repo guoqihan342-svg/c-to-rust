@@ -613,6 +613,53 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 )
             self.assertIn("clang_lowering_report", str(raised.exception))
 
+    def test_rejects_candidate_selection_id_outside_candidate_set(self) -> None:
+        module = load_validator_module()
+        candidate_generation = self._candidate_selection_record()
+        route = {"candidate_generation": candidate_generation}
+        profile = {"candidate_generation": candidate_generation}
+
+        module.validate_typed_ir_candidate_binding(Path("unused"), "unused", route, profile)
+
+        drifted = json.loads(json.dumps(route))
+        drifted["candidate_generation"]["selected_candidate_id"] = "typed-ir:missing"
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                drifted,
+                {"candidate_generation": drifted["candidate_generation"]},
+            )
+        self.assertIn("selected_candidate_id", str(raised.exception))
+
+    def test_rejects_c2rust_candidate_claiming_semantic_pass(self) -> None:
+        module = load_validator_module()
+        route = {"candidate_generation": self._candidate_selection_record()}
+
+        semantic_claim = json.loads(json.dumps(route))
+        semantic_claim["candidate_generation"]["candidate_set"][2]["semantic_pass"] = True
+        semantic_claim["candidate_generation"]["c2rust_baseline"]["semantic_pass"] = True
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                semantic_claim,
+                {"candidate_generation": semantic_claim["candidate_generation"]},
+            )
+        self.assertIn("semantic_pass", str(raised.exception))
+
+        role_claim = json.loads(json.dumps(route))
+        role_claim["candidate_generation"]["candidate_set"][2]["correctness_role"] = "semantic_source"
+        role_claim["candidate_generation"]["c2rust_baseline"]["correctness_role"] = "semantic_source"
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                role_claim,
+                {"candidate_generation": role_claim["candidate_generation"]},
+            )
+        self.assertIn("correctness_role", str(raised.exception))
+
     def test_rejects_cache_missing_route_baseline_profile_identities(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -3508,6 +3555,45 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         manifest["evidence"]["final_verification"] = self._ref(final_path, final.get("status", "passed"))
         manifest["evidence"]["cache_metadata"] = self._ref(cache_path, "recorded")
         self._write_json(manifest_path, manifest)
+
+    def _candidate_selection_record(self) -> dict:
+        c2rust_candidate = {
+            "candidate_id": "c2rust-baseline",
+            "kind": "c2rust-baseline",
+            "status": "skipped",
+            "role": "baseline_or_repair_candidate_context",
+            "correctness_role": "candidate_context_only",
+            "reason": "blocked_by_missing_tools",
+            "semantic_pass": False,
+        }
+        return {
+            "selection_policy": {
+                "stage": "post_generation_provenance",
+                "selection_basis": "translator_artifact_primary_candidate",
+                "semantic_acceptance": False,
+                "full_router": False,
+            },
+            "selected_candidate_id": "primary:legacy-string-translator",
+            "candidate_set": [
+                {
+                    "candidate_id": "primary:legacy-string-translator",
+                    "kind": "legacy-string-translator",
+                    "status": "generated",
+                    "role": "primary_rust_draft",
+                    "semantic_pass": False,
+                },
+                {
+                    "candidate_id": "typed-ir:clang-lowered",
+                    "kind": "typed-ir",
+                    "status": "missing",
+                    "role": "typed_ir_candidate_signal",
+                    "rust_draft_generated": False,
+                    "semantic_pass": False,
+                },
+                c2rust_candidate,
+            ],
+            "c2rust_baseline": c2rust_candidate,
+        }
 
     def _refresh_route_source_artifact_ref(
         self,

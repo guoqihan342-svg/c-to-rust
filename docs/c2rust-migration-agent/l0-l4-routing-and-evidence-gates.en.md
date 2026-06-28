@@ -118,6 +118,8 @@ Validation profile determines which gates must pass for this run. Key fields:
 | `candidate_generation` | Candidate generation path (typed IR, string, C2Rust baseline) | L2-L3 |
 | `competition_environment` | Competition environment profile binding | L1, L3 |
 
+The current `candidate_generation` inventory is post-generation provenance: `selection_policy.stage=post_generation_provenance`, `full_router=false`, and `candidate_set` only records the primary Rust draft, typed-IR signal, and C2Rust baseline context. It is not yet a full score/hard-gate router.
+
 ### 4.2 Semantic Pass Decision
 
 `semantic_pass_for_run()` rules (simplified):
@@ -228,6 +230,7 @@ This is the most easily misunderstood aspect of the entire pipeline. Their relat
 Key principles:
 - Candidate route only selects the candidate generation implementation, not semantic acceptance.
 - Evidence route decision incorporates candidate provenance into route rationale, but alias/pointer risk floors take priority.
+- The new `candidate_set` only inventories already produced or observed candidate sources and binds the current primary draft through `selected_candidate_id`; the C2Rust baseline remains `candidate_context_only` and cannot become a semantic source.
 - Only when validation profile + gates all pass + no skipped required gate can semantic pass be claimed.
 
 ## 7. Fail-Closed Design Principles
@@ -246,6 +249,7 @@ The entire pipeline follows fail-closed principles: when uncertain, refuse rathe
 
 - Schema requires all required properties present
 - `candidate_generation` in route and profile must be exactly identical
+- New evidence with `candidate_set` must keep ids unique, point `selected_candidate_id` at a candidate in the set, keep the C2Rust baseline as `candidate_context_only`, and keep every candidate `semantic_pass=false`
 - `semantic_pass=true` is rejected in any candidate/draft evidence
 - L4/refused disallows residual `candidate_generated`, `accepted_after_gates` and similar statuses
 - `--require-semantic-pass` strongly checks sha256/status for all manifest refs

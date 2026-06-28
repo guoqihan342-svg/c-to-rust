@@ -1426,6 +1426,84 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(primary["fallback_from"], "clang-lowered-typed-ir")
             self.assertEqual(primary["fallback_reason"], "clang_lowered_typed_ir_unavailable")
 
+    def test_route_decision_records_candidate_set_and_selected_candidate(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "candidate-set-route-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-candidate-set-route-source"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {
+                    "status": "skipped",
+                    "reason": "blocked_by_missing_tools",
+                    "correctness_role": "candidate_context_only",
+                },
+            )
+
+            generation = route["candidate_generation"]
+            self.assertEqual(
+                generation["selection_policy"]["stage"],
+                "post_generation_provenance",
+            )
+            self.assertFalse(generation["selection_policy"]["semantic_acceptance"])
+            self.assertEqual(
+                generation["selected_candidate_id"],
+                "primary:legacy-string-translator",
+            )
+            candidates = {item["candidate_id"]: item for item in generation["candidate_set"]}
+            self.assertEqual(
+                set(candidates),
+                {
+                    "primary:legacy-string-translator",
+                    "typed-ir:clang-lowered",
+                    "c2rust-baseline",
+                },
+            )
+            self.assertEqual(candidates["primary:legacy-string-translator"]["kind"], "legacy-string-translator")
+            self.assertEqual(candidates["primary:legacy-string-translator"]["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(candidates["typed-ir:clang-lowered"]["status"], "missing")
+            self.assertFalse(candidates["typed-ir:clang-lowered"]["semantic_pass"])
+            self.assertEqual(candidates["c2rust-baseline"]["status"], "skipped")
+            self.assertEqual(candidates["c2rust-baseline"]["correctness_role"], "candidate_context_only")
+            self.assertFalse(candidates["c2rust-baseline"]["semantic_pass"])
+
     def test_normalized_artifacts_preserve_translation_fallback_source(self) -> None:
         module = load_auto_migrate_module()
         spec = {

@@ -98,9 +98,56 @@
       "additionalProperties": true,
       "required": ["typed_ir"],
       "properties": {
+        "selection_policy": {"$ref": "#/definitions/candidateSelectionPolicy"},
+        "selected_candidate_id": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "string", "minLength": 1}
+          ]
+        },
+        "candidate_set": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/candidateSetItem"}
+        },
         "primary_candidate": {"$ref": "#/definitions/primaryCandidateEvidence"},
         "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
+        "c2rust_baseline": {"$ref": "#/definitions/candidateSetItem"},
         "generated_draft_semantic_pass": {"const": false}
+      }
+    },
+    "candidateSelectionPolicy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["stage", "semantic_acceptance", "full_router"],
+      "properties": {
+        "stage": {"enum": ["post_generation_provenance"]},
+        "selection_basis": {"type": "string", "minLength": 1},
+        "semantic_acceptance": {"const": false},
+        "full_router": {"const": false}
+      }
+    },
+    "candidateSetItem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["candidate_id", "kind", "status", "role", "semantic_pass"],
+      "properties": {
+        "candidate_id": {"type": "string", "minLength": 1},
+        "kind": {
+          "enum": [
+            "unknown",
+            "legacy-string-translator",
+            "clang-lowered-typed-ir",
+            "typed-ir",
+            "c2rust-baseline"
+          ]
+        },
+        "status": {"type": "string", "minLength": 1},
+        "role": {"type": "string", "minLength": 1},
+        "semantic_pass": {"const": false},
+        "correctness_role": {"enum": ["candidate_context_only"]},
+        "fallback": {"type": "boolean"},
+        "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},
+        "fallback_reason": {"type": "string", "minLength": 1}
       }
     },
     "primaryCandidateEvidence": {

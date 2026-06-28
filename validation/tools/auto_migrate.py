@@ -2912,7 +2912,7 @@ def emit_route_decision(
     cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
     pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
     plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
-    candidate_generation = candidate_generation_evidence(spec, evidence_dir)
+    candidate_generation = candidate_generation_evidence(spec, evidence_dir, c2rust_baseline)
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan, candidate_generation)
     translator = route_translator(level)
     profile = validation_profile_name(level, "dev")
@@ -2954,29 +2954,108 @@ def emit_route_decision(
     return decision
 
 
-def candidate_generation_evidence(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+def candidate_generation_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
     plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
     plan = read_json(plan_path) if plan_path.exists() else {}
+    primary_candidate = primary_candidate_binding(plan)
+    typed_ir_candidate = typed_ir_candidate_binding(report_path)
+    c2rust_candidate = c2rust_baseline_candidate_binding(c2rust_baseline)
     return {
-        "primary_candidate": primary_candidate_binding(plan),
-        "typed_ir": typed_ir_candidate_binding(report_path),
+        "selection_policy": candidate_selection_policy(),
+        "selected_candidate_id": selected_candidate_id(primary_candidate),
+        "candidate_set": candidate_set_binding(
+            primary_candidate,
+            typed_ir_candidate,
+            c2rust_candidate,
+        ),
+        "primary_candidate": primary_candidate,
+        "typed_ir": typed_ir_candidate,
+        "c2rust_baseline": c2rust_candidate,
     }
 
 
 def primary_candidate_binding(plan: dict[str, Any]) -> dict[str, Any]:
     source = translation_source_from_plan(plan)
     binding: dict[str, Any] = {
+        "candidate_id": f"primary:{source['selected']}",
         "selected": source["selected"],
         "fallback": bool(source.get("fallback_from")),
+        "semantic_pass": False,
     }
     if source.get("fallback_from"):
         binding["fallback_from"] = source["fallback_from"]
     if source.get("fallback_reason"):
         binding["fallback_reason"] = source["fallback_reason"]
     return binding
+
+
+def candidate_selection_policy() -> dict[str, Any]:
+    return {
+        "stage": "post_generation_provenance",
+        "selection_basis": "translator_artifact_primary_candidate",
+        "semantic_acceptance": False,
+        "full_router": False,
+    }
+
+
+def selected_candidate_id(primary_candidate: dict[str, Any]) -> str | None:
+    if primary_candidate.get("selected") == "unknown":
+        return None
+    return str(primary_candidate.get("candidate_id"))
+
+
+def candidate_set_binding(
+    primary_candidate: dict[str, Any],
+    typed_ir_candidate: dict[str, Any],
+    c2rust_candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    selected = str(primary_candidate.get("selected", "unknown"))
+    primary_status = "missing" if selected == "unknown" else "generated"
+    primary = {
+        "candidate_id": primary_candidate.get("candidate_id", "primary:unknown"),
+        "kind": selected,
+        "status": primary_status,
+        "role": "primary_rust_draft",
+        "semantic_pass": False,
+    }
+    if primary_candidate.get("fallback"):
+        primary["fallback"] = True
+    if primary_candidate.get("fallback_from"):
+        primary["fallback_from"] = primary_candidate["fallback_from"]
+    if primary_candidate.get("fallback_reason"):
+        primary["fallback_reason"] = primary_candidate["fallback_reason"]
+    return [
+        primary,
+        {
+            "candidate_id": "typed-ir:clang-lowered",
+            "kind": "typed-ir",
+            "status": typed_ir_candidate.get("status", "missing"),
+            "role": "typed_ir_candidate_signal",
+            "rust_draft_generated": bool(typed_ir_candidate.get("rust_draft_generated", False)),
+            "semantic_pass": False,
+        },
+        c2rust_candidate,
+    ]
+
+
+def c2rust_baseline_candidate_binding(c2rust_baseline: dict[str, Any] | None) -> dict[str, Any]:
+    baseline = c2rust_baseline or {}
+    return {
+        "candidate_id": "c2rust-baseline",
+        "kind": "c2rust-baseline",
+        "status": str(baseline.get("status", "missing")),
+        "role": "baseline_or_repair_candidate_context",
+        "correctness_role": str(baseline.get("correctness_role", "candidate_context_only")),
+        "reason": str(baseline.get("reason", "missing")),
+        "semantic_pass": False,
+    }
 
 
 def translation_source_from_plan(plan: dict[str, Any]) -> dict[str, Any]:

@@ -118,6 +118,8 @@ Validation profile 决定本次运行必须通过的 gates。核心字段：
 | `candidate_generation` | 候选生成路径（typed IR, string, C2Rust baseline） | L2-L3 |
 | `competition_environment` | 比赛环境 profile 绑定 | L1, L3 |
 
+当前 `candidate_generation` 的候选清单是后生成阶段 provenance：`selection_policy.stage=post_generation_provenance`、`full_router=false`，`candidate_set` 只记录 primary Rust draft、typed-IR signal 和 C2Rust baseline context；它不是完整的 score/hard-gate router。
+
 ### 4.2 Semantic Pass 判定
 
 `semantic_pass_for_run()` 判定规则（简化）：
@@ -228,6 +230,7 @@ Legacy v1 指针图可缺省 effect_graph，避免破坏历史 evidence。
 关键原则：
 - Candidate route 只选择候选生成实现，不决定语义接受。
 - Evidence route decision 把候选 provenance 纳入 route rationale，但 alias/pointer risk floor 优先。
+- 新 `candidate_set` 只是把已产生或已观测的候选来源列清楚，并用 `selected_candidate_id` 绑定当前 primary draft；C2Rust baseline 保持 `candidate_context_only`，不能成为 semantic source。
 - 只有 validation profile + gates 全部通过 + no skipped required gate 时，才能声明 semantic pass。
 
 ## 7. Fail-Closed 设计原则
@@ -246,6 +249,7 @@ Legacy v1 指针图可缺省 effect_graph，避免破坏历史 evidence。
 
 - schema 要求所有 required properties 存在
 - route 和 profile 中的 `candidate_generation` 必须完全一致
+- 带 `candidate_set` 的新证据必须保证 id 唯一、`selected_candidate_id` 指向集合内候选、C2Rust baseline 为 `candidate_context_only`，且所有 candidate `semantic_pass=false`
 - `semantic_pass=true` 在任何 candidate/draft evidence 中都被拒绝
 - L4/refused 下不允许残留 `candidate_generated`、`accepted_after_gates` 等状态
 - `--require-semantic-pass` 下强校验所有 manifest ref 的 sha256/status

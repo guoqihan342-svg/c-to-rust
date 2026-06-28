@@ -10057,3 +10057,56 @@ English mirror summary:
 - When clang-lowered typed IR is unavailable and the compatibility path uses the legacy string translator, raw and normalized JSONL events include a `translation_fallback` event.
 - `auto_migrate.py` preserves `translation_source` after normalization and binds it into `route_decision.candidate_generation.primary_candidate`.
 - This is provenance, not a full multi-candidate router and not semantic acceptance.
+
+## 149. 2026-06-28 P0 post-generation candidate inventory provenance
+
+本轮继续处理外部评价中“route 只是静态壳、没有真实候选集合”的问题。仍不一次性实现完整 L0-L4 多候选 router，而是先把后生成阶段的候选清单和选择 provenance 落到 route/profile evidence，并让 validator 能拒绝候选集合漂移和语义冒领。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `candidate_generation_evidence()` 现在接收 C2Rust baseline manifest 摘要，并写入：
+    - `selection_policy.stage=post_generation_provenance`
+    - `selection_policy.semantic_acceptance=false`
+    - `selection_policy.full_router=false`
+    - `selected_candidate_id`
+    - `candidate_set`
+  - `candidate_set` 当前包含三类后生成阶段来源：primary Rust draft、typed-IR signal、`c2rust-baseline` context。
+  - `primary_candidate` 增加 `candidate_id` 和 `semantic_pass=false`，继续保留 fallback provenance。
+  - `c2rust-baseline` 候选固定为 `correctness_role=candidate_context_only` 和 `semantic_pass=false`，不能作为语义通过来源。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 新增 candidate selection record 校验：`candidate_set` id 必须唯一，`selected_candidate_id` 必须指向集合内候选，所有 candidate 必须保持 `semantic_pass=false`。
+  - `c2rust-baseline` candidate 必须保持 `candidate_context_only`，且 `candidate_generation.c2rust_baseline` 必须与 `candidate_set` 中同 id 项一致。
+  - 旧 evidence 不带 `candidate_set` 时保持兼容。
+- `validation/auto-translation-template/route-decision.schema.json` 与 `validation-profile.schema.json`
+  - 增加 `selection_policy`、`selected_candidate_id`、`candidate_set` 和 `c2rust_baseline` 形状。
+  - `candidate_generation` required 仍保持兼容策略，避免破坏旧 route/profile fixtures。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_candidate_set_and_selected_candidate
+```
+实现前失败于 `KeyError: 'selection_policy'`。
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_candidate_selection_id_outside_candidate_set validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_candidate_claiming_semantic_pass
+```
+实现前失败于没有抛出 `SystemExit`。
+
+边界：
+- 可以说：route/profile evidence 现在有最小候选清单 provenance，并能绑定当前 primary draft 与 C2Rust baseline context。
+- 可以说：validator 会拒绝 candidate id 漂移、C2Rust baseline 冒充语义来源，以及任何 candidate 自称 `semantic_pass=true`。
+- 不应说：完整多候选 router、score/hard-gate 决策、C2Rust baseline/repair 实际调度、LLM candidate 调度、fallback chain 优先级、或 semantic acceptance 已完成。
+
+English mirror summary:
+
+- Added post-generation candidate inventory provenance to route/profile evidence.
+- `candidate_set` now records the primary Rust draft, typed-IR signal, and C2Rust baseline context.
+- The selected primary draft is bound through `selected_candidate_id`; C2Rust baseline remains `candidate_context_only`.
+- The validator rejects candidate-set id drift, C2Rust semantic-source claims, and candidate `semantic_pass=true`.
+- This remains provenance with `full_router=false`; full multi-candidate routing and semantic acceptance remain future work.

@@ -27,6 +27,7 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 ## Latest Route Provenance Boundary
 
 - When `clang-lowering-report` is enabled but clang-lowered typed IR cannot produce the primary Rust draft, fallback to the legacy string translator is no longer silent. Raw translator artifacts and normalized `auto_migrate.py` evidence record `translation_source`, JSONL includes `translation_fallback`, and `route_decision.candidate_generation.primary_candidate` binds the selected generator plus fallback source/reason. This is provenance only; the full multi-candidate router for C2Rust/LLM candidates remains future work.
+- Route/profile evidence now also records `selection_policy.stage=post_generation_provenance`, `selected_candidate_id`, and `candidate_set`, putting the primary Rust draft, typed-IR signal, and C2Rust baseline context into one auditable inventory. The validator rejects candidate-set id drift, C2Rust baseline claims as a semantic source, and any candidate claiming `semantic_pass=true`. `selection_policy.full_router=false`, so score/hard-gate routing, C2Rust/LLM dispatch, and semantic acceptance remain future work.
 
 ## Bilingual Documentation Convention
 

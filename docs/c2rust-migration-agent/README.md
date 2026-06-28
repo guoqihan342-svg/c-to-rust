@@ -27,6 +27,7 @@
 ## 最新路由来源边界
 
 - 启用 `clang-lowering-report` 但 clang-lowered typed IR 不能生成主 Rust draft 时，fallback 到 legacy string translator 不再是静默行为。translator 原始 artifacts 和 `auto_migrate.py` 归一化 evidence 都记录 `translation_source`，JSONL 包含 `translation_fallback`，`route_decision.candidate_generation.primary_candidate` 绑定 selected generator、fallback source 和 reason。这只是 provenance，不代表 C2Rust/LLM 多候选 router 已完成。
+- route/profile evidence 现在还会记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`，把 primary Rust draft、typed-IR signal 与 C2Rust baseline context 放进同一份可审计清单；validator 会拒绝候选集合 id 漂移、C2Rust baseline 冒充语义来源，以及任何 candidate 自称 `semantic_pass=true`。`selection_policy.full_router=false`，说明 score/hard gate、C2Rust/LLM 调度和语义接受仍未完成。
 
 ## 双语文档约定
 
