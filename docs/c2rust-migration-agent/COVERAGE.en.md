@@ -20,6 +20,7 @@ This document honestly lists C language constructs that are "currently supported
 | `const void *` (byte cursor) | Narrow | Maps to `&[u8]` only in proven byte cursor scenarios |
 | `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]`, read-only |
 | `T *` (mutable output pointer) | Narrow | Maps to `&mut [T]` only when used as a write target |
+| `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write/statement inc-dec; not a general ownership or alias model |
 | plain `char` | Unsupported | Sign unknown, clang frontend rejects |
 | `short` / `unsigned short` | Unsupported | Target-dependent spelling, rejected |
 | `long` / `unsigned long` | Unsupported | Target ABI width inference not modeled |
@@ -28,7 +29,7 @@ This document honestly lists C language constructs that are "currently supported
 | `_Bool` | Unsupported | Not modeled |
 | `enum` | Unsupported | Not modeled |
 | `union` | Unsupported | Not modeled |
-| `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, by-value dot-field compound assignment, statement-position dot-field inc/dec, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; no `->`, value-position field updates, pointer/alias-sensitive field writes, nesting, anonymous |
+| `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, by-value dot-field compound assignment, statement-position dot-field inc/dec, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; pointer member access is limited to the readonly and single-pointer mutable subsets, not general `->`; value-position field updates, multi-pointer alias-sensitive field writes, nesting, anonymous remain unsupported |
 
 ## Declarations and Initialization
 
@@ -64,11 +65,12 @@ This document honestly lists C language constructs that are "currently supported
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
-| `p->field` (arrow member) | Unsupported | Pointer/record ownership not modeled |
+| `p->field` (arrow member) | Narrow | Readonly `const struct T *p` scalar field reads, null-presence/guarded readonly reads, and direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/statement inc-dec are supported; multi-pointer aliasing, nullable mutable pointers, read-before-write, maybe-write reads, complex bases/targets/RHS, non-scalar fields, value-position inc-dec, `ForStmt` step inc-dec, layout/ABI claims, and semantic acceptance remain unsupported |
 | `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, statement-position `p.field += value` (RHS limited to a simple integer variable, literal, or integer cast), standalone statement-position `p.field++` / `++p.field` / `p.field--` / `--p.field` (base must be a direct by-value record variable and the field must be a supported integer), and field access after local copy only; value-position `p.field++`, complex RHS/base forms, and pointer/alias-sensitive field writes remain unsupported |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |
+| `p->field++` / `--p->field` (statement) | Narrow | Direct single-pointer mutable record pointer scalar field target only; lowered as value-discarded assignment desugar, not raw inc/dec value semantics |
 | `*p++` (byte cursor post-increment) | Narrow | Only in proven byte cursor context |
 | `&x` (address-of) | Unsupported | |
 | `sizeof` | Unsupported | |

@@ -1464,6 +1464,131 @@ fn typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape()
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let inc_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let dec_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bump_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: inc_target.clone(),
+                value: ir_binary(
+                    IrBinOp::Add,
+                    inc_target,
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: dec_target.clone(),
+                value: ir_binary(
+                    IrBinOp::Sub,
+                    dec_target,
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty,
+                ),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit mutable record pointer field inc/dec desugar shape");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn bump_point_x(mut p: &mut Point)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = (p.x + 1i32);"), "{rust}");
+    assert!(rust.contains("p.x = (p.x - 1i32);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-field-inc-dec-desugar",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_raw_bump_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_lit(0, "0", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::IncDec {
+                    target: Box::new(IrExpr::Member {
+                        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    }),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("raw mutable record pointer field inc/dec expression must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs() {
     let i32_ty = ir_i32();
     let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
@@ -16653,7 +16778,7 @@ fn clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled() {
+fn clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -16666,12 +16791,12 @@ fn clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled() {
         "clang path does not exist: {}",
         clang_path.display()
     );
-    let out_dir = unique_out_dir("clang-real-arrow-record-field-inc-dec");
+    let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-inc-dec");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_arrow_record_field_inc_dec.c");
+    let source_file = out_dir.join("mutable_record_pointer_field_inc_dec.c");
     fs::write(
         &source_file,
-        "struct point { int x; int y; };\nint bad_arrow_record_field_inc_dec(struct point *p) { p->x++; return 0; }\n",
+        "struct point { int x; int y; };\nvoid bump_point_x(struct point *p) { p->x++; ++p->x; p->x--; --p->x; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -16679,19 +16804,37 @@ fn clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled() {
         clang_path.to_string_lossy().into_owned(),
     )]);
 
-    let report = lower_function_from_clang_ast_dump_report(
-        &environment,
-        &source_file,
-        "bad_arrow_record_field_inc_dec",
-    );
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "bump_point_x");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign { .. }, IrStmt::Assign { .. }, IrStmt::Assign { .. }, IrStmt::Assign { .. }] =
+        function.body.as_slice()
+    else {
+        panic!(
+            "expected four mutable record pointer field inc/dec assignments, got {:?}",
+            function.body
+        );
+    };
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit mutable record pointer field inc/dec statement from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(rust.contains("pub y: i32"), "{rust}");
     assert!(
-        report.errors.iter().any(|error| error
-            .message
-            .contains("arrow member targets require pointer/record ownership evidence")),
-        "{:?}",
-        report.errors
+        rust.contains("pub fn bump_point_x(mut p: &mut Point)"),
+        "{rust}"
+    );
+    assert_eq!(rust.matches("p.x = (p.x + 1i32);").count(), 2);
+    assert_eq!(rust.matches("p.x = (p.x - 1i32);").count(), 2);
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-mutable-record-pointer-field-inc-dec",
+        rust,
     );
 }
 

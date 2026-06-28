@@ -1072,9 +1072,31 @@ fn inc_dec_assignment_target_type<'a>(
 ) -> Result<&'a ClangTypeSkeleton, String> {
     match target {
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ty),
-        ClangExprSkeleton::Member { is_arrow: true, .. } => Err(format!(
-            "{context} inc/dec arrow member targets require pointer/record ownership evidence"
-        )),
+        ClangExprSkeleton::Member {
+            base,
+            ty,
+            is_arrow: true,
+            ..
+        } => {
+            if context != "statement" {
+                return Err(format!(
+                    "{context} inc/dec record pointer field targets are unsupported outside standalone statements"
+                ));
+            }
+            match base.as_ref() {
+                ClangExprSkeleton::DeclRef { ty: base_ty, .. }
+                    if clang_type_is_mutable_record_pointer(base_ty) =>
+                {
+                    Ok(ty)
+                }
+                ClangExprSkeleton::DeclRef { .. } => Err(format!(
+                    "{context} inc/dec record pointer field target base must be a non-const record pointer variable"
+                )),
+                _ => Err(format!(
+                    "{context} inc/dec record pointer field target must have a direct record pointer variable base"
+                )),
+            }
+        }
         ClangExprSkeleton::Member {
             base,
             ty,
@@ -1101,7 +1123,7 @@ fn inc_dec_assignment_target_type<'a>(
             }
         }
         _ => Err(format!(
-            "{context} inc/dec target must be a simple variable or by-value record field"
+            "{context} inc/dec target must be a simple variable, by-value record field, or direct mutable record pointer field"
         )),
     }
 }
@@ -3965,7 +3987,8 @@ mod tests {
     }
 
     #[test]
-    fn stmt_skeleton_from_ast_rejects_record_field_inc_dec_arrow_target() {
+    fn stmt_skeleton_from_ast_accepts_mutable_record_pointer_field_inc_dec_statement_as_assignment()
+    {
         let stmt = serde_json::json!({
             "kind": "UnaryOperator",
             "opcode": "++",
@@ -3990,10 +4013,57 @@ mod tests {
 
         let skeleton = stmt_skeleton_from_ast(&stmt).expect("record arrow inc/dec skeleton");
 
-        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
-            panic!("expected arrow field inc/dec to be unsupported, got {skeleton:?}");
+        let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+            panic!("expected arrow field inc/dec assignment, got {skeleton:?}");
         };
-        assert!(reason.contains("arrow member targets require pointer/record ownership evidence"));
+        assert!(
+            matches!(&target, ClangExprSkeleton::Member { field, is_arrow: true, .. } if field == "x"),
+            "expected arrow-field assignment target, got {target:?}"
+        );
+        let ClangExprSkeleton::Binary { op, lhs, rhs, .. } = value else {
+            panic!("expected binary assignment value, got {value:?}");
+        };
+        assert_eq!(op, ClangBinaryOperator::Add);
+        assert!(
+            matches!(lhs.as_ref(), ClangExprSkeleton::Member { field, is_arrow: true, .. } if field == "x"),
+            "expected arrow-field binary lhs, got {lhs:?}"
+        );
+        assert!(matches!(
+            rhs.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_statement() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "const struct point *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("const arrow inc/dec skeleton");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected const arrow field inc/dec to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("non-const record pointer variable"));
     }
 
     #[test]
@@ -4024,6 +4094,39 @@ mod tests {
 
         let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
             panic!("expected record field inc/dec for step to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("unsupported outside standalone statements"));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct point *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton =
+            inc_dec_for_step_skeleton_from_ast(&stmt).expect("record pointer field for step");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected record pointer field inc/dec for step to be unsupported, got {skeleton:?}");
         };
         assert!(reason.contains("unsupported outside standalone statements"));
     }

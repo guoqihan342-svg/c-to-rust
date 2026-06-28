@@ -20,6 +20,7 @@
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
 | `const T *` (readonly integer pointer) | 窄支持 | 映射为 `&[T]`，只读 |
 | `T *` (mutable output pointer) | 窄支持 | 仅在作为写目标时映射为 `&mut [T]` |
+| `struct T *` (mutable record pointer) | 窄支持 | 仅在 direct single-pointer scalar field 写/update/read-after-write/statement inc-dec 时映射为 `&mut T`；不是通用 ownership 或 alias 模型 |
 | `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
 | `short` / `unsigned short` | 不支持 | target-dependent spelling，拒绝 |
 | `long` / `unsigned long` | 不支持 | target ABI 宽度推断未建模 |
@@ -28,7 +29,7 @@
 | `_Bool` | 不支持 | 未建模 |
 | `enum` | 不支持 | 未建模 |
 | `union` | 不支持 | 未建模 |
-| `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、按值 dot-field compound assignment、statement 位置 dot-field inc/dec、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；无 `->`、value-position field update、pointer/alias-sensitive field write、嵌套、匿名 |
+| `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、按值 dot-field compound assignment、statement 位置 dot-field inc/dec、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；pointer member access 只限 readonly 和 single-pointer mutable 窄子集，不是通用 `->`；value-position field update、多 pointer alias-sensitive field write、嵌套、匿名仍不支持 |
 
 ## 声明与初始化
 
@@ -64,11 +65,12 @@
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
 | `p[i]` (array subscript) | 窄支持 | readonly pointer slice 或 local/global array |
-| `p->field` (arrow member) | 不支持 | pointer/record ownership 未建模 |
+| `p->field` (arrow member) | 窄支持 | readonly `const struct T *p` scalar field read、null-presence/guarded readonly read，以及 direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/statement inc-dec 已支持；multi-pointer alias、nullable mutable pointer、read-before-write、maybe-write 后读取、复杂 base/target/RHS、非标量字段、value-position inc-dec、`ForStmt` step inc-dec、layout/ABI 声明和 semantic acceptance 仍不支持 |
 | `p.field` (dot member access) | 窄支持 | 仅按值 record dot-field read、简单 `p.field = value`、statement 位置 `p.field += value`（RHS 仅简单整数变量/字面量/整数 cast）、standalone statement 位置 `p.field++` / `++p.field` / `p.field--` / `--p.field`（base 必须是直接按值 record 变量，field 必须是受支持整数）、本地 copy 后字段访问；value-position `p.field++`、复杂 RHS/复杂 base 和 pointer/alias-sensitive field write 仍不支持 |
 | `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
 | `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
 | `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |
+| `p->field++` / `--p->field` (statement) | 窄支持 | 仅 direct single-pointer mutable record pointer scalar field target；按 value-discarded assignment desugar lowering，不支持 raw inc/dec value 语义 |
 | `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
 | `&x` (address-of) | 不支持 | |
 | `sizeof` | 不支持 | |

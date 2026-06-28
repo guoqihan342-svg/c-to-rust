@@ -9787,3 +9787,49 @@ English mirror summary:
 - The definite-write state is field-level: `p->x = value; return p->y;` still fails closed.
 - Reads before writes and reads after maybe-writes still fail closed; loop/body writes are not promoted to post-loop definite writes.
 - Updated Chinese and English MVP backlog to move this narrow read-after-write path into the supported typed IR candidate subset while keeping broader alias/noalias and path-sensitive ownership work open.
+
+## 143. 2026-06-28 P1 mutable record pointer field statement inc/dec
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理结论一致：`p->x++` / `--p->x` 不需要新增 typed IR raw inc/dec emitter；更安全的切口是只在 clang statement-position、表达式值被丢弃时，把 direct mutable record pointer scalar field inc/dec desugar 成现有 assignment/update 形状：`p->x = p->x +/- 1`。这复用上一节的 single-pointer gate、field-level definite-write/read 逻辑和 mutable arrow compound update helper。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `inc_dec_assignment_target_type()` 放开 direct mutable record pointer arrow field，但仅限 `context == "statement"`。
+  - arrow base 必须是 direct `DeclRef`，并且类型必须满足非 const record pointer；`const struct T *p`、复杂 base、非 record pointer base 仍 fail closed。
+  - `ForStmt step` context 继续拒绝 record pointer field inc/dec，避免把 loop step 顺序语义混入本切口。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape`，直接验证 `Assign(Member arrow, Binary(Add/Sub, same Member, 1))` 可发射 `p: &mut Point` 和 `p.x = (p.x +/- 1i32);`。
+  - 新增 direct typed IR 负例 `typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr`，先 definite-write 字段后再构造 raw `IrExpr::IncDec(Member arrow)`，确认 raw inc/dec expression 仍 fail closed。
+  - 将真实 clang smoke 改为正例 `clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled`，覆盖 `p->x++; ++p->x; p->x--; --p->x;`。
+  - 新增 clang frontend unit 边界：const record pointer field inc/dec 和 `ForStmt step` 中 record pointer field inc/dec 仍拒绝。
+- `docs/c2rust-migration-agent/README.md` / `.en.md`、`core-translation-architecture.md` / `.en.md`、`COVERAGE.md` / `.en.md`、`future-vision-and-mvp.md` / `.en.md`
+  - 同步把 direct single-pointer mutable record pointer scalar field statement inc/dec 标为窄 candidate 子集。
+  - 明确 raw/value-position inc/dec、`return p->x++`、`for (...; p->x++)`、多 pointer alias、nullable mutable pointer、复杂 base/target/RHS、non-scalar field、layout/ABI 和 semantic acceptance 仍 fail closed。
+
+定向验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_mutable_record_pointer_field_inc_dec_statement_as_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled -- --nocapture
+```
+
+结果：
+- clang frontend statement/const/for-step 单元测试均按预期通过。
+- direct typed IR desugar 正例通过，并通过 rustc snippet smoke。
+- raw `IrExpr::IncDec(Member arrow)` 负例通过，错误保持在 `inc/dec expression is unsupported`。
+- 真实 clang AST `p->x++; ++p->x; p->x--; --p->x;` smoke 通过，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：single-pointer gate 下的 direct mutable record pointer scalar field 在 standalone statement 位置支持 `p->x++` / `++p->x` / `p->x--` / `--p->x`，并发射为 `p.x = (p.x +/- 1i32);`。
+- 可以说：这是 clang statement desugar 后的 assignment/update candidate，不是完整 C inc/dec expression semantics。
+- 不应说：已支持 raw/value-position inc/dec、`return/call/condition` 中的 `p->field++`、`ForStmt` step 中 record-field inc/dec、多 pointer alias/noalias、nullable mutable pointer、复杂 base/target/RHS、non-scalar field、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field statement-inc/dec candidate path.
+- `struct T *p; p->scalar_field++; ++p->scalar_field; p->scalar_field--; --p->scalar_field;` now lowers from real clang AST into assignment desugar shapes and emits `p: &mut T` plus direct Rust field updates, under the existing single-pointer-param gate.
+- Raw `IrExpr::IncDec` is still unsupported; value-position inc/dec, `ForStmt` step record-field inc/dec, complex targets, nullable mutable pointers, multi-pointer aliasing, layout/ABI claims, and semantic acceptance remain fail-closed.
+- Updated Chinese and English docs/coverage/backlog to mark this narrow statement-position path as supported while keeping broader pointer ownership and value-position update semantics open.
