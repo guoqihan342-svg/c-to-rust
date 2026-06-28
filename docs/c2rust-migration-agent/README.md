@@ -42,7 +42,7 @@
 
 - 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，机器可读状态见 `baseline-record.json`。
 - 架构与合约：见 `index/architecture.md`。覆盖 `agent-contract.md`、`baseline-and-versioning.md`、`context-store-and-self-healing.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`、`l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`。
-- 运行与验证：见 `index/operations.md`。覆盖 `build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
+- 运行与验证：见 `index/operations.md`。覆盖 `build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
 - 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
 - FlashDB 用例边界：见 `index/flashdb.md`。覆盖 `baseline-record.json`、`build-and-c2rust-baseline.md`、`flashdb-rust-skeleton-and-milestone.md`、`full-regression-runner.md`。
 - 归档/分析：见 `index/archive.md`。覆盖 `archive/context-history-2026-06-28.md`、`analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。

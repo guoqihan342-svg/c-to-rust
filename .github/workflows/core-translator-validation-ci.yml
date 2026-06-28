@@ -68,6 +68,7 @@ jobs:
           python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
           python -m unittest validation.tools.test_competition_environment_profile
           python -m unittest validation.tools.test_unsafe_budget
+          python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix
 
       - name: Run repository unsafe budget gate

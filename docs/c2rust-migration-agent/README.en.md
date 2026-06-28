@@ -42,7 +42,7 @@
 
 - Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; machine-readable status lives in `baseline-record.json`.
 - Architecture and contracts: see `index/architecture.md`. Covers `agent-contract.md`, `baseline-and-versioning.md`, `context-store-and-self-healing.md`, `core-translation-architecture.md` / `core-translation-architecture.en.md`, and `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`.
-- Operations and validation: see `index/operations.md`. Covers `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
+- Operations and validation: see `index/operations.md`. Covers `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
 - Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
 - FlashDB case boundary: see `index/flashdb.md`. Covers `baseline-record.json`, `build-and-c2rust-baseline.md`, `flashdb-rust-skeleton-and-milestone.md`, and `full-regression-runner.md`.
 - Archive/analysis: see `index/archive.md`. Covers `archive/context-history-2026-06-28.md` and `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.
