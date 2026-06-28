@@ -705,6 +705,23 @@ def enrich_clang_lowering_report(
     write_json(report_path, report)
 
 
+def unsupported_control_flow_kind(label: str) -> str:
+    prefix = str(label).split(":", 1)[0]
+    if prefix in {
+        "goto",
+        "switch",
+        "label",
+        "case",
+        "default",
+        "setjmp",
+        "longjmp",
+        "inline_assembly",
+        "relooper_refusal",
+    }:
+        return prefix
+    return "unknown"
+
+
 def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
     """Rewrite raw translator output into schema-bound candidate evidence.
 
@@ -775,16 +792,17 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     functions = []
     for function in raw_functions:
         unsupported = function.get("unsupported_control_flow", [])
-        unsupported_cf.extend(
+        function_unsupported_cf = [
             {
                 "id": f"unsupported-{idx + 1}",
-                "kind": "goto" if item == "goto" else "unknown",
+                "kind": unsupported_control_flow_kind(item),
                 "reason": f"{item} requires CFG/relooper support",
                 "source_span": source_span(),
                 "translation_effect": "requires_relooper",
             }
             for idx, item in enumerate(unsupported)
-        )
+        ]
+        unsupported_cf.extend(function_unsupported_cf)
         blocks = function.get("blocks", [])
         statements = blocks[0].get("statements", []) if blocks else []
         statement_kinds = blocks[0].get("statement_kinds", []) if blocks else []
@@ -817,8 +835,8 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "structured_control_flow": {
                     "if_count": count_token(spec.get("c_source", ""), "if"),
                     "loop_count": count_token(spec.get("c_source", ""), "while") + count_token(spec.get("c_source", ""), "for"),
-                    "has_goto": any(item.get("kind") == "goto" for item in unsupported_cf),
-                    "has_switch": "switch" in unsupported,
+                    "has_goto": any(item.get("kind") == "goto" for item in function_unsupported_cf),
+                    "has_switch": any(item.get("kind") == "switch" for item in function_unsupported_cf),
                     "relooper_required": bool(unsupported),
                 },
             }
@@ -3704,11 +3722,11 @@ def route_level(
         "cfg": cfg.get("status"),
         "plan": plan.get("status"),
     }
-    if any(value == "blocked" for value in blocked_statuses.values()):
-        rationale.append({"feature": "blocked_artifact", "values": blocked_statuses, "weight": "hard_refuse"})
-        return "L4", rationale
     if cfg.get("unsupported_control_flow"):
         rationale.append({"feature": "unsupported_control_flow", "weight": "hard_refuse"})
+        return "L4", rationale
+    if any(value == "blocked" for value in blocked_statuses.values()):
+        rationale.append({"feature": "blocked_artifact", "values": blocked_statuses, "weight": "hard_refuse"})
         return "L4", rationale
     pointer_nodes = pointer.get("pointer_nodes", [])
     typed_ir_signal = typed_ir_candidate_route_signal(candidate_generation or {}, scalar_only=not pointer_nodes)

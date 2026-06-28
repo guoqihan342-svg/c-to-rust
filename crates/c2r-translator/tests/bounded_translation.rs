@@ -241,6 +241,35 @@ fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_direct_call_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/direct_call_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "call_expression")
+        .expect("lower direct call fixture without invoking clang");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from direct call fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn call_expression(mut value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let mut first: i32 = helper(value);"),
+        "{rust}"
+    );
+    assert!(rust.contains("value = helper(first);"), "{rust}");
+    assert!(rust.contains("return helper(value);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-direct-call",
+        &format!("fn helper(value: i32) -> i32 {{ value }}\n{rust}"),
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_size_t_without_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"

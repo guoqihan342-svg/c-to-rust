@@ -62,7 +62,7 @@ This document honestly lists C language constructs that are "currently supported
 | `&&` `\|\|` (short-circuit) | Narrow | Condition and value-position C int 0/1 |
 | `?:` (conditional) | Narrow | Pure integer value-position only |
 | Integer cast (explicit/implicit) | Narrow | Clang-proven integral cast, source/target both supported integers |
-| Function call (direct call) | Narrow | Direct identifier callee only |
+| Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, while reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
 | Nested direct call | Narrow | One-level single nested arg only |
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
@@ -96,8 +96,8 @@ This document honestly lists C language constructs that are "currently supported
 | `for` (scoped) | Narrow | Simple init/condition/step forms |
 | `break` | Narrow | Inside loop body only |
 | `continue` | Narrow | Inside loop body only |
-| `switch` | Unsupported | Requires CFG + relooper |
-| `goto` | Unsupported | Requires CFG + relooper |
+| `switch` | Unsupported | CFG/relooper/route refusal evidence exists; full CFG + relooper still required before lowering |
+| `goto` | Unsupported | CFG/relooper/route refusal evidence exists; full CFG + relooper still required before lowering |
 | label | Unsupported | |
 | `case` / `default` | Unsupported | |
 

@@ -64,7 +64,7 @@
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven integral cast，source/target 同为支持整数 |
-| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
@@ -98,8 +98,8 @@
 | `for` (scoped) | 窄支持 | init/condition/step 为简单形式 |
 | `break` | 窄支持 | 仅在 loop body 内 |
 | `continue` | 窄支持 | 仅在 loop body 内 |
-| `switch` | 不支持 | 需 CFG + relooper |
-| `goto` | 不支持 | 需 CFG + relooper |
+| `switch` | 不支持 | 已有 CFG/relooper/route 拒绝证据；仍需完整 CFG + relooper 才能 lowering |
+| `goto` | 不支持 | 已有 CFG/relooper/route 拒绝证据；仍需完整 CFG + relooper 才能 lowering |
 | label | 不支持 | |
 | `case` / `default` | 不支持 | |
 
