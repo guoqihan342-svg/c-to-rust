@@ -77,8 +77,8 @@
 | `p->field++` / `--p->field` (statement) | 窄支持 | 仅 direct single-pointer mutable record pointer scalar field target；按 value-discarded assignment desugar lowering，不支持 raw inc/dec value 语义 |
 | `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
 | `&x` (address-of) | 不支持 | |
-| `sizeof` | 窄支持 | 仅支持 clang `UnaryExprOrTypeTraitExpr` 的 type operand 且 operand 是已绑定 ABI 宽度的整数类型，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`；降为 `size_t`/`usize` 整数字面量；expression operand `sizeof(x)`、record/struct layout、array/object operand、packing/alignment 仍 fail-closed |
-| `_Alignof` | 不支持 | |
+| `sizeof` | 窄支持 | 仅支持 clang `UnaryExprOrTypeTraitExpr` 的 type operand，且 operand 是已绑定 ABI 宽度的整数类型或完整定长整数数组类型，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`、`sizeof(int[3])`；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度；expression operand `sizeof(x)`、incomplete/VLA array、record/struct layout、object operand、packing/alignment 仍 fail-closed |
+| `_Alignof` | 不支持 | clang `_Alignof(type)` 会显式 fail-closed；当前 target profile 只有宽度证据，没有 alignment/layout profile，不能猜 alignment |
 | `(type){init}` compound literal | 不支持 | |
 | 函数指针 | 不支持 | |
 | 逗号表达式 | 不支持 | |

@@ -2058,7 +2058,9 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
     let arg_type = type_from_qual_type(&arg_qual_type)?;
     if !matches!(
         arg_type.kind,
-        ClangTypeKind::Integer { .. } | ClangTypeKind::Unsupported { .. }
+        ClangTypeKind::Integer { .. }
+            | ClangTypeKind::Array { .. }
+            | ClangTypeKind::Unsupported { .. }
     ) {
         return Err(ClangFrontendError {
             kind: "unsupported_sizeof_type".to_string(),
@@ -3201,6 +3203,7 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         }),
         ClangExprSkeleton::SizeOfType { arg_type, ty } => {
             let value = sizeof_type_bytes(arg_type)?;
+            validate_sizeof_result_fits_type(value, ty)?;
             Ok(IrExpr::LitInt {
                 value,
                 spelling: value.to_string(),
@@ -3307,6 +3310,37 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
 }
 
 #[cfg(feature = "typed-ir")]
+fn validate_sizeof_result_fits_type(
+    value: u64,
+    ty: &ClangTypeSkeleton,
+) -> Result<(), ClangFrontendError> {
+    let ClangTypeKind::Integer {
+        signed: false,
+        width,
+    } = ty.kind
+    else {
+        return Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof result type {} must be an ABI-bound unsigned integer before typed IR lowering",
+                ty.spelled
+            ),
+        });
+    };
+    if width >= 64 || value < (1u64 << width) {
+        Ok(())
+    } else {
+        Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof result {value} does not fit target result type {} width {width}",
+                ty.spelled
+            ),
+        })
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> {
     match &ty.kind {
         ClangTypeKind::Integer { width, .. } if *width > 0 && *width % 8 == 0 => {
@@ -3319,6 +3353,32 @@ fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> 
                 ty.spelled
             ),
         }),
+        ClangTypeKind::Array { element, len } => {
+            let len = len.ok_or_else(|| ClangFrontendError {
+                kind: "unsupported_sizeof_type".to_string(),
+                message: format!(
+                    "sizeof({}) requires a complete array bound before typed IR lowering",
+                    ty.spelled
+                ),
+            })?;
+            let len = u64::try_from(len).map_err(|_| ClangFrontendError {
+                kind: "unsupported_sizeof_type".to_string(),
+                message: format!(
+                    "sizeof({}) array bound exceeds the current typed IR byte-size representation",
+                    ty.spelled
+                ),
+            })?;
+            let element_size = sizeof_type_bytes(element)?;
+            element_size
+                .checked_mul(len)
+                .ok_or_else(|| ClangFrontendError {
+                    kind: "unsupported_sizeof_type".to_string(),
+                    message: format!(
+                        "sizeof({}) overflows the current typed IR byte-size representation",
+                        ty.spelled
+                    ),
+                })
+        }
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_sizeof_type".to_string(),
             message: format!(
@@ -6397,6 +6457,111 @@ mod tests {
     }
 
     #[test]
+    fn sizeof_fixed_integer_array_type_lowers_to_total_byte_size() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "small-int-test-abi".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 16,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int[3]"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof(int[3]) skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof(int[3]) should lower with ABI profile");
+
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected sizeof(int[3]) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 6);
+        assert_eq!(ty.spelled, "size_t");
+    }
+
+    #[test]
+    fn sizeof_incomplete_array_type_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int[]"}
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("sizeof(int[]) skeleton should parse");
+        let error = lower_expr(&skeleton).expect_err("sizeof incomplete array must fail closed");
+
+        assert_eq!(error.kind, "unsupported_sizeof_type");
+        assert!(
+            error.message.contains("complete array bound"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_vla_like_array_type_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int[n]"}
+        });
+
+        let error = expr_skeleton_from_ast(&expr).expect_err("VLA-like sizeof must fail closed");
+
+        assert_eq!(error.kind, "invalid_array_type");
+        assert!(
+            error.message.contains("array length is not usize"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_array_result_exceeding_target_size_t_stays_fail_closed() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "small-size-t-test-abi".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 16,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 16,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int[40000]"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof(int[40000]) skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let error = lower_expr(&skeleton).expect_err("oversized sizeof result must fail closed");
+
+        assert_eq!(error.kind, "unsupported_sizeof_type");
+        assert!(
+            error.message.contains("does not fit target result type"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
     fn sizeof_target_dependent_integer_stays_fail_closed_without_profile() {
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -6491,6 +6656,34 @@ mod tests {
 
         assert!(
             error.message.contains("sizeof") && error.message.contains("layout"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn alignof_type_trait_stays_fail_closed_without_alignment_profile() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "_Alignof",
+            "argType": {"qualType": "int"}
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("_Alignof skeleton should parse");
+        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
+            panic!("expected _Alignof to remain unsupported, got {skeleton:?}");
+        };
+        assert_eq!(node, "UnaryExprOrTypeTraitExpr");
+        assert!(
+            reason.contains("_Alignof") && reason.contains("alignment/lowering support"),
+            "unexpected reason: {reason}"
+        );
+
+        let error = lower_expr(&skeleton).expect_err("_Alignof must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(
+            error.message.contains("_Alignof") && error.message.contains("alignment"),
             "unexpected error: {error:?}"
         );
     }

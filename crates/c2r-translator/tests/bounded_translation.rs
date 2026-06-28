@@ -336,6 +336,99 @@ fn clang_ast_fixture_replays_sizeof_int_with_target_abi_profile() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_sizeof_int_array_with_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "small-int-test-abi".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 16,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 32,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "sizeof_int_array_bytes",
+        Some(&target_abi),
+    )
+    .expect("lower sizeof(int[3]) fixture with target ABI profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from sizeof(int[3]) fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn sizeof_int_array_bytes() -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 6usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-sizeof-int-array", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_sizeof_int_array_without_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "sizeof_int_array_bytes")
+            .expect_err("sizeof(int[3]) result size_t must fail closed without target ABI profile");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
+        error
+            .message
+            .contains("requires target ABI width provenance"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_alignof_int_without_alignment_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "alignof_int_bytes",
+        Some(&target_abi),
+    )
+    .expect_err("_Alignof must fail closed without target alignment profile");
+
+    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert!(
+        error.message.contains("_Alignof") && error.message.contains("alignment"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_sizeof_int_without_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"

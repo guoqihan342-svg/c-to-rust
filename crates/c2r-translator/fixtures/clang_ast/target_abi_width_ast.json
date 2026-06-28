@@ -300,6 +300,66 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "sizeof_int_array_bytes",
+      "type": {
+        "qualType": "size_t (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "sizeof",
+                  "argType": {
+                    "qualType": "int[3]"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "alignof_int_bytes",
+      "type": {
+        "qualType": "size_t (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "_Alignof",
+                  "argType": {
+                    "qualType": "int"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }
