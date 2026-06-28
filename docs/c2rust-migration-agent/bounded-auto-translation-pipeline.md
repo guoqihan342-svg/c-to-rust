@@ -92,7 +92,7 @@ safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointe
 
 - 不再把“项目小而精”作为当前项目约束。项目可以扩展为多 crate、多工具、多 target；受限的是每个 slice 的迁移声明和证据边界。
 - 不采用“全自动 C -> Rust 翻译”的强表述。本 change 是 bounded automatic translation pipeline，只生成证据绑定候选。
-- 不采用 `tree-sitter-only` 作为语义事实源。`tree-sitter-c` 可以做快速索引或切片定位；类型、宏展开、ABI、struct layout、implicit casts 必须来自 build profile、compile commands、clang/libclang、WSL/Linux/CI 或明确 unsupported evidence。
+- 不采用 `tree-sitter-only` 作为语义事实源。`tree-sitter-c` 可以做快速索引或切片定位；类型、宏展开、ABI、struct layout、implicit casts 必须来自 build profile、compile commands、`CLANG_PATH` 驱动的 clang AST dump JSON、WSL/Linux/CI 或明确 unsupported evidence。
 - 不把 DeepSeek 或任何单一模型作为硬依赖。AI 层必须 provider-agnostic、可关闭、可缓存、可审计；默认本地 pipeline 不能依赖在线 AI 才能运行。
 - 不采用错误的 loop-label goto 初版方案。MVP 只支持结构化控制流；`goto` 和非结构化 CFG 默认 blocked。Corrode-style CFG relooper 留作后续能力，不在第一版强行翻译。
 - 不把 raw pointer draft 暴露成默认 Rust public API。raw pointer 属于低层 draft/internal/FFI 边界，public API 仍需 safe wrapper 或 reviewed exception。

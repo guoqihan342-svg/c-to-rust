@@ -72,7 +72,7 @@ The baseline record must store:
 - generated file hashes
 - transpiler warnings
 - skipped files/functions
-- environment variables relevant to clang/libclang
+- environment variables relevant to `CLANG_PATH`-driven clang AST dump JSON; `LIBCLANG_PATH` is recorded only as ignored diagnostic metadata when observed
 
 ## Current Host Constraint
 

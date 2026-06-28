@@ -69,7 +69,7 @@
     }
   },
   "baseline_generation": {
-    "preferred_environment": "WSL or Linux with clang/libclang, bear or CMake compile_commands, and c2rust on PATH",
+    "preferred_environment": "WSL or Linux with CLANG_PATH-driven clang AST dump JSON, bear or CMake compile_commands, and c2rust on PATH",
     "native_windows_status": "blocked_by_missing_tools",
     "c2rust_command_template": "c2rust transpile --emit-build-files path/to/compile_commands.json",
     "c2rust_output_hashes": null,

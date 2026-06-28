@@ -90,7 +90,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(lane["auto_migrate_flag"], "--competition-clang-lane")
         self.assertEqual(lane["feature"], "clang-lowering-report")
         self.assertEqual(lane["requires_env"], ["CLANG_PATH"])
-        self.assertEqual(lane["optional_env"], ["LIBCLANG_PATH"])
+        self.assertEqual(lane["ignored_env_for_ast_dump"], ["LIBCLANG_PATH"])
         self.assertEqual(lane["missing_status"], "missing_clang_path")
 
     def test_compatibility_profile_stays_synchronized_with_default_profile(self) -> None:

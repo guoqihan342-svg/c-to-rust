@@ -10241,3 +10241,71 @@ English mirror summary:
 - The validator rejects baseline candidate status/reason/role drift from the manifest and generated output_ref drift from the actual file hash.
 - Route/profile schemas now describe the new C2Rust baseline candidate binding while keeping legacy evidence compatibility.
 - This improves auditability only; C2Rust remains candidate context and is not a semantic correctness source.
+
+## 152. 2026-06-28 P0 clang frontend fact boundary
+
+本轮继续处理 P0 “统一 clang 前端事实”。只读子智能体确认真实 lowering 路径已经是 `CLANG_PATH` 调用 `clang -Xclang -ast-dump=json -fsyntax-only`，但 dry-run artifact、cache identity、competition profile 和部分文档仍容易让人误解为 libclang 是当前解析前端。主线选择最小切片：保留 dry-run 的诊断价值，不删除功能；把它明确标记为 diagnostic-only，并把 `LIBCLANG_PATH` 改成 ignored legacy observed metadata。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangDryRun.status` 从旧的 `ready_without_libclang` 改为 `diagnostic_only`。
+  - 新增 `active_frontend`：`kind=clang_ast_dump_json`、`command="clang -Xclang -ast-dump=json -fsyntax-only"`、`required_env=["CLANG_PATH"]`、`uses_libclang=false`。
+  - 新增 `claim_boundary`：`role=diagnostic_only`，不影响 manifest status，也不影响 semantic pass。
+  - `ClangEnvironment` 不再暴露 `libclang_path` 作为能力字段，改为 `observed_libclang_path`；设置 `LIBCLANG_PATH` 时状态为 `ignored_for_ast_dump`。
+- `crates/c2r-translator/src/artifacts.rs`
+  - `*-clang-dry-run.json` 写入 `artifact_kind=clang-dry-run`、顶层 `active_frontend` 和 `claim_boundary`。
+  - parse-spec 错误路径同样带 diagnostic boundary，避免 blocked artifact 暗示 libclang 前端。
+- `validation/tools/auto_migrate.py`
+  - `clang_lowering_identity()` 现在记录 `frontend=clang_ast_dump_json`、`command`、`requires_env=["CLANG_PATH"]`。
+  - `LIBCLANG_PATH` 移到 `ignored_env_for_ast_dump.LIBCLANG_PATH`，reason 为 `ignored_for_ast_dump`。
+- `config/competition-env/environment.json` 与 `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`
+  - competition clang lane 从 `optional_env=["LIBCLANG_PATH"]` 改为 `ignored_env_for_ast_dump=["LIBCLANG_PATH"]`。
+- 文档/OpenSpec/slice spec：
+  - `future-vision-and-mvp.md` / `.en.md` 将 P0 “统一 clang 前端事实”勾选为完成。
+  - `bounded-auto-translation-pipeline.md` / `.en.md`、`build-and-c2rust-baseline.md`、`baseline-record.json`、当前 OpenSpec spec/change 文档和 `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 都收窄为 `CLANG_PATH` 驱动的 clang AST dump JSON 或 compile_commands 语义事实；不再把 `clang/libclang` 合并写成当前事实源。
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run -- --nocapture
+```
+实现前失败于 `ClangDryRun` 缺少 `claim_boundary` / `active_frontend`，以及 `ClangEnvironment` 缺少 `observed_libclang_path` / `role`。
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity
+```
+实现前失败于缺 `frontend`、`artifact_kind`、`ignored_env_for_ast_dump` 等字段。
+
+已跑 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_competition_environment_profile
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_template_schema_contracts validation.tools.test_competition_environment_profile validation.tools.test_unsafe_budget
+openspec validate --all --strict
+python validation/tools/unsafe_budget.py --max-ratio 0.10
+python -m json.tool config/competition-env/environment.json > $null
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json > $null
+python -m json.tool docs/c2rust-migration-agent/baseline-record.json > $null
+python -m json.tool validation/slice-specs/flashdb-real-fdb-calc-crc32.json > $null
+git diff --check
+```
+
+结果：
+- Rust all-features：67 lib/bin tests + 435 bounded_translation tests 通过。
+- Python 组合：154 tests 通过（有一条 jsonschema metaschema deprecation warning，不影响结果）。
+- OpenSpec：38 passed, 0 failed。
+- unsafe budget：34 files / 26676 lines，0 unsafe，ratio 0.0。
+- 当前代码/文档/OpenSpec（排除 archive 和历史 CONTEXT）扫描无 `clang/libclang`、`ready_without_libclang`、`optional_env` 旧 contract 残留。
+
+边界：
+- 可以说：当前 active clang frontend fact 已统一为 `CLANG_PATH` + clang AST dump JSON；dry-run 是 diagnostic-only；`LIBCLANG_PATH` 只作为 ignored metadata 记录。
+- 不应说：libclang parse/lowering 已启用、`LIBCLANG_PATH` 是 optional capability、dry-run artifact 能证明 typed semantic pass、或 competition clang lane 默认开启。
+
+English mirror summary:
+
+- Normalized the active clang frontend contract to `CLANG_PATH` + `clang -Xclang -ast-dump=json -fsyntax-only`.
+- `clang-dry-run` artifacts now carry `diagnostic_only` status, explicit claim boundary, and `active_frontend.kind=clang_ast_dump_json`.
+- `LIBCLANG_PATH` is now recorded only as ignored diagnostic metadata (`ignored_env_for_ast_dump` / `observed_libclang_path`), not as an active frontend capability.
+- Competition environment JSON, validation profile, roadmap docs, OpenSpec text, and slice-spec diagnostics were updated to match the current implementation.
+- This completes the P0 clang frontend fact-boundary item, not a real libclang parser implementation.

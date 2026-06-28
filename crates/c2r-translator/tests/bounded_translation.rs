@@ -11176,7 +11176,15 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
         Some("function-span-sha")
     );
     assert!(parse_spec.compile_commands.is_none());
-    assert_eq!(dry_run.status, "ready_without_libclang");
+    assert_eq!(dry_run.status, "diagnostic_only");
+    assert_eq!(dry_run.claim_boundary.role, "diagnostic_only");
+    assert_eq!(dry_run.active_frontend.kind, "clang_ast_dump_json");
+    assert_eq!(
+        dry_run.active_frontend.command,
+        "clang -Xclang -ast-dump=json -fsyntax-only"
+    );
+    assert_eq!(dry_run.active_frontend.required_env, vec!["CLANG_PATH"]);
+    assert!(!dry_run.active_frontend.uses_libclang);
     assert_eq!(
         dry_run.arguments,
         vec![
@@ -11187,7 +11195,7 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
     );
     assert!(dry_run
         .diagnostics
-        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+        .contains(&"LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH".to_string()));
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -11229,18 +11237,19 @@ fn clang_dry_run_records_missing_libclang_environment_without_parsing() {
         .expect("clang parse spec")
         .dry_run_with_environment(&environment);
 
-    assert_eq!(dry_run.status, "ready_without_libclang");
+    assert_eq!(dry_run.status, "diagnostic_only");
+    assert_eq!(dry_run.claim_boundary.role, "diagnostic_only");
+    assert_eq!(dry_run.active_frontend.kind, "clang_ast_dump_json");
     assert_eq!(dry_run.environment.status, "not_configured");
     assert_eq!(dry_run.environment.source.as_deref(), None);
-    assert_eq!(dry_run.environment.libclang_path.as_deref(), None);
+    assert_eq!(dry_run.environment.observed_libclang_path.as_deref(), None);
+    assert_eq!(dry_run.environment.role, "diagnostic_only");
+    assert!(dry_run.environment.diagnostics.iter().any(|diagnostic| {
+        diagnostic.contains("LIBCLANG_PATH is not set and is ignored for clang AST dump lowering")
+    }));
     assert!(dry_run
-        .environment
         .diagnostics
-        .iter()
-        .any(|diagnostic| { diagnostic.contains("LIBCLANG_PATH is not set") }));
-    assert!(dry_run
-        .diagnostics
-        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+        .contains(&"LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH".to_string()));
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -11285,19 +11294,20 @@ fn clang_dry_run_records_configured_libclang_path_without_enabling_parse() {
         .expect("clang parse spec")
         .dry_run_with_environment(&environment);
 
-    assert_eq!(dry_run.status, "ready_without_libclang");
-    assert_eq!(dry_run.environment.status, "configured");
+    assert_eq!(dry_run.status, "diagnostic_only");
+    assert_eq!(dry_run.active_frontend.kind, "clang_ast_dump_json");
+    assert_eq!(dry_run.environment.status, "ignored_for_ast_dump");
     assert_eq!(dry_run.environment.source.as_deref(), Some("LIBCLANG_PATH"));
     assert_eq!(
-        dry_run.environment.libclang_path.as_deref(),
+        dry_run.environment.observed_libclang_path.as_deref(),
         Some("C:/LLVM/bin/libclang.dll")
     );
     assert!(dry_run.environment.diagnostics.iter().any(|diagnostic| {
-        diagnostic.contains("configured but real libclang parsing remains disabled")
+        diagnostic.contains("LIBCLANG_PATH is configured but ignored for clang AST dump lowering")
     }));
     assert!(dry_run
         .diagnostics
-        .contains(&"libclang execution is not enabled in this dry-run skeleton".to_string()));
+        .contains(&"LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH".to_string()));
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -22744,8 +22754,13 @@ fn clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata() {
         .iter()
         .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
     assert_eq!(dry_run["schema_version"], 1);
-    assert_eq!(dry_run["status"], "ready_without_libclang");
+    assert_eq!(dry_run["artifact_kind"], "clang-dry-run");
+    assert_eq!(dry_run["status"], "diagnostic_only");
     assert_eq!(dry_run["frontend"], "clang");
+    assert_eq!(dry_run["claim_boundary"]["role"], "diagnostic_only");
+    assert_eq!(dry_run["active_frontend"]["kind"], "clang_ast_dump_json");
+    assert_eq!(dry_run["active_frontend"]["uses_libclang"], false);
+    assert_eq!(dry_run["dry_run"]["status"], "diagnostic_only");
     assert_eq!(dry_run["dry_run"]["source_file"], "src/fdb_utils.c");
     assert_eq!(
         dry_run["dry_run"]["arguments"],

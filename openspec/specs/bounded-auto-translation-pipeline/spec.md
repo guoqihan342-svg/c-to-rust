@@ -38,7 +38,7 @@ slice spec 必须是从真实 C 源码生成的中间契约和证据锚点，而
 #### Scenario: Syntax index cannot replace semantic evidence
 - **WHEN** `tree-sitter-c` or another syntax-only parser locates a function, call, type spelling, or source span
 - **THEN** the run may use that parser only for indexing, slicing, or tolerant scanning
-- **AND** typedef, macro expansion, ABI, struct layout, integer width, implicit cast, and declaration disambiguation facts MUST come from build profile, compile commands, clang/libclang, WSL/Linux/CI evidence, or explicit unsupported/type-ambiguity records before a Rust draft can be accepted
+- **AND** typedef, macro expansion, ABI, struct layout, integer width, implicit cast, and declaration disambiguation facts MUST come from build profile, compile commands, `CLANG_PATH`-driven clang AST dump JSON, WSL/Linux/CI evidence, or explicit unsupported/type-ambiguity records before a Rust draft can be accepted
 
 ### Requirement: Real C Frontend Before Scale Claims
 The system SHALL not claim scalable C-to-Rust translation capability until at least one real source function is automatically discovered, extracted, translated, and validated through the existing evidence gates.

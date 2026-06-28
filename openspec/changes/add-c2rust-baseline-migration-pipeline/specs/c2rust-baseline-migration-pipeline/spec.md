@@ -12,7 +12,7 @@ The system SHALL build migration context from a layered frontend stack where syn
 
 #### Scenario: Semantic facts require typed frontend evidence
 - **WHEN** a route decision or deterministic rule depends on C type, layout, integer width, macro-expanded expression, implicit cast, enum value, pointer mutability, or function signature facts
-- **THEN** accepted semantic facts MUST come from compile profile, compile commands, clang/libclang, original C oracle evidence, or explicit unsupported semantic records
+- **THEN** accepted semantic facts MUST come from compile profile, compile commands, `CLANG_PATH`-driven clang AST dump JSON, original C oracle evidence, or explicit unsupported semantic records; `LIBCLANG_PATH` is ignored diagnostic metadata unless a future explicit libclang adapter is enabled
 - **AND** C2Rust baseline evidence MAY provide candidate context or cross-check hints
 - **AND** C2Rust baseline evidence MUST NOT by itself satisfy a typed semantic fact required for acceptance
 - **AND** missing semantic facts MUST upgrade the route level or block acceptance

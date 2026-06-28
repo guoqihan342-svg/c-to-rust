@@ -1,13 +1,13 @@
 ## ADDED Requirements
 
 ### Requirement: Source and toolchain baseline
-The migration system SHALL pin every migration run to exact source and toolchain versions. The baseline record MUST include the C source commit, OpenSpec version, Rust toolchain, C2Rust package or artifact hash, C2Rust generation command, LLVM/libclang configuration, test tool versions, and generated artifact hashes.
+The migration system SHALL pin every migration run to exact source and toolchain versions. The baseline record MUST include the C source commit, OpenSpec version, Rust toolchain, C2Rust package or artifact hash, C2Rust generation command, LLVM/clang AST frontend configuration, test tool versions, and generated artifact hashes. `LIBCLANG_PATH` is recorded only as ignored diagnostic metadata unless a future explicit libclang adapter is enabled.
 
 每次迁移必须锁定版本，禁止只写 latest。FlashDB 的 GitCode 源码 commit、工具链、C2Rust 产物和测试种子都必须可复现。
 #### Scenario: Capturing FlashDB baseline
 - **WHEN** the Agent starts the FlashDB migration
 - **THEN** it records the FlashDB source commit from `https://gitcode.com/xwxf/FlashDB.git`
-- **THEN** it records OpenSpec, Rust, C2Rust, LLVM/libclang, and test tool versions
+- **THEN** it records OpenSpec, Rust, C2Rust, LLVM/clang AST frontend, and test tool versions
 - **THEN** it saves `compile_commands.json`, macro matrix, feature matrix, and test seeds
 
 ### Requirement: C2Rust baseline is oracle-only

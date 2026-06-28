@@ -254,26 +254,35 @@ pub(crate) fn write_clang_dry_run_artifact(
     prefix: &str,
 ) -> Result<PathBuf, Box<dyn Error>> {
     let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
-        Ok(parse_spec) => json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "source_commit": spec.source_commit,
-            "frontend": "clang",
-            "status": "ready_without_libclang",
-            "dry_run": parse_spec.dry_run(),
-            "metadata": {
-                "source_file_hashes": parse_spec.source_file_hashes,
-                "function_source_span": parse_spec.function_source_span,
-            },
-            "errors": [],
-        }),
+        Ok(parse_spec) => {
+            let dry_run = parse_spec.dry_run();
+            json!({
+                "schema_version": 1,
+                "artifact_kind": "clang-dry-run",
+                "target_id": spec.target_id,
+                "slice_id": spec.slice_id,
+                "source_commit": spec.source_commit,
+                "frontend": "clang",
+                "active_frontend": dry_run.active_frontend.clone(),
+                "claim_boundary": dry_run.claim_boundary.clone(),
+                "status": "diagnostic_only",
+                "dry_run": dry_run,
+                "metadata": {
+                    "source_file_hashes": parse_spec.source_file_hashes,
+                    "function_source_span": parse_spec.function_source_span,
+                },
+                "errors": [],
+            })
+        }
         Err(error) => json!({
             "schema_version": 1,
+            "artifact_kind": "clang-dry-run",
             "target_id": spec.target_id,
             "slice_id": spec.slice_id,
             "source_commit": spec.source_commit,
             "frontend": "clang",
+            "active_frontend": clang_frontend::clang_ast_dump_active_frontend(),
+            "claim_boundary": clang_frontend::diagnostic_claim_boundary(),
             "status": "blocked",
             "dry_run": null,
             "metadata": {
@@ -597,6 +606,7 @@ mod core_translation_artifact_tests {
 #[cfg(all(test, feature = "clang-frontend"))]
 mod clang_dry_run_artifact_tests {
     use std::{
+        collections::BTreeMap,
         env, fs,
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
@@ -605,7 +615,7 @@ mod clang_dry_run_artifact_tests {
     use serde_json::Value;
 
     use super::*;
-    use crate::BuildProfile;
+    use crate::{BuildProfile, SourceSpanRef};
 
     fn unique_out_dir(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -654,6 +664,54 @@ mod clang_dry_run_artifact_tests {
         assert_eq!(value["status"], "blocked");
         assert_eq!(value["dry_run"], Value::Null);
         assert_eq!(value["errors"][0]["kind"], "missing_source_root");
+    }
+
+    #[test]
+    fn clang_dry_run_artifact_marks_libclang_as_diagnostic_only() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "add-one".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "add_one".to_string(),
+            c_source: "int add_one(int value) { return value + 1; }".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            source_root: Some("C:/src/demo".to_string()),
+            source_file: Some("src/add_one.c".to_string()),
+            source_files: Vec::new(),
+            source_file_hashes: BTreeMap::from([(
+                "src/add_one.c".to_string(),
+                "source-sha".to_string(),
+            )]),
+            function_source_span: Some(SourceSpanRef {
+                file: "src/add_one.c".to_string(),
+                line_start: 1,
+                line_end: 1,
+                byte_start: 0,
+                byte_end: 42,
+                sha256: "function-span-sha".to_string(),
+            }),
+            build_profile: profile(),
+            ..SliceSpec::default()
+        };
+        let out_dir = unique_out_dir("clang-dry-run-diagnostic-only");
+        fs::create_dir_all(&out_dir).unwrap();
+
+        let path = write_clang_dry_run_artifact(&spec, &out_dir, "l3-add-one").unwrap();
+        let value: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+
+        assert_eq!(value["artifact_kind"], "clang-dry-run");
+        assert_eq!(value["status"], "diagnostic_only");
+        assert_eq!(value["claim_boundary"]["role"], "diagnostic_only");
+        assert_eq!(value["claim_boundary"]["affects_manifest_status"], false);
+        assert_eq!(value["claim_boundary"]["affects_semantic_pass"], false);
+        assert_eq!(value["active_frontend"]["kind"], "clang_ast_dump_json");
+        assert_eq!(
+            value["active_frontend"]["command"],
+            "clang -Xclang -ast-dump=json -fsyntax-only"
+        );
+        assert_eq!(value["active_frontend"]["required_env"][0], "CLANG_PATH");
+        assert_eq!(value["active_frontend"]["uses_libclang"], false);
+        assert_eq!(value["dry_run"]["status"], "diagnostic_only");
     }
 }
 

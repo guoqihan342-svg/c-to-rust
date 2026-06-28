@@ -4480,11 +4480,19 @@ class AutoMigrateTests(unittest.TestCase):
                 identity["clang_lowering_identity"],
                 {
                     "enabled": True,
+                    "frontend": "clang_ast_dump_json",
+                    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
                     "features": ["clang-lowering-report"],
+                    "requires_env": ["CLANG_PATH"],
                     "clang_path_status": "configured",
                     "clang_path": "C:/LLVM/bin/clang.exe",
-                    "libclang_path_status": "configured",
-                    "libclang_path": "C:/LLVM/bin/libclang.dll",
+                    "ignored_env_for_ast_dump": {
+                        "LIBCLANG_PATH": {
+                            "status": "configured",
+                            "value": "C:/LLVM/bin/libclang.dll",
+                            "reason": "ignored_for_ast_dump",
+                        },
+                    },
                     "clang_version": "clang version unit-test",
                 },
             )
@@ -4517,6 +4525,13 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertTrue(identity["clang_lowering_identity"]["required"])
             self.assertEqual(identity["clang_lowering_identity"]["lane"], "competition-clang-lane")
             self.assertEqual(identity["clang_lowering_identity"]["requires_env"], ["CLANG_PATH"])
+            self.assertEqual(identity["clang_lowering_identity"]["frontend"], "clang_ast_dump_json")
+            self.assertEqual(
+                identity["clang_lowering_identity"]["ignored_env_for_ast_dump"]["LIBCLANG_PATH"][
+                    "reason"
+                ],
+                "ignored_for_ast_dump",
+            )
             self.assertEqual(identity["clang_lowering_identity"]["clang_path_status"], "configured")
 
     def test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact(self) -> None:
@@ -4552,8 +4567,13 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             self.assertEqual(dry_run["frontend"], "clang")
-            self.assertEqual(dry_run["status"], "ready_without_libclang")
+            self.assertEqual(dry_run["artifact_kind"], "clang-dry-run")
+            self.assertEqual(dry_run["status"], "diagnostic_only")
+            self.assertEqual(dry_run["claim_boundary"]["role"], "diagnostic_only")
+            self.assertEqual(dry_run["active_frontend"]["kind"], "clang_ast_dump_json")
+            self.assertFalse(dry_run["active_frontend"]["uses_libclang"])
             self.assertEqual(dry_run["dry_run"]["source_file"], "src/fdb_utils.c")
+            self.assertEqual(dry_run["dry_run"]["status"], "diagnostic_only")
             self.assertEqual(dry_run["errors"], [])
 
     def test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact(self) -> None:
@@ -4670,11 +4690,19 @@ class AutoMigrateTests(unittest.TestCase):
         current["translator_feature_set"] = ["clang-lowering-report"]
         current["clang_lowering_identity"] = {
             "enabled": True,
+            "frontend": "clang_ast_dump_json",
+            "command": "clang -Xclang -ast-dump=json -fsyntax-only",
             "features": ["clang-lowering-report"],
+            "requires_env": ["CLANG_PATH"],
             "clang_path_status": "configured",
             "clang_path": "C:/LLVM/bin/clang.exe",
-            "libclang_path_status": "configured",
-            "libclang_path": "C:/LLVM/bin/libclang.dll",
+            "ignored_env_for_ast_dump": {
+                "LIBCLANG_PATH": {
+                    "status": "configured",
+                    "value": "C:/LLVM/bin/libclang.dll",
+                    "reason": "ignored_for_ast_dump",
+                },
+            },
             "clang_version": "clang version unit-test",
         }
 

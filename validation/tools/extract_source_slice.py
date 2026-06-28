@@ -174,7 +174,7 @@ def generate_slice_spec(
             "clang_type_extraction": {
                 "available": False,
                 "diagnostics": [
-                    "syntax-indexed real source slice; clang/libclang or compile_commands semantic evidence required for accepted translation"
+                    "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
                 ],
             },
         },

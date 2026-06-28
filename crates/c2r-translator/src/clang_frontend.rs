@@ -87,7 +87,8 @@ impl Error for ClangFrontendError {}
 pub struct ClangEnvironment {
     pub status: String,
     pub source: Option<String>,
-    pub libclang_path: Option<String>,
+    pub observed_libclang_path: Option<String>,
+    pub role: String,
     pub diagnostics: Vec<String>,
 }
 
@@ -104,11 +105,12 @@ impl ClangEnvironment {
             .filter(|value| !value.is_empty())
         {
             return Self {
-                status: "configured".to_string(),
+                status: "ignored_for_ast_dump".to_string(),
                 source: Some("LIBCLANG_PATH".to_string()),
-                libclang_path: Some(libclang_path.to_string()),
+                observed_libclang_path: Some(libclang_path.to_string()),
+                role: "diagnostic_only".to_string(),
                 diagnostics: vec![
-                    "LIBCLANG_PATH is configured but real libclang parsing remains disabled in this dry-run skeleton"
+                    "LIBCLANG_PATH is configured but ignored for clang AST dump lowering; active lowering uses CLANG_PATH"
                         .to_string(),
                 ],
             };
@@ -117,18 +119,36 @@ impl ClangEnvironment {
         Self {
             status: "not_configured".to_string(),
             source: None,
-            libclang_path: None,
+            observed_libclang_path: None,
+            role: "diagnostic_only".to_string(),
             diagnostics: vec![
-                "LIBCLANG_PATH is not set; real libclang parsing remains disabled in this dry-run skeleton"
-                    .to_string(),
+                "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering".to_string(),
             ],
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangActiveFrontend {
+    pub kind: String,
+    pub command: String,
+    pub required_env: Vec<String>,
+    pub uses_libclang: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ClangClaimBoundary {
+    pub role: String,
+    pub affects_manifest_status: bool,
+    pub affects_semantic_pass: bool,
+    pub authoritative_evidence: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClangDryRun {
     pub status: String,
+    pub active_frontend: ClangActiveFrontend,
+    pub claim_boundary: ClangClaimBoundary,
     pub source_root: String,
     pub source_file: String,
     pub function_name: String,
@@ -432,8 +452,10 @@ impl ClangParseSpec {
     }
 
     pub fn dry_run_with_environment(&self, environment: &BTreeMap<String, String>) -> ClangDryRun {
-        let mut diagnostics =
-            vec!["libclang execution is not enabled in this dry-run skeleton".to_string()];
+        let mut diagnostics = vec![
+            "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+                .to_string(),
+        ];
         if self.compile_commands.is_some() {
             diagnostics.push(
                 "compile_commands is present; dry-run arguments omit synthesized include/define flags"
@@ -442,7 +464,9 @@ impl ClangParseSpec {
         }
 
         ClangDryRun {
-            status: "ready_without_libclang".to_string(),
+            status: "diagnostic_only".to_string(),
+            active_frontend: clang_ast_dump_active_frontend(),
+            claim_boundary: diagnostic_claim_boundary(),
             source_root: self.source_root.to_string_lossy().into_owned(),
             source_file: self.source_file.to_string_lossy().into_owned(),
             function_name: self.function_name.clone(),
@@ -474,6 +498,24 @@ impl ClangParseSpec {
             })
             .chain(self.defines.iter().map(|define| format!("-D{define}")))
             .collect()
+    }
+}
+
+pub fn clang_ast_dump_active_frontend() -> ClangActiveFrontend {
+    ClangActiveFrontend {
+        kind: "clang_ast_dump_json".to_string(),
+        command: "clang -Xclang -ast-dump=json -fsyntax-only".to_string(),
+        required_env: vec!["CLANG_PATH".to_string()],
+        uses_libclang: false,
+    }
+}
+
+pub fn diagnostic_claim_boundary() -> ClangClaimBoundary {
+    ClangClaimBoundary {
+        role: "diagnostic_only".to_string(),
+        affects_manifest_status: false,
+        affects_semantic_pass: false,
+        authoritative_evidence: false,
     }
 }
 

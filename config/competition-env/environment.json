@@ -62,7 +62,7 @@
       "requires_env": [
         "CLANG_PATH"
       ],
-      "optional_env": [
+      "ignored_env_for_ast_dump": [
         "LIBCLANG_PATH"
       ],
       "missing_status": "missing_clang_path"

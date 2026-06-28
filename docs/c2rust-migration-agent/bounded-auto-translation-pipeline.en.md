@@ -92,7 +92,7 @@ Corrected:
 
 - Do not keep "small and fine-grained project" as a current project constraint. The project may grow into multiple crates, tools, and targets; what remains bounded is each slice claim and evidence boundary.
 - Do not use the stronger "fully automatic C -> Rust translation" claim. This change is a bounded automatic translation pipeline that generates evidence-bound candidates.
-- Do not use `tree-sitter-only` as the semantic fact source. `tree-sitter-c` can help with fast indexing or slice location; types, macro expansion, ABI, struct layout, and implicit casts must come from the build profile, compile commands, clang/libclang, WSL/Linux/CI, or explicit unsupported evidence.
+- Do not use `tree-sitter-only` as the semantic fact source. `tree-sitter-c` can help with fast indexing or slice location; types, macro expansion, ABI, struct layout, and implicit casts must come from the build profile, compile commands, `CLANG_PATH`-driven clang AST dump JSON, WSL/Linux/CI, or explicit unsupported evidence.
 - Do not hard-depend on DeepSeek or any single model provider. The AI layer must be provider-agnostic, disableable, cacheable, and auditable; the default local pipeline must run without online AI.
 - Do not implement the incorrect loop-label goto strategy in the MVP. The MVP supports structured control flow only; `goto` and unstructured CFG are blocked by default. Corrode-style CFG relooper is deferred.
 - Do not expose raw pointer drafts as the default Rust public API. Raw pointers belong behind low-level draft/internal/FFI boundaries unless a reviewed exception is recorded.

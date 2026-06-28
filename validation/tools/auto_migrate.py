@@ -5145,11 +5145,19 @@ def clang_lowering_identity(
         clang_version = "not_configured"
     identity = {
         "enabled": True,
+        "frontend": "clang_ast_dump_json",
+        "command": "clang -Xclang -ast-dump=json -fsyntax-only",
         "features": ["clang-lowering-report"],
+        "requires_env": ["CLANG_PATH"],
         "clang_path_status": clang_path_status,
         "clang_path": clang_path,
-        "libclang_path_status": libclang_path_status,
-        "libclang_path": libclang_path,
+        "ignored_env_for_ast_dump": {
+            "LIBCLANG_PATH": {
+                "status": libclang_path_status,
+                "value": libclang_path,
+                "reason": "ignored_for_ast_dump",
+            }
+        },
         "clang_version": clang_version,
     }
     if competition_clang_lane:
@@ -5158,7 +5166,7 @@ def clang_lowering_identity(
                 "lane": "competition-clang-lane",
                 "required": True,
                 "requires_env": ["CLANG_PATH"],
-                "optional_env": ["LIBCLANG_PATH"],
+                "ignored_env_for_ast_dump": identity["ignored_env_for_ast_dump"],
             }
         )
     return identity
