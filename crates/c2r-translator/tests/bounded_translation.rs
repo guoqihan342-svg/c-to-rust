@@ -106,6 +106,48 @@ fn assert_rust_snippet_compiles(name: &str, rust_code: &str) {
 }
 
 #[cfg(feature = "typed-ir")]
+fn assert_rust_snippet_runs(name: &str, rust_code: &str, main_body: &str) {
+    let out_dir = unique_out_dir(name);
+    fs::create_dir_all(&out_dir).unwrap();
+    let source = out_dir.join("main.rs");
+    let output = out_dir.join(if cfg!(windows) { "main.exe" } else { "main" });
+    fs::write(
+        &source,
+        format!("{rust_code}\nfn main() {{\n{main_body}\n}}\n"),
+    )
+    .unwrap();
+
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let compile = Command::new(&rustc)
+        .arg("-C")
+        .arg("overflow-checks=on")
+        .arg(&source)
+        .arg("-o")
+        .arg(&output)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run rustc: {error}"));
+
+    assert!(
+        compile.status.success(),
+        "rustc failed for {name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&compile.stdout),
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let run = Command::new(&output)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run emitted snippet {name}: {error}"));
+    assert!(
+        run.status.success(),
+        "emitted snippet failed for {name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    fs::remove_dir_all(out_dir).unwrap();
+}
+
+#[cfg(feature = "typed-ir")]
 fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
     IrType {
         spelled: spelled.to_string(),
@@ -4008,6 +4050,105 @@ fn typed_ir_emits_scalar_subtraction() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_runs_unsigned_add_with_wrapping_semantics() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "add_one".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Add,
+                ir_var("value", u32_ty.clone()),
+                ir_lit(1, "1U", u32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit unsigned wrapping add");
+
+    assert_rust_snippet_runs(
+        "typed-ir-unsigned-wrapping-add",
+        &emitted.rust,
+        "assert_eq!(add_one(u32::MAX), 0u32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_unsigned_sub_with_wrapping_semantics() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "sub_one_u32".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Sub,
+                ir_var("value", u32_ty.clone()),
+                ir_lit(1, "1U", u32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit unsigned wrapping sub");
+
+    assert_rust_snippet_runs(
+        "typed-ir-unsigned-wrapping-sub",
+        &emitted.rust,
+        "assert_eq!(sub_one_u32(0u32), u32::MAX);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_unsigned_mul_with_wrapping_semantics() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "mul_two".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Mul,
+                ir_var("value", u32_ty.clone()),
+                ir_lit(2, "2U", u32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit unsigned wrapping mul");
+
+    assert_rust_snippet_runs(
+        "typed-ir-unsigned-wrapping-mul",
+        &emitted.rust,
+        "assert_eq!(mul_two(u32::MAX), 0xFFFF_FFFEu32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_scalar_mul_div_mod() {
     let i32_ty = ir_i32();
     let mul = ir_binary(
@@ -5172,7 +5313,7 @@ fn typed_ir_emits_postfix_decrement_while_condition_for_size_counter() {
     assert!(rust.contains("size = size.wrapping_sub(1usize);"));
     assert!(rust.contains("if size_before_dec0 == 0usize {"));
     assert!(rust.contains("break;"));
-    assert!(rust.contains("acc = (acc + size);"));
+    assert!(rust.contains("acc = acc.wrapping_add(size);"));
     assert!(rust.contains("return acc;"));
     assert_rust_snippet_compiles("typed-ir-postfix-decrement-while", &rust);
 }
@@ -5514,7 +5655,7 @@ fn typed_ir_emits_binary_arithmetic_with_integral_operand_cast() {
     let rust = emit_rust_from_ir(&ir).expect("emit binary arithmetic integral cast");
 
     assert!(rust.contains("pub fn add_byte(acc: u32, byte: u8) -> u32"));
-    assert!(rust.contains("return (acc + (byte as u32));"));
+    assert!(rust.contains("return acc.wrapping_add((byte as u32));"));
     assert_rust_snippet_compiles("typed-ir-binary-integral-operand-cast", &rust);
 }
 
@@ -6362,7 +6503,7 @@ fn typed_ir_emits_comparison_condition_with_integral_cast_operand() {
 
     assert!(rust.contains("pub fn cmp_condition_cast(mut value: u32) -> u32"));
     assert!(rust.contains("if (value > (0i32 as u32)) {"));
-    assert!(rust.contains("value = (value + 1u32);"));
+    assert!(rust.contains("value = value.wrapping_add(1u32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-comparison-condition-cast", &rust);
 }
@@ -19214,7 +19355,7 @@ fn clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled() {
         emit_rust_from_ir(function).expect("emit unsigned comparison if from real clang AST");
     assert!(rust.contains("pub fn adjust_unsigned_positive(mut value: u32) -> u32"));
     assert!(rust.contains("if (value > (0i32 as u32)) {"));
-    assert!(rust.contains("value = (value + 1u32);"));
+    assert!(rust.contains("value = value.wrapping_add(1u32);"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-unsigned-comparison", &rust);
 }

@@ -9905,3 +9905,49 @@ English mirror summary:
 1. 先提交当前 if-return definite-assignment 切片。
 2. 下一提交优先做 unsigned wrapping 红测和修复：新增运行 emitted Rust snippet 的测试 helper，覆盖 `u32::MAX + 1`, `0u32 - 1`, unsigned multiply。修复应只对 unsigned `Add` / `Sub` / `Mul` 使用 wrapping；signed overflow、division/modulo zero、invalid shift count 继续 fail closed 或进入后续 contract。
 3. 再做 competition clang lane：明确 `optional_tools.clang` 或 required clang 配置，补 `CLANG_PATH` 检查和 opt-in wrapper。
+
+## 146. 2026-06-28 P0 unsigned arithmetic wrapping semantics
+
+本轮按外部评价和多智能体只读审计修复 P0 语义 bug：typed IR emitter 过去对 C unsigned `+` / `-` / `*` 发裸 Rust 运算，导致 debug/overflow-checks 下 `uint32_t` 模运算候选会 panic，而 release 下才碰巧回绕。这会直接影响 adler32、crc32、xxhash、checksum/hash 类真实题型，不能依赖编译 profile。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_binary_result_expr()` / `unsigned_wrapping_method()` / `is_unsigned_integer_type()`。
+  - 普通 `IrExpr::Binary`、`emit_expr_with_prelude()` 中的 binary 表达式、以及 mutable record pointer field compound assignment 的专用发射路径，现在共享同一策略。
+  - 仅当 result type 是 unsigned integer 且 op 是 `Add` / `Sub` / `Mul` 时发射 `.wrapping_add(...)` / `.wrapping_sub(...)` / `.wrapping_mul(...)`。
+  - signed `+` / `-` / `*`、shift、division、modulo、bitwise 继续保留原有发射边界；signed overflow、division/modulo zero、invalid shift count 是后续 contract/fail-closed 问题。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `assert_rust_snippet_runs()`，用 `rustc -C overflow-checks=on` 编译并运行 emitted Rust snippet。
+  - 新增运行型 RED/GREEN 用例：`u32::MAX + 1 -> 0`、`0u32 - 1 -> u32::MAX`、`u32::MAX * 2 -> 0xFFFF_FFFE`。
+  - 更新无符号 `usize`/`u32` 旧字符串断言为 `wrapping_add` 形状；legacy string translator 的字符串断言不动。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `COVERAGE.md` / `.en.md`
+  - `core-translation-architecture.md` / `.en.md`
+  - `future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir wrapping_semantics -- --nocapture
+```
+实现前 3 条测试分别因 `attempt to add/subtract/multiply with overflow` 失败。
+
+已跑定向 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir wrapping_semantics -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --test bounded_translation typed_ir_ -- --nocapture
+```
+结果：3 条 wrapping runtime tests 通过；216 条 `typed_ir_` 集成测试通过。
+
+边界：
+- 可以说：typed IR generic emitter 的 unsigned integer `Add` / `Sub` / `Mul` candidate 不再依赖 debug/release overflow 行为。
+- 可以说：checksum/hash 类候选生成少了一个核心 profile-dependent 正确性风险。
+- 不应说：已完成 adler/crc/xxhash 全语义接受、完整 C arithmetic、signed overflow parity、非法 shift count 处理、division/modulo zero contract、完整 usual arithmetic conversions、pointer arithmetic 或 semantic acceptance。
+
+English mirror summary:
+
+- Fixed the typed IR emitter's profile-dependent C unsigned arithmetic lowering for `+`, `-`, and `*`.
+- Unsigned-result `IrExpr::Binary` now emits explicit Rust `wrapping_add`, `wrapping_sub`, and `wrapping_mul` across the normal expression path, the prelude expression path, and the mutable record pointer field compound-update helper.
+- Added runtime emitted-Rust tests compiled with `rustc -C overflow-checks=on` for `u32::MAX + 1`, `0u32 - 1`, and unsigned multiply.
+- Signed overflow, division/modulo zero, invalid shift counts, full usual arithmetic conversions, pointer arithmetic, and semantic acceptance remain separate fail-closed or validation-gate work.

@@ -1623,12 +1623,18 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     if let Some(reason) = mutable_record_pointer_field_compound_rhs_rejection_reason(rhs) {
         return Err(reason);
     }
-    let op = emit_binary_op(op)?;
-    validate_binary_operand_types(op, lhs, rhs, ty)?;
+    let op_token = emit_binary_op(op)?;
+    validate_binary_operand_types(op_token, lhs, rhs, ty)?;
     let rhs = emit_expr(rhs, symbols, context).map_err(|detail| {
         format!("mutable record pointer field compound assignment RHS {detail}")
     })?;
-    Ok(Some(format!("({emitted_target} {op} {rhs})")))
+    Ok(Some(emit_binary_result_expr(
+        op,
+        op_token,
+        emitted_target,
+        &rhs,
+        ty,
+    )))
 }
 
 fn same_direct_mutable_record_pointer_member(
@@ -2009,13 +2015,13 @@ fn emit_expr(
             if let Some(expr) = emit_comparison_value_expr(op, lhs, rhs, ty, symbols, context)? {
                 return Ok(expr);
             }
-            let op = emit_binary_op(op)?;
-            validate_binary_operand_types(op, lhs, rhs, ty)?;
+            let op_token = emit_binary_op(op)?;
+            validate_binary_operand_types(op_token, lhs, rhs, ty)?;
             let lhs = emit_expr(lhs, symbols, context)
                 .map_err(|detail| format!("binary lhs {detail}"))?;
             let rhs = emit_expr(rhs, symbols, context)
                 .map_err(|detail| format!("binary rhs {detail}"))?;
-            Ok(format!("({lhs} {op} {rhs})"))
+            Ok(emit_binary_result_expr(op, op_token, &lhs, &rhs, ty))
         }
         IrExpr::Unary {
             op, operand, ty, ..
@@ -2572,8 +2578,8 @@ fn emit_expr_with_prelude(
                     expr,
                 });
             }
-            let op = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
-            validate_binary_operand_types(op, lhs, rhs, ty)
+            let op_token = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
+            validate_binary_operand_types(op_token, lhs, rhs, ty)
                 .map_err(|detail| format!("{path} {detail}"))?;
             let lhs = emit_expr_with_prelude(
                 lhs,
@@ -2591,7 +2597,7 @@ fn emit_expr_with_prelude(
             )?;
             Ok(EmittedExpr {
                 prelude: format!("{}{}", lhs.prelude, rhs.prelude),
-                expr: format!("({} {op} {})", lhs.expr, rhs.expr),
+                expr: emit_binary_result_expr(op, op_token, &lhs.expr, &rhs.expr, ty),
             })
         }
         IrExpr::Cast { target, expr, .. } => {
@@ -3019,6 +3025,32 @@ fn emit_binary_op(op: &IrBinOp) -> Result<&'static str, String> {
         IrBinOp::Shl => Ok("<<"),
         IrBinOp::Shr => Ok(">>"),
         _ => Err(format!("binary op {op:?} is unsupported")),
+    }
+}
+
+fn emit_binary_result_expr(
+    op: &IrBinOp,
+    op_token: &str,
+    lhs: &str,
+    rhs: &str,
+    result_ty: &IrType,
+) -> String {
+    if let Some(method) = unsigned_wrapping_method(op, result_ty) {
+        format!("{lhs}.{method}({rhs})")
+    } else {
+        format!("({lhs} {op_token} {rhs})")
+    }
+}
+
+fn unsigned_wrapping_method(op: &IrBinOp, result_ty: &IrType) -> Option<&'static str> {
+    if !is_unsigned_integer_type(result_ty) {
+        return None;
+    }
+    match op {
+        IrBinOp::Add => Some("wrapping_add"),
+        IrBinOp::Sub => Some("wrapping_sub"),
+        IrBinOp::Mul => Some("wrapping_mul"),
+        _ => None,
     }
 }
 
@@ -5239,6 +5271,10 @@ fn null_pointer_comparison_var<'a>(
 
 fn is_integer_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Integer { .. })
+}
+
+fn is_unsigned_integer_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Integer { signed: false, .. })
 }
 
 fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {

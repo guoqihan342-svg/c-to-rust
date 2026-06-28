@@ -51,7 +51,7 @@ This document honestly lists C language constructs that are "currently supported
 |-----------|--------|-------|
 | Integer literal | Supported | Including unsigned suffix |
 | Variable reference | Supported | Locals and params |
-| `+` `-` `*` `/` `%` | Supported | Scalar integer, same-type operands required |
+| `+` `-` `*` `/` `%` | Narrow | Scalar integer, same-type operands required; unsigned-result `+` / `-` / `*` emit explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul` |
 | `&` `\|` `^` `<<` `>>` | Supported | Scalar integer, same-type operands required |
 | `~` (bitwise not) | Supported | |
 | `-value` (unary minus) | Narrow | Signed integer only |
@@ -157,9 +157,10 @@ This document honestly lists C language constructs that are "currently supported
 
 1. **All typed IR successes are candidate generation, not semantic pass.** `semantic_pass=false` remains true until independent validation gates accept the exact draft.
 2. **Legacy crc32 specialty templates and string recognizer crc32 paths are deleted.** Must not be restored.
-3. **Division/modulo**: Only when the divisor is non-zero by literal or fixture contract constraint can it enter semantic gate discussion.
-4. **Bitwise/shift**: Does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
-5. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
-6. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
-7. **Record/struct**: The dot-field path still emits a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof. The whole-record return inventory path rejects duplicate tags, bitfields, volatile/packed fields, self-pointer fields, and non-scalar fields; unions and nested/anonymous records still fail closed.
-8. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.
+3. **Unsigned Add/Sub/Mul**: C unsigned `+` / `-` / `*` emit explicit wrapping Rust operations to avoid debug/release profile divergence; this remains candidate generation and does not replace the C oracle.
+4. **Division/modulo**: Only when the divisor is non-zero by literal or fixture contract constraint can it enter semantic gate discussion.
+5. **Bitwise/shift**: Does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
+6. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
+7. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
+8. **Record/struct**: The dot-field path still emits a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof. The whole-record return inventory path rejects duplicate tags, bitfields, volatile/packed fields, self-pointer fields, and non-scalar fields; unions and nested/anonymous records still fail closed.
+9. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.
