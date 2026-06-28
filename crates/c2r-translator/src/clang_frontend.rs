@@ -340,6 +340,10 @@ pub enum ClangExprSkeleton {
         spelling: String,
         ty: ClangTypeSkeleton,
     },
+    SizeOfType {
+        arg_type: ClangTypeSkeleton,
+        ty: ClangTypeSkeleton,
+    },
     NullPtr {
         ty: ClangTypeSkeleton,
     },
@@ -1495,7 +1499,9 @@ fn record_field_compound_assignment_value_rejection_reason(
     value: &ClangExprSkeleton,
 ) -> Option<String> {
     match value {
-        ClangExprSkeleton::DeclRef { ty, .. } | ClangExprSkeleton::IntegerLiteral { ty, .. } => {
+        ClangExprSkeleton::DeclRef { ty, .. }
+        | ClangExprSkeleton::IntegerLiteral { ty, .. }
+        | ClangExprSkeleton::SizeOfType { ty, .. } => {
             if matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
                 None
             } else {
@@ -1804,6 +1810,7 @@ fn expr_skeleton_from_ast_with_options(
                 ty,
             })
         }
+        Some("UnaryExprOrTypeTraitExpr") => unary_expr_or_type_trait_skeleton_from_ast(expr),
         Some("BinaryOperator") => {
             let op = match string_field(expr, "opcode").as_deref() {
                 Some("+") => ClangBinaryOperator::Add,
@@ -2019,6 +2026,51 @@ fn expr_skeleton_from_ast_with_options(
             message: "clang expression node is missing kind".to_string(),
         }),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn unary_expr_or_type_trait_skeleton_from_ast(
+    expr: &Value,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let name = string_field(expr, "name").ok_or_else(|| ClangFrontendError {
+        kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
+        message: "UnaryExprOrTypeTraitExpr is missing name".to_string(),
+    })?;
+    if name != "sizeof" {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "UnaryExprOrTypeTraitExpr".to_string(),
+            reason: format!("{name} requires explicit alignment/lowering support"),
+        });
+    }
+    if expr.get("inner").is_some() {
+        return Err(ClangFrontendError {
+            kind: "unsupported_sizeof_operand".to_string(),
+            message: "sizeof expression operand requires explicit value/type semantic lowering before typed IR lowering".to_string(),
+        });
+    }
+    let arg_qual_type = expr
+        .get("argType")
+        .and_then(|value| string_field(value, "qualType"))
+        .ok_or_else(|| ClangFrontendError {
+            kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
+            message: "sizeof type operand is missing argType.qualType".to_string(),
+        })?;
+    let arg_type = type_from_qual_type(&arg_qual_type)?;
+    if !matches!(
+        arg_type.kind,
+        ClangTypeKind::Integer { .. } | ClangTypeKind::Unsupported { .. }
+    ) {
+        return Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({arg_qual_type}) requires explicit C layout/ABI provenance before typed IR lowering"
+            ),
+        });
+    }
+    Ok(ClangExprSkeleton::SizeOfType {
+        arg_type,
+        ty: expr_type(expr)?,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2301,7 +2353,9 @@ fn bounded_call_arg_rejection_reason(
     allow_immediate_nested_call: bool,
 ) -> Option<String> {
     match expr {
-        ClangExprSkeleton::DeclRef { .. } | ClangExprSkeleton::IntegerLiteral { .. } => None,
+        ClangExprSkeleton::DeclRef { .. }
+        | ClangExprSkeleton::IntegerLiteral { .. }
+        | ClangExprSkeleton::SizeOfType { .. } => None,
         ClangExprSkeleton::NullPtr { .. } => {
             Some("call arguments cannot use null pointer value semantics".to_string())
         }
@@ -2515,14 +2569,9 @@ fn type_from_qual_type_with_target_abi(
             canonical: "void".to_string(),
             kind: ClangTypeKind::Void,
         }),
-        "int" => Ok(ClangTypeSkeleton {
-            spelled: "int".to_string(),
-            canonical: "int".to_string(),
-            kind: ClangTypeKind::Integer {
-                signed: true,
-                width: 32,
-            },
-        }),
+        "int" => Ok(profile_or_default_int_type(
+            "int", "int", true, 32, target_abi,
+        )),
         "signed char" => Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: "signed char".to_string(),
@@ -2571,7 +2620,14 @@ fn type_from_qual_type_with_target_abi(
                 width: 16,
             },
         }),
-        "unsigned int" | "uint32_t" => Ok(ClangTypeSkeleton {
+        "unsigned int" => Ok(profile_or_default_int_type(
+            "unsigned int",
+            "unsigned int",
+            false,
+            32,
+            target_abi,
+        )),
+        "uint32_t" => Ok(ClangTypeSkeleton {
             spelled: qual_type.trim().to_string(),
             canonical: "uint32_t".to_string(),
             kind: ClangTypeKind::Integer {
@@ -2606,6 +2662,39 @@ fn type_from_qual_type_with_target_abi(
                 reason: format!("{other} is outside the current type skeleton"),
             },
         }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn profile_or_default_int_type(
+    spelling: &str,
+    canonical: &str,
+    signed: bool,
+    default_width: u16,
+    target_abi: Option<&TargetAbiProfile>,
+) -> ClangTypeSkeleton {
+    let width = match target_abi {
+        Some(abi) => match nonzero_width(abi.int_width) {
+            Some(width) => width,
+            None => {
+                return ClangTypeSkeleton {
+                    spelled: spelling.to_string(),
+                    canonical: canonical.to_string(),
+                    kind: ClangTypeKind::Unsupported {
+                        reason: format!(
+                            "{spelling} requires an explicit target ABI int_width before typed IR lowering"
+                        ),
+                    },
+                };
+            }
+        },
+        None => default_width,
+    };
+
+    ClangTypeSkeleton {
+        spelled: spelling.to_string(),
+        canonical: canonical.to_string(),
+        kind: ClangTypeKind::Integer { signed, width },
     }
 }
 
@@ -2766,6 +2855,7 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
     match expr {
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
+        | ClangExprSkeleton::SizeOfType { ty, .. }
         | ClangExprSkeleton::NullPtr { ty }
         | ClangExprSkeleton::Binary { ty, .. }
         | ClangExprSkeleton::Unary { ty, .. }
@@ -2810,6 +2900,9 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         }
         ClangExprSkeleton::Cast { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
+        }
+        ClangExprSkeleton::SizeOfType { arg_type, .. } => {
+            bind_target_abi_to_type(arg_type, target_abi);
         }
         ClangExprSkeleton::Index { base, index, .. } => {
             bind_target_abi_to_expr(base, target_abi);
@@ -3106,6 +3199,15 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             ty: lower_type(ty)?,
             source_span: None,
         }),
+        ClangExprSkeleton::SizeOfType { arg_type, ty } => {
+            let value = sizeof_type_bytes(arg_type)?;
+            Ok(IrExpr::LitInt {
+                value,
+                spelling: value.to_string(),
+                ty: lower_type(ty)?,
+                source_span: None,
+            })
+        }
         ClangExprSkeleton::NullPtr { ty } => Ok(IrExpr::NullPtr {
             ty: lower_type(ty)?,
             source_span: None,
@@ -3200,6 +3302,36 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::Unsupported { node, reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_expr".to_string(),
             message: format!("{node}: {reason}"),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> {
+    match &ty.kind {
+        ClangTypeKind::Integer { width, .. } if *width > 0 && *width % 8 == 0 => {
+            Ok(u64::from(*width / 8))
+        }
+        ClangTypeKind::Integer { width, .. } => Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({}) has non-byte-addressable width {width}; typed IR lowering requires explicit target ABI provenance",
+                ty.spelled
+            ),
+        }),
+        ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({}) requires target ABI width provenance before typed IR lowering: {reason}",
+                ty.spelled
+            ),
+        }),
+        _ => Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                ty.spelled
+            ),
         }),
     }
 }
@@ -6052,6 +6184,33 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_with_target_abi_binds_int_width() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "small-int-test-abi".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 16,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+
+        for (spelling, expected_signed) in [("int", true), ("unsigned int", false)] {
+            let ty =
+                type_from_qual_type_with_target_abi(spelling, Some(&abi)).expect("type skeleton");
+
+            assert_eq!(ty.spelled, spelling);
+            assert!(matches!(
+                ty.kind,
+                ClangTypeKind::Integer { signed, width }
+                    if signed == expected_signed && width == 16
+            ));
+        }
+    }
+
+    #[test]
     fn type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported() {
         let abi = TargetAbiProfile {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
@@ -6092,6 +6251,248 @@ mod tests {
             ClangTypeKind::Unsupported { ref reason }
                 if reason.contains("requires target ABI width provenance")
         ));
+    }
+
+    #[test]
+    fn sizeof_integer_type_lowers_to_profile_bound_size_t_literal() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof integer skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof integer should lower");
+
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected sizeof to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 4);
+        assert_eq!(ty.spelled, "size_t");
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+    }
+
+    #[test]
+    fn sizeof_int_lowers_from_target_int_width_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "small-int-test-abi".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 16,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof(int) skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof(int) should lower with ABI profile");
+
+        let IrExpr::LitInt { value, .. } = ir else {
+            panic!("expected sizeof(int) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 2);
+    }
+
+    #[test]
+    fn sizeof_size_t_lowers_from_target_pointer_width_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "size_t"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof size_t skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof size_t should lower");
+
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected sizeof(size_t) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 8);
+        assert_eq!(ty.spelled, "size_t");
+    }
+
+    #[test]
+    fn sizeof_long_lowers_from_target_long_width_profile() {
+        for (abi_name, long_width, expected_size) in [
+            ("x86_64-unknown-linux-gnu", 64, 8),
+            ("x86_64-pc-windows-msvc", 32, 4),
+        ] {
+            let abi = TargetAbiProfile {
+                triple_or_abi: abi_name.to_string(),
+                endianness: Some("little".to_string()),
+                int_width: 32,
+                char_width: 8,
+                plain_char_signed: Some(true),
+                short_width: 16,
+                long_width,
+                long_long_width: 64,
+                pointer_width: 64,
+            };
+            let expr = serde_json::json!({
+                "kind": "UnaryExprOrTypeTraitExpr",
+                "type": {"qualType": "size_t"},
+                "valueCategory": "prvalue",
+                "name": "sizeof",
+                "argType": {"qualType": "long"}
+            });
+
+            let mut skeleton =
+                expr_skeleton_from_ast(&expr).expect("sizeof(long) skeleton should parse");
+            bind_target_abi_to_expr(&mut skeleton, &abi);
+            let ir = lower_expr(&skeleton).expect("sizeof(long) should lower with ABI profile");
+
+            let IrExpr::LitInt { value, ty, .. } = ir else {
+                panic!("expected sizeof(long) to lower to LitInt, got {ir:?}");
+            };
+            assert_eq!(value, expected_size, "{abi_name}");
+            assert_eq!(ty.spelled, "size_t");
+        }
+    }
+
+    #[test]
+    fn sizeof_target_dependent_integer_stays_fail_closed_without_profile() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "long"}
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("sizeof(long) skeleton should parse");
+        let error = lower_expr(&skeleton).expect_err("sizeof(long) without ABI must fail closed");
+
+        assert_eq!(error.kind, "unsupported_sizeof_type");
+        assert!(
+            error
+                .message
+                .contains("requires target ABI width provenance"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_expression_operand_stays_fail_closed_without_arg_type() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "value"
+                    },
+                    "type": {"qualType": "int"}
+                }
+            ]
+        });
+
+        let error =
+            expr_skeleton_from_ast(&expr).expect_err("sizeof expression operand must fail closed");
+
+        assert_eq!(error.kind, "unsupported_sizeof_operand");
+        assert!(
+            error.message.contains("expression operand"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_expression_operand_stays_fail_closed_even_with_arg_type() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "int"},
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "value"
+                    },
+                    "type": {"qualType": "int"}
+                }
+            ]
+        });
+
+        let error =
+            expr_skeleton_from_ast(&expr).expect_err("sizeof expression operand must fail closed");
+
+        assert_eq!(error.kind, "unsupported_sizeof_operand");
+        assert!(
+            error.message.contains("expression operand"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn sizeof_record_type_stays_fail_closed_without_layout_provenance() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "struct point"}
+        });
+
+        let error = expr_skeleton_from_ast(&expr).expect_err("record sizeof must fail closed");
+
+        assert!(
+            error.message.contains("sizeof") && error.message.contains("layout"),
+            "unexpected error: {error:?}"
+        );
     }
 
     #[test]

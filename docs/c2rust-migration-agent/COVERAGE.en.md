@@ -10,8 +10,8 @@ This document honestly lists C language constructs that are "currently supported
 
 | C Type | Status | Notes |
 |--------|--------|-------|
-| `int` | Supported | Maps to `i32`, signed 32-bit |
-| `unsigned int` / `uint32_t` | Supported | Maps to `u32`, unsigned 32-bit |
+| `int` | Supported | Without a target profile, maps through the existing C baseline as `i32`; profile-aware clang lowering binds `build_profile.target.int_width` so ABI semantics such as `sizeof(int)` are not guessed as fixed 32-bit |
+| `unsigned int` / `uint32_t` | Supported | `uint32_t` always maps to `u32`; without a target profile, `unsigned int` maps through the existing C baseline as `u32`, while profile-aware clang lowering binds `build_profile.target.int_width` |
 | `uint8_t` / `unsigned char` | Supported | Maps to `u8` |
 | `int8_t` / `signed char` | Supported | Maps to `i8` |
 | `int16_t` | Supported | Maps to `i16` |
@@ -75,7 +75,7 @@ This document honestly lists C language constructs that are "currently supported
 | `p->field++` / `--p->field` (statement) | Narrow | Direct single-pointer mutable record pointer scalar field target only; lowered as value-discarded assignment desugar, not raw inc/dec value semantics |
 | `*p++` (byte cursor post-increment) | Narrow | Only in proven byte cursor context |
 | `&x` (address-of) | Unsupported | |
-| `sizeof` | Unsupported | |
+| `sizeof` | Narrow | Supports only clang `UnaryExprOrTypeTraitExpr` type operands whose operand type is an ABI-bound integer type, such as `sizeof(int)`, `sizeof(long)`, and `sizeof(size_t)`; lowers to a `size_t`/`usize` integer literal; expression operands like `sizeof(x)`, record/struct layout, array/object operands, packing, and alignment remain fail-closed |
 | `_Alignof` | Unsupported | |
 | `(type){init}` compound literal | Unsupported | |
 | Function pointer | Unsupported | |

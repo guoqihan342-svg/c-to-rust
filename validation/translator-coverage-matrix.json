@@ -378,10 +378,12 @@
       "ir_constructs": [
         "target ABI integer width provenance",
         "fixed-width integer spelling acceptance",
+        "profile-bound int/unsigned int width binding",
         "plain char/short/long/long long/size_t width binding",
         "plain char signedness provenance",
         "explicit-width-field refusal",
         "profile-bound target integer width lowering",
+        "profile-bound sizeof integer type lowering",
         "fail_closed_without_abi_profile",
         "translator input target ABI profile preservation"
       ],
@@ -391,6 +393,10 @@
           "evidence": [
             {
               "name": "target ABI width no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
+            },
+            {
+              "name": "sizeof(int) no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
             },
             {
@@ -404,6 +410,10 @@
           "evidence": [
             {
               "name": "type_from_qual_type target-dependent integer width tests",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "sizeof type operand lowering tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
@@ -449,6 +459,26 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "type_from_qual_type_with_target_abi_binds_int_width",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "sizeof_integer_type_lowers_to_profile_bound_size_t_literal",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "sizeof_int_lowers_from_target_int_width_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "sizeof_size_t_lowers_from_target_pointer_width_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "sizeof_long_lowers_from_target_long_width_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "clang_parse_spec_preserves_target_abi_width_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -458,6 +488,10 @@
         },
         {
           "name": "clang_ast_fixture_binds_extended_target_abi_integer_widths",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_sizeof_int_with_target_abi_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -480,6 +514,31 @@
           "name": "type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "char/short/long long still fail closed when their explicit signedness or width fields are absent"
+        },
+        {
+          "name": "sizeof_record_type_stays_fail_closed_without_layout_provenance",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "sizeof over record/layout types requires explicit C layout and ABI provenance"
+        },
+        {
+          "name": "sizeof_target_dependent_integer_stays_fail_closed_without_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "sizeof over target-dependent integer spellings requires target ABI width provenance"
+        },
+        {
+          "name": "sizeof_expression_operand_stays_fail_closed_without_arg_type",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "sizeof expression operands are not yet modeled and must not be treated as type operands"
+        },
+        {
+          "name": "sizeof_expression_operand_stays_fail_closed_even_with_arg_type",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "sizeof expression operands with clang argType metadata still require explicit value/type semantic lowering"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_sizeof_int_without_target_abi_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "sizeof result type size_t must fail closed unless build_profile.target supplies ABI width evidence"
         },
         {
           "name": "clang_ast_fixture_rejects_size_t_without_target_abi_profile",

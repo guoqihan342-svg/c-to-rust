@@ -12,8 +12,8 @@
 
 | C 类型 | 状态 | 说明 |
 |--------|------|------|
-| `int` | 已支持 | 映射为 `i32`，signed 32-bit |
-| `unsigned int` / `uint32_t` | 已支持 | 映射为 `u32`，unsigned 32-bit |
+| `int` | 已支持 | 无 target profile 时按既有 C baseline 映射为 `i32`；profile-aware clang lowering 会绑定 `build_profile.target.int_width`，避免 `sizeof(int)` 等 ABI 语义固定猜成 32-bit |
+| `unsigned int` / `uint32_t` | 已支持 | `uint32_t` 固定映射为 `u32`；`unsigned int` 无 target profile 时按既有 C baseline 映射为 `u32`，profile-aware clang lowering 会绑定 `build_profile.target.int_width` |
 | `uint8_t` / `unsigned char` | 已支持 | 映射为 `u8` |
 | `int8_t` / `signed char` | 已支持 | 映射为 `i8` |
 | `int16_t` | 已支持 | 映射为 `i16` |
@@ -77,7 +77,7 @@
 | `p->field++` / `--p->field` (statement) | 窄支持 | 仅 direct single-pointer mutable record pointer scalar field target；按 value-discarded assignment desugar lowering，不支持 raw inc/dec value 语义 |
 | `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
 | `&x` (address-of) | 不支持 | |
-| `sizeof` | 不支持 | |
+| `sizeof` | 窄支持 | 仅支持 clang `UnaryExprOrTypeTraitExpr` 的 type operand 且 operand 是已绑定 ABI 宽度的整数类型，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`；降为 `size_t`/`usize` 整数字面量；expression operand `sizeof(x)`、record/struct layout、array/object operand、packing/alignment 仍 fail-closed |
 | `_Alignof` | 不支持 | |
 | `(type){init}` compound literal | 不支持 | |
 | 函数指针 | 不支持 | |
