@@ -164,6 +164,8 @@ def evidence_location(evidence_root: Path, l2_root: Path, slice_id: str) -> tupl
         return evidence_root / "demo", "l3-sum-i32-buffer", "L3"
     if slice_id == "demo-call-expression":
         return evidence_root / "demo", "l3-call-expression", "L3"
+    if slice_id == "demo-signed-rshift-contract":
+        return evidence_root / "demo", "l3-signed-rshift-contract", "L3"
     if slice_id == "demo-external-direct-callee":
         return evidence_root / "demo", "l3-external-direct-callee", "L3"
     if slice_id == "demo-sum-i32-ptr-arith":
@@ -184,6 +186,8 @@ def expected_negative_report_path(slice_id: str) -> str:
         return "validation/evidence/demo/l3-sum-i32-buffer-negative-diff.json"
     if slice_id == "demo-call-expression":
         return "validation/evidence/demo/l3-call-expression-negative-diff.json"
+    if slice_id == "demo-signed-rshift-contract":
+        return "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json"
     if slice_id == "demo-external-direct-callee":
         return "validation/evidence/demo/l3-external-direct-callee-negative-diff.json"
     if slice_id == "demo-sum-i32-ptr-arith":

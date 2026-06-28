@@ -4681,6 +4681,69 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(translator_input["source_file"], "src/target_fn.c")
 
+    def test_translator_input_preserves_scalar_arithmetic_contract(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            spec = {
+                "target_id": "demo",
+                "slice_id": "signed-rshift-contract",
+                "source": {"source_root": "C:/src/project"},
+                "source_commit": "1234567",
+                "function_name": "signed_rshift_contract",
+                "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+                "fixture_hash": "fixture-sha",
+                "c_boundary": {
+                    "scalar_arithmetic_contract": {
+                        "wrapping_profile": "not_declared",
+                        "signed_overflow": "not_declared",
+                        "division_by_zero": "not_declared",
+                        "signed_division_overflow": "not_declared",
+                        "shift_count": "runtime_precondition_in_range",
+                        "signed_right_shift": "explicit_implementation_defined_contract",
+                    },
+                    "files": [
+                        {
+                            "path": "src/signed_rshift_contract.c",
+                            "role": "source",
+                            "sha256": "declared-source-sha",
+                        }
+                    ],
+                    "signatures": [
+                        {
+                            "function": "signed_rshift_contract",
+                            "source_span": {
+                                "file": "src/signed_rshift_contract.c",
+                                "line_start": 1,
+                                "line_end": 1,
+                                "byte_start": 0,
+                                "byte_end": 72,
+                                "sha256": "span-sha",
+                            },
+                        }
+                    ],
+                },
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                translator_input["c_boundary"]["scalar_arithmetic_contract"]["signed_right_shift"],
+                "explicit_implementation_defined_contract",
+            )
+            self.assertEqual(
+                translator_input["c_boundary"]["scalar_arithmetic_contract"]["shift_count"],
+                "runtime_precondition_in_range",
+            )
+
     def test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:

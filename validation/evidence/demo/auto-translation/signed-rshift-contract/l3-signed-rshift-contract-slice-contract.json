@@ -1,0 +1,114 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+        "role": "source",
+        "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "signed_rshift_contract"
+    ],
+    "implementation_defined_behavior": [
+      "signed right shift is accepted only as arithmetic shift under the explicit slice contract"
+    ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "explicit_implementation_defined_contract",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+        "function": "signed_rshift_contract",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          },
+          {
+            "bounds": {
+              "maximum": 31,
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "count"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 76,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [
+      "C signed right shift is implementation-defined and accepted only as arithmetic shift under this explicit slice contract."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable signed-right-shift semantics without explicit contract",
+      "shift-count UB equivalence outside the committed input domain",
+      "complete signed scalar UB coverage"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No portable C standard signed-right-shift semantic claim without the explicit implementation-defined contract.",
+      "No support for count < 0 or count >= 32.",
+      "No signed overflow or full scalar UB coverage claim."
+    ]
+  },
+  "fixture": {
+    "hash": "signed-rshift-contract-fixture",
+    "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "signed_rshift_contract",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/signed_rshift_contract.rs",
+    "module_path": "validation/l2_slices/src/signed_rshift_contract.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "input": "i32, u32",
+        "name": "signed_rshift_contract",
+        "output": "SignedRshiftContractReport",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/signed_rshift_contract.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo"
+}

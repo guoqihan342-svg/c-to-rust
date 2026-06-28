@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-signed-rshift-contract-20260628",
+    "fixture_hash=signed-rshift-contract-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "status": "none",
+  "target_id": "demo"
+}

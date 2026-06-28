@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+    "sha256": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 6,
+  "fixture": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+  "fixture_sha256": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+  "harness_draft": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
+    "sha256": "2c091209980c8edb10ffd36732c6769394fff57551406a230aa1d73d128bac7b",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "source_slice_id": "signed-rshift-contract",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

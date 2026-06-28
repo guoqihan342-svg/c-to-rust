@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-signed-rshift-contract-performance-smoke.json",
+    "sha256": "a028278113780641196b3f96b13fdaf0befc6b2d2539302e7c341214be3799d5",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "signed-rshift-contract",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -1,0 +1,17 @@
+{
+  "target_id": "demo",
+  "slice_id": "signed-rshift-contract",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-translation-plan.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-translation-events.jsonl",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-type-map.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-cfg.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-pointer-graph.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-ai-candidate-manifest.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-blocked-repairs.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-draft.rs",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-dry-run.json",
+    "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-lowering-report.json"
+  ]
+}

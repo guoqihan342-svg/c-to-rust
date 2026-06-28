@@ -1,0 +1,15 @@
+{
+  "case_count": 6,
+  "compared_fields": [
+    "return_value",
+    "status",
+    "contract"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,171 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [
+      "C signed right shift is implementation-defined and accepted only as arithmetic shift under this explicit slice contract."
+    ],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status",
+      "contract"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_semantic_pass": false,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No portable C standard signed-right-shift semantic claim without the explicit implementation-defined contract.",
+      "No support for count < 0 or count >= 32.",
+      "No signed overflow or full scalar UB coverage claim.",
+      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable signed-right-shift semantics without explicit contract",
+      "shift-count UB equivalence outside the committed input domain",
+      "complete signed scalar UB coverage",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c2rust-baseline-manifest.json",
+      "sha256": "47c793ac3f932da8eafeaa59cceca2e4534f52c9a2d921227fb324ee17ebe62d",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-status.json",
+      "sha256": "46b232a4a23043261c32fee51626a0b9e18c4d9b12c1c2b870134dd2ff43ef33",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-cache-metadata.json",
+      "sha256": "7c0654ca8912d95ecb7c4400fea35ec8966073e72849f57913d200b251a7cfb5",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-lowering-report.json",
+      "sha256": "1375f3bf7835587c05429129884cf91d9840ecc1004eaa1160183f5270698ec6",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-config-profile.json",
+      "profile_id": "demo-signed-rshift-contract-wsl-gcc",
+      "sha256": "7c25c075e2eead73f8d229e4c77855e84cc139c3f78c33e78f0891e13ce6b259",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-context-pack.json",
+      "sha256": "bb98cd649945838b70a005a5fd9c8752973f8fd346b94cda7a240ee94f30513a",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-final-verification.json",
+      "sha256": "ee8d488f9b996e732d112e0d2bf154705fec4687472722648d27dfa8cd1ca172",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-negative-diff.json",
+      "sha256": "015f1855cec46df02285e298b33616411f64ebbbdc92276d5a21f983380fd2e2",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "3f7dc17ef1e984c21fb87cfd5253b64b8d0a692c34456ff813a957fcfebd3a1c",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-pointer-graph.json",
+      "sha256": "bea79864f69df9067ed96732cba5b6bdc72bd4e7b80bde32181428aadf501b5a",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
+      "sha256": "b203ad35e1b1031391e37865b10ebcca2329602055849ae1ab73a4ce45dfc3b7",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/rust-check.json",
+      "sha256": "4b3351286328217edba3b05b0b5ca6f50975d0ceb93385bad882d620d6e08c2b",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-report.json",
+      "sha256": "8467d8923be3a53b9551325a225357be139eca42611521e2889c0fe829e4e8f7",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-diff.json",
+      "sha256": "7cb0d55c79e4ab357f225d6e20c523f1d9dc5b24abcbd36d7a6d22ad209d6df0",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-slice-contract.json",
+      "sha256": "58622f5c26d52a2c01a6d0862a4085a00f6e9b32cbf393085959562da040da92",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-summary.json",
+      "sha256": "d8671b0e278a52addf61a58f31a66adb9165d6f87570e0867de1d50f6e0e0e0a",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-test-translation-generated.json",
+      "sha256": "16717e8ff7f042d994f5718e398813f11ed0e20ecb7622bc290af25192b5ed5e",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-unsafe-ledger.json",
+      "sha256": "aaf6fd9b15532bf63a29e0df519aa8201f527ed7bac163f15cfff12cd988862f",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-unsafe-scan.json",
+      "sha256": "a475bad7e47de9065288765539e92759b707653a3ff21bac77a711a7b87f0dcc",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "ffa033fd1887e73828d83c995d0c8cdeb3edaa5707b76b58ccb021d7a28d282b",
+      "status": "passed"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-version-manifest.json",
+      "sha256": "771932b76a9372a588cfd990d1228cd5a740484eba419a61b9a9770df258bd5c",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "signed-rshift-contract-fixture",
+    "operation_count": 4,
+    "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "b65e4588f2bed12629980158dfbc2b4958fc57b2",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "passed",
+  "target_id": "demo"
+}

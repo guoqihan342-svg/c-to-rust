@@ -1,0 +1,38 @@
+{
+  "cache_inputs": [
+    "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "validation/l2_slices/src/signed_rshift_contract.rs"
+  ],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/signed-rshift-contract.c"
+  ],
+  "direct_rust_files": [
+    "validation/l2_slices/src/signed_rshift_contract.rs",
+    "validation/l2_slices/tests/signed_rshift_contract.rs",
+    "validation/l2_slices/src/bin/emit_reports.rs"
+  ],
+  "level": "L3",
+  "related_tests": [
+    "validation/l2_slices/tests/signed_rshift_contract.rs::signed_rshift_contract_matches_c_oracle_under_explicit_contract"
+  ],
+  "repo_commit": "workspace",
+  "scalar_runtime_contract": {
+    "contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "explicit_implementation_defined_contract",
+      "wrapping_profile": "not_declared"
+    },
+    "preconditions": [
+      "shift_count_in_range",
+      "signed_right_shift_implementation_defined"
+    ]
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo"
+}

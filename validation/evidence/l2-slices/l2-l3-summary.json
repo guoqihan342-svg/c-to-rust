@@ -47,6 +47,12 @@
         "case_count": 6,
         "l2_status": "passed",
         "l3_status": "passed",
+        "slice_id": "demo-signed-rshift-contract"
+      },
+      {
+        "case_count": 6,
+        "l2_status": "passed",
+        "l3_status": "passed",
         "slice_id": "demo-external-direct-callee"
       },
       {
@@ -108,6 +114,11 @@
         "status": "passed"
       },
       {
+        "report": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+        "slice_id": "demo-signed-rshift-contract",
+        "status": "passed"
+      },
+      {
         "report": "validation/evidence/demo/l3-external-direct-callee-negative-diff.json",
         "slice_id": "demo-external-direct-callee",
         "status": "passed"
@@ -139,6 +150,7 @@
       "validation/l2_slices/src/call_expression_chain.rs",
       "validation/l2_slices/src/copy_i32_ptr_arith.rs",
       "validation/l2_slices/src/libuv_ip4_addr.rs",
+      "validation/l2_slices/src/signed_rshift_contract.rs",
       "validation/l2_slices/src/sqlite_varint.rs",
       "validation/l2_slices/src/store_add_one.rs",
       "validation/l2_slices/src/sum_i32_buffer.rs",

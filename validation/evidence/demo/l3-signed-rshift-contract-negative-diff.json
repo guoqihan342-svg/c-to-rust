@@ -1,0 +1,26 @@
+{
+  "case_id": "positive-count-zero",
+  "compared_fields": [
+    "return_value",
+    "status",
+    "contract"
+  ],
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "positive-count-zero",
+    "field": "contract",
+    "mutated_c_value": "logical_right_shift",
+    "rust_value": "implementation_defined_arithmetic_shift"
+  },
+  "level": "L3",
+  "mutated_fields": [
+    "contract"
+  ],
+  "mutation": "first oracle case implementation-defined signed right shift contract is changed",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

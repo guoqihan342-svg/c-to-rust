@@ -1,0 +1,51 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+    "defines": [],
+    "include_paths": [],
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "explicit_implementation_defined_contract",
+      "wrapping_profile": "not_declared"
+    }
+  },
+  "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+  "fixture_hash": "signed-rshift-contract-fixture",
+  "function_name": "signed_rshift_contract",
+  "function_source_span": {
+    "byte_end": 76,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+    "line_end": 1,
+    "line_start": 1,
+    "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+  },
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "source_file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+    "validation/l2_slices/fixtures/signed-rshift-contract.c": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+      "role": "source",
+      "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

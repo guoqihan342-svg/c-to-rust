@@ -1,0 +1,502 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "fixture_sha256": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+      "diff": "629404aa07a580df6e92ba5ee89be430e2f2255a21926da48b7faa658658750e",
+      "final_verification": "1b085f4d7a5389d31a599737a2a469caa11cbbc4434cfaf377ceec972c7777ca",
+      "negative_diff": "01f89a9480c71e33403b2c18a505dfa0bd1c8a6bc5a97d6b69974114eeaeae75",
+      "performance_smoke": "a028278113780641196b3f96b13fdaf0befc6b2d2539302e7c341214be3799d5",
+      "rust_report": "7458ba3dd7759d8df21a69d3950fd69553ef564340fccb430fe523fdfeb21e03",
+      "unsafe_ledger": "b3688881fcaa4fc9cb91d8a4a08dabb9bf80be64a872635686e8f065aa51773d",
+      "unsafe_scan": "926f56353fd2fb5a786376758f119e8a524637f0ec28f468cfe76a4cdcfc1434",
+      "version_manifest": "f759e4f9369dbc2aaa63fbdeda550a4577b2c615f75cd9fbe2420947423c09b6"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-signed-rshift-contract-diff.json",
+      "final_verification": "validation/evidence/demo/l3-signed-rshift-contract-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-signed-rshift-contract-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-signed-rshift-contract-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-signed-rshift-contract-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-signed-rshift-contract-version-manifest.json"
+    },
+    "slice_id": "signed-rshift-contract",
+    "source_commit": "demo-signed-rshift-contract-20260628",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c2rust-baseline-manifest.json",
+    "sha256": "47c793ac3f932da8eafeaa59cceca2e4534f52c9a2d921227fb324ee17ebe62d",
+    "status": "skipped"
+  },
+  "cache": {
+    "alias_gate_identity": {
+      "alias_set_count": 0,
+      "aliasing_proven": false,
+      "decision": "not_applicable",
+      "precondition_count": 0,
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "build_profile_hash": "794acdc07cd148daef66f3ac991c47da6f1ea339057c6c393c881d6e45a560a1",
+    "c2rust_baseline_identity": {
+      "sha256": "c31b97b8a184d58440445420ffe945eb5c522ed4e28e5e3fdaf3eecd5143983d",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
+      "sha256": "2c091209980c8edb10ffd36732c6769394fff57551406a230aa1d73d128bac7b",
+      "status": "draft"
+    },
+    "cache_input_fields": [
+      "source_commit",
+      "source_file_hashes",
+      "slice_spec_sha256",
+      "fixture_hash",
+      "build_profile_hash",
+      "competition_environment_identity",
+      "cargo_lock_hash",
+      "tool_versions",
+      "schema_versions",
+      "translator_version",
+      "translator_manifest_sha256",
+      "command_arguments",
+      "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
+    ],
+    "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
+    "clang_lowering_identity": {
+      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+      "clang_path_status": "configured",
+      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
+    "command_arguments": [
+      "auto_migrate.py",
+      "--slice-spec",
+      "validation/slice-specs/demo-signed-rshift-contract.json",
+      "--accept-existing-evidence",
+      "--emit-clang-lowering-report"
+    ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
+    },
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c2rust-baseline-manifest.json",
+        "sha256": "47c793ac3f932da8eafeaa59cceca2e4534f52c9a2d921227fb324ee17ebe62d",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L0",
+        "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
+        "sha256": "b203ad35e1b1031391e37865b10ebcca2329602055849ae1ab73a4ce45dfc3b7",
+        "status": "recorded"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
+        "profile": "L0-dev",
+        "sha256": "ffa033fd1887e73828d83c995d0c8cdeb3edaa5707b76b58ccb021d7a28d282b",
+        "status": "passed"
+      }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "not_applicable",
+      "alias_sensitive": false,
+      "read_effect_count": 0,
+      "read_nodes": [],
+      "schema_version": 2,
+      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+      "write_effect_count": 0,
+      "write_nodes": []
+    },
+    "fixture_hash": "signed-rshift-contract-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "invalidates": [
+      "context_pack",
+      "type_map",
+      "cfg",
+      "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
+      "rust_draft",
+      "patch_plan",
+      "ai_candidate",
+      "c_oracle",
+      "rust_replay",
+      "diff",
+      "negative_diff",
+      "unsafe_ledger",
+      "final_verification",
+      "auto_translation_manifest",
+      "summary"
+    ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "4c6751079bac14a84e31217e543195d4faaeb70e827a760365edc6fd455f1135",
+      "status": "sufficient_for_semantic_pass"
+    },
+    "route_decision_identity": {
+      "sha256": "8435b93f2c0ce5d3ef95a7a883bd17cf9967b592c8672d87fb40c4a3ac8f03e3",
+      "status": "recorded"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "23fcbd88045f7d14d26651975d11746da67460a1c9a644aa17e22ae0a9c5bf45",
+      "status": "recorded"
+    },
+    "schema_version": 1,
+    "schema_versions": {
+      "auto_cache_metadata": 1,
+      "auto_translation_plan": 1,
+      "cfg": 1,
+      "evidence_manifest": 1,
+      "pointer_graph": 2,
+      "type_map": 1
+    },
+    "slice_id": "signed-rshift-contract",
+    "slice_spec_sha256": "759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "source_commit": "demo-signed-rshift-contract-20260628",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+      "validation/l2_slices/fixtures/signed-rshift-contract.c": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+    },
+    "target_id": "demo",
+    "tool_versions": {
+      "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+      "openspec": "1.4.1",
+      "python": "Python 3.14.2",
+      "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+    },
+    "translator_feature_set": [
+      "clang-lowering-report"
+    ],
+    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "00e71c97601d1fbb369cdc7541315cb52947b38377a77f55fcd6225d16d98ef9",
+      "status": "passed"
+    }
+  },
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_semantic_pass": false,
+    "must_still_pass": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No portable C standard signed-right-shift semantic claim without the explicit implementation-defined contract.",
+      "No support for count < 0 or count >= 32.",
+      "No signed overflow or full scalar UB coverage claim."
+    ],
+    "scope": "auto-translation run bound to accepted_evidence_binding; final_verification.semantic_pass=true is sourced from accepted/named-slice evidence; generated_draft_semantic_pass remains false; generated Rust draft remains candidate/provenance",
+    "semantic_pass": true
+  },
+  "fixture": {
+    "hash": "signed-rshift-contract-fixture",
+    "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json"
+  },
+  "l3_evidence_manifest": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-evidence-manifest.json",
+    "semantic_pass": true,
+    "status": "passed"
+  },
+  "level": "L3",
+  "oracle": {
+    "accepted_oracle": {
+      "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+      "sha256": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+      "status": "passed"
+    },
+    "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+    "case_count": 6,
+    "fixture": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "fixture_sha256": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+    "harness_draft": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
+    "harness_draft_ref": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
+      "sha256": "2c091209980c8edb10ffd36732c6769394fff57551406a230aa1d73d128bac7b",
+      "status": "draft"
+    },
+    "schema_version": 1,
+    "semantic_pass": true,
+    "slice_id": "signed-rshift-contract",
+    "source_commit": "demo-signed-rshift-contract-20260628",
+    "source_slice_id": "signed-rshift-contract",
+    "source_status": "passed",
+    "status": "C_ORACLE_GENERATED",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "patch": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-self-healing-blocked-repairs.json",
+    "blocked_repairs_items": [],
+    "blocked_repairs_status": "none",
+    "patch_events": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-patch-events.jsonl",
+    "self_heal_applied": false,
+    "status": "none"
+  },
+  "replay": {
+    "behavior_fields": [
+      "return_value",
+      "status",
+      "contract"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-signed-rshift-contract-20260628",
+      "slice_spec_sha256=570b3f3d6bd0755a4d7b587f797cd6ab91bc0a5833e9c8e28a3f804d46f0b0da",
+      "fixture_hash=signed-rshift-contract-fixture",
+      "build_profile_hash=794acdc07cd148daef66f3ac991c47da6f1ea339057c6c393c881d6e45a560a1",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_value",
+        "status",
+        "contract"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+        "sha256": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+        "sha256": "01f89a9480c71e33403b2c18a505dfa0bd1c8a6bc5a97d6b69974114eeaeae75",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-draft.rs",
+        "status": "candidate"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+        "sha256": "7458ba3dd7759d8df21a69d3950fd69553ef564340fccb430fe523fdfeb21e03",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-signed-rshift-contract-diff.json",
+        "sha256": "629404aa07a580df6e92ba5ee89be430e2f2255a21926da48b7faa658658750e",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "generated_draft_semantic_pass": false,
+    "known_gaps": [
+      "Generated replay draft is not itself the accepted replay implementation.",
+      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
+    ],
+    "level": "L3",
+    "repo_commit": "b65e4588f2bed12629980158dfbc2b4958fc57b2",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml signed_rshift_contract",
+        "file": "validation/l2_slices/tests/signed_rshift_contract.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_signed_rshift_contract_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_signed_rshift_contract_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_signed_rshift_contract_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "signed-rshift-contract",
+    "source_commit": "demo-signed-rshift-contract-20260628",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+          "operation_count": 4,
+          "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+          "sha256": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+          "sha256": "7458ba3dd7759d8df21a69d3950fd69553ef564340fccb430fe523fdfeb21e03",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "contract"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+            "sha256": "d69bfdaeed632f7dc4f04d374a3007c39a2e4a00ca152ea6135cf2452cdf4e27",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+            "sha256": "7458ba3dd7759d8df21a69d3950fd69553ef564340fccb430fe523fdfeb21e03",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-signed-rshift-contract-diff.json",
+            "sha256": "629404aa07a580df6e92ba5ee89be430e2f2255a21926da48b7faa658658750e",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/signed_rshift_contract.rs::accepted_signed_rshift_contract_replay",
+        "source": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_value",
+          "status",
+          "contract"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+            "sha256": "01f89a9480c71e33403b2c18a505dfa0bd1c8a6bc5a97d6b69974114eeaeae75",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_signed_rshift_contract_negative_diff",
+        "source": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
+    "sha256": "b203ad35e1b1031391e37865b10ebcca2329602055849ae1ab73a4ce45dfc3b7",
+    "status": "recorded"
+  },
+  "rust_check": {
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-gkrx06r1 F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\demo\\auto-translation\\signed-rshift-contract\\l3-signed-rshift-contract-rust-draft.rs",
+    "error_count": 0,
+    "errors": [],
+    "external_callee_context": {
+      "blocked_callees": [],
+      "blocked_count": 0,
+      "declared_callees": [],
+      "declared_count": 0,
+      "status": "not_applicable"
+    },
+    "schema_version": 1,
+    "self_healing": {
+      "blocked_repairs": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-self-healing-blocked-repairs.json",
+      "patch_events": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-patch-events.jsonl",
+      "status": "none"
+    },
+    "status": "passed"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "accepted_evidence_bound",
+  "target_id": "demo",
+  "translator": {
+    "artifact_paths": [
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-translation-plan.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-auto-translation-events.jsonl",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-type-map.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-cfg.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-pointer-graph.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-ai-candidate-manifest.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-blocked-repairs.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-rust-draft.rs",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-dry-run.json",
+      "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-lowering-report.json"
+    ],
+    "slice_id": "signed-rshift-contract",
+    "status": "generated",
+    "target_id": "demo"
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "ffa033fd1887e73828d83c995d0c8cdeb3edaa5707b76b58ccb021d7a28d282b",
+    "status": "passed"
+  }
+}

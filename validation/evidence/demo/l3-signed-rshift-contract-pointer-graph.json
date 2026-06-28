@@ -1,0 +1,34 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "context_pack_ref": "validation/evidence/demo/l3-signed-rshift-contract-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "signed_rshift_contract has no pointer parameters, pointer returns, globals, buffers, or external mutable state in the committed fixture boundary.",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/fixtures/signed-rshift-contract.c",
+      "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json"
+    ],
+    "functions": [
+      "signed_rshift_contract"
+    ],
+    "globals": [],
+    "structs": []
+  },
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

@@ -1,0 +1,36 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c2rust-baseline-manifest.json",
+    "sha256": "47c793ac3f932da8eafeaa59cceca2e4534f52c9a2d921227fb324ee17ebe62d",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-gkrx06r1 F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\demo\\auto-translation\\signed-rshift-contract\\l3-signed-rshift-contract-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
+    "sha256": "b203ad35e1b1031391e37865b10ebcca2329602055849ae1ab73a4ce45dfc3b7",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "ffa033fd1887e73828d83c995d0c8cdeb3edaa5707b76b58ccb021d7a28d282b",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [],
+  "durable_evidence": {
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "e27d23307f48b293ec9d6f0cc5a33f92fa318be78bbf4ce815c893ea200146ad",
+    "typed_ir_sha256": "51d49ba1d0377a83deaf74e56b01053c34616d73bf64a1152fcf2475f4c7e84d"
+  },
+  "errors": [],
+  "fixture_hash": "signed-rshift-contract-fixture",
+  "frontend": "clang",
+  "function_name": "signed_rshift_contract",
+  "lowering_report": {
+    "arguments": [
+      "-Xclang",
+      "-ast-dump=json",
+      "-fsyntax-only",
+      ".\\validation/l2_slices/fixtures/signed-rshift-contract.c"
+    ],
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "diagnostics": [],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang",
+    "function_ir": {
+      "body": [
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "Var": {
+                    "name": "value",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Shr",
+                "rhs": {
+                  "Var": {
+                    "name": "count",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "signed_rshift_contract",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        },
+        {
+          "name": "count",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "signed_rshift_contract",
+    "globals": [],
+    "source_file": "./validation/l2_slices/fixtures/signed-rshift-contract.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "compile_commands": null,
+    "function_source_span": {
+      "byte_end": 76,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+      "line_end": 1,
+      "line_start": 1,
+      "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+    },
+    "logical_source_file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json": "01de94a211873595a6b4bfbd4837e4bb0ab8be7b35166a7189fcbbc1479026cd",
+      "validation/l2_slices/fixtures/signed-rshift-contract.c": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+    },
+    "source_root": "."
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "source_file": "./validation/l2_slices/fixtures/signed-rshift-contract.c",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [
+      {
+        "code": "shift_count_in_range",
+        "detail": "C shift count must be nonnegative and smaller than the shifted integer width",
+        "ir_node": "IrExpr::Binary.Shr",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "signed_right_shift_implementation_defined",
+        "detail": "C signed right shift is implementation-defined and requires an explicit slice/platform contract",
+        "ir_node": "IrExpr::Binary.Shr",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "e27d23307f48b293ec9d6f0cc5a33f92fa318be78bbf4ce815c893ea200146ad",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "51d49ba1d0377a83deaf74e56b01053c34616d73bf64a1152fcf2475f4c7e84d"
+  }
+}

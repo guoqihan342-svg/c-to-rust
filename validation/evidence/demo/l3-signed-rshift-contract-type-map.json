@@ -1,0 +1,63 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/l3-signed-rshift-contract-config-profile.json",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "role": "input_value",
+      "rust_type": "i32",
+      "symbol": "value"
+    },
+    {
+      "c_name": "count",
+      "c_type": "int",
+      "confidence": "contract_bound",
+      "id": "type-2",
+      "kind": "primitive",
+      "role": "shift_count",
+      "rust_type": "u32",
+      "symbol": "count"
+    },
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "role": "return_value",
+      "rust_type": "i32",
+      "symbol": "return"
+    }
+  ],
+  "repo_commit": "workspace",
+  "safe_boundary": {
+    "public_api": "pub fn signed_rshift_contract(value: i32, count: u32) -> SignedRshiftContractReport",
+    "raw_pointer_exposed": false,
+    "unsafe_required": false
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-signed-rshift-contract.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": [],
+  "unsupported_types": []
+}

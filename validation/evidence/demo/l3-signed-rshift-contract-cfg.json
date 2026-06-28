@@ -1,0 +1,80 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [
+            "none"
+          ],
+          "source_span": {
+            "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "return",
+            "binary_shift"
+          ],
+          "statements": [
+            "return value >> count"
+          ]
+        }
+      ],
+      "edges": [],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "signed_rshift_contract",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "value >> count",
+          "source_span": {
+            "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "runtime_preconditions": [
+        "shift_count_in_range",
+        "signed_right_shift_implementation_defined"
+      ],
+      "signature": "int signed_rshift_contract(int value, int count)",
+      "source_span": {
+        "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-signed-rshift-contract.json",
+    "status": "ready"
+  },
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

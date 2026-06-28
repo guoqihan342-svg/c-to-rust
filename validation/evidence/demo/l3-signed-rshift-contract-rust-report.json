@@ -1,0 +1,69 @@
+{
+  "c_source_boundary": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+  "case_count": 6,
+  "cases": [
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 0,
+      "coverage_kind": "identity_shift",
+      "id": "positive-count-zero",
+      "return_value": 7,
+      "status": "ok",
+      "value": 7
+    },
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 1,
+      "coverage_kind": "positive_arithmetic",
+      "id": "positive-half",
+      "return_value": 4,
+      "status": "ok",
+      "value": 8
+    },
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 1,
+      "coverage_kind": "negative_arithmetic",
+      "id": "negative-half",
+      "return_value": -4,
+      "status": "ok",
+      "value": -8
+    },
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 1,
+      "coverage_kind": "negative_sign_fill",
+      "id": "minus-one-stays-minus-one",
+      "return_value": -1,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 5,
+      "coverage_kind": "negative_multi_bit",
+      "id": "negative-multi-bit",
+      "return_value": -32,
+      "status": "ok",
+      "value": -1024
+    },
+    {
+      "contract": "implementation_defined_arithmetic_shift",
+      "count": 30,
+      "coverage_kind": "high_valid_count",
+      "id": "int-min-high-count",
+      "return_value": -2,
+      "status": "ok",
+      "value": -2147483648
+    }
+  ],
+  "command": "cargo run --bin emit_reports",
+  "fixture": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/signed_rshift_contract.rs",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,31 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version",
+    "scalar_arithmetic_contract"
+  ],
+  "fixture": {
+    "hash": "signed-rshift-contract-fixture",
+    "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "workspace",
+  "scalar_arithmetic_contract": {
+    "division_by_zero": "not_declared",
+    "shift_count": "runtime_precondition_in_range",
+    "signed_division_overflow": "not_declared",
+    "signed_overflow": "not_declared",
+    "signed_right_shift": "explicit_implementation_defined_contract",
+    "wrapping_profile": "not_declared"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

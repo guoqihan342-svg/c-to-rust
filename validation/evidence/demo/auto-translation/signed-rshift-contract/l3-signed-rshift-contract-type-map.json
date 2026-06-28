@@ -1,0 +1,62 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-translator-input.json",
+    "sha256": "570b3f3d6bd0755a4d7b587f797cd6ab91bc0a5833e9c8e28a3f804d46f0b0da",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-signed-rshift-contract-20260628",
+    "slice_spec_sha256=759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "fixture_hash=signed-rshift-contract-fixture",
+    "build_profile_hash=794acdc07cd148daef66f3ac991c47da6f1ea339057c6c393c881d6e45a560a1",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "count",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "b65e4588f2bed12629980158dfbc2b4958fc57b2",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-signed-rshift-contract.json",
+    "sha256": "759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "status": "ready"
+  },
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

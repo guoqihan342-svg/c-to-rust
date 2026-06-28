@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "signed-rshift-contract",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "signed_rshift_contract",
+  "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "fixture_hash": "signed-rshift-contract-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-signed-rshift-contract-20260628",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/signed-rshift-contract.c": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+        "role": "source",
+        "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+      },
+      {
+        "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+        "role": "fixture"
+      }
+    ],
+    "functions": [
+      "signed_rshift_contract"
+    ],
+    "signatures": [
+      {
+        "function": "signed_rshift_contract",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input"
+          },
+          {
+            "name": "count",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": 0,
+              "maximum": 31
+            }
+          }
+        ],
+        "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+          "line_start": 1,
+          "line_end": 1,
+          "byte_start": 0,
+          "byte_end": 76,
+          "sha256": "63d79483f52ea0a3019baa8b882fc60d2a7251c07a17dcf674005f8efdd837e1"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "implementation_defined_behavior": [
+      "signed right shift is accepted only as arithmetic shift under the explicit slice contract"
+    ],
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_right_shift": "explicit_implementation_defined_contract"
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-signed-rshift-contract-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/fixtures/signed-rshift-contract.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "competition-profile-or-local-oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "signed-rshift-contract-fixture",
+    "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+    "hash": "signed-rshift-contract-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int",
+          "range": [
+            -2147483648,
+            2147483647
+          ]
+        },
+        {
+          "name": "count",
+          "type": "int",
+          "range": [
+            0,
+            31
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
+    "cases": [
+      {
+        "id": "positive-count-zero",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json"
+      },
+      {
+        "id": "negative-half",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json"
+      },
+      {
+        "id": "minus-one-stays-minus-one",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json"
+      },
+      {
+        "id": "int-min-high-count",
+        "input_ref": "cases[5]",
+        "expected_ref": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status",
+      "contract"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+    "diff": "validation/evidence/demo/l3-signed-rshift-contract-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-signed-rshift-contract-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-signed-rshift-contract-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-signed-rshift-contract-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-signed-rshift-contract-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-signed-rshift-contract-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status",
+      "contract"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/signed_rshift_contract.rs",
+    "public_api": [
+      {
+        "name": "signed_rshift_contract",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper",
+        "input": "i32, u32",
+        "output": "SignedRshiftContractReport"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/signed_rshift_contract.rs",
+    "api_name": "signed_rshift_contract",
+    "test_file": "validation/l2_slices/tests/signed_rshift_contract.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [
+      "C signed right shift is implementation-defined and accepted only as arithmetic shift under this explicit slice contract."
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No portable C standard signed-right-shift semantic claim without the explicit implementation-defined contract.",
+      "No support for count < 0 or count >= 32.",
+      "No signed overflow or full scalar UB coverage claim."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable signed-right-shift semantics without explicit contract",
+      "shift-count UB equivalence outside the committed input domain",
+      "complete signed scalar UB coverage"
+    ]
+  },
+  "accepted_metadata_differences": [
+    "C signed right shift is implementation-defined and accepted only as arithmetic shift under this explicit slice contract."
+  ],
+  "non_goals": [
+    "No full project migration claim.",
+    "No portable C standard signed-right-shift semantic claim without the explicit implementation-defined contract.",
+    "No support for count < 0 or count >= 32.",
+    "No signed overflow or full scalar UB coverage claim."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.scalar_arithmetic_contract",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

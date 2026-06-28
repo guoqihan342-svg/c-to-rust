@@ -1,0 +1,92 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "positive signed right shift fixture cases",
+      "negative arithmetic signed right shift fixture cases",
+      "high valid shift-count fixture case"
+    ],
+    "negative_cases": [
+      "contract mutation in negative diff",
+      "missing explicit signed-right-shift contract is rejected by typed IR evidence tests"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-signed-rshift-contract-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-signed-rshift-contract-diff.json",
+      "status": "passed"
+    }
+  },
+  "known_gaps": [
+    "L3 demo test translation covers the named function slice and committed oracle fixture only.",
+    "No full-project migration or exhaustive symbolic equivalence is claimed."
+  ],
+  "level": "L3",
+  "repo_commit": "workspace",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test signed_rshift_contract",
+      "file": "validation/l2_slices/tests/signed_rshift_contract.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "signed_rshift_contract_matches_c_oracle_under_explicit_contract"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "path": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-signed-rshift-contract-c-oracle.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "Committed C oracle fixture is replayed by Rust cargo tests and emit_reports evidence generation."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status",
+        "contract"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/signed_rshift_contract.rs::signed_rshift_contract_matches_c_oracle_under_explicit_contract",
+      "source": "validation/l2_slices/fixtures/signed-rshift-contract-c-oracle.json",
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_value",
+        "status",
+        "contract"
+      ],
+      "coverage_kind": "negative_case",
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_signed_rshift_contract_negative_diff",
+      "source": "validation/evidence/demo/l3-signed-rshift-contract-negative-diff.json",
+      "status": "mapped"
+    }
+  ]
+}

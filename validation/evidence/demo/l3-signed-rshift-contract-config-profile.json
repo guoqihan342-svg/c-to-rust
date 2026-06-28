@@ -1,0 +1,39 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "repo_commit",
+    "fixture.hash",
+    "rust_boundary.module"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "committed explicit-contract fixture",
+    "command_args": [
+      "gcc",
+      "-std=c99",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ],
+    "include_paths": []
+  },
+  "level": "L3",
+  "profile_id": "demo-signed-rshift-contract-wsl-gcc",
+  "repo_commit": "workspace",
+  "rust_profile": {
+    "cargo_features": [],
+    "package": "c-to-rust-l2-slices"
+  },
+  "scalar_arithmetic_contract": {
+    "division_by_zero": "not_declared",
+    "shift_count": "runtime_precondition_in_range",
+    "signed_division_overflow": "not_declared",
+    "signed_overflow": "not_declared",
+    "signed_right_shift": "explicit_implementation_defined_contract",
+    "wrapping_profile": "not_declared"
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -1,0 +1,159 @@
+{
+  "artifact_refs": {
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-clang-lowering-report.json",
+      "status": "lowered"
+    },
+    "route_decision": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
+      "status": "passed"
+    }
+  },
+  "boundary": "This artifact records refusal conditions for signed right shift contracts; it does not accept the generated Rust draft as semantic proof.",
+  "refusals": [
+    {
+      "code": "missing_explicit_signed_right_shift_contract",
+      "decision": "fail_closed",
+      "evidence_refs": [
+        "crates/c2r-translator/tests/bounded_translation.rs::typed_ir_rejects_signed_right_shift_without_contract"
+      ],
+      "reason": "C signed right shift is implementation-defined and the typed-IR emitter must reject it without an explicit slice/platform contract.",
+      "required_contract": {
+        "field": "c_boundary.scalar_arithmetic_contract.signed_right_shift",
+        "value": "explicit_implementation_defined_contract"
+      }
+    },
+    {
+      "code": "wrong_explicit_signed_right_shift_contract",
+      "decision": "fail_closed",
+      "evidence_refs": [
+        "validation/tools/test_auto_migrate.py::test_scalar_admission_requires_matching_contract_and_input_domain"
+      ],
+      "reason": "The scalar admission gate treats any non-matching signed_right_shift contract as unresolved.",
+      "required_contract": {
+        "field": "c_boundary.scalar_arithmetic_contract.signed_right_shift",
+        "value": "explicit_implementation_defined_contract"
+      }
+    },
+    {
+      "code": "missing_scalar_input_domain",
+      "decision": "fail_closed",
+      "evidence_refs": [
+        "validation/tools/test_auto_migrate.py::test_scalar_admission_requires_matching_contract_and_input_domain"
+      ],
+      "reason": "Runtime scalar preconditions cannot be admitted without a fixture input domain binding.",
+      "required_contract": {
+        "field": "fixture_contract.scalar_input_domain",
+        "value": "nonempty parameters"
+      }
+    }
+  ],
+  "route_level": "L0",
+  "runtime_preconditions": [
+    {
+      "code": "shift_count_in_range",
+      "detail": "C shift count must be nonnegative and smaller than the shifted integer width",
+      "ir_node": "IrExpr::Binary.Shr",
+      "source_span": null,
+      "type": {
+        "canonical": "int",
+        "kind": "integer",
+        "signed": true,
+        "spelled": "int",
+        "width": 32
+      }
+    },
+    {
+      "code": "signed_right_shift_implementation_defined",
+      "detail": "C signed right shift is implementation-defined and requires an explicit slice/platform contract",
+      "ir_node": "IrExpr::Binary.Shr",
+      "source_span": null,
+      "type": {
+        "canonical": "int",
+        "kind": "integer",
+        "signed": true,
+        "spelled": "int",
+        "width": 32
+      }
+    }
+  ],
+  "scalar_admission": {
+    "contract_status": "recorded",
+    "covered": [
+      {
+        "code": "shift_count_in_range",
+        "covered_by": [
+          "c_boundary.scalar_arithmetic_contract.shift_count",
+          "fixture_contract.scalar_input_domain"
+        ],
+        "status": "covered"
+      },
+      {
+        "code": "signed_right_shift_implementation_defined",
+        "covered_by": [
+          "c_boundary.scalar_arithmetic_contract.signed_right_shift",
+          "fixture_contract.scalar_input_domain"
+        ],
+        "status": "covered"
+      }
+    ],
+    "precondition_count": 2,
+    "source_fields": [
+      "c_boundary.scalar_arithmetic_contract",
+      "fixture_contract.scalar_input_domain",
+      "claim_boundary.must_not_claim"
+    ],
+    "status": "covered",
+    "unresolved": []
+  },
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "explicit_implementation_defined_contract",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "portable signed-right-shift semantics without explicit contract",
+        "shift-count UB equivalence outside the committed input domain",
+        "complete signed scalar UB coverage"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": false,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2147483648,
+            2147483647
+          ],
+          "type": "int"
+        },
+        {
+          "name": "count",
+          "range": [
+            0,
+            31
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo"
+}

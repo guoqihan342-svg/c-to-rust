@@ -1,0 +1,88 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-signed-rshift-contract-20260628",
+    "slice_spec_sha256=759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "fixture_hash=signed-rshift-contract-fixture",
+    "build_profile_hash=794acdc07cd148daef66f3ac991c47da6f1ea339057c6c393c881d6e45a560a1",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "return"
+          ],
+          "statements": [
+            "return"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "signed_rshift_contract",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int signed_rshift_contract(int value, int count)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "relooper_required": false
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "b65e4588f2bed12629980158dfbc2b4958fc57b2",
+  "schema_version": 1,
+  "slice_id": "signed-rshift-contract",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-signed-rshift-contract.json",
+    "sha256": "759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "status": "ready"
+  },
+  "source_commit": "demo-signed-rshift-contract-20260628",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

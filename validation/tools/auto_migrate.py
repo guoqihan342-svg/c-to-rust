@@ -144,6 +144,7 @@ def main() -> int:
     else:
         replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
     validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
+    refusal_evidence = emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
     cache = emit_cache_metadata(
@@ -223,6 +224,11 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         translator_spec["source_file_hashes"] = resolved_source_file_hashes
     if source_span:
         translator_spec["function_source_span"] = source_span
+    scalar_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
+    if scalar_contract:
+        translator_spec["c_boundary"] = {
+            "scalar_arithmetic_contract": scalar_contract,
+        }
     compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
     if compile_commands:
         translator_spec["compile_commands"] = compile_commands
@@ -1334,6 +1340,95 @@ def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | 
     if code == "signed_right_shift_implementation_defined":
         return "signed_right_shift", "explicit_implementation_defined_contract"
     return None, None
+
+
+def emit_scalar_refusal_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> dict[str, Any] | None:
+    slice_id = required_str(spec, "slice_id")
+    typed_ir = route_decision.get("candidate_generation", {}).get("typed_ir", {})
+    runtime_preconditions = typed_ir.get("runtime_preconditions", [])
+    if not isinstance(runtime_preconditions, list):
+        runtime_preconditions = []
+    codes = {
+        str(item.get("code", ""))
+        for item in runtime_preconditions
+        if isinstance(item, dict)
+    }
+    if "signed_right_shift_implementation_defined" not in codes:
+        return None
+
+    prefix = f"l3-{slice_id}"
+    path = evidence_dir / f"{prefix}-refusal-evidence.json"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "status": "recorded",
+        "route_level": route_decision.get("level"),
+        "runtime_preconditions": runtime_preconditions,
+        "scalar_admission": typed_ir.get("scalar_admission"),
+        "scalar_ub_contract": scalar_ub_contract(spec),
+        "refusals": [
+            {
+                "code": "missing_explicit_signed_right_shift_contract",
+                "decision": "fail_closed",
+                "reason": "C signed right shift is implementation-defined and the typed-IR emitter must reject it without an explicit slice/platform contract.",
+                "required_contract": {
+                    "field": "c_boundary.scalar_arithmetic_contract.signed_right_shift",
+                    "value": "explicit_implementation_defined_contract",
+                },
+                "evidence_refs": [
+                    "crates/c2r-translator/tests/bounded_translation.rs::typed_ir_rejects_signed_right_shift_without_contract"
+                ],
+            },
+            {
+                "code": "wrong_explicit_signed_right_shift_contract",
+                "decision": "fail_closed",
+                "reason": "The scalar admission gate treats any non-matching signed_right_shift contract as unresolved.",
+                "required_contract": {
+                    "field": "c_boundary.scalar_arithmetic_contract.signed_right_shift",
+                    "value": "explicit_implementation_defined_contract",
+                },
+                "evidence_refs": [
+                    "validation/tools/test_auto_migrate.py::test_scalar_admission_requires_matching_contract_and_input_domain"
+                ],
+            },
+            {
+                "code": "missing_scalar_input_domain",
+                "decision": "fail_closed",
+                "reason": "Runtime scalar preconditions cannot be admitted without a fixture input domain binding.",
+                "required_contract": {
+                    "field": "fixture_contract.scalar_input_domain",
+                    "value": "nonempty parameters",
+                },
+                "evidence_refs": [
+                    "validation/tools/test_auto_migrate.py::test_scalar_admission_requires_matching_contract_and_input_domain"
+                ],
+            },
+        ],
+        "artifact_refs": {
+            "route_decision": {
+                "path": rel(evidence_dir / f"{prefix}-route-decision.json"),
+                "status": route_decision.get("status", "recorded"),
+            },
+            "validation_profile": {
+                "path": rel(evidence_dir / f"{prefix}-validation-profile.json"),
+                "status": validation_profile.get("status", "recorded"),
+            },
+            "clang_lowering_report": {
+                "path": rel(evidence_dir / f"{prefix}-clang-lowering-report.json"),
+                "status": typed_ir.get("source_artifact", {}).get("status", "recorded"),
+            },
+        },
+        "boundary": "This artifact records refusal conditions for signed right shift contracts; it does not accept the generated Rust draft as semantic proof.",
+    }
+    write_json(path, payload)
+    return payload
 
 
 def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip: bool) -> dict[str, Any]:
