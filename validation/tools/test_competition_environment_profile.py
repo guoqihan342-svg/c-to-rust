@@ -1,5 +1,6 @@
 import hashlib
 import json
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,11 @@ COMPAT_PROFILE_DIR = (
     / "environment-profiles"
     / "huawei-competition-ubuntu-24.04"
 )
+RUST_MANIFESTS = [
+    REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml",
+    REPO_ROOT / "validation" / "l2_slices" / "Cargo.toml",
+    REPO_ROOT / "flashDB_rust" / "Cargo.toml",
+]
 
 
 def load_json(path: Path) -> dict:
@@ -20,6 +26,11 @@ def load_json(path: Path) -> dict:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def direct_rust_dependencies(manifest: Path) -> set[str]:
+    cargo_toml = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    return set(cargo_toml.get("dependencies", {}))
 
 
 class CompetitionEnvironmentProfileTests(unittest.TestCase):
@@ -92,6 +103,57 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(lane["requires_env"], ["CLANG_PATH"])
         self.assertEqual(lane["ignored_env_for_ast_dump"], ["LIBCLANG_PATH"])
         self.assertEqual(lane["missing_status"], "missing_clang_path")
+
+    def test_dependency_admission_policy_governs_current_direct_dependencies(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        policy = profile["dependency_admission_policy"]
+
+        self.assertEqual(policy["schema_version"], 1)
+        self.assertEqual(policy["status"], "enforced")
+        self.assertEqual(policy["source_of_truth"], "config/competition-env/environment.json")
+        self.assertEqual(
+            policy["applies_to"]["manifest_paths"],
+            [
+                "crates/c2r-translator/Cargo.toml",
+                "validation/l2_slices/Cargo.toml",
+                "flashDB_rust/Cargo.toml",
+            ],
+        )
+        self.assertEqual(
+            policy["applies_to"]["default_paths_must_not_require"],
+            ["go", "cmake", "clang"],
+        )
+        self.assertIn("semantic_risk", policy["admission_rule"]["required_risk_basis"])
+        self.assertIn("generation_quality_risk", policy["admission_rule"]["required_risk_basis"])
+        self.assertIn("maintainability_risk", policy["admission_rule"]["required_risk_basis"])
+        self.assertIn("compatible_with_rust_1_96", policy["admission_rule"]["required_environment_fit"])
+        self.assertIn("does_not_require_unavailable_tool", policy["admission_rule"]["required_environment_fit"])
+
+        approved_rust = policy["approved_direct_dependencies"]["rust"]
+        self.assertEqual(sorted(approved_rust), ["serde", "serde_json"])
+        for dependency_name, admission in approved_rust.items():
+            with self.subTest(dependency_name=dependency_name):
+                self.assertEqual(admission["admission"], "approved")
+                self.assertTrue(admission["risk_basis"])
+                self.assertTrue(admission["environment_fit"])
+                self.assertIn("rust_1_96_compatible", admission["environment_fit"])
+
+        for manifest in RUST_MANIFESTS:
+            with self.subTest(manifest=manifest.relative_to(REPO_ROOT).as_posix()):
+                self.assertLessEqual(direct_rust_dependencies(manifest), set(approved_rust))
+
+        candidates = policy["candidate_dependencies"]
+        for dependency_name in ["libclang", "bindgen", "syn", "quote", "tracing", "anyhow"]:
+            with self.subTest(dependency_name=dependency_name):
+                self.assertEqual(candidates[dependency_name]["admission"], "not_approved")
+                self.assertTrue(candidates[dependency_name]["required_before_use"])
+
+    def test_core_validation_ci_runs_competition_environment_profile_tests(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "core-translator-validation-ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("validation.tools.test_competition_environment_profile", workflow)
 
     def test_compatibility_profile_stays_synchronized_with_default_profile(self) -> None:
         synchronized_files = [

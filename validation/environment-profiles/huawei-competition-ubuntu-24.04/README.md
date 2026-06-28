@@ -48,4 +48,5 @@ bash validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-c
 - Rust 代码必须保持 stable Rust `1.96.0` 兼容，不引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
 - Node/npm 脚本按 Node `v24.13.0` / npm `11.6.2` 适配。
+- 直接依赖必须通过 `environment.json.dependency_admission_policy` 准入。新增 libclang、bindgen、syn、quote、tracing、anyhow 或其他依赖前，必须记录它消除的具体语义风险、生成质量风险或可维护性风险，并证明它不破坏默认 competition profile。
 - 新生成的 validation evidence 应记录 `profile_id=huawei-competition-ubuntu-24.04` 和所用 `environment.json` 哈希。

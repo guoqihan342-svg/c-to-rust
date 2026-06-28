@@ -68,6 +68,109 @@
       "missing_status": "missing_clang_path"
     }
   },
+  "dependency_admission_policy": {
+    "schema_version": 1,
+    "status": "enforced",
+    "source_of_truth": "config/competition-env/environment.json",
+    "applies_to": {
+      "manifest_paths": [
+        "crates/c2r-translator/Cargo.toml",
+        "validation/l2_slices/Cargo.toml",
+        "flashDB_rust/Cargo.toml"
+      ],
+      "default_paths_must_not_require": [
+        "go",
+        "cmake",
+        "clang"
+      ],
+      "rust_toolchain": "stable-1.96.0",
+      "python": "3.12.3",
+      "node": "v24.13.0"
+    },
+    "admission_rule": {
+      "required_risk_basis": [
+        "semantic_risk",
+        "generation_quality_risk",
+        "maintainability_risk"
+      ],
+      "required_environment_fit": [
+        "compatible_with_rust_1_96",
+        "does_not_require_unavailable_tool",
+        "uses_configured_mirrors"
+      ],
+      "default_decision": "not_approved_until_documented"
+    },
+    "approved_direct_dependencies": {
+      "rust": {
+        "serde": {
+          "admission": "approved",
+          "risk_basis": [
+            "machine_readable_validation_and_translation_evidence"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
+        },
+        "serde_json": {
+          "admission": "approved",
+          "risk_basis": [
+            "machine_readable_validation_and_translation_evidence"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
+        }
+      }
+    },
+    "candidate_dependencies": {
+      "libclang": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove it removes a concrete semantic frontend risk not covered by CLANG_PATH AST dump JSON",
+          "prove competition profile fit and keep default non-clang gates working"
+        ]
+      },
+      "bindgen": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove generated bindings remove a concrete ABI or header modeling risk",
+          "prove no default dependency on clang, libclang, cmake, or go"
+        ]
+      },
+      "syn": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove it removes a concrete Rust generation-quality or maintainability risk",
+          "record direct-dependency justification separate from serde_derive transitive use"
+        ]
+      },
+      "quote": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove it removes a concrete Rust generation-quality or maintainability risk",
+          "record direct-dependency justification separate from serde_derive transitive use"
+        ]
+      },
+      "tracing": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove it removes a concrete observability or maintainability risk",
+          "record runtime/logging impact for competition validation"
+        ]
+      },
+      "anyhow": {
+        "admission": "not_approved",
+        "required_before_use": [
+          "prove it removes a concrete error-reporting maintainability risk",
+          "show it does not weaken structured evidence errors or fail-closed reasons"
+        ]
+      }
+    }
+  },
   "adaptation_policy": [
     "Do not require Go for build, test, validation, or migration gates.",
     "Do not require CMake in default competition gates; use Cargo, Python, gcc/g++, and GNU Make paths.",

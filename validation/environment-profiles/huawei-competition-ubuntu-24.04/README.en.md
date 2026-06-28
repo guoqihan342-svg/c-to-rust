@@ -48,4 +48,5 @@ bash validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-c
 - Rust code must remain compatible with stable Rust `1.96.0` and must not use nightly-only features.
 - Python scripts should target Python `3.12.3` / pip `24.0`.
 - Node/npm scripts should target Node `v24.13.0` / npm `11.6.2`.
+- Direct dependencies must be admitted by `environment.json.dependency_admission_policy`. Before adding libclang, bindgen, syn, quote, tracing, anyhow, or any other dependency, record the concrete semantic risk, generation-quality risk, or maintainability risk it removes, and prove it does not break the default competition profile.
 - Newly generated validation evidence should record `profile_id=huawei-competition-ubuntu-24.04` plus the hash of the `environment.json` path actually used.
