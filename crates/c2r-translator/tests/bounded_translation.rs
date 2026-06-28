@@ -270,6 +270,120 @@ fn clang_ast_fixture_replays_direct_call_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_record_field_subset_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/record_field_ast.json"))
+            .expect("fixture JSON");
+
+    let point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "point_x")
+        .expect("lower record value field read fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Member {
+                field,
+                is_arrow: false,
+                ..
+            }),
+        ..
+    }] = point_x.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected record value field read return, got {:?}",
+            point_x.function_ir.body
+        );
+    };
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&point_x.function_ir, &point_x.globals)
+        .expect("emit Rust from record value field read fixture");
+    let rust = &emitted.rust;
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub fn point_x(p: Point) -> i32"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-value-read", rust);
+
+    let set_point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "set_point_x")
+        .expect("lower record value field assignment fixture without invoking clang");
+    let [IrStmt::Assign { target, .. }, IrStmt::Return {
+        value: Some(IrExpr::Member { field, .. }),
+        ..
+    }] = set_point_x.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected record value field assignment and return, got {:?}",
+            set_point_x.function_ir.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: false, .. } if field == "x"),
+        "expected dot member assignment target, got {target:?}"
+    );
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&set_point_x.function_ir, &set_point_x.globals)
+        .expect("emit Rust from record value field assignment fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn set_point_x(mut p: Point, value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-value-assignment", rust);
+
+    let point_x_ptr = lower_function_and_globals_from_clang_ast_json_value(&ast, "point_x_ptr")
+        .expect("lower readonly record pointer field read fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Member {
+                field,
+                is_arrow: true,
+                ..
+            }),
+        ..
+    }] = point_x_ptr.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected readonly arrow member read return, got {:?}",
+            point_x_ptr.function_ir.body
+        );
+    };
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&point_x_ptr.function_ir, &point_x_ptr.globals)
+        .expect("emit Rust from readonly record pointer field read fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn point_x_ptr(p: &Point) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-arrow-read", rust);
+
+    let write_point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "write_point_x")
+        .expect("lower mutable record pointer field write fixture without invoking clang");
+    let [IrStmt::Assign { target, .. }] = write_point_x.function_ir.body.as_slice() else {
+        panic!(
+            "expected mutable arrow member assignment, got {:?}",
+            write_point_x.function_ir.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member assignment target, got {target:?}"
+    );
+    let emitted =
+        emit_rust_from_ir_with_globals(&write_point_x.function_ir, &write_point_x.globals)
+            .expect("emit Rust from mutable record pointer field write fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn write_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-arrow-write", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/pointer_value_boundary_ast.json"
