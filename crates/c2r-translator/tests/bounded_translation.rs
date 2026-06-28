@@ -11,11 +11,11 @@ use std::process::Command;
 use c2r_translator::clang_frontend::ClangParseSpec;
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 use c2r_translator::clang_frontend::{
-    lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
-    lower_function_from_clang_parse_spec_report, lower_function_skeleton,
-    lower_function_skeleton_report, ClangBinaryOperator, ClangExprSkeleton, ClangFunctionSkeleton,
-    ClangIncDecOperator, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton,
-    ClangUnaryOperator,
+    lower_function_and_globals_from_clang_ast_json_value, lower_function_from_clang_ast_dump,
+    lower_function_from_clang_ast_dump_report, lower_function_from_clang_parse_spec_report,
+    lower_function_skeleton, lower_function_skeleton_report, ClangBinaryOperator,
+    ClangExprSkeleton, ClangFunctionSkeleton, ClangIncDecOperator, ClangParamSkeleton,
+    ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator,
 };
 #[cfg(feature = "typed-ir")]
 use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
@@ -145,6 +145,24 @@ fn assert_rust_snippet_runs(name: &str, rust_code: &str, main_body: &str) {
     );
 
     fs::remove_dir_all(out_dir).unwrap();
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
+    let ast: Value = serde_json::from_str(include_str!("../fixtures/clang_ast/add_one_ast.json"))
+        .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_one")
+        .expect("lower committed clang AST fixture");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(lowered.globals.is_empty());
+    assert!(rust.contains("pub fn add_one(value: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return (value + 1i32);"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-add-one", rust);
 }
 
 #[cfg(feature = "typed-ir")]

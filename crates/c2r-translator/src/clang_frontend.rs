@@ -386,9 +386,9 @@ pub struct ClangLoweringReport {
 
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct LoweredFunctionWithGlobals {
-    function_ir: IrFunction,
-    globals: Vec<IrGlobal>,
+pub struct LoweredFunctionWithGlobals {
+    pub function_ir: IrFunction,
+    pub globals: Vec<IrGlobal>,
 }
 
 impl ClangParseSpec {
@@ -550,6 +550,14 @@ fn lower_function_and_globals_from_clang_ast_dump_with_arguments(
     function_name: &str,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let ast = clang_ast_dump_json(clang_path, arguments)?;
+    lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+}
+
+#[cfg(feature = "typed-ir")]
+pub fn lower_function_and_globals_from_clang_ast_json_value(
+    ast: &Value,
+    function_name: &str,
+) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let record_inventory = record_inventory_from_ast(&ast);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),

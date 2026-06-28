@@ -55,6 +55,9 @@ jobs:
       - name: Run translator feature matrix tests
         run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
 
+      - name: Run no-clang typed IR fixture replay
+        run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --no-default-features --features clang-frontend,typed-ir clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust -- --exact
+
       - name: Run core validation Python tests
         run: |
           python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
