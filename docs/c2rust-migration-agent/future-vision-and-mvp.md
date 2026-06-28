@@ -12,6 +12,8 @@
 
 从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。**本文件是唯一全局 roadmap/backlog 来源**；其它文档若出现 checklist、tasks、Next 或 P0/P1/P2 文字，只能是局部验收模板、OpenSpec change 任务、历史实施计划或分析材料，不能覆盖本文优先级。
 
+本文的 Phase 2/3/4 描述能力成熟阶段；P0/P1/P2 是默认执行队列。实际开工时以 P0/P1/P2 为准，遇到 Phase 条目和 P 队列交叉时，把对应能力拆成最小可验证切片执行。
+
 - **先扩翻译能力，再扩仪式**：新增 schema、manifest、gate 前，必须能说明它解决了具体翻译风险、验证误判或复现问题。
 - **FlashDB 只是用例**：可以继续用 FlashDB 做回归样本，但不能写 FlashDB 专用 recognizer、模板或特判路径。
 - **候选生成不等于语义接受**：typed IR、C2Rust、LLM 和手写规则都只是 candidate source；语义通过只由 C oracle、Rust replay、diff、negative diff、unsafe ledger 和 final verification 决定。
@@ -144,7 +146,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 
 ### P0: 先把当前 MVP 变成可信、可维护的翻译器核心
 
-- [ ] 拆分 `crates/c2r-translator/src/lib.rs`：当前仍约 69 行，先做行为保持拆分，把 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任拆到子模块；已完成公开 model schema 拆分、artifact/IO leaf helper（`write_json_file`、`write_text_file`、`translation_events_jsonl`）拆分、core translation artifact writer helper（`write_core_translation_artifacts`）拆分、feature-gated clang dry-run artifact writer（`write_clang_dry_run_artifact`）拆分、clang lowering report artifact writer cluster（`write_clang_lowering_report_artifact`、`typed_ir_candidate_evidence`、`readonly_global_summary`）拆分、clang-lowered translation/evidence 私有模块（`clang_lowered_translation.rs`）拆分、legacy string translator 私有模块（`legacy_translation.rs`）拆分，以及 `write_translation_artifacts` public orchestration 拆分，crate root API 保持兼容；仍待 CLI/manifest orchestration、generic typed IR route、unsafe/metadata 统计、parser/evidence builder/emitter 的后续拆分；拆分提交必须保持现有测试通过。
+- [ ] 继续收敛 `crates/c2r-translator/src/lib.rs`：crate root 已经缩成较小的 public orchestration 入口，但仍要把 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任继续拆到子模块；已完成公开 model schema 拆分、artifact/IO leaf helper（`write_json_file`、`write_text_file`、`translation_events_jsonl`）拆分、core translation artifact writer helper（`write_core_translation_artifacts`）拆分、feature-gated clang dry-run artifact writer（`write_clang_dry_run_artifact`）拆分、clang lowering report artifact writer cluster（`write_clang_lowering_report_artifact`、`typed_ir_candidate_evidence`、`readonly_global_summary`）拆分、clang-lowered translation/evidence 私有模块（`clang_lowered_translation.rs`）拆分、legacy string translator 私有模块（`legacy_translation.rs`）拆分，以及 `write_translation_artifacts` public orchestration 拆分，crate root API 保持兼容；仍待 CLI/manifest orchestration、generic typed IR route、unsafe/metadata 统计、parser/evidence builder/emitter 的后续拆分；拆分提交必须保持现有测试通过。
 - [ ] 拆分 `typed_ir.rs` / `clang_frontend.rs` 巨文件：先做行为保持拆分，把 IR 数据类型、类型/definite-assignment validation、emitter、side-effect helpers、clang AST skeleton、clang-to-IR lowering、report/evidence builder 分到稳定子模块；每一刀必须保持 feature matrix、public API、bounded tests、fixture replay 和 `git diff --check` 通过。
 - [x] 统一 clang 前端事实：当前主路径是 `CLANG_PATH` 调用 `clang -Xclang -ast-dump=json -fsyntax-only`；`--emit-clang-dry-run` artifact 现在标记 `artifact_kind=clang-dry-run`、`status=diagnostic_only`、`claim_boundary.role=diagnostic_only` 和 `active_frontend.kind=clang_ast_dump_json`，`LIBCLANG_PATH` 仅作为 `ignored_env_for_ast_dump`/`observed_libclang_path` 诊断元数据，不参与 lowering，也不表示真实 libclang 解析路径已启用。
 - [x] 明确比赛环境 clang 路线：`config/competition-env/environment.json` 现在把 clang 声明为 optional capability/optional lane；默认构建、测试和验证不要求 clang。需要真实 clang AST dump typed-IR 路线时使用 `auto_migrate.py --competition-clang-lane`，该 lane 自动启用 `clang-lowering-report`，要求 `CLANG_PATH`，缺失时清晰失败；只传 `--emit-clang-lowering-report` 仍是 diagnostic opt-in，缺 clang 时写 unavailable 报告。
