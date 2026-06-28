@@ -287,6 +287,34 @@ fn clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang() {
     assert!(error.reason.contains("division by zero literal"));
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_ub_refusals_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/scalar_refusals_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    for (function_name, expected_reason) in [
+        ("literal_modulo_by_zero", "modulo by zero literal"),
+        ("shift_count_out_of_range", "shift count literal 32"),
+        ("signed_right_shift_without_contract", "signed right shift"),
+    ] {
+        let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+            .unwrap_or_else(|error| panic!("lower committed clang AST fixture {function_name}: {error}"));
+        let error = match emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals) {
+            Ok(emitted) => panic!("fixture {function_name} must fail closed, emitted {}", emitted.rust),
+            Err(error) => error,
+        };
+
+        assert!(
+            error.reason.contains(expected_reason),
+            "expected {function_name} refusal to contain {expected_reason:?}, got {:?}",
+            error.reason
+        );
+    }
+}
+
 #[cfg(feature = "typed-ir")]
 fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
     IrType {
