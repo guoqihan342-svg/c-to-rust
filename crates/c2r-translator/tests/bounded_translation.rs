@@ -5986,6 +5986,49 @@ fn typed_ir_emits_direct_identifier_call_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_direct_call_argument_integral_cast() {
+    let u8_ty = ir_u8();
+    let u32_ty = ir_u32();
+    let void_ty = ir_void();
+    let ir = IrFunction {
+        name: "call_hook_cast".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u8_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![IrExpr::Cast {
+                    target: u32_ty,
+                    expr: Box::new(ir_var("value", u8_ty)),
+                    implicit: true,
+                    source_span: None,
+                }],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit direct call argument cast");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn call_hook_cast(value: u8)"));
+    assert!(rust.contains("observe((value as u32));"));
+    assert_rust_snippet_compiles(
+        "typed-ir-direct-call-argument-integral-cast",
+        &format!("fn observe(_: u32) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_reserved_c_macro_direct_call() {
     for callee in [
         "assert",

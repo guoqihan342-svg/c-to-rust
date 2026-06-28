@@ -383,6 +383,8 @@
         "IntegralPromotion explicit typed IR cast in conditional-operator condition contexts",
         "IntegralCast explicit typed IR cast in if/while/do/for condition contexts",
         "IntegralPromotion explicit typed IR cast in if/while/do/for condition contexts",
+        "IntegralCast explicit typed IR cast in direct-call argument contexts",
+        "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
         "LValueToRValue transparent lvalue-read skeleton boundary",
         "NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -392,7 +394,7 @@
       "dimension_status": {
         "clang_fixture_replay": {
           "status": "gap",
-          "reason": "current coverage is clang AST skeleton unit coverage for expression-level, conditional-operator condition, and control-flow condition integral ImplicitCastExpr preservation; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
+          "reason": "current coverage is clang AST skeleton unit coverage for expression-level, direct-call argument, conditional-operator condition, and control-flow condition integral ImplicitCastExpr preservation; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
         },
         "handwritten_ir": {
           "status": "not_applicable",
@@ -409,7 +411,7 @@
         },
         "runtime_emitted_rust": {
           "status": "gap",
-          "reason": "current coverage proves clang skeleton/IR integral cast preservation in value, conditional-operator condition, and control-flow condition contexts plus fail-closed boundaries only; no emitted Rust compile or runtime behavior gate is claimed for this row"
+          "reason": "current coverage proves clang skeleton/IR integral cast preservation in value, direct-call argument, conditional-operator condition, and control-flow condition contexts plus fail-closed boundaries only; emitted Rust compile coverage for direct-call argument casts is tracked in the direct-call row, not as a full implicit-cast runtime gate"
         },
         "c_rust_diff": {
           "status": "gap",
@@ -431,6 +433,14 @@
         },
         {
           "name": "stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_direct_call_arg_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_direct_call_arg_integral_promotion",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
@@ -991,6 +1001,8 @@
         "direct CallExpr",
         "bounded external callee context",
         "reserved C macro/stdlib/extern callee fail-closed",
+        "integer cast direct-call argument",
+        "integer promotion direct-call argument",
         "function-to-pointer decay value fail-closed",
         "pointer value call argument/return fail-closed",
         "route candidate evidence"
@@ -1023,6 +1035,10 @@
             {
               "name": "direct call expression translator tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_direct_call_argument_integral_cast",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1048,6 +1064,10 @@
           "evidence": [
             {
               "name": "direct call emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_direct_call_argument_integral_cast",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1086,6 +1106,18 @@
         },
         {
           "name": "clang_ast_fixture_replays_direct_call_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_direct_call_arg_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_direct_call_arg_integral_promotion",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "typed_ir_emits_direct_call_argument_integral_cast",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],

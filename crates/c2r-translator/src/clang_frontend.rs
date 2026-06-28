@@ -1959,7 +1959,7 @@ fn expr_skeleton_from_ast_with_options(
             })
         }
         Some("InitListExpr") => init_list_expr_skeleton_from_ast(expr),
-        Some("CallExpr") => call_expr_skeleton_from_ast(expr, preserve_integral_casts),
+        Some("CallExpr") => call_expr_skeleton_from_ast(expr),
         Some("UnaryOperator") => {
             let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
                 kind: "invalid_unary_operator".to_string(),
@@ -2276,10 +2276,7 @@ fn inc_dec_expr_skeleton_from_ast(
 }
 
 #[cfg(feature = "typed-ir")]
-fn call_expr_skeleton_from_ast(
-    expr: &Value,
-    preserve_integral_casts: bool,
-) -> Result<ClangExprSkeleton, ClangFrontendError> {
+fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
     let children = inner(expr);
     let Some((callee_node, arg_nodes)) = children.split_first() else {
         return Err(ClangFrontendError {
@@ -2298,7 +2295,7 @@ fn call_expr_skeleton_from_ast(
     };
     let mut args = Vec::with_capacity(arg_nodes.len());
     for arg_node in arg_nodes {
-        let arg = expr_skeleton_from_ast_with_options(arg_node, preserve_integral_casts)?;
+        let arg = expr_skeleton_from_ast_with_options(arg_node, true)?;
         args.push(arg);
     }
     if let Some(reason) = bounded_call_args_rejection_reason(&args) {
@@ -4744,6 +4741,160 @@ mod tests {
         assert!(matches!(
             args.as_slice(),
             [IrExpr::Var { name, .. }] if name == "value"
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_direct_call_arg_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void (*)(uint32_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void (uint32_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "observe"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralCast",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "uint8_t" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "uint8_t" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("direct call statement skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower direct call statement");
+
+        let IrStmt::Expr {
+            expr: IrExpr::Call { callee, args, .. },
+            ..
+        } = ir
+        else {
+            panic!("expected IR expr call statement, got {ir:?}");
+        };
+        assert_eq!(callee, "observe");
+        let [IrExpr::Cast {
+            target,
+            expr,
+            implicit,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected direct call argument cast, got {args:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
+        ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_direct_call_arg_integral_promotion() {
+        let stmt = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "void" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "void (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "void (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "observe"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "IntegralPromotion",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "uint8_t" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "uint8_t" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = stmt_skeleton_from_ast(&stmt).expect("direct call statement skeleton");
+        let ir = lower_stmt(&skeleton).expect("lower direct call statement");
+
+        let IrStmt::Expr {
+            expr: IrExpr::Call { callee, args, .. },
+            ..
+        } = ir
+        else {
+            panic!("expected IR expr call statement, got {ir:?}");
+        };
+        assert_eq!(callee, "observe");
+        let [IrExpr::Cast {
+            target,
+            expr,
+            implicit,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected direct call argument promotion, got {args:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
         ));
     }
 
