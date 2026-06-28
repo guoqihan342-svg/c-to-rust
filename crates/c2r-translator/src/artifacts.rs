@@ -158,9 +158,32 @@ pub fn write_translation_artifacts(
         status: status.to_string(),
         artifact_paths: artifacts
             .into_iter()
-            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .map(|path| portable_artifact_path(&path))
             .collect(),
     })
+}
+
+fn portable_artifact_path(path: &Path) -> String {
+    if path.is_absolute() {
+        if let Ok(current_dir) = std::env::current_dir() {
+            if let Ok(relative) = path.strip_prefix(&current_dir) {
+                return path_to_manifest_string(relative);
+            }
+        }
+        if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+            let crate_dir = Path::new(manifest_dir);
+            if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
+                if let Ok(relative) = path.strip_prefix(repo_root) {
+                    return path_to_manifest_string(relative);
+                }
+            }
+        }
+    }
+    path_to_manifest_string(path)
+}
+
+fn path_to_manifest_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -779,6 +802,31 @@ mod core_translation_artifact_tests {
         assert!(out_dir
             .join("l3-artifact-orchestration-clang-lowering-report.json")
             .exists());
+    }
+
+    #[test]
+    fn write_translation_artifacts_manifest_paths_are_repo_relative() {
+        let spec = SliceSpec {
+            target_id: "demo-target".to_string(),
+            slice_id: "repo-relative-artifacts".to_string(),
+            source_commit: "abcdef0".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            function_name: "identity".to_string(),
+            c_source: "int identity(int value) { return value; }".to_string(),
+            ..SliceSpec::default()
+        };
+        let out_dir = std::env::current_dir()
+            .unwrap()
+            .join("target/c2r-translator-tests/repo-relative-artifacts");
+
+        let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+        assert!(!manifest
+            .artifact_paths
+            .iter()
+            .any(|path| path.contains(':') || path.starts_with('/')));
+        assert!(manifest.artifact_paths.iter().all(|path| path
+            .starts_with("target/c2r-translator-tests/repo-relative-artifacts/")));
     }
 }
 
