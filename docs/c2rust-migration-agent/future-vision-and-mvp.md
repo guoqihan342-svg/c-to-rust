@@ -16,6 +16,8 @@
 - **FlashDB 只是用例**：可以继续用 FlashDB 做回归样本，但不能写 FlashDB 专用 recognizer、模板或特判路径。
 - **候选生成不等于语义接受**：typed IR、C2Rust、LLM 和手写规则都只是 candidate source；语义通过只由 C oracle、Rust replay、diff、negative diff、unsafe ledger 和 final verification 决定。
 - **C oracle 也有边界**：oracle 只能证明固定 source commit、fixture、编译器/flags、target ABI、平台模型和 observable output contract 下的行为；未定义行为、实现定义行为、硬件/RTOS/volatile 副作用和测试覆盖不足必须显式记录，不能被"通过测试"掩盖。
+- **fail-closed 不能变成死胡同**：拒绝翻译时必须给出可执行的下一步，包括 source span、unsupported construct、需要补的 IR/lowering 规则、oracle/fixture 缺口、可尝试的候选源和人工 review 输入；否则只能算 blocked，不算治理成功。
+- **evidence 成本必须受控**：release 必需证据、开发 smoke、诊断日志和历史归档要分级；新增 evidence 生成流程必须记录耗时、文件大小、保留/压缩/清理策略，不能让元数据增长吞掉翻译开发效率。
 - **unsafe 数字不是安全证明**：unsafe budget 是治理指标，不是 FFI、硬件、volatile、ABI 或并发语义已经安全建模的证明；0 findings 只能说明当前扫描范围内未发现 first-party non-test `unsafe`。
 - **C2Rust baseline 必须可追溯**：route/profile 中的 C2Rust candidate 只能作为 `candidate_context_only`，必须绑定 baseline manifest；当 baseline 真正生成输出时，还必须绑定 output path/status/sha256，并由 validator 拒绝漂移。
 - **C2Rust skipped 不能算候选成功**：baseline 为 `skipped`、`blocked` 或无 output 时，必须记录 reason、toolchain/env、input hash 和 `output_ref=null`；不得把 skipped 计入 generated、compiled、accepted 或 semantic pass。
@@ -160,10 +162,12 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] 加强 unsafe ledger 治理粒度：登记项后续应扩展到 span、替代方案、覆盖测试、source evidence 和审核状态，而不是只依赖 path+category 的最小登记键。
 - [ ] 执行 `CONTEXT.md` handoff 收敛：建立短 current-state 入口，归档或拆分 superseded 长历史段，并给旧段标明“历史记录、不可作为当前能力事实”；release/README/roadmap 不得依赖 `CONTEXT.md` 的旧会话段作为能力证明。
 - [ ] 执行 evidence portability 清理：新增 validator 或报告检查本机绝对路径、旧 WSL/Windows 工作目录、不可复现临时目录和缺失 profile hash；历史 evidence 可保留但必须标为 historical/diagnostic，新 milestone evidence 必须可从 repo + competition profile 复现。
+- [ ] 建立 evidence 成本和保留策略：区分 committed release evidence、CI smoke evidence、diagnostic-only logs 和 historical archive；每条证据流水线都要报告 runtime、artifact count、total bytes、retention class、compression/prune policy，避免 1000+ evidence 文件继续无边界增长。
 - [ ] 治理 OpenSpec/validation 复杂度：归档或关闭过期 active changes，区分 lightweight release gate、developer smoke gate 和 full-regression gate；默认阅读入口只指向当前 roadmap、quickstart、coverage/capability report 和 milestone evidence，不让 1000+ evidence 文件或长 OpenSpec 历史成为新手入口。
 - [ ] 收窄公开叙述：README、路线图和 evidence summary 必须区分 L1 native-build baseline、candidate generation、accepted semantic pass；不能把 native-build catalogue 写成真实项目自动翻译完成。
 - [ ] 标明 showcase 边界：`flashDB_rust` 当前属于手写安全实现/验证基线，不能被当作自动翻译产物；任何对外展示都必须区分 handwritten implementation、translator-generated candidate、accepted evidence 和 semantic pass。
 - [ ] 落地 L0-L4 路由治理：区分 catalogue/native baseline、translation route signal 和 semantic acceptance；L0 只代表 deterministic 0-token candidate signal，L1 包含 native C baseline，也可在当前 route policy 中表示非 scalar typed IR candidate signal，L2 代表候选编译 + unsafe/diff 证据，L3 才能声明 named slice 语义通过，L4 是拒绝或 accepted-evidence-authoritative 边界。
+- [ ] 建立 fail-closed repair playbook：每个 L4/refused 或 blocked slice 必须输出 source span、IR feature gap、oracle/fixture gap、可尝试路线（typed IR/C2Rust/LLM/manual）、最小下一步测试和人工介入点；没有这些字段时不得把拒绝包装成“已治理”。
 - [x] 禁止 clang-lowered typed IR 失败后无遥测地静默 fallback 到 legacy string translator：translator 原始 artifact 现在写入 `translation_source`，fallback 时记录 `selected`、`fallback_from`、`fallback_reason`，JSONL 追加 `translation_fallback`；`auto_migrate.py` 归一化后继续保留该字段，并在 `route_decision.candidate_generation.primary_candidate` 中绑定主候选来源。
 - [ ] 降级并退役 legacy string translator：把它标成 compatibility-only candidate source，默认 route/metrics 中单独计数，禁止把它称为 parser 或 typed-IR success；当 no-clang fixture replay 与真实 clang lane 覆盖最小切片后，从 primary candidate path 中移除，只保留诊断或历史 evidence 兼容入口。
 - [x] 把 route metadata 的最小候选清单做实为 provenance：`auto_migrate.py` 现在在 route/profile evidence 中写入 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`，覆盖 primary Rust draft、typed-IR signal 和 `c2rust-baseline` context；validator 会拒绝 id 漂移、C2Rust baseline 冒充语义来源和 candidate `semantic_pass=true`。
@@ -193,6 +197,7 @@ input.c  →  clang AST dump  →  Semantic IR  →  Lowering  →  Rust candida
 - [ ] 在 P0 语义稳定后再做多候选 router：把 L0 deterministic recipes、L1 generic typed IR、L2 C2Rust baseline/repair、L3 LLM candidate、L4 refuse 汇入同一个可审计 decision object，带 score 或 hard gate。这不能替代 C oracle，也不能让任何候选绕过共同 validation pipeline。
 - [ ] 发布量化评估和案例报告：每个 milestone 都应给出真实项目/函数数、accepted/refused/blocked 比例、主要失败类别、平均人工介入点、性能 smoke 结果、unsafe 统计、可复现命令、evidence hash、社区复核状态和已知 non-goals；同时加入竞品/基线对比，至少比较 raw C2Rust、C2Rust+repair、当前 typed-IR route、LLM candidate 和手写参考实现的生成率、编译率、accepted 率、人工介入点、unsafe/性能边界；没有这些数据时只能称为研究原型/受限 MVP。
 - [ ] 建立开源反馈循环：外部可评估 milestone 前补 `CONTRIBUTING`/issue template/review checklist 或等价文档，记录 review/PR/issue 反馈入口；社区指标不能当能力证明，但没有公开反馈记录时不得把 release 写成成熟生产工具。
+- [ ] 降低单一维护者风险：外部 milestone 前补 CODEOWNERS 或等价 ownership 文档、reviewer rotation、issue triage 规则和 release checklist；关键验证命令、证据生成、路由决策和发布流程不得只依赖单个维护者或单次 Codex 会话记忆。
 - [ ] 补新手 quickstart：README 或 `docs/quickstart` 必须提供 10-15 分钟最小复现路径，包含环境前提、competition Linux/CI 命令、可选 PowerShell 本机命令、第一条可验证 slice、预期 artifacts、常见失败和边界说明；不能让新用户从 `CONTEXT.md` 或历史 evidence 反推入口。
 - [ ] 把 CFG/SSA/MIR/LLVM/self-hosting 等研究路线放在长期 backlog；在 P0 CI、模块拆分、真实切片语义通过率稳定前，不把它们作为主线开发。
 

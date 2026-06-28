@@ -10459,3 +10459,36 @@ English mirror summary:
 边界：
 - 可以说：这次把成熟度、C2Rust skipped、复现路径、catalog L1 failure、竞品对比和 quickstart 风险纳入 roadmap，并收窄了 real-clang evidence 表述。
 - 不应说：C2Rust 已可执行、durable real-clang evidence 已提交、quickstart 已实现、catalog L1 失败治理已实现或 OpenSpec/validation 复杂度已收敛。
+
+## 157. 2026-06-28 external review triage: fail-closed repair and evidence cost
+
+本轮处理用户新贴的缺点评价。两个只读子智能体分别核查当前仓库事实与 `future-vision-and-mvp.md` 覆盖情况。结论是：评价大方向可参考，但多数风险已经在上一轮 roadmap 中覆盖；本轮只补两个真正缺口，避免重复堆待办。
+
+判断：
+- 成立或部分成立：当前语法覆盖仍有限；端到端真实切片案例少；项目不能被包装成生产级通用 C→Rust 工具；严格验证和 fail-closed 会带来人工介入成本；evidence/validation 的时间和存储成本需要治理。
+- 已覆盖不需重复：Agent/LLM 只作为 candidate source；社区反馈和 milestone review；quickstart；公开叙述边界；C2Rust skipped；Linux/CI 复现路径；FlashDB 只是用例；复杂 C 特性如 function pointer/union/macro/多文件 TU 仍在 P1/P2/P4 待办。
+- 不准确或无法仅凭本地仓库确认：根目录并非没有 `README.md`；`CONTEXT.md` 当前可访问，但不能作为外部评估入口；star/fork/watch 属于 GitHub 社区指标，本地仓库只能把“缺少公开反馈记录不得宣称成熟”写入 release 规则，不能把实时社区数字作为代码事实。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：fail-closed 不能变成死胡同；拒绝翻译时必须给出 source span、unsupported construct、缺失 IR/lowering 规则、oracle/fixture 缺口、可尝试候选源和人工 review 输入。
+- 执行规则新增：evidence 成本必须受控；release evidence、developer smoke、diagnostic logs 和 historical archive 要分级，并记录 runtime、file size、retention/compression/prune policy。
+- P0 新增：建立 evidence 成本和保留策略，报告 runtime、artifact count、total bytes、retention class、compression/prune policy。
+- P0 新增：建立 fail-closed repair playbook，每个 L4/refused 或 blocked slice 输出 source span、IR feature gap、oracle/fixture gap、可尝试路线、最小下一步测试和人工介入点。
+- P2 新增：降低单一维护者风险，外部 milestone 前补 CODEOWNERS/ownership 文档、reviewer rotation、issue triage 规则和 release checklist，关键流程不得依赖单个维护者或单次 Codex 会话记忆。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/9
+- Phase 4: 0/8
+- P0: 7/31
+- P1: 0/10
+- P2: 0/9
+
+边界：
+- 可以说：这次把 fail-closed 后续修复路径、evidence 成本治理和单一维护者风险补进 roadmap。
+- 不应说：repair playbook、evidence retention validator、evidence prune policy、CODEOWNERS 或 reviewer rotation 已经实现。
