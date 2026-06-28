@@ -55,6 +55,8 @@ These fields may record host facts, but they must not become reproducible entryp
 - `diagnostic_only`: debug logs, stdout/stderr, and host-local diagnostics; not semantic claim anchors.
 - `historical_archive`: older L1/L2 catalogues, experiments, and broad audit material for historical traceability only.
 
+`target/full-regression/<run-id>` is `ci_smoke`, not committed release evidence. Its `summary.json`, `events.jsonl`, and logs are reusable developer/CI smoke records; local absolute `evidence_root`, `working_directory`, and `log` fields are treated as diagnostic metadata rather than claim anchors. Each pipeline report lists `artifact_count`, `total_bytes`, `runtime_ms`, `retention_class`, compression/prune policy, and `report_artifacts`.
+
 ## Current Boundary
 
 The tool is the report/validator foundation, not a cleanup tool. It exposes historical absolute paths but does not require the whole repository to pass a portability gate immediately. Promoting it to a release gate requires historical evidence classification, retention-policy confirmation, and refreshed milestone evidence first.

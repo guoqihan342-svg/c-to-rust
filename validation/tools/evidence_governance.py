@@ -112,7 +112,7 @@ def build_inventory(repo_root: Path, evidence_dir: Path) -> dict[str, Any]:
     for path in files:
         size = path.stat().st_size
         total_bytes += size
-        retention_class = retention_class_for(path.relative_to(evidence_dir))
+        retention_class = retention_class_for(path.relative_to(evidence_dir), evidence_dir=evidence_dir)
         class_counts[retention_class] += 1
         class_bytes[retention_class] += size
         largest_files.append(
@@ -122,8 +122,7 @@ def build_inventory(repo_root: Path, evidence_dir: Path) -> dict[str, Any]:
                 "retention_class": retention_class,
             }
         )
-        payload = load_structured_payload(path)
-        if payload is not None:
+        for _, payload in structured_payloads(path):
             runtime_ms_observations.extend(find_duration_ms(payload))
 
     largest_files.sort(key=lambda item: item["bytes"], reverse=True)
@@ -166,11 +165,11 @@ def build_pipeline_inventory(repo_root: Path, evidence_dir: Path, files: list[Pa
         total_bytes = sum(path.stat().st_size for path in pipeline_files)
         durations = []
         for path in pipeline_files:
-            payload = load_structured_payload(path)
-            if payload is not None:
+            for _, payload in structured_payloads(path):
                 durations.extend(find_duration_ms(payload))
         retention_counts = Counter(
-            retention_class_for(path.relative_to(evidence_dir)) for path in pipeline_files
+            retention_class_for(path.relative_to(evidence_dir), evidence_dir=evidence_dir)
+            for path in pipeline_files
         )
         retention_class = retention_counts.most_common(1)[0][0]
         pipeline = {
@@ -181,10 +180,24 @@ def build_pipeline_inventory(repo_root: Path, evidence_dir: Path, files: list[Pa
             "retention_class": retention_class,
             "compression_policy": compression_policy_for(retention_class),
             "prune_policy": prune_policy_for(retention_class),
+            "report_artifacts": report_artifacts_for(repo_root, pipeline_files),
         }
         pipeline.update(pipeline_identity(relative_pipeline))
         pipelines.append(pipeline)
     return pipelines
+
+
+def report_artifacts_for(repo_root: Path, pipeline_files: list[Path]) -> list[str]:
+    report_names = []
+    for path in sorted(pipeline_files):
+        name = path.name.lower()
+        if (
+            name in {"summary.json", "events.jsonl"}
+            or "report" in name
+            or name.endswith("-manifest.json")
+        ):
+            report_names.append(rel_or_posix(repo_root, path))
+    return report_names
 
 
 def build_candidate_generation_inventory(files: list[Path]) -> dict[str, Any]:
@@ -295,6 +308,7 @@ def build_portability_report(repo_root: Path, evidence_dir: Path) -> dict[str, A
                 node=payload,
                 json_path="$",
                 segments=[],
+                evidence_dir=evidence_dir,
                 issues=issues,
                 profile_hash_issues=profile_hash_issues,
                 diagnostic_host_metadata=diagnostic_host_metadata,
@@ -319,6 +333,7 @@ def scan_payload(
     node: Any,
     json_path: str,
     segments: list[str],
+    evidence_dir: Path,
     issues: list[dict[str, Any]],
     profile_hash_issues: list[dict[str, Any]],
     diagnostic_host_metadata: list[dict[str, Any]],
@@ -343,6 +358,7 @@ def scan_payload(
                 node=value,
                 json_path=f"{json_path}.{key}",
                 segments=[*segments, str(key)],
+                evidence_dir=evidence_dir,
                 issues=issues,
                 profile_hash_issues=profile_hash_issues,
                 diagnostic_host_metadata=diagnostic_host_metadata,
@@ -357,6 +373,7 @@ def scan_payload(
                 node=value,
                 json_path=f"{json_path}[{index}]",
                 segments=[*segments, "[]"],
+                evidence_dir=evidence_dir,
                 issues=issues,
                 profile_hash_issues=profile_hash_issues,
                 diagnostic_host_metadata=diagnostic_host_metadata,
@@ -369,7 +386,7 @@ def scan_payload(
             "json_path": json_path,
             "value": node,
         }
-        if is_claim_anchor_path(segments):
+        if is_claim_anchor_path(segments, evidence_dir=evidence_dir):
             issues.append({"code": "absolute_claim_anchor_path", **record})
         else:
             diagnostic_host_metadata.append({"code": "diagnostic_host_metadata_path", **record})
@@ -415,9 +432,11 @@ def find_duration_ms(node: Any) -> list[int]:
     return values
 
 
-def retention_class_for(relative_path: Path) -> str:
+def retention_class_for(relative_path: Path, *, evidence_dir: Path | None = None) -> str:
     parts = set(relative_path.parts)
     name = relative_path.name.lower()
+    if is_full_regression_root(evidence_dir):
+        return "ci_smoke"
     if name.endswith(".log") or "stdout" in name or "stderr" in name or "diagnostic" in parts:
         return "diagnostic_only"
     if "ci-smoke" in parts or "ci_smoke" in parts:
@@ -427,8 +446,24 @@ def retention_class_for(relative_path: Path) -> str:
     return "historical_archive"
 
 
-def is_claim_anchor_path(segments: list[str]) -> bool:
+def is_full_regression_root(evidence_dir: Path | None) -> bool:
+    if evidence_dir is None:
+        return False
+    parts = {part.lower() for part in evidence_dir.parts}
+    return evidence_dir.name.lower() == "full-regression" or (
+        "target" in parts and "full-regression" in parts
+    )
+
+
+def is_claim_anchor_path(segments: list[str], *, evidence_dir: Path | None = None) -> bool:
     leaf = segments[-1] if segments else ""
+    if is_full_regression_root(evidence_dir) and leaf in {
+        "evidence_root",
+        "events",
+        "log",
+        "working_directory",
+    }:
+        return False
     if leaf in DIAGNOSTIC_KEYS:
         return False
     if any(segment in DIAGNOSTIC_SEGMENTS for segment in segments):

@@ -154,6 +154,52 @@ class EvidenceGovernanceTests(unittest.TestCase):
             self.assertEqual(metrics["by_role"]["compatibility_rust_draft"], 1)
             self.assertEqual(metrics["selected_candidate_count"], 0)
 
+    def test_full_regression_inventory_is_ci_smoke_with_report_artifacts_and_runtime(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            run_dir = root / "target/full-regression/run-1"
+            self._write_json(
+                run_dir / "summary.json",
+                {
+                    "status": "passed",
+                    "duration_ms": 17,
+                    "evidence_root": "F:/agent/crustpaper/0625ctr/target/full-regression/run-1",
+                    "working_directory": "F:/agent/crustpaper/0625ctr",
+                },
+            )
+            self._write(
+                run_dir / "events.jsonl",
+                json.dumps(
+                    {
+                        "event": "step",
+                        "duration_ms": 5,
+                        "log": "F:/agent/crustpaper/0625ctr/target/full-regression/run-1/step.log",
+                    }
+                )
+                + "\n",
+            )
+            self._write(run_dir / "round.log", "full regression smoke output\n")
+
+            report = evidence_governance.build_report(root, evidence_root=Path("target/full-regression"))
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["portability"]["claim_anchor_issue_count"], 0)
+            self.assertGreaterEqual(report["portability"]["diagnostic_host_metadata_count"], 3)
+            self.assertEqual(report["inventory"]["retention_classes"]["ci_smoke"]["file_count"], 3)
+            self.assertEqual(report["inventory"]["runtime"]["observation_count"], 2)
+            self.assertEqual(report["inventory"]["runtime"]["total_duration_ms"], 22)
+            pipelines = {
+                pipeline["pipeline_id"]: pipeline for pipeline in report["inventory"]["pipelines"]
+            }
+            self.assertIn("target/full-regression/run-1", pipelines)
+            pipeline = pipelines["target/full-regression/run-1"]
+            self.assertEqual(pipeline["retention_class"], "ci_smoke")
+            self.assertEqual(pipeline["artifact_count"], 3)
+            self.assertEqual(pipeline["runtime_ms"], 17)
+            self.assertEqual(pipeline["prune_policy"], "may_prune_after_ci_retention_window")
+            self.assertIn("target/full-regression/run-1/summary.json", pipeline["report_artifacts"])
+            self.assertIn("target/full-regression/run-1/events.jsonl", pipeline["report_artifacts"])
+
     def test_translator_artifact_paths_are_claim_anchor_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
             root = Path(tmp)

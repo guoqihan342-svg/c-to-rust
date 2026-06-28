@@ -55,6 +55,8 @@ python -B -m unittest validation.tools.test_evidence_governance
 - `diagnostic_only`：调试日志、stdout/stderr、host-local 诊断信息，不作为语义 claim anchor。
 - `historical_archive`：旧 L1/L2 catalogue、旧实验记录和广义审计材料，仅用于历史追溯。
 
+`target/full-regression/<run-id>` 属于 `ci_smoke`，不是 committed release evidence。该目录下的 `summary.json`、`events.jsonl` 和日志只作为可重跑的开发/CI smoke 记录；其中的 `evidence_root`、`working_directory`、`log` 等本机绝对路径按 diagnostic metadata 处理，不作为 claim anchor。每条 pipeline 报告会列出 `artifact_count`、`total_bytes`、`runtime_ms`、`retention_class`、压缩/清理策略和 `report_artifacts`。
+
 ## 当前边界
 
 当前工具是 report/validator 基础层，不是清理器。它会把历史 absolute path 暴露出来，但不会强制全仓库立即通过 portability gate。要把它提升为 release gate，必须先完成历史 evidence 分类、保留策略确认和 milestone evidence 刷新。
