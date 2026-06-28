@@ -29,6 +29,10 @@ The Chinese source currently contains these major headings:
 - `# 全量回归`
 - `## 设计原则`
 
+## Current OpenCode Competition Summary
+
+The Chinese README now treats the 600-minute figure as an optional external evaluation budget, not as an optimization target. The competition path prioritizes accuracy and complete evidence, may process independent slices with parallel agents or batch workers, and requires isolated worker outputs plus common validator/final-verification acceptance.
+
 ## Maintenance Notes
 
 - Keep filenames paired as `README.md` and `README.en.md` in the same directory.

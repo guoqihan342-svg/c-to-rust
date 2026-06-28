@@ -4,7 +4,7 @@ Chinese original: `opencode-single-interaction.md`.
 
 ## Overview
 
-The competition evaluation model: OpenCode reads this repository and completes the C-to-Rust migration in a **single interaction**, with a timeout cap of **600 minutes (10 hours)**. No multi-round prompt tuning, no mid-session branch switching, no external human intervention.
+The competition evaluation model: OpenCode reads this repository and completes the C-to-Rust migration in a **single interaction**. If the evaluator sets a **600-minute (10-hour)** timeout cap, treat it as an external budget reference. This project still optimizes for accuracy first, not for saving time at the cost of validation. No multi-round prompt tuning, no mid-session branch switching, no external human intervention.
 
 ## Goal
 
@@ -24,16 +24,16 @@ Output requirements:
 
 ## Single-Interaction Design Principles
 
-To complete reliably within 600 minutes, the project architecture follows these principles:
+To maximize semantic accuracy within one interaction, the project architecture follows these principles:
 
 1. **One prompt, full pipeline.** No agent loop, no multi-turn dialogue, no human mid-process decisions.
-2. **Sequential execution, not parallel.** Avoid parallel subagent synchronization overhead and inconsistency risks. Verify each stage before proceeding to the next.
-3. **Fail-closed, no iterative repair.** When the translator encounters an unsupported C construct, it refuses and records the reason. No LLM repair loop. Only deterministically-passing candidates enter the validation pipeline.
+2. **Parallelism is allowed, but evidence must converge through one gate.** Multiple subagents or batch workers may process independent slices. Each worker must write to an isolated output directory, and the common validator/final verification must aggregate the result. An agent's conversational judgment is never acceptance evidence.
+3. **Fail-closed; do not loosen gates to save time.** When the translator encounters an unsupported C construct, it refuses and records the reason. Only deterministically-passing candidates enter the validation pipeline.
 4. **Evidence-driven, not dialogue-driven.** Correctness depends on machine-verifiable evidence (C oracle + Rust replay + diff + negative diff), not on agent conversational skill.
 
-## Pipeline and Time Estimates
+## Pipeline and Reference Time Estimates
 
-Per-slice estimates using `auto_migrate.py` (real C source function, with clang lowering):
+These estimates are only for planning, not acceptance criteria. Competition and development both prioritize semantic accuracy and evidence completeness. Per-slice estimates using `auto_migrate.py` (real C source function, with clang lowering):
 
 | Stage | Operation | Estimated |
 |-------|-----------|-----------|
@@ -52,14 +52,14 @@ Per-slice estimates using `auto_migrate.py` (real C source function, with clang 
 
 For FlashDB crc32 (the proven case): typed IR candidate generation to validation profile generation takes ~5-8 minutes.
 
-**Concurrency strategy**: within a single round, 3-5 independent slices (different functions with no mutual dependencies) can run without blocking each other. Total estimate: ~20 min per slice, 5 slices feasible in one round.
+**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence.
 
 ## OpenCode Single-Interaction Prompt Template
 
 ```
 You are a C-to-Rust automatic translation agent. Your working directory is the root of this repository.
 
-Complete the following tasks in order. No extra exploration. No parallelism. Verify each step before continuing.
+Run the environment check first, then process real C slices. Independent slices may run in parallel, but every worker must use an isolated output directory; final validation and summary checks must converge through the common gates.
 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — Verify the environment meets the competition baseline.
@@ -76,9 +76,9 @@ Complete the following tasks in order. No extra exploration. No parallelism. Ver
 5. openspec validate --all --strict
    — Full OpenSpec validation.
 
-6. If time permits, repeat steps 2-4 for additional real C source functions.
+6. To improve coverage and accuracy, repeat steps 2-4 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be validated by the common gates.
 
-Time limit: 600 minutes. Before running, use the read tool to review CONTEXT.md for current state.
+If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
 If a command fails, record the reason and do not enter a repair loop.
 ```
@@ -88,7 +88,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not modify project Rust/Python source code** (unless `blocked_repairs` evidence already exists and the original text explicitly allows repair).
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
-- **Do not parallelize subagents** (parallelism introduces uncertainty in single-interaction; this project is designed as a sequential reliable pipeline).
+- **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.
 - **All evidence files must be written to disk**; the validator reads disk files directly, not in-memory constructs.
 
@@ -96,7 +96,7 @@ If a command fails, record the reason and do not enter a repair loop.
 
 | Failure Scenario | Handling |
 |------------------|----------|
-| `CLANG_PATH` not set and no vendored clang | `missing_clang_path`; typed IR lane unavailable. Fall back to string translator (demo slices only). |
+| `CLANG_PATH` not set and no vendored clang | Write `missing_clang_path`; typed IR lane unavailable. The legacy string translator may only be used as an explicit diagnostic/demo path and must not count as L3 semantic pass. |
 | C oracle harness compilation failure | Write `compiler_not_found` or specific compile error. Never fake `C_ORACLE_GENERATED`. |
 | Rust replay output mismatch with C oracle | Write diff failure evidence. Never fake `passed`. |
 | Negative diff does not catch mismatch | Write negative diff failure evidence. Never fake `caught_mismatch`. |

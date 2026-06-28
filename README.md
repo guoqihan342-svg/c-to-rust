@@ -117,11 +117,11 @@
 
 ## OpenCode 比赛单次交互
 
-比赛使用 OpenCode 直接调用本仓库，一次交互完成 C→Rust 迁移，超时上限 **600 分钟**。详见 `config/competition-env/opencode-single-interaction.md`：
+比赛使用 OpenCode 直接调用本仓库，一次交互完成 C→Rust 迁移；若评测方设置 **600 分钟**，它只是外部预算参考，项目目标仍是准确性和证据完整性优先。详见 `config/competition-env/opencode-single-interaction.md`：
 
-- 单次 prompt 模板（顺序执行所有阶段）
-- 管线时间预估（单 slice < 20 分钟）
-- Agent 行为约束（不修改源码、不并行、fail-closed）
+- 单次 prompt 模板（可并行处理互不依赖的 slice）
+- 管线参考耗时（只用于规划，不作为验收条件）
+- Agent 行为约束（不修改源码、并行输出隔离、fail-closed）
 - 容错设计和比赛输出结构
 
 ## 快速命令
