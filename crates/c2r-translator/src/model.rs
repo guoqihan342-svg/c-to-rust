@@ -32,7 +32,21 @@ pub struct SliceSpec {
     pub function_source_span: Option<SourceSpanRef>,
     #[serde(default)]
     pub compile_commands: Option<String>,
+    #[serde(default)]
+    pub c_boundary: CBoundary,
     pub build_profile: BuildProfile,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CBoundary {
+    #[serde(default)]
+    pub scalar_arithmetic_contract: ScalarArithmeticContract,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ScalarArithmeticContract {
+    #[serde(default)]
+    pub signed_right_shift: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

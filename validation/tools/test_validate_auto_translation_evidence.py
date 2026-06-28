@@ -407,6 +407,12 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                         "detail": "shift count must stay within the lhs integer width",
                         "ir_node": "IrExpr::Binary.Shl",
                         "source_span": None,
+                    },
+                    {
+                        "code": "signed_right_shift_implementation_defined",
+                        "detail": "signed right shift requires an explicit implementation-defined contract",
+                        "ir_node": "IrExpr::Binary.Shr",
+                        "source_span": None,
                     }
                 ],
                 "rust_draft_generated": True,
@@ -432,13 +438,21 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             }
             typed_ir["scalar_admission"] = {
                 "status": "covered",
-                "precondition_count": 1,
+                "precondition_count": 2,
                 "covered": [
                     {
                         "code": "shift_count_in_range",
                         "status": "covered",
                         "covered_by": [
                             "c_boundary.scalar_arithmetic_contract.shift_count",
+                            "fixture_contract.scalar_input_domain",
+                        ],
+                    },
+                    {
+                        "code": "signed_right_shift_implementation_defined",
+                        "status": "covered",
+                        "covered_by": [
+                            "c_boundary.scalar_arithmetic_contract.signed_right_shift",
                             "fixture_contract.scalar_input_domain",
                         ],
                     }
@@ -464,7 +478,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                         "division_by_zero": "runtime_precondition_nonzero_divisor",
                         "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
                         "shift_count": "runtime_precondition_in_range",
-                        "signed_right_shift": "fail_closed_without_explicit_contract",
+                        "signed_right_shift": "explicit_implementation_defined_contract",
                     },
                     "fixture_contract": {
                         "case_source": "unit-test",

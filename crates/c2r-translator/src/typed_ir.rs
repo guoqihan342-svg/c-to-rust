@@ -325,8 +325,26 @@ pub struct IrEmitError {
     pub route: crate::translation_route::CandidateRouteDecision,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SignedRightShiftPolicy {
+    FailClosed,
+    ImplementationDefinedArithmetic,
+}
+
+impl Default for SignedRightShiftPolicy {
+    fn default() -> Self {
+        Self::FailClosed
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct EmitPolicy {
+    pub signed_right_shift: SignedRightShiftPolicy,
+}
+
 #[derive(Clone, Debug, Default)]
 struct EmitContext {
+    policy: EmitPolicy,
     assigned_vars: HashSet<String>,
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
@@ -433,9 +451,10 @@ impl DefiniteAssignmentState {
 }
 
 impl EmitContext {
-    fn from_function_and_globals(
+    fn from_function_and_globals_and_policy(
         function: &IrFunction,
         globals: &[IrGlobal],
+        policy: EmitPolicy,
     ) -> Result<Self, String> {
         let assigned_vars = collect_assigned_vars(&function.body);
         let byte_cursor_sources = collect_byte_cursor_sources(&function.body);
@@ -466,6 +485,7 @@ impl EmitContext {
             }
         }
         Ok(Self {
+            policy,
             assigned_vars,
             byte_slice_params,
             byte_cursor_sources,
@@ -543,7 +563,16 @@ pub fn emit_rust_from_ir_with_globals(
     function: &IrFunction,
     globals: &[IrGlobal],
 ) -> Result<EmittedRust, IrEmitError> {
-    emit_scalar_rust_from_ir_with_globals(function, globals)
+    emit_rust_from_ir_with_globals_and_policy(function, globals, EmitPolicy::default())
+}
+
+#[allow(clippy::result_large_err)]
+pub fn emit_rust_from_ir_with_globals_and_policy(
+    function: &IrFunction,
+    globals: &[IrGlobal],
+    policy: EmitPolicy,
+) -> Result<EmittedRust, IrEmitError> {
+    emit_scalar_rust_from_ir_with_globals_and_policy(function, globals, policy)
         .map(|rust| EmittedRust {
             rust,
             route: generic_typed_ir_route(),
@@ -564,21 +593,29 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     emit_scalar_rust_from_ir_with_globals(function, &[])
 }
 
+fn emit_scalar_rust_from_ir_with_globals(
+    function: &IrFunction,
+    globals: &[IrGlobal],
+) -> Result<String, String> {
+    emit_scalar_rust_from_ir_with_globals_and_policy(function, globals, EmitPolicy::default())
+}
+
 /// Lowers the supported scalar subset into one Rust function plus constants.
 ///
 /// The function first builds the semantic emission context and runs
 /// fail-closed validation, then emits globals, record definitions, parameters,
 /// and statements. Anything outside the current typed IR contract returns a
 /// path-rich error before a partial Rust candidate can escape.
-fn emit_scalar_rust_from_ir_with_globals(
+fn emit_scalar_rust_from_ir_with_globals_and_policy(
     function: &IrFunction,
     globals: &[IrGlobal],
+    policy: EmitPolicy,
 ) -> Result<String, String> {
     let return_type = emit_return_type(&function.return_type)?;
     if return_type.is_some() && !ends_with_return_value(&function.body) {
         return Err("non-void function must end with a return value".to_string());
     }
-    let mut context = EmitContext::from_function_and_globals(function, globals)?;
+    let mut context = EmitContext::from_function_and_globals_and_policy(function, globals, policy)?;
     context.mutable_record_pointer_read_fields =
         validate_definite_assignment(function, globals, &context)?;
     let function_name = emit_identifier(&function.name, "function")?;
@@ -1643,7 +1680,7 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     }
     let op_token = emit_binary_op(op)?;
     validate_binary_operand_types(op_token, lhs, rhs, ty)?;
-    validate_binary_runtime_contract(op, lhs, rhs, ty)?;
+    validate_binary_runtime_contract(op, lhs, rhs, ty, &context.policy)?;
     let rhs = emit_expr(rhs, symbols, context).map_err(|detail| {
         format!("mutable record pointer field compound assignment RHS {detail}")
     })?;
@@ -2036,7 +2073,7 @@ fn emit_expr(
             }
             let op_token = emit_binary_op(op)?;
             validate_binary_operand_types(op_token, lhs, rhs, ty)?;
-            validate_binary_runtime_contract(op, lhs, rhs, ty)?;
+            validate_binary_runtime_contract(op, lhs, rhs, ty, &context.policy)?;
             let lhs = emit_expr(lhs, symbols, context)
                 .map_err(|detail| format!("binary lhs {detail}"))?;
             let rhs = emit_expr(rhs, symbols, context)
@@ -2607,7 +2644,7 @@ fn emit_expr_with_prelude(
             let op_token = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
             validate_binary_operand_types(op_token, lhs, rhs, ty)
                 .map_err(|detail| format!("{path} {detail}"))?;
-            validate_binary_runtime_contract(op, lhs, rhs, ty)
+            validate_binary_runtime_contract(op, lhs, rhs, ty, &context.policy)
                 .map_err(|detail| format!("{path} {detail}"))?;
             let lhs = emit_expr_with_prelude(
                 lhs,
@@ -3195,6 +3232,7 @@ fn validate_binary_runtime_contract(
     lhs: &IrExpr,
     rhs: &IrExpr,
     result_ty: &IrType,
+    policy: &EmitPolicy,
 ) -> Result<(), String> {
     match op {
         IrBinOp::Div if static_integer_value(rhs) == Some(0) => {
@@ -3203,7 +3241,9 @@ fn validate_binary_runtime_contract(
         IrBinOp::Mod if static_integer_value(rhs) == Some(0) => {
             Err("modulo by zero literal is unsupported".to_string())
         }
-        IrBinOp::Shl | IrBinOp::Shr => validate_shift_runtime_contract(op, lhs, rhs, result_ty),
+        IrBinOp::Shl | IrBinOp::Shr => {
+            validate_shift_runtime_contract(op, lhs, rhs, result_ty, policy)
+        }
         _ => Ok(()),
     }
 }
@@ -3213,6 +3253,7 @@ fn validate_shift_runtime_contract(
     lhs: &IrExpr,
     rhs: &IrExpr,
     result_ty: &IrType,
+    policy: &EmitPolicy,
 ) -> Result<(), String> {
     let width = integer_width_bits(result_ty)
         .ok_or_else(|| format!("shift result type {} is unsupported", type_label(result_ty)))?;
@@ -3236,7 +3277,10 @@ fn validate_shift_runtime_contract(
             ));
         }
     }
-    if matches!(op, IrBinOp::Shr) && is_signed_integer_type(result_ty) {
+    if matches!(op, IrBinOp::Shr)
+        && is_signed_integer_type(result_ty)
+        && policy.signed_right_shift != SignedRightShiftPolicy::ImplementationDefinedArithmetic
+    {
         return Err(format!(
             "signed right shift for {} is implementation-defined without an explicit contract",
             type_label(result_ty)

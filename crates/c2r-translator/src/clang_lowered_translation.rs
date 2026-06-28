@@ -21,9 +21,13 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
     let report =
         clang_frontend::lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
     let function_ir = report.function_ir.as_ref()?;
-    let rust_code = typed_ir::emit_rust_from_ir_with_globals(function_ir, &report.globals)
-        .ok()?
-        .rust;
+    let rust_code = typed_ir::emit_rust_from_ir_with_globals_and_policy(
+        function_ir,
+        &report.globals,
+        emit_policy_from_spec(spec),
+    )
+    .ok()?
+    .rust;
 
     let mut result = TranslationResult {
         rust_code,
@@ -41,6 +45,20 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
     };
     record_clang_lowered_ir_evidence(spec, function_ir, &mut result);
     Some(result)
+}
+
+fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
+    let signed_right_shift = if spec
+        .c_boundary
+        .scalar_arithmetic_contract
+        .signed_right_shift
+        == "explicit_implementation_defined_contract"
+    {
+        typed_ir::SignedRightShiftPolicy::ImplementationDefinedArithmetic
+    } else {
+        typed_ir::SignedRightShiftPolicy::FailClosed
+    };
+    typed_ir::EmitPolicy { signed_right_shift }
 }
 
 /// Mirrors an already-emitted typed IR function into translator evidence.

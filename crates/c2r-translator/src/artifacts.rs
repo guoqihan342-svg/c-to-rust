@@ -269,8 +269,12 @@ pub(crate) fn write_clang_lowering_report_artifact(
                 &environment,
                 &parse_spec,
             );
-            let typed_ir_candidate =
-                typed_ir_candidate_evidence(report.function_ir.as_ref(), &report.globals);
+            let emit_policy = emit_policy_from_spec(spec);
+            let typed_ir_candidate = typed_ir_candidate_evidence(
+                report.function_ir.as_ref(),
+                &report.globals,
+                emit_policy,
+            );
             json!({
                 "schema_version": 1,
                 "artifact_kind": "clang-lowering-report",
@@ -357,6 +361,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
 fn typed_ir_candidate_evidence(
     function_ir: Option<&typed_ir::IrFunction>,
     globals: &[typed_ir::IrGlobal],
+    emit_policy: typed_ir::EmitPolicy,
 ) -> serde_json::Value {
     let readonly_globals = globals
         .iter()
@@ -374,7 +379,7 @@ fn typed_ir_candidate_evidence(
         });
     };
 
-    match typed_ir::emit_rust_from_ir_with_globals(function_ir, globals) {
+    match typed_ir::emit_rust_from_ir_with_globals_and_policy(function_ir, globals, emit_policy) {
         Ok(emitted) => json!({
             "status": "generated",
             "candidate_route": emitted.route,
@@ -393,6 +398,21 @@ fn typed_ir_candidate_evidence(
             "unsupported_reason": error.reason,
         }),
     }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
+    let signed_right_shift = if spec
+        .c_boundary
+        .scalar_arithmetic_contract
+        .signed_right_shift
+        == "explicit_implementation_defined_contract"
+    {
+        typed_ir::SignedRightShiftPolicy::ImplementationDefinedArithmetic
+    } else {
+        typed_ir::SignedRightShiftPolicy::FailClosed
+    };
+    typed_ir::EmitPolicy { signed_right_shift }
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -614,6 +634,15 @@ fn collect_binary_runtime_preconditions(
                 ty,
                 source_span,
             ));
+            if matches!(op, typed_ir::IrBinOp::Shr) && signed {
+                preconditions.push(runtime_precondition(
+                    "signed_right_shift_implementation_defined",
+                    "C signed right shift is implementation-defined and requires an explicit slice/platform contract",
+                    op,
+                    ty,
+                    source_span,
+                ));
+            }
         }
         _ => {}
     }
@@ -825,8 +854,10 @@ mod core_translation_artifact_tests {
             .artifact_paths
             .iter()
             .any(|path| path.contains(':') || path.starts_with('/')));
-        assert!(manifest.artifact_paths.iter().all(|path| path
-            .starts_with("target/c2r-translator-tests/repo-relative-artifacts/")));
+        assert!(manifest
+            .artifact_paths
+            .iter()
+            .all(|path| path.starts_with("target/c2r-translator-tests/repo-relative-artifacts/")));
     }
 }
 
@@ -954,7 +985,10 @@ mod clang_lowering_report_artifact_tests {
 
     use super::*;
     use crate::{
-        typed_ir::{IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind},
+        typed_ir::{
+            EmitPolicy, IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind,
+            SignedRightShiftPolicy,
+        },
         BuildProfile,
     };
 
@@ -1094,7 +1128,7 @@ mod clang_lowering_report_artifact_tests {
             source_span: None,
         };
 
-        let evidence = typed_ir_candidate_evidence(Some(&function), &[]);
+        let evidence = typed_ir_candidate_evidence(Some(&function), &[], EmitPolicy::default());
         let codes = evidence["runtime_preconditions"]
             .as_array()
             .expect("runtime precondition evidence")
@@ -1109,6 +1143,52 @@ mod clang_lowering_report_artifact_tests {
         assert!(codes.contains(&"modulo_divisor_nonzero"));
         assert!(codes.contains(&"signed_modulo_no_overflow"));
         assert!(codes.contains(&"shift_count_in_range"));
+    }
+
+    #[test]
+    fn typed_ir_candidate_evidence_records_signed_right_shift_contract_precondition() {
+        let i32_ty = int_type("int", true, 32);
+        let function = IrFunction {
+            name: "signed_rshift_contract".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![
+                IrParam {
+                    name: "value".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "count".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+            ],
+            body: vec![IrStmt::Return {
+                value: Some(binary(
+                    IrBinOp::Shr,
+                    var("value", &i32_ty),
+                    var("count", &i32_ty),
+                    &i32_ty,
+                )),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+        let policy = EmitPolicy {
+            signed_right_shift: SignedRightShiftPolicy::ImplementationDefinedArithmetic,
+        };
+
+        let evidence = typed_ir_candidate_evidence(Some(&function), &[], policy);
+        let codes = evidence["runtime_preconditions"]
+            .as_array()
+            .expect("runtime precondition evidence")
+            .iter()
+            .map(|item| item["code"].as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(evidence["status"], "generated");
+        assert!(codes.contains(&"shift_count_in_range"));
+        assert!(codes.contains(&"signed_right_shift_implementation_defined"));
     }
 
     #[test]

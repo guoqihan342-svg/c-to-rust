@@ -21,8 +21,9 @@ use c2r_translator::clang_frontend::{
 use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
 #[cfg(feature = "typed-ir")]
 use c2r_translator::typed_ir::{
-    emit_rust_from_ir, emit_rust_from_ir_with_globals, IrBinOp, IrExpr, IrFunction, IrGlobal,
-    IrGlobalInit, IrIncDecOp, IrParam, IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp,
+    emit_rust_from_ir, emit_rust_from_ir_with_globals, emit_rust_from_ir_with_globals_and_policy,
+    EmitPolicy, IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam,
+    IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp, SignedRightShiftPolicy,
 };
 use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;
@@ -252,7 +253,10 @@ fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
     assert!(rust.contains(
         "pub fn scalar_runtime_preconditions(value: i32, divisor: i32, count: i32) -> i32"
     ));
-    assert!(rust.contains(".checked_add(1i32).expect(\"signed addition overflow\")"), "{rust}");
+    assert!(
+        rust.contains(".checked_add(1i32).expect(\"signed addition overflow\")"),
+        "{rust}"
+    );
     assert!(
         rust.contains(".checked_div(divisor).expect(\"division by zero or signed overflow\")"),
         "{rust}"
@@ -267,7 +271,10 @@ fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
         ),
         "{rust}"
     );
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-scalar-runtime-preconditions", rust);
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-scalar-runtime-preconditions",
+        rust,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -301,9 +308,14 @@ fn clang_ast_fixture_replays_scalar_ub_refusals_without_clang() {
         ("signed_right_shift_without_contract", "signed right shift"),
     ] {
         let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
-            .unwrap_or_else(|error| panic!("lower committed clang AST fixture {function_name}: {error}"));
+            .unwrap_or_else(|error| {
+                panic!("lower committed clang AST fixture {function_name}: {error}")
+            });
         let error = match emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals) {
-            Ok(emitted) => panic!("fixture {function_name} must fail closed, emitted {}", emitted.rust),
+            Ok(emitted) => panic!(
+                "fixture {function_name} must fail closed, emitted {}",
+                emitted.rust
+            ),
             Err(error) => error,
         };
 
@@ -4888,6 +4900,48 @@ fn typed_ir_rejects_signed_right_shift_without_contract() {
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(error.reason.contains("signed right shift"));
     assert!(error.reason.contains("implementation-defined"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_signed_right_shift_with_explicit_contract_policy() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "signed_rshift_contract".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Shr,
+                ir_var("value", i32_ty.clone()),
+                ir_var("count", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+    let policy = EmitPolicy {
+        signed_right_shift: SignedRightShiftPolicy::ImplementationDefinedArithmetic,
+    };
+
+    let emitted = emit_rust_from_ir_with_globals_and_policy(&ir, &[], policy)
+        .expect("explicit contract policy should allow signed right shift");
+
+    assert!(emitted.rust.contains("pub fn signed_rshift_contract"));
+    assert!(emitted.rust.contains(".checked_shr("));
+    assert_rust_snippet_compiles("typed-ir-signed-rshift-contract", &emitted.rust);
 }
 
 #[cfg(feature = "typed-ir")]
