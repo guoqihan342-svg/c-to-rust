@@ -43,6 +43,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--slice-spec", action="append", dest="slice_specs", type=Path, default=[])
     parser.add_argument("--extract-spec", action="append", dest="extraction_specs", type=Path, default=[])
+    parser.add_argument("--worker-summary", action="append", dest="worker_summaries", type=Path, default=[])
     parser.add_argument("--source-repo-root", "--repo-root", dest="source_repo_root")
     parser.add_argument("--source-file")
     parser.add_argument("--function")
@@ -64,12 +65,16 @@ def main() -> int:
     direct_extraction_spec = direct_extraction_spec_from_args(args, parser)
     if direct_extraction_spec is not None:
         extraction_specs.append(direct_extraction_spec)
-    if not args.slice_specs and not extraction_specs:
-        parser.error("at least one --slice-spec, --extract-spec, or direct extraction argument group is required")
+    if not args.slice_specs and not extraction_specs and not args.worker_summaries:
+        parser.error(
+            "at least one --slice-spec, --extract-spec, --worker-summary, "
+            "or direct extraction argument group is required"
+        )
 
     result = run_competition(
         slice_specs=args.slice_specs,
         extraction_specs=extraction_specs,
+        worker_summaries=args.worker_summaries,
         out_root=args.out_root,
         proof_class=args.proof_class,
         run_id=args.run_id,
@@ -83,6 +88,7 @@ def run_competition(
     *,
     slice_specs: list[Path],
     extraction_specs: list[ExtractionSpecInput] | None = None,
+    worker_summaries: list[Path] | None = None,
     out_root: Path,
     proof_class: str,
     command_runner: CommandRunner = subprocess.run,
@@ -90,8 +96,12 @@ def run_competition(
     run_id: str | None = None,
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
-    if not slice_specs and not extraction_specs:
-        raise SystemExit("at least one --slice-spec, --extract-spec, or direct extraction argument group is required")
+    worker_summaries = worker_summaries or []
+    if not slice_specs and not extraction_specs and not worker_summaries:
+        raise SystemExit(
+            "at least one --slice-spec, --extract-spec, --worker-summary, "
+            "or direct extraction argument group is required"
+        )
 
     repo_root = repo_root.resolve()
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
@@ -113,6 +123,17 @@ def run_competition(
     semantic_pass = 0
     refused = 0
     blocked = 0
+    worker_statuses = load_worker_summary_statuses(worker_summaries, repo_root=repo_root, out_root=out_root)
+    for worker in worker_statuses:
+        worker_slices = worker["slices"]
+        typed_ir_generated += worker_slices["typed_ir_generated"]
+        compiled += worker_slices["compiled"]
+        semantic_pass += worker_slices["semantic_pass"]
+        refused += worker_slices["refused"]
+        blocked += worker_slices["blocked"]
+        slice_failures += worker_slices["failed"]
+        if worker["status"] != "passed":
+            gate_failures += 1
 
     environment_result = run_logged_step(
         "environment-check",
@@ -235,7 +256,9 @@ def run_competition(
         "elapsed_seconds": int(time.monotonic() - started),
         "translator_version": "0.1.0",
         "slices": {
-            "attempted": len(slice_specs) + len(extraction_specs),
+            "attempted": len(slice_specs)
+            + len(extraction_specs)
+            + sum(worker["slices"]["attempted"] for worker in worker_statuses),
             "typed_ir_generated": typed_ir_generated,
             "compiled": compiled,
             "semantic_pass": semantic_pass,
@@ -254,6 +277,11 @@ def run_competition(
             "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
         },
     }
+    if worker_statuses:
+        summary["workers"] = {
+            "count": len(worker_statuses),
+            "summaries": worker_statuses,
+        }
     summary_path = out_root / "summary" / "competition-run-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -279,6 +307,61 @@ def run_competition(
 
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return command_runner(command, cwd=repo_root, text=True, capture_output=True)
+
+
+def load_worker_summary_statuses(
+    worker_summaries: list[Path],
+    *,
+    repo_root: Path,
+    out_root: Path,
+) -> list[dict[str, Any]]:
+    statuses = []
+    for path in worker_summaries:
+        resolved = path if path.is_absolute() else repo_root / path
+        summary = json.loads(resolved.read_text(encoding="utf-8"))
+        slices = summary.get("slices", {})
+        final_gate = summary.get("final_gate", {})
+        status = final_gate.get("status") if isinstance(final_gate, dict) else "failed"
+        if status not in {"passed", "failed", "blocked"}:
+            status = "failed"
+        worker_slices = {
+            key: nonnegative_int(slices.get(key))
+            for key in [
+                "attempted",
+                "typed_ir_generated",
+                "compiled",
+                "semantic_pass",
+                "refused",
+                "blocked",
+                "failed",
+            ]
+        }
+        statuses.append(
+            {
+                "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
+                "status": status,
+                "proof_class": str(summary.get("proof_class", "unknown")),
+                "attempted": worker_slices["attempted"],
+                "semantic_pass": worker_slices["semantic_pass"],
+                "failed": worker_slices["failed"],
+                "slices": worker_slices,
+            }
+        )
+    return statuses
+
+
+def nonnegative_int(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def summary_reference_path(path: Path, *, repo_root: Path, out_root: Path) -> str:
+    resolved = path.resolve()
+    for root in [repo_root.resolve(), out_root.resolve()]:
+        try:
+            return resolved.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return resolved.as_posix()
 
 
 def direct_extraction_spec_from_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any] | None:

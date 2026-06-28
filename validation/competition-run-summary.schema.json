@@ -171,6 +171,109 @@
         "minLength": 1
       }
     },
+    "workers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "summaries"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "status",
+              "proof_class",
+              "attempted",
+              "semantic_pass",
+              "failed",
+              "slices"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed",
+                  "blocked"
+                ]
+              },
+              "proof_class": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attempted": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "semantic_pass": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "slices": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "attempted",
+                  "typed_ir_generated",
+                  "compiled",
+                  "semantic_pass",
+                  "refused",
+                  "blocked",
+                  "failed"
+                ],
+                "properties": {
+                  "attempted": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "typed_ir_generated": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "compiled": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "semantic_pass": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "refused": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "blocked": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "failed": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "final_gate": {
       "type": "object",
       "additionalProperties": false,

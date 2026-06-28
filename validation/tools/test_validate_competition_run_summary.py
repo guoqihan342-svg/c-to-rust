@@ -78,6 +78,57 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["proof_class"], "wsl-local-simulation")
 
+    def test_accepts_valid_competition_run_summary_with_worker_statuses(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 2,
+            "summaries": [
+                {
+                    "path": "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                },
+                {
+                    "path": "target/competition-out/workers/worker-b/summary/competition-run-summary.json",
+                    "status": "failed",
+                    "proof_class": "local-simulation",
+                    "attempted": 2,
+                    "semantic_pass": 1,
+                    "failed": 1,
+                    "slices": {
+                        "attempted": 2,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 1,
+                    },
+                },
+            ],
+        }
+        summary["final_gate"]["status"] = "failed"
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            result = module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+
     def test_rejects_unknown_proof_class(self) -> None:
         module = load_validator_module()
         summary = valid_summary()
@@ -90,6 +141,40 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
         self.assertIn("proof_class", str(raised.exception))
+
+    def test_rejects_worker_summary_count_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 2,
+            "summaries": [
+                {
+                    "path": "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("workers.count", str(raised.exception))
 
     def test_rejects_absolute_artifact_root(self) -> None:
         module = load_validator_module()

@@ -82,6 +82,63 @@ def write_final_verification(
     )
 
 
+def write_worker_summary(
+    root: Path,
+    worker_id: str,
+    *,
+    attempted: int,
+    semantic_pass: int,
+    failed: int = 0,
+    final_gate_status: str = "passed",
+) -> Path:
+    path = root / worker_id / "summary" / "competition-run-summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": f"run-{worker_id}",
+                "proof_class": "local-simulation",
+                "profile_id": "huawei-competition-ubuntu-24.04",
+                "profile_sha256": "a" * 64,
+                "clang_source": "missing",
+                "cargo_mirror_activation": {
+                    "method": "CARGO_HOME",
+                    "path": "config/competition-env/cargo",
+                    "config_file": "config/competition-env/cargo/config.toml",
+                },
+                "elapsed_seconds": 1,
+                "translator_version": "0.1.0",
+                "slices": {
+                    "attempted": attempted,
+                    "typed_ir_generated": semantic_pass,
+                    "compiled": semantic_pass,
+                    "semantic_pass": semantic_pass,
+                    "refused": 0,
+                    "blocked": 0,
+                    "failed": failed,
+                },
+                "unsafe_budget": {
+                    "status": "passed",
+                    "total_first_party_non_test_unsafe": 0,
+                    "ratio": 0.0,
+                },
+                "artifact_roots": [
+                    f"target/competition-out/{worker_id}/evidence",
+                    f"target/competition-out/{worker_id}/summary",
+                    f"target/competition-out/{worker_id}/logs",
+                ],
+                "final_gate": {
+                    "status": final_gate_status,
+                    "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class FakeCommandRunner:
     def __init__(
         self,
@@ -321,6 +378,39 @@ class RunCompetitionTests(unittest.TestCase):
         self.assertEqual(extraction["include_paths"], ["include"])
         self.assertEqual(extraction["defines"], ["DIRECT=1"])
 
+    def test_main_accepts_worker_summary_cli_args(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--worker-summary",
+                "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        self.assertEqual(
+            calls["worker_summaries"],
+            [Path("target/competition-out/workers/worker-a/summary/competition-run-summary.json")],
+        )
+
     def test_main_rejects_incomplete_direct_extraction_cli_args(self) -> None:
         module = load_runner_module()
         original_argv = sys.argv
@@ -425,7 +515,7 @@ class RunCompetitionTests(unittest.TestCase):
                     run_id="run-test",
                 )
 
-        self.assertIn("--slice-spec, --extract-spec, or direct extraction argument group", str(raised.exception))
+        self.assertIn("--slice-spec, --extract-spec, --worker-summary, or direct extraction argument group", str(raised.exception))
 
     def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
         module = load_runner_module()
@@ -514,6 +604,46 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 2)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["slices"]["failed"], 1)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_merges_worker_summaries_without_reprocessing_slices(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(worker_root, "worker-a", attempted=1, semantic_pass=1)
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=2,
+                semantic_pass=1,
+                failed=1,
+                final_gate_status="failed",
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 3)
+            self.assertEqual(summary["slices"]["semantic_pass"], 2)
+            self.assertEqual(summary["slices"]["failed"], 1)
+            self.assertEqual(summary["workers"]["count"], 2)
+            self.assertEqual(summary["workers"]["summaries"][0]["status"], "passed")
+            self.assertEqual(summary["workers"]["summaries"][1]["status"], "failed")
             self.assertEqual(summary["final_gate"]["status"], "failed")
 
     def test_runner_keeps_global_gate_failure_out_of_slice_failure_counts(self) -> None:

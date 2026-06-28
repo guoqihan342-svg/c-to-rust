@@ -50,6 +50,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
     validate_artifact_roots(summary.get("artifact_roots", []), repo_root=repo_root)
     validate_final_gate(summary)
     validate_slice_counts(summary)
+    validate_workers(summary)
 
     return {
         "status": "passed",
@@ -108,6 +109,22 @@ def validate_slice_counts(summary: dict[str, Any]) -> None:
         raise SystemExit("competition run summary slices.compiled exceeds slices.typed_ir_generated")
     if int(slices["typed_ir_generated"]) > attempted:
         raise SystemExit("competition run summary slices.typed_ir_generated exceeds slices.attempted")
+
+
+def validate_workers(summary: dict[str, Any]) -> None:
+    workers = summary.get("workers")
+    if workers is None:
+        return
+    summaries = workers["summaries"]
+    if int(workers["count"]) != len(summaries):
+        raise SystemExit("competition run summary workers.count does not match workers.summaries length")
+    for index, worker in enumerate(summaries):
+        slices = worker["slices"]
+        for key in ["attempted", "semantic_pass", "failed"]:
+            if int(worker[key]) != int(slices[key]):
+                raise SystemExit(f"competition run summary workers.summaries[{index}].{key} does not match slices.{key}")
+        if worker["status"] != "passed" and summary["final_gate"]["status"] == "passed":
+            raise SystemExit("competition run summary final_gate passed with failed worker summary")
 
 
 def repo_relative(path: Path, repo_root: Path) -> str:
