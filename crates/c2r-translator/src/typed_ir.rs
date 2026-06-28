@@ -5005,6 +5005,11 @@ fn validate_mutable_pointer_write_alias_boundary(
         .filter(|param| mutable_pointer_slice_element_type(&param.ty).is_some())
         .map(|param| (param.name.as_str(), &param.ty))
         .collect::<HashMap<_, _>>();
+    let readonly_pointer_params = params
+        .iter()
+        .filter(|param| readonly_pointer_slice_element_type(&param.ty).is_some())
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect::<HashMap<_, _>>();
     let mut write_params = HashSet::new();
     collect_mutable_pointer_write_params_from_body(
         body,
@@ -5015,6 +5020,22 @@ fn validate_mutable_pointer_write_alias_boundary(
         return Err(
             "mutable pointer write requires exactly one pointer param for alias proof".to_string(),
         );
+    }
+    // Safe Rust cannot express a potentially aliased `&[T]` read beside an
+    // `&mut [T]` write without a stronger noalias fact.
+    if !write_params.is_empty() {
+        let mut readonly_read_params = HashSet::new();
+        collect_readonly_pointer_read_params_from_body(
+            body,
+            &readonly_pointer_params,
+            &mut readonly_read_params,
+        )?;
+        if !readonly_read_params.is_empty() {
+            return Err(
+                "mutable pointer write with readonly pointer read requires noalias proof"
+                    .to_string(),
+            );
+        }
     }
     Ok(())
 }
@@ -5138,6 +5159,269 @@ fn collect_direct_mutable_pointer_write_param(
         .is_some_and(|param_ty| *param_ty == ty)
     {
         write_params.insert(name.to_string());
+    }
+    Ok(())
+}
+
+fn collect_readonly_pointer_read_params_from_body(
+    body: &[IrStmt],
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    read_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_readonly_pointer_read_params_from_expr(
+                        init,
+                        readonly_pointer_params,
+                        read_params,
+                    )?;
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
+                collect_readonly_pointer_read_params_from_expr(
+                    target,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                collect_readonly_pointer_read_params_from_expr(
+                    value,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_readonly_pointer_read_params_from_expr(
+                    condition,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                collect_readonly_pointer_read_params_from_body(
+                    then_body,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                collect_readonly_pointer_read_params_from_body(
+                    else_body,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_readonly_pointer_read_params_from_expr(
+                    condition,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                collect_readonly_pointer_read_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_readonly_pointer_read_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                collect_readonly_pointer_read_params_from_expr(
+                    condition,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                collect_readonly_pointer_read_params_from_body(
+                    init,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+                if let Some(condition) = condition {
+                    collect_readonly_pointer_read_params_from_expr(
+                        condition,
+                        readonly_pointer_params,
+                        read_params,
+                    )?;
+                }
+                if let Some(step) = step {
+                    collect_readonly_pointer_read_params_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        readonly_pointer_params,
+                        read_params,
+                    )?;
+                }
+                collect_readonly_pointer_read_params_from_body(
+                    body,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_readonly_pointer_read_params_from_expr(
+                        value,
+                        readonly_pointer_params,
+                        read_params,
+                    )?;
+                }
+            }
+            IrStmt::Expr { expr, .. } => {
+                collect_readonly_pointer_read_params_from_expr(
+                    expr,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_readonly_pointer_read_params_from_expr(
+    expr: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    read_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    match expr {
+        IrExpr::Index { base, index, .. } => {
+            collect_direct_readonly_pointer_read_param(base, readonly_pointer_params, read_params)?;
+            collect_readonly_pointer_read_params_from_expr(
+                base,
+                readonly_pointer_params,
+                read_params,
+            )?;
+            collect_readonly_pointer_read_params_from_expr(
+                index,
+                readonly_pointer_params,
+                read_params,
+            )?;
+        }
+        IrExpr::Deref { ptr, .. } => {
+            collect_direct_readonly_pointer_read_param(ptr, readonly_pointer_params, read_params)?;
+            if let Some((base, _)) = readonly_pointer_add_operands_from_expr(ptr.as_ref()) {
+                collect_direct_readonly_pointer_read_param(
+                    base,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+            collect_readonly_pointer_read_params_from_expr(
+                ptr,
+                readonly_pointer_params,
+                read_params,
+            )?;
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_readonly_pointer_read_params_from_expr(
+                lhs,
+                readonly_pointer_params,
+                read_params,
+            )?;
+            collect_readonly_pointer_read_params_from_expr(
+                rhs,
+                readonly_pointer_params,
+                read_params,
+            )?;
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        } => {
+            collect_readonly_pointer_read_params_from_expr(
+                operand,
+                readonly_pointer_params,
+                read_params,
+            )?;
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_readonly_pointer_read_params_from_expr(
+                condition,
+                readonly_pointer_params,
+                read_params,
+            )?;
+            collect_readonly_pointer_read_params_from_expr(
+                then_expr,
+                readonly_pointer_params,
+                read_params,
+            )?;
+            collect_readonly_pointer_read_params_from_expr(
+                else_expr,
+                readonly_pointer_params,
+                read_params,
+            )?;
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_readonly_pointer_read_params_from_expr(
+                    element,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_readonly_pointer_read_params_from_expr(
+                    arg,
+                    readonly_pointer_params,
+                    read_params,
+                )?;
+            }
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+    Ok(())
+}
+
+fn readonly_pointer_add_operands_from_expr(expr: &IrExpr) -> Option<(&IrExpr, &IrExpr)> {
+    let IrExpr::Binary { lhs, rhs, .. } = expr else {
+        return None;
+    };
+    readonly_pointer_add_operands(lhs, rhs)
+}
+
+fn collect_direct_readonly_pointer_read_param(
+    expr: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    read_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Ok(());
+    };
+    if readonly_pointer_params
+        .get(name.as_str())
+        .is_some_and(|param_ty| *param_ty == ty)
+    {
+        read_params.insert(name.to_string());
     }
     Ok(())
 }
