@@ -63,7 +63,7 @@
 | `==` `!=` `<` `<=` `>` `>=` | 窄支持 | 条件和 value-position C int 0/1 |
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position |
-| 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通表达式中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast 和 `LValueToRValue`/`NoOp` skeleton 边界可继续 |
+| 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；普通表达式或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast 和 `LValueToRValue`/`NoOp` skeleton 边界可继续 |
 | 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
@@ -92,10 +92,10 @@
 |------|------|------|
 | 表达式语句 | 已支持 | `value++;` |
 | `return` (with/without value) | 已支持 | |
-| `if` / `if-else` | 已支持 | 含 comparison condition |
-| `while` | 已支持 | 含 postfix `size--` |
-| `do-while` | 已支持 | |
-| `for` (scoped) | 窄支持 | init/condition/step 为简单形式 |
+| `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `while` | 已支持 | 含 postfix `size--`；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `for` (scoped) | 窄支持 | init/condition/step 为简单形式；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `break` | 窄支持 | 仅在 loop body 内 |
 | `continue` | 窄支持 | 仅在 loop body 内 |
 | `switch` | 不支持 | 已有 CFG/relooper/route 拒绝证据；仍需完整 CFG + relooper 才能 lowering |

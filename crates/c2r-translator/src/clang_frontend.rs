@@ -1099,7 +1099,7 @@ fn for_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFr
     }
     Ok(ClangStmtSkeleton::For {
         init,
-        condition: Some(expr_skeleton_from_ast(condition)?),
+        condition: Some(condition_expr_skeleton_from_ast(condition)?),
         step: Some(Box::new(for_step_stmt_skeleton_from_ast(step)?)),
         body: stmt_body_skeleton_from_ast(body)?,
     })
@@ -1580,7 +1580,7 @@ fn if_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
     };
 
     Ok(ClangStmtSkeleton::If {
-        condition: expr_skeleton_from_ast(condition)?,
+        condition: condition_expr_skeleton_from_ast(condition)?,
         then_body: stmt_body_skeleton_from_ast(then_body)?,
         else_body,
     })
@@ -1596,7 +1596,7 @@ fn while_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, Clang
         });
     };
     Ok(ClangStmtSkeleton::While {
-        condition: expr_skeleton_from_ast(condition)?,
+        condition: condition_expr_skeleton_from_ast(condition)?,
         body: stmt_body_skeleton_from_ast(body)?,
     })
 }
@@ -1612,7 +1612,7 @@ fn do_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFro
     };
     Ok(ClangStmtSkeleton::DoWhile {
         body: stmt_body_skeleton_from_ast(body)?,
-        condition: expr_skeleton_from_ast(condition)?,
+        condition: condition_expr_skeleton_from_ast(condition)?,
     })
 }
 
@@ -1732,6 +1732,11 @@ fn expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFronte
 
 #[cfg(feature = "typed-ir")]
 fn value_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    expr_skeleton_from_ast_with_options(expr, true)
+}
+
+#[cfg(feature = "typed-ir")]
+fn condition_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
     expr_skeleton_from_ast_with_options(expr, true)
 }
 
@@ -3906,6 +3911,51 @@ fn required_path(value: Option<&str>, field: &str) -> Result<PathBuf, ClangFront
 mod tests {
     use super::*;
 
+    fn integral_cast_condition_ast() -> Value {
+        serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "IntegralCast",
+            "type": { "qualType": "unsigned int" },
+            "inner": [
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        })
+    }
+
+    fn return_one_stmt_ast() -> Value {
+        serde_json::json!({
+            "kind": "ReturnStmt",
+            "inner": [
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        })
+    }
+
+    fn assert_unsigned_integral_condition_cast(condition: ClangExprSkeleton) {
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Cast {
+                implicit: true,
+                target: ClangTypeSkeleton {
+                    kind: ClangTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
     #[test]
     fn expr_skeleton_from_ast_maps_comparison_opcodes() {
         let cases = [
@@ -6040,6 +6090,110 @@ mod tests {
             else_body.as_slice(),
             [ClangStmtSkeleton::Assign { .. }]
         ));
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_if_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                integral_cast_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_while_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "WhileStmt",
+            "inner": [
+                integral_cast_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = while_stmt_skeleton_from_ast(&stmt).expect("while skeleton");
+        let ClangStmtSkeleton::While { condition, .. } = skeleton else {
+            panic!("expected while skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_do_while_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "DoStmt",
+            "inner": [
+                return_one_stmt_ast(),
+                integral_cast_condition_ast()
+            ]
+        });
+
+        let skeleton = do_stmt_skeleton_from_ast(&stmt).expect("do-while skeleton");
+        let ClangStmtSkeleton::DoWhile { condition, .. } = skeleton else {
+            panic!("expected do-while skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_for_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "ForStmt",
+            "inner": [
+                {
+                    "kind": "DeclStmt",
+                    "inner": [
+                        {
+                            "kind": "VarDecl",
+                            "name": "i",
+                            "type": { "qualType": "int" },
+                            "init": "c",
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "0"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {},
+                integral_cast_condition_ast(),
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                },
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = for_stmt_skeleton_from_ast(&stmt).expect("for skeleton");
+        let ClangStmtSkeleton::For {
+            condition: Some(condition),
+            ..
+        } = skeleton
+        else {
+            panic!("expected for skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
     }
 
     #[test]

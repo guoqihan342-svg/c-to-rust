@@ -379,6 +379,8 @@
         "ImplicitCastExpr",
         "IntegralCast explicit typed IR cast in preserved value contexts",
         "IntegralPromotion explicit typed IR cast in preserved value contexts",
+        "IntegralCast explicit typed IR cast in if/while/do/for condition contexts",
+        "IntegralPromotion explicit typed IR cast in if/while/do/for condition contexts",
         "LValueToRValue transparent lvalue-read skeleton boundary",
         "NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -388,7 +390,7 @@
       "dimension_status": {
         "clang_fixture_replay": {
           "status": "gap",
-          "reason": "current coverage is expression-level clang AST skeleton unit coverage; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
+          "reason": "current coverage is clang AST skeleton unit coverage for expression-level and condition-context integral ImplicitCastExpr preservation; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
         },
         "handwritten_ir": {
           "status": "not_applicable",
@@ -405,7 +407,7 @@
         },
         "runtime_emitted_rust": {
           "status": "gap",
-          "reason": "current coverage proves clang skeleton/IR cast preservation and fail-closed boundaries only; no emitted Rust compile or runtime behavior gate is claimed for this row"
+          "reason": "current coverage proves clang skeleton/IR integral cast preservation in value and condition contexts plus fail-closed boundaries only; no emitted Rust compile or runtime behavior gate is claimed for this row"
         },
         "c_rust_diff": {
           "status": "gap",
@@ -427,6 +429,22 @@
         },
         {
           "name": "stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_if_condition_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_while_condition_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_do_while_condition_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_for_condition_integral_cast",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {

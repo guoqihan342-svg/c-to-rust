@@ -61,7 +61,7 @@ This document honestly lists C language constructs that are "currently supported
 | `==` `!=` `<` `<=` `>` `>=` | Narrow | Condition and value-position C int 0/1 |
 | `&&` `\|\|` (short-circuit) | Narrow | Condition and value-position C int 0/1 |
 | `?:` (conditional) | Narrow | Pure integer value-position only |
-| Integer cast (explicit/implicit) | Narrow | Clang-proven `IntegralCast` / `IntegralPromotion`, source/target both supported integers; `FloatingToIntegral`, `IntegralToFloating`, and unknown/missing `ImplicitCastExpr.castKind` in ordinary expressions fail closed, and only modeled integer casts plus the `LValueToRValue`/`NoOp` skeleton boundary continue |
+| Integer cast (explicit/implicit) | Narrow | Clang-proven `IntegralCast` / `IntegralPromotion`, source/target both supported integers; integral `ImplicitCastExpr` nodes in ordinary value contexts and `if`/`while`/`do-while`/`for` condition contexts are preserved as explicit IR casts; `FloatingToIntegral`, `IntegralToFloating`, and unknown/missing `ImplicitCastExpr.castKind` in ordinary expressions or conditions fail closed, and only modeled integer casts plus the `LValueToRValue`/`NoOp` skeleton boundary continue |
 | Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, while reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
 | Nested direct call | Narrow | One-level single nested arg only |
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
@@ -90,10 +90,10 @@ This document honestly lists C language constructs that are "currently supported
 |-----------|--------|-------|
 | Expression statement | Supported | `value++;` |
 | `return` (with/without value) | Supported | |
-| `if` / `if-else` | Supported | Including comparison condition |
-| `while` | Supported | Including postfix `size--` |
-| `do-while` | Supported | |
-| `for` (scoped) | Narrow | Simple init/condition/step forms |
+| `if` / `if-else` | Supported | Including comparison condition; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
+| `while` | Supported | Including postfix `size--`; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
+| `do-while` | Supported | clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
+| `for` (scoped) | Narrow | Simple init/condition/step forms; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
 | `break` | Narrow | Inside loop body only |
 | `continue` | Narrow | Inside loop body only |
 | `switch` | Unsupported | CFG/relooper/route refusal evidence exists; full CFG + relooper still required before lowering |
