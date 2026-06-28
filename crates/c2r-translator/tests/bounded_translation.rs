@@ -11,11 +11,13 @@ use std::process::Command;
 use c2r_translator::clang_frontend::ClangParseSpec;
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 use c2r_translator::clang_frontend::{
-    lower_function_and_globals_from_clang_ast_json_value, lower_function_from_clang_ast_dump,
-    lower_function_from_clang_ast_dump_report, lower_function_from_clang_parse_spec_report,
-    lower_function_skeleton, lower_function_skeleton_report, ClangBinaryOperator,
-    ClangExprSkeleton, ClangFunctionSkeleton, ClangIncDecOperator, ClangParamSkeleton,
-    ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator,
+    lower_function_and_globals_from_clang_ast_json_value,
+    lower_function_and_globals_from_clang_ast_json_value_with_target_abi,
+    lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
+    lower_function_from_clang_parse_spec_report, lower_function_skeleton,
+    lower_function_skeleton_report, ClangBinaryOperator, ClangExprSkeleton, ClangFunctionSkeleton,
+    ClangIncDecOperator, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton,
+    ClangUnaryOperator,
 };
 #[cfg(feature = "typed-ir")]
 use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
@@ -25,13 +27,16 @@ use c2r_translator::typed_ir::{
     EmitPolicy, IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam,
     IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp, SignedRightShiftPolicy,
 };
-use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
+use c2r_translator::{
+    translate_slice, write_translation_artifacts, BuildProfile, SliceSpec, TargetAbiProfile,
+};
 use serde_json::Value;
 
 fn profile(clang_available: bool) -> BuildProfile {
     BuildProfile {
         include_paths: vec!["/tmp/lib/include".to_string()],
         defines: vec!["_GNU_SOURCE".to_string()],
+        target: None,
         target_triple: Some("x86_64-unknown-linux-gnu".to_string()),
         abi: Some("linux-gnu".to_string()),
         compiler_command_source: "compile_commands.json".to_string(),
@@ -236,6 +241,60 @@ fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_size_t_without_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_size")
+        .expect_err("size_t must fail closed without target ABI profile");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
+        error
+            .message
+            .contains("requires target ABI width provenance"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_binds_size_t_with_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "identity_size",
+        Some(&target_abi),
+    )
+    .expect("lower size_t fixture with target ABI profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from size_t fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn identity_size(value: usize) -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-target-abi-size-t", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/scalar_runtime_preconditions_ast.json"
@@ -325,6 +384,46 @@ fn clang_ast_fixture_replays_scalar_ub_refusals_without_clang() {
             error.reason
         );
     }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_array_decay_outside_subscript_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/array_decay_ast.json"))
+            .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "first_local_table")
+        .expect_err("array decay through unary deref must fail closed");
+
+    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert!(error.message.contains("ArrayToPointerDecay"));
+    assert!(error.message.contains("explicit IR"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_allows_array_decay_inside_subscript_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/array_decay_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table")
+        .expect("array decay in array subscript base should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array subscript base decay should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn lookup_local_table(i: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[i as usize];"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-array-decay-subscript", rust);
 }
 
 #[cfg(feature = "typed-ir")]
@@ -541,6 +640,39 @@ fn ir_not(expr: IrExpr, ty: IrType) -> IrExpr {
         operand: Box::new(expr),
         ty,
         source_span: None,
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_control_flow_refusals_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/control_flow_refusals_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    for (function_name, expected_reason) in [
+        ("label_refusal", "unsupported control-flow LabelStmt"),
+        ("goto_refusal", "unsupported control-flow GotoStmt"),
+        ("switch_refusal", "unsupported control-flow SwitchStmt"),
+        ("case_refusal", "unsupported control-flow CaseStmt"),
+        ("default_refusal", "unsupported control-flow DefaultStmt"),
+    ] {
+        let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+            .expect_err("control-flow fixture must fail closed during clang AST lowering");
+        assert_eq!(error.kind, "unsupported_clang_stmt");
+        assert!(
+            error.message.contains(expected_reason),
+            "expected {function_name} refusal to contain {expected_reason:?}, got {:?}",
+            error.message
+        );
+        assert!(
+            error
+                .message
+                .contains("requires structured CFG/relooper support"),
+            "expected {function_name} refusal to mention CFG/relooper support, got {:?}",
+            error.message
+        );
     }
 }
 
@@ -5402,6 +5534,79 @@ fn typed_ir_emits_direct_identifier_call_statement() {
         "typed-ir-direct-call-statement",
         &format!("fn observe(_: i32) {{}}\n{rust}"),
     );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_reserved_c_macro_direct_call() {
+    for callee in [
+        "assert",
+        "static_assert",
+        "_Static_assert",
+        "sizeof",
+        "offsetof",
+        "malloc",
+        "calloc",
+        "realloc",
+        "free",
+        "memcpy",
+        "memmove",
+        "memset",
+        "memcmp",
+        "strlen",
+        "printf",
+        "fprintf",
+        "sprintf",
+        "snprintf",
+        "puts",
+        "putchar",
+        "getchar",
+        "exit",
+        "abort",
+    ] {
+        let i32_ty = ir_i32();
+        let void_ty = ir_void();
+        let ir = IrFunction {
+            name: "reserved_call".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            }],
+            body: vec![
+                IrStmt::Expr {
+                    expr: IrExpr::Call {
+                        callee: callee.to_string(),
+                        args: vec![ir_var("value", i32_ty.clone())],
+                        ty: void_ty,
+                        source_span: None,
+                    },
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(ir_var("value", i32_ty)),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).unwrap_err();
+
+        assert_eq!(error.route.route, CandidateRoute::Unsupported);
+        assert!(error.reason.contains(callee), "{:?}", error.reason);
+        assert!(
+            error.reason.contains("reserved C macro"),
+            "{:?}",
+            error.reason
+        );
+        assert!(
+            error.reason.contains("explicit lowering or extern binding"),
+            "{:?}",
+            error.reason
+        );
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -12268,6 +12473,56 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
 
 #[cfg(feature = "clang-frontend")]
 #[test]
+fn clang_parse_spec_preserves_target_abi_width_profile() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "target-abi-width",
+        "source_commit": "1234567",
+        "function_name": "identity_size",
+        "c_source": "size_t identity_size(size_t value) { return value; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/project",
+        "source_file": "src/size.c",
+        "source_file_hashes": {
+            "src/size.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/size.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 48,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "long_width": 64,
+                "pointer_width": 64
+            },
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "x86_64-unknown-linux-gnu",
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let target_abi = parse_spec.target_abi.expect("target ABI profile");
+
+    assert_eq!(target_abi.triple_or_abi, "x86_64-unknown-linux-gnu");
+    assert_eq!(target_abi.int_width, 32);
+    assert_eq!(target_abi.long_width, 64);
+    assert_eq!(target_abi.pointer_width, 64);
+}
+
+#[cfg(feature = "clang-frontend")]
+#[test]
 fn clang_dry_run_records_missing_libclang_environment_without_parsing() {
     let spec: SliceSpec = serde_json::from_value(serde_json::json!({
         "target_id": "flashdb",
@@ -17707,6 +17962,7 @@ fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
         build_profile: BuildProfile {
             include_paths: vec!["inc".to_string(), "tests".to_string()],
             defines: Vec::new(),
+            target: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "real-flashdb-slice-spec-test".to_string(),
@@ -23755,6 +24011,57 @@ fn unsupported_goto_blocks_translation_without_false_success() {
 }
 
 #[test]
+fn unsupported_goto_records_minimal_cfg_blocks_and_edges() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "goto-cfg-evidence".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "again".to_string(),
+        c_source: "int again(int x) { again: x++; if (x < 10) goto again; return x; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+    let function = &result.cfg.functions[0];
+
+    assert!(result.rust_code.is_empty());
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "label:again"));
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "goto:again"));
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "relooper_refusal:goto"));
+    assert!(function
+        .blocks
+        .iter()
+        .any(|block| block.id == "label-again"));
+    assert!(function.blocks.iter().any(|block| block.id == "goto-again"));
+    assert!(function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "entry->goto-again"));
+    assert!(function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "goto-again->label-again"));
+    assert!(!function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "entry->goto"));
+}
+
+#[test]
 fn unsupported_switch_blocks_translation_until_cfg_relooper_exists() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
@@ -23779,6 +24086,61 @@ fn unsupported_switch_blocks_translation_until_cfg_relooper_exists() {
         .unsupported_control_flow
         .iter()
         .any(|node| node == "switch"));
+}
+
+#[test]
+fn unsupported_switch_records_case_default_cfg_edges() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "switch-cfg-evidence".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "choose".to_string(),
+        c_source: "int choose(int x) { switch (x) { case 1: return 1; default: return 0; } }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+    let function = &result.cfg.functions[0];
+
+    assert!(result.rust_code.is_empty());
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "case:1"));
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "default"));
+    assert!(function
+        .unsupported_control_flow
+        .iter()
+        .any(|node| node == "relooper_refusal:switch"));
+    assert!(function.blocks.iter().any(|block| block.id == "switch-0"));
+    assert!(function.blocks.iter().any(|block| block.id == "case-1"));
+    assert!(function.blocks.iter().any(|block| block.id == "default"));
+    assert!(function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "entry->switch-0"));
+    assert!(function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "switch-0->case-1"));
+    assert!(function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "switch-0->default"));
+    assert!(!function
+        .blocks
+        .iter()
+        .flat_map(|block| block.edges.iter())
+        .any(|edge| edge == "entry->switch"));
 }
 
 #[test]

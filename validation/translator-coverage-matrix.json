@@ -373,18 +373,140 @@
       ]
     },
     {
+      "id": "target-abi-integer-width-provenance",
+      "status": "partial",
+      "ir_constructs": [
+        "target ABI integer width provenance",
+        "fixed-width integer spelling acceptance",
+        "plain long/unsigned long/size_t width binding",
+        "plain char/short/long long explicit-width-field refusal",
+        "profile-bound target integer width lowering",
+        "fail_closed_without_abi_profile",
+        "translator input target ABI profile preservation"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "target ABI width no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
+            },
+            {
+              "name": "target ABI width fixture replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "type_from_qual_type target-dependent integer width tests",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_fixture_binds_size_t_with_target_abi_profile",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "no named-slice C/Rust diff is claimed for ABI-width refusal yet"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "typed frontend type-provenance behavior, not legacy fallback"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "no route-decision evidence currently records ABI-width refusal as a candidate-selection feature"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "type_from_qual_type_maps_fixed_width_integer_scalars",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "type_from_qual_type_with_target_abi_binds_lp64_integer_widths",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "clang_parse_spec_preserves_target_abi_width_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_binds_size_t_with_target_abi_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "test_translator_input_preserves_target_abi_width_profile",
+          "path": "validation/tools/test_auto_migrate.py"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "plain char/short/long/long long/size_t widths require target ABI/profile binding before lowering"
+        },
+        {
+          "name": "type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "unknown or absent target ABI profile must not bind target-dependent integer widths"
+        },
+        {
+          "name": "type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "char/short/long long still need explicit signedness or width fields beyond int/long/pointer width"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_size_t_without_target_abi_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "clang AST size_t must fail closed unless build_profile.target supplies ABI width evidence"
+        }
+      ]
+    },
+    {
       "id": "readonly-and-mutable-pointer-slice-lowering",
       "status": "covered",
       "ir_constructs": [
         "readonly pointer deref/index read",
         "mutable pointer deref/index write",
         "pointer add index deref",
+        "ArrayToPointerDecay in ArraySubscriptExpr base",
+        "ArrayToPointerDecay outside ArraySubscriptExpr fail-closed",
         "slice boundary"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
-          "status": "gap",
-          "reason": "no committed no-clang AST fixture yet covers pointer slice lowering"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "array decay no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/array_decay_ast.json"
+            },
+            {
+              "name": "array decay fixture replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
         },
         "handwritten_ir": {
           "status": "covered",
@@ -448,6 +570,10 @@
         {
           "name": "typed_ir_emits_mutable_pointer_add_index_deref_assignment",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_allows_array_decay_inside_subscript_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -460,6 +586,11 @@
           "name": "typed_ir_rejects_mutable_pointer_complex_offset_assignment",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "complex mutable pointer offsets lack alias and bounds proof"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_array_decay_outside_subscript_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "ArrayToPointerDecay outside ArraySubscriptExpr still needs explicit IR before Rust lowering"
         }
       ]
     },
@@ -546,6 +677,7 @@
       "ir_constructs": [
         "direct CallExpr",
         "bounded external callee context",
+        "reserved C macro/stdlib/extern callee fail-closed",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -618,6 +750,11 @@
           "name": "blocks_unsupported_call_expressions_without_rust_draft",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "calls outside the bounded direct-callee subset must not produce a Rust draft"
+        },
+        {
+          "name": "typed_ir_rejects_reserved_c_macro_direct_call",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "reserved C macro/stdlib/extern-like callees must not be emitted as plain Rust function calls without explicit lowering or extern binding"
         }
       ]
     },
@@ -690,6 +827,150 @@
           "name": "validator rejects candidate selection id drift",
           "path": "validation/tools/test_validate_auto_translation_evidence.py",
           "fail_closed_reason": "route metadata must not let fallback or baseline candidates masquerade as accepted semantic sources"
+        }
+      ]
+    },
+    {
+      "id": "complex-control-flow-fail-closed",
+      "status": "partial",
+      "ir_constructs": [
+        "IrStmt::While",
+        "IrStmt::Break",
+        "IrStmt::Continue",
+        "IrStmt::DoWhile",
+        "IrStmt::For",
+        "legacy CFG evidence for label/goto/switch/case/default",
+        "unsupported_control_flow classification",
+        "relooper_refusal evidence for goto/switch"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "control-flow refusal AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/control_flow_refusals_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed IR structured loop control-flow tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed IR and legacy complex-control-flow fail-closed tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed IR while/do-while/for control-flow emitted Rust tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "this row records translator/unit-level control-flow evidence only; no named-slice C/Rust differential gate is claimed"
+        },
+        "legacy_fallback": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "legacy string translator switch/goto minimal CFG evidence tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "no committed auto-translation route-decision/refusal evidence currently exercises switch/goto; existing route CFG evidence does not record has_goto/has_switch or unsupported_control_flow for this class"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "typed_ir_emits_scalar_while_with_integer_condition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_break_in_scalar_while_body",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_continue_in_scalar_while_body",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_scalar_do_while_with_condition_check_after_body",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "unsupported_goto_records_minimal_cfg_blocks_and_edges",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "unsupported_switch_records_case_default_cfg_edges",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_break_outside_loop",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "break outside a modeled loop must not emit Rust"
+        },
+        {
+          "name": "typed_ir_rejects_continue_outside_loop",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "continue outside a modeled loop must not emit Rust"
+        },
+        {
+          "name": "typed_ir_rejects_while_with_unsupported_condition_expr",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "unsupported loop conditions must not be guessed into Rust control flow"
+        },
+        {
+          "name": "typed_ir_rejects_while_with_incdec_condition_expr",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "side-effecting inc/dec loop conditions require explicit sequencing support before lowering"
+        },
+        {
+          "name": "unsupported_goto_blocks_translation_without_false_success",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "goto requires CFG/relooper support, records relooper_refusal evidence, and must keep the Rust draft empty"
+        },
+        {
+          "name": "unsupported_switch_blocks_translation_until_cfg_relooper_exists",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "switch requires CFG/relooper support, records relooper_refusal evidence, and must keep the Rust draft empty"
+        },
+        {
+          "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "clang AST GotoStmt/SwitchStmt/LabelStmt/CaseStmt/DefaultStmt nodes must fail closed with structured CFG/relooper reasons before typed-IR lowering"
         }
       ]
     }

@@ -890,6 +890,7 @@ mod clang_dry_run_artifact_tests {
         BuildProfile {
             include_paths: Vec::new(),
             defines: Vec::new(),
+            target: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),
@@ -1007,6 +1008,7 @@ mod clang_lowering_report_artifact_tests {
         BuildProfile {
             include_paths: Vec::new(),
             defines: Vec::new(),
+            target: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),

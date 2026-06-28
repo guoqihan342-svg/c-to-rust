@@ -823,6 +823,7 @@ mod clang_lowered_ir_evidence_tests {
         BuildProfile {
             include_paths: Vec::new(),
             defines: Vec::new(),
+            target: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),

@@ -17,7 +17,7 @@ This document honestly lists C language constructs that are "currently supported
 | `int16_t` | Supported | Maps to `i16` |
 | `uint16_t` | Supported | Maps to `u16` |
 | `int64_t` / `uint64_t` | Supported | Maps to `i64` / `u64` |
-| `size_t` (clang canonical) | Supported | Maps to `usize` |
+| `size_t` | Narrow | Maps to `usize` only when `build_profile.target` provides explicit target ABI width evidence; no-profile clang frontend lowering still fails closed and must not guess a fixed 64-bit width |
 | `void` | Supported | Return type and pointer pointee |
 | `const void *` (byte cursor) | Narrow | Maps to `&[u8]` only in proven byte cursor scenarios |
 | `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]`, read-only |
@@ -25,7 +25,7 @@ This document honestly lists C language constructs that are "currently supported
 | `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write, direct if-return fallthrough writes, and statement inc-dec; not a general ownership or alias model |
 | plain `char` | Unsupported | Sign unknown, clang frontend rejects |
 | `short` / `unsigned short` | Unsupported | Target-dependent spelling, rejected |
-| `long` / `unsigned long` | Unsupported | Target ABI width inference not modeled |
+| `long` / `unsigned long` | Narrow | Modeled only when `build_profile.target.long_width` is explicit; no-profile cases still fail closed |
 | `long long` / `unsigned long long` | Unsupported | Rejected unless a typedef alias |
 | `float` / `double` / `long double` | Unsupported | Floating-point entirely unsupported |
 | `_Bool` | Unsupported | Not modeled |

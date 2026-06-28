@@ -25,10 +25,10 @@
 //! - **The frontend does not decide Rust semantics**: it lowers C AST into typed IR.
 //!   The typed IR emitter decides what Rust to emit. The validation pipeline decides
 //!   whether the result is correct.
-//! - **Type mapping is conservative**: only fixed-width integer typedef aliases (int8_t
-//!   through uint64_t) and `signed char` are mapped to typed IR integer types. Target-
-//!   dependent spellings like `short`, `long long`, plain `char`, and plain `long` are
-//!   explicitly unsupported.
+//! - **Type mapping is conservative**: fixed-width integer typedef aliases (int8_t through
+//!   uint64_t) and `signed char` map directly to typed IR integer types. Target-dependent
+//!   spellings fail closed unless an explicit target ABI profile provides the required evidence;
+//!   the current profile-bound path only lowers `long`/`unsigned long` and `size_t`.
 //!
 //! # Coverage
 //!
@@ -55,7 +55,7 @@ use crate::typed_ir::{
     IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam, IrRecordField,
     IrStmt, IrType, IrTypeKind, IrUnOp,
 };
-use crate::{SliceSpec, SourceSpanRef};
+use crate::{SliceSpec, SourceSpanRef, TargetAbiProfile};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClangParseSpec {
@@ -64,6 +64,7 @@ pub struct ClangParseSpec {
     pub function_name: String,
     pub include_paths: Vec<String>,
     pub defines: Vec<String>,
+    pub target_abi: Option<TargetAbiProfile>,
     pub compile_commands: Option<PathBuf>,
     pub source_file_hashes: BTreeMap<String, String>,
     pub function_source_span: Option<SourceSpanRef>,
@@ -509,6 +510,7 @@ impl ClangParseSpec {
             function_name: spec.function_name.clone(),
             include_paths: spec.build_profile.include_paths.clone(),
             defines: spec.build_profile.defines.clone(),
+            target_abi: spec.build_profile.target.clone(),
             compile_commands: spec.compile_commands.as_ref().map(PathBuf::from),
             source_file_hashes: spec.source_file_hashes.clone(),
             function_source_span: Some(function_source_span),
@@ -626,12 +628,24 @@ pub fn lower_function_and_globals_from_clang_ast_json_value(
     ast: &Value,
     function_name: &str,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
+    lower_function_and_globals_from_clang_ast_json_value_with_target_abi(ast, function_name, None)
+}
+
+#[cfg(feature = "typed-ir")]
+pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+    ast: &Value,
+    function_name: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let record_inventory = record_inventory_from_ast(&ast);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
-    let skeleton = function_skeleton_from_ast(function)?;
+    let mut skeleton = function_skeleton_from_ast(function)?;
+    if let Some(target_abi) = target_abi {
+        bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);
+    }
     let mut function_ir = lower_function_skeleton(&skeleton)?;
     attach_record_inventory_to_function(&mut function_ir, &record_inventory);
     let globals = readonly_globals_from_ast(&ast)?;
@@ -704,11 +718,13 @@ pub fn lower_function_from_clang_parse_spec_report(
         Some(clang_path.to_string_lossy().to_string()),
         arguments.clone(),
         environment,
-        lower_function_and_globals_from_clang_ast_dump_with_arguments(
-            &clang_path,
-            &arguments,
-            &parse_spec.function_name,
-        ),
+        clang_ast_dump_json(&clang_path, &arguments).and_then(|ast| {
+            lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+                &ast,
+                &parse_spec.function_name,
+                parse_spec.target_abi.as_ref(),
+            )
+        }),
     )
 }
 
@@ -1026,6 +1042,11 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         }
         Some("BreakStmt") => Ok(ClangStmtSkeleton::Break),
         Some("ContinueStmt") => Ok(ClangStmtSkeleton::Continue),
+        Some("GotoStmt" | "SwitchStmt" | "LabelStmt" | "CaseStmt" | "DefaultStmt") => {
+            Ok(ClangStmtSkeleton::Unsupported {
+                reason: unsupported_control_flow_stmt_reason(stmt),
+            })
+        }
         Some(kind) => Ok(ClangStmtSkeleton::Unsupported {
             reason: unsupported_stmt_reason(stmt, kind),
         }),
@@ -1597,6 +1618,45 @@ fn unsupported_stmt_reason(stmt: &Value, kind: &str) -> String {
 }
 
 #[cfg(feature = "typed-ir")]
+fn unsupported_control_flow_stmt_reason(stmt: &Value) -> String {
+    let kind = string_field(stmt, "kind").unwrap_or_else(|| "unknown".to_string());
+    let mut reason =
+        format!("unsupported control-flow {kind} requires structured CFG/relooper support");
+    match kind.as_str() {
+        "GotoStmt" => {
+            if let Some(label) = inner(stmt)
+                .iter()
+                .find(|child| string_field(child, "kind").as_deref() == Some("LabelDecl"))
+                .and_then(|child| string_field(child, "name"))
+            {
+                reason.push_str(&format!(" before lowering target label {label}"));
+            }
+        }
+        "LabelStmt" => {
+            if let Some(label) = string_field(stmt, "name") {
+                reason.push_str(&format!(" before lowering label {label}"));
+            }
+        }
+        "CaseStmt" => {
+            if let Some(value) = inner(stmt).first().and_then(case_label_value) {
+                reason.push_str(&format!(" before lowering case {value}"));
+            }
+        }
+        _ => {}
+    }
+    reason
+}
+
+#[cfg(feature = "typed-ir")]
+fn case_label_value(node: &Value) -> Option<String> {
+    match string_field(node, "kind").as_deref() {
+        Some("IntegerLiteral") => string_field(node, "value"),
+        Some("ImplicitCastExpr" | "ParenExpr") => inner(node).first().and_then(case_label_value),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn decl_stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFrontendError> {
     let var_decls = decl_stmt_var_decls(stmt);
     let [var_decl] = var_decls.as_slice() else {
@@ -1686,6 +1746,14 @@ fn expr_skeleton_from_ast_with_options(
             let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
             if string_field(expr, "castKind").as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
+            }
+            if string_field(expr, "castKind").as_deref() == Some("ArrayToPointerDecay") {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason:
+                        "castKind ArrayToPointerDecay requires explicit IR before Rust lowering"
+                            .to_string(),
+                });
             }
             if preserve_integral_casts && is_integral_conversion_cast_expr(expr) {
                 return Ok(ClangExprSkeleton::Cast {
@@ -1819,7 +1887,7 @@ fn expr_skeleton_from_ast_with_options(
                 });
             };
             Ok(ClangExprSkeleton::Index {
-                base: Box::new(expr_skeleton_from_ast_with_options(
+                base: Box::new(array_subscript_base_skeleton_from_ast(
                     base,
                     preserve_integral_casts,
                 )?),
@@ -1974,6 +2042,24 @@ fn null_pointer_skeleton_from_cast(
         });
     }
     Ok(ClangExprSkeleton::NullPtr { ty: target })
+}
+
+#[cfg(feature = "typed-ir")]
+fn array_subscript_base_skeleton_from_ast(
+    base: &Value,
+    preserve_integral_casts: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(base, "kind").as_deref() == Some("ImplicitCastExpr")
+        && string_field(base, "castKind").as_deref() == Some("ArrayToPointerDecay")
+    {
+        let operand = inner(base).first().ok_or_else(|| ClangFrontendError {
+            kind: "invalid_clang_expr".to_string(),
+            message: "ArrayToPointerDecay in ArraySubscriptExpr base is missing operand"
+                .to_string(),
+        })?;
+        return expr_skeleton_from_ast_with_options(operand, preserve_integral_casts);
+    }
+    expr_skeleton_from_ast_with_options(base, preserve_integral_casts)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2366,9 +2452,17 @@ fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFront
 /// ambiguous C spellings fail closed so the typed IR emitter never receives a
 /// type whose width or layout was inferred by string guesswork.
 fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    type_from_qual_type_with_target_abi(qual_type, None)
+}
+
+#[cfg(feature = "typed-ir")]
+fn type_from_qual_type_with_target_abi(
+    qual_type: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     let trimmed = qual_type.trim();
     if let Some(pointee) = trimmed.strip_suffix('*') {
-        let pointee = type_from_qual_type(pointee.trim())?;
+        let pointee = type_from_qual_type_with_target_abi(pointee.trim(), target_abi)?;
         return Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: format!("{} *", pointee.canonical),
@@ -2378,7 +2472,7 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
         });
     }
     if let Some(unqualified) = trimmed.strip_prefix("const ") {
-        let unqualified = type_from_qual_type(unqualified.trim())?;
+        let unqualified = type_from_qual_type_with_target_abi(unqualified.trim(), target_abi)?;
         return Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
             canonical: unqualified.canonical,
@@ -2386,7 +2480,7 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
         });
     }
     if let Some((element, len)) = split_array_qual_type(trimmed)? {
-        let element = type_from_qual_type(element)?;
+        let element = type_from_qual_type_with_target_abi(element, target_abi)?;
         let canonical = match len {
             Some(len) => format!("{}[{len}]", element.canonical),
             None => format!("{}[]", element.canonical),
@@ -2499,22 +2593,10 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 width: 64,
             },
         }),
-        "size_t" => Ok(ClangTypeSkeleton {
-            spelled: trimmed.to_string(),
-            canonical: "size_t".to_string(),
-            kind: ClangTypeKind::Integer {
-                signed: false,
-                width: 64,
-            },
-        }),
-        "unsigned long" => Ok(ClangTypeSkeleton {
-            spelled: trimmed.to_string(),
-            canonical: trimmed.to_string(),
-            kind: ClangTypeKind::Integer {
-                signed: false,
-                width: 64,
-            },
-        }),
+        "char" | "short" | "unsigned short" | "long" | "unsigned long" | "long long"
+        | "unsigned long long" | "size_t" => Ok(target_dependent_integer_type_with_profile(
+            trimmed, target_abi,
+        )),
         other => Ok(ClangTypeSkeleton {
             spelled: other.to_string(),
             canonical: other.to_string(),
@@ -2522,6 +2604,237 @@ fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFronte
                 reason: format!("{other} is outside the current type skeleton"),
             },
         }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_dependent_integer_type_with_profile(
+    spelling: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> ClangTypeSkeleton {
+    if let Some((signed, width)) = target_dependent_integer_width(spelling, target_abi) {
+        return ClangTypeSkeleton {
+            spelled: spelling.to_string(),
+            canonical: spelling.to_string(),
+            kind: ClangTypeKind::Integer { signed, width },
+        };
+    }
+
+    ClangTypeSkeleton {
+        spelled: spelling.to_string(),
+        canonical: spelling.to_string(),
+        kind: ClangTypeKind::Unsupported {
+            reason: if target_abi.is_some() {
+                format!(
+                    "{spelling} requires an explicit target ABI width field before typed IR lowering"
+                )
+            } else {
+                format!("{spelling} requires target ABI width provenance before typed IR lowering")
+            },
+        },
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_dependent_integer_width(
+    spelling: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Option<(bool, u16)> {
+    let abi = target_abi?;
+    match spelling {
+        "long" => nonzero_width(abi.long_width).map(|width| (true, width)),
+        "unsigned long" => nonzero_width(abi.long_width).map(|width| (false, width)),
+        "size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn nonzero_width(width: u16) -> Option<u16> {
+    if width == 0 {
+        None
+    } else {
+        Some(width)
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn bind_target_abi_to_function_skeleton(
+    function: &mut ClangFunctionSkeleton,
+    target_abi: &TargetAbiProfile,
+) {
+    bind_target_abi_to_type(&mut function.return_type, target_abi);
+    for param in &mut function.params {
+        bind_target_abi_to_type(&mut param.ty, target_abi);
+    }
+    bind_target_abi_to_stmts(&mut function.body, target_abi);
+}
+
+#[cfg(feature = "typed-ir")]
+fn bind_target_abi_to_stmts(statements: &mut [ClangStmtSkeleton], target_abi: &TargetAbiProfile) {
+    for statement in statements {
+        bind_target_abi_to_stmt(statement, target_abi);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn bind_target_abi_to_stmt(statement: &mut ClangStmtSkeleton, target_abi: &TargetAbiProfile) {
+    match statement {
+        ClangStmtSkeleton::Decl { ty, init, .. } => {
+            bind_target_abi_to_type(ty, target_abi);
+            if let Some(init) = init {
+                bind_target_abi_to_expr(init, target_abi);
+            }
+        }
+        ClangStmtSkeleton::Assign { target, value } => {
+            bind_target_abi_to_expr(target, target_abi);
+            bind_target_abi_to_expr(value, target_abi);
+        }
+        ClangStmtSkeleton::CompoundAssign {
+            target,
+            value,
+            result_ty,
+            compute_lhs_ty,
+            compute_result_ty,
+            ..
+        } => {
+            bind_target_abi_to_expr(target, target_abi);
+            bind_target_abi_to_expr(value, target_abi);
+            bind_target_abi_to_type(result_ty, target_abi);
+            bind_target_abi_to_type(compute_lhs_ty, target_abi);
+            bind_target_abi_to_type(compute_result_ty, target_abi);
+        }
+        ClangStmtSkeleton::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            bind_target_abi_to_expr(condition, target_abi);
+            bind_target_abi_to_stmts(then_body, target_abi);
+            bind_target_abi_to_stmts(else_body, target_abi);
+        }
+        ClangStmtSkeleton::While { condition, body } => {
+            bind_target_abi_to_expr(condition, target_abi);
+            bind_target_abi_to_stmts(body, target_abi);
+        }
+        ClangStmtSkeleton::DoWhile { body, condition } => {
+            bind_target_abi_to_stmts(body, target_abi);
+            bind_target_abi_to_expr(condition, target_abi);
+        }
+        ClangStmtSkeleton::For {
+            init,
+            condition,
+            step,
+            body,
+        } => {
+            bind_target_abi_to_stmts(init, target_abi);
+            if let Some(condition) = condition {
+                bind_target_abi_to_expr(condition, target_abi);
+            }
+            if let Some(step) = step {
+                bind_target_abi_to_stmt(step, target_abi);
+            }
+            bind_target_abi_to_stmts(body, target_abi);
+        }
+        ClangStmtSkeleton::Return { value } => {
+            if let Some(value) = value {
+                bind_target_abi_to_expr(value, target_abi);
+            }
+        }
+        ClangStmtSkeleton::Expr { expr } => {
+            bind_target_abi_to_expr(expr, target_abi);
+        }
+        ClangStmtSkeleton::Break
+        | ClangStmtSkeleton::Continue
+        | ClangStmtSkeleton::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiProfile) {
+    match expr {
+        ClangExprSkeleton::DeclRef { ty, .. }
+        | ClangExprSkeleton::IntegerLiteral { ty, .. }
+        | ClangExprSkeleton::NullPtr { ty }
+        | ClangExprSkeleton::Binary { ty, .. }
+        | ClangExprSkeleton::Unary { ty, .. }
+        | ClangExprSkeleton::Conditional { ty, .. }
+        | ClangExprSkeleton::IncDec { ty, .. }
+        | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::Index { ty, .. }
+        | ClangExprSkeleton::ArrayLiteral { ty, .. }
+        | ClangExprSkeleton::Call { ty, .. }
+        | ClangExprSkeleton::Member { ty, .. } => {
+            bind_target_abi_to_type(ty, target_abi);
+        }
+        ClangExprSkeleton::Cast { target, .. } => {
+            bind_target_abi_to_type(target, target_abi);
+        }
+        ClangExprSkeleton::Unsupported { .. } => {}
+    }
+
+    match expr {
+        ClangExprSkeleton::Binary { lhs, rhs, .. } => {
+            bind_target_abi_to_expr(lhs, target_abi);
+            bind_target_abi_to_expr(rhs, target_abi);
+        }
+        ClangExprSkeleton::Unary { operand, .. } => {
+            bind_target_abi_to_expr(operand, target_abi);
+        }
+        ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            bind_target_abi_to_expr(condition, target_abi);
+            bind_target_abi_to_expr(then_expr, target_abi);
+            bind_target_abi_to_expr(else_expr, target_abi);
+        }
+        ClangExprSkeleton::IncDec { target, .. } => {
+            bind_target_abi_to_expr(target, target_abi);
+        }
+        ClangExprSkeleton::Deref { ptr, .. } => {
+            bind_target_abi_to_expr(ptr, target_abi);
+        }
+        ClangExprSkeleton::Cast { expr, .. } => {
+            bind_target_abi_to_expr(expr, target_abi);
+        }
+        ClangExprSkeleton::Index { base, index, .. } => {
+            bind_target_abi_to_expr(base, target_abi);
+            bind_target_abi_to_expr(index, target_abi);
+        }
+        ClangExprSkeleton::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                bind_target_abi_to_expr(element, target_abi);
+            }
+        }
+        ClangExprSkeleton::Call { args, .. } => {
+            for arg in args {
+                bind_target_abi_to_expr(arg, target_abi);
+            }
+        }
+        ClangExprSkeleton::Member { base, .. } => {
+            bind_target_abi_to_expr(base, target_abi);
+        }
+        ClangExprSkeleton::DeclRef { .. }
+        | ClangExprSkeleton::IntegerLiteral { .. }
+        | ClangExprSkeleton::NullPtr { .. }
+        | ClangExprSkeleton::Unsupported { .. } => {}
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn bind_target_abi_to_type(ty: &mut ClangTypeSkeleton, target_abi: &TargetAbiProfile) {
+    if let Ok(bound) = type_from_qual_type_with_target_abi(&ty.spelled, Some(target_abi)) {
+        if !matches!(bound.kind, ClangTypeKind::Unsupported { .. }) {
+            *ty = bound;
+        }
+    }
+    match &mut ty.kind {
+        ClangTypeKind::Pointer { pointee } => bind_target_abi_to_type(pointee, target_abi),
+        ClangTypeKind::Array { element, .. } => bind_target_abi_to_type(element, target_abi),
+        _ => {}
     }
 }
 
@@ -4675,6 +4988,35 @@ mod tests {
     }
 
     #[test]
+    fn expr_skeleton_from_ast_rejects_array_to_pointer_decay_without_explicit_ir() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "ArrayToPointerDecay",
+            "type": { "qualType": "int *" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int[4]" },
+                    "referencedDecl": { "name": "table" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("array-to-pointer decay skeleton");
+
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::Unsupported { ref node, ref reason }
+                if node == "ImplicitCastExpr"
+                    && reason.contains("ArrayToPointerDecay")
+                    && reason.contains("explicit IR")
+        ));
+        let error = lower_expr(&skeleton).expect_err("array-to-pointer decay must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("ArrayToPointerDecay"));
+    }
+
+    #[test]
     fn expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_operands() {
         let expr = serde_json::json!({
             "kind": "BinaryOperator",
@@ -5642,11 +5984,90 @@ mod tests {
 
     #[test]
     fn type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported() {
-        for spelling in ["short", "unsigned short", "long long", "unsigned long long"] {
+        for spelling in [
+            "char",
+            "short",
+            "unsigned short",
+            "long",
+            "unsigned long",
+            "long long",
+            "unsigned long long",
+            "size_t",
+        ] {
             let ty = type_from_qual_type(spelling).expect("type skeleton");
 
-            assert!(matches!(ty.kind, ClangTypeKind::Unsupported { .. }));
+            assert!(matches!(
+                ty.kind,
+                ClangTypeKind::Unsupported { ref reason }
+                    if reason.contains("requires target ABI width provenance")
+            ));
         }
+    }
+
+    #[test]
+    fn type_from_qual_type_with_target_abi_binds_lp64_integer_widths() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            long_width: 64,
+            pointer_width: 64,
+        };
+
+        for (spelling, expected_signed, expected_width) in [
+            ("long", true, 64),
+            ("unsigned long", false, 64),
+            ("size_t", false, 64),
+        ] {
+            let ty =
+                type_from_qual_type_with_target_abi(spelling, Some(&abi)).expect("type skeleton");
+
+            assert_eq!(ty.spelled, spelling);
+            assert!(matches!(
+                ty.kind,
+                ClangTypeKind::Integer { signed, width }
+                    if signed == expected_signed && width == expected_width
+            ));
+        }
+    }
+
+    #[test]
+    fn type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            long_width: 64,
+            pointer_width: 64,
+        };
+
+        for spelling in [
+            "char",
+            "short",
+            "unsigned short",
+            "long long",
+            "unsigned long long",
+        ] {
+            let ty =
+                type_from_qual_type_with_target_abi(spelling, Some(&abi)).expect("type skeleton");
+
+            assert!(matches!(
+                ty.kind,
+                ClangTypeKind::Unsupported { ref reason }
+                    if reason.contains("requires an explicit target ABI width field")
+            ));
+        }
+    }
+
+    #[test]
+    fn type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed() {
+        let ty = type_from_qual_type_with_target_abi("size_t", None).expect("type skeleton");
+
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Unsupported { ref reason }
+                if reason.contains("requires target ABI width provenance")
+        ));
     }
 
     #[test]

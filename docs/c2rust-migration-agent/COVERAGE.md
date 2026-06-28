@@ -19,7 +19,7 @@
 | `int16_t` | 已支持 | 映射为 `i16` |
 | `uint16_t` | 已支持 | 映射为 `u16` |
 | `int64_t` / `uint64_t` | 已支持 | 映射为 `i64` / `u64` |
-| `size_t` (clang canonical) | 已支持 | 映射为 `usize` |
+| `size_t` | 窄支持 | 仅在 `build_profile.target` 提供明确 target ABI 宽度证据时映射为 `usize`；无 profile 的 clang frontend 仍 fail-closed，禁止猜成固定 64-bit |
 | `void` | 已支持 | return type 和 pointer pointee |
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
 | `const T *` (readonly integer pointer) | 窄支持 | 映射为 `&[T]`，只读 |
@@ -27,7 +27,7 @@
 | `struct T *` (mutable record pointer) | 窄支持 | 仅在 direct single-pointer scalar field 写/update/read-after-write、direct if-return fallthrough write、statement inc-dec 时映射为 `&mut T`；不是通用 ownership 或 alias 模型 |
 | `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
 | `short` / `unsigned short` | 不支持 | target-dependent spelling，拒绝 |
-| `long` / `unsigned long` | 不支持 | target ABI 宽度推断未建模 |
+| `long` / `unsigned long` | 窄支持 | 仅在 `build_profile.target.long_width` 明确时按该宽度建模；无 profile 仍 fail-closed |
 | `long long` / `unsigned long long` | 不支持 | 如不是 typedef alias，拒绝 |
 | `float` / `double` / `long double` | 不支持 | 浮点类型完全未支持 |
 | `_Bool` | 不支持 | 未建模 |

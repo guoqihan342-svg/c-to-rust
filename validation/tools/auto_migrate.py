@@ -203,12 +203,15 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         "build_profile": {
             "include_paths": build_profile.get("include_paths", []),
             "defines": build_profile.get("defines", []),
+            "target": target if target else None,
             "target_triple": spec.get("build_profile", {}).get("target_triple") or target.get("triple_or_abi"),
             "abi": spec.get("build_profile", {}).get("abi") or target.get("triple_or_abi"),
             "compiler_command_source": build_profile.get("compiler_command_source", "unknown"),
             "clang_available": bool(build_profile.get("clang_available", clang.get("available", False))),
         },
     }
+    if translator_spec["build_profile"]["target"] is None:
+        del translator_spec["build_profile"]["target"]
     source_root = spec.get("source", {}).get("source_root")
     if source_root:
         translator_spec["source_root"] = source_root

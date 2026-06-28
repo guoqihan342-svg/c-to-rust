@@ -1,0 +1,50 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "identity_size",
+      "type": {
+        "qualType": "size_t (size_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "size_t"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

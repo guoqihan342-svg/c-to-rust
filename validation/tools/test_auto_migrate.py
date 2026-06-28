@@ -4720,6 +4720,47 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(translator_input["source_file"], "src/target_fn.c")
 
+    def test_translator_input_preserves_target_abi_width_profile(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            target = {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "long_width": 64,
+                "pointer_width": 64,
+            }
+            spec = {
+                "target_id": "demo",
+                "slice_id": "target-abi-width",
+                "source_commit": "1234567",
+                "function_name": "count",
+                "c_source": "size_t count(size_t value) { return value; }",
+                "fixture_hash": "fixture-sha",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "target": target,
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(translator_input["build_profile"]["target"], target)
+            self.assertEqual(
+                translator_input["build_profile"]["target_triple"],
+                "x86_64-unknown-linux-gnu",
+            )
+            self.assertEqual(
+                translator_input["build_profile"]["abi"],
+                "x86_64-unknown-linux-gnu",
+            )
+
     def test_translator_input_preserves_scalar_arithmetic_contract(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:

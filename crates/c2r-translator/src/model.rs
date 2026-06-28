@@ -6,10 +6,22 @@ use serde::{Deserialize, Serialize};
 pub struct BuildProfile {
     pub include_paths: Vec<String>,
     pub defines: Vec<String>,
+    #[serde(default)]
+    pub target: Option<TargetAbiProfile>,
     pub target_triple: Option<String>,
     pub abi: Option<String>,
     pub compiler_command_source: String,
     pub clang_available: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TargetAbiProfile {
+    pub triple_or_abi: String,
+    #[serde(default)]
+    pub endianness: Option<String>,
+    pub int_width: u16,
+    pub long_width: u16,
+    pub pointer_width: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
