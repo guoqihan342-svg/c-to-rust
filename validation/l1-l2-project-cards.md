@@ -1,3 +1,5 @@
+英文镜像见 `l1-l2-project-cards.en.md`。
+
 # L1/L2 Project Cards
 
 中文：这些项目卡片把 L0 catalog 目标转成后续可执行动作。它们不是 L1/L2 已通过证据；只有实际 clone、pin commit、build/test、迁移切片编译、C/Rust diff 全部完成后，才能升级对应项目状态。

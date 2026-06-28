@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Code-Test Translation Template
 
 中文：本模板用于记录 C-to-Rust 迁移切片中的“代码翻译”和“测试翻译”是否同步推进。它把 C 测试、fixture、oracle 期望、Rust 测试文件、测试函数名、覆盖路径、负向用例和失效键放在同一个可审计 manifest 中。

@@ -1,3 +1,5 @@
+英文镜像见 `translator-strengthening-analysis.en.md`。
+
 # c-to-rust 翻译器加强分析
 
 > 日期：2026-06-27

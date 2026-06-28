@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Multi-Project C-to-Rust Validation
 
 中文：本目录用于管理“十几个复杂 C 项目”的迁移验证候选集。当前阶段已完成 L0 目录校验、远程 HEAD 探测，以及 40/40 个项目的 L1 native C build/test smoke 尝试；这仍不代表这些项目已经迁移成功，也不代表语义等价已经证明。

@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # Code-Test Translation Checklist
 
 Use this checklist before claiming L2 or L3 success for a translated slice.

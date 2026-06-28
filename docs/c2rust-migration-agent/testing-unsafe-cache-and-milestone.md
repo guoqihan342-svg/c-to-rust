@@ -1,3 +1,5 @@
+英文镜像见 `testing-unsafe-cache-and-milestone.en.md`。
+
 # Testing, Unsafe Budget, Cache, and Performance Gates
 
 中文说明：语义等价不能靠“看起来一样”，必须靠 C oracle/C2Rust baseline、Rust 测试、golden image、property/fuzz、覆盖率、性能 smoke 和 unsafe 审计共同约束。

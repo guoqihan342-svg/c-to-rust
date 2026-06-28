@@ -1,3 +1,5 @@
+英文镜像见 `flashdb-rust-skeleton-and-milestone.en.md`。
+
 # `flashDB_rust` Skeleton and First Milestone
 
 中文说明：第一阶段不追求一次性迁完整个 FlashDB，而是先做可编译、可测试、可差分验证的 host-verifiable 子集。

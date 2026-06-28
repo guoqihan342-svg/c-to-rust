@@ -1,3 +1,5 @@
+英文镜像见 `agent-contract.en.md`。
+
 # C2Rust Migration Agent Contract
 
 中文说明：本文定义给 OpenCode、Codex 或其他智能体调用的迁移 Agent 契约。目标是少 token、安全、快、可追溯，并允许多个有边界的子智能体并行工作。

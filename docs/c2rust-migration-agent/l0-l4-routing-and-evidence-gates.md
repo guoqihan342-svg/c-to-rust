@@ -1,3 +1,5 @@
+英文镜像见 `l0-l4-routing-and-evidence-gates.en.md`。
+
 # L0-L4 路由、证据流与验证门禁设计
 
 本文档详细解释 `validation/tools/auto_migrate.py` 的 L0-L4 路由决策、证据流拓扑和验证门禁的设计思路。英文镜像见 `l0-l4-routing-and-evidence-gates.en.md`。

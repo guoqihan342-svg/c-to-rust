@@ -1,3 +1,5 @@
+英文镜像见 `full-regression-runner.en.md`。
+
 # Full Regression Runner
 
 中文说明：`scripts/run-full-regression.ps1` 是根目录级总控回归入口，用来把 FlashDB Rust、L2 slices、bounded translator、auto-translation evidence、OpenSpec gates 和仓库 whitespace 检查串成可重复轮次。它不把合成负载冒充真实生产数据，也不声称 `cargo-llvm-cov` 分支覆盖率。

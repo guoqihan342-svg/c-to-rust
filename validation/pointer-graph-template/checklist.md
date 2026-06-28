@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # Pointer Dependency Graph Checklist
 
 Use this checklist before translating a pointer-bearing C slice or reporting L2/L3 success for one.

@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # Slice Spec Checklist
 
 - [ ] `target_id` and `slice_id` are stable.

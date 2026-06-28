@@ -1,3 +1,5 @@
+英文镜像见 `CONTEXT.en.md`。
+
 ﻿# CONTEXT.md
 
 本文件是给新 Codex 会话快速接手用的短交接，不是项目路线图、release 文档、能力证明或长会话日志。历史长记录已归档到 `docs/c2rust-migration-agent/archive/context-history-2026-06-28.md`。

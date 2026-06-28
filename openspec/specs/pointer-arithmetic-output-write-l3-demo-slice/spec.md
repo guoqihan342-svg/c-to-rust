@@ -1,3 +1,5 @@
+英文镜像见 `spec.en.md`。
+
 # pointer-arithmetic-output-write-l3-demo-slice Specification
 
 ## Purpose

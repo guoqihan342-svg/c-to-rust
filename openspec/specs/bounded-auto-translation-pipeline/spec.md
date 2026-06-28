@@ -1,3 +1,5 @@
+英文镜像见 `spec.en.md`。
+
 # bounded-auto-translation-pipeline Specification
 
 ## Purpose

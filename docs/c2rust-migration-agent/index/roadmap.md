@@ -1,3 +1,5 @@
+英文镜像见 `roadmap.en.md`。
+
 ﻿# 覆盖与路线
 
 - [COVERAGE.md](../COVERAGE.md)

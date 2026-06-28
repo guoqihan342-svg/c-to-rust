@@ -1,3 +1,5 @@
+英文镜像见 `context-store-and-self-healing.en.md`。
+
 # Cross-File Context Store and Compile Self-Healing
 
 中文说明：跨文件上下文管理是这个 Agent 的核心。不能把整个仓库一次性塞给 AI，也不能在单点重构时破坏模块调用关系。

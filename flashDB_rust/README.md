@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # flashDB_rust
 
 中文：这是 FlashDB C-to-Rust 迁移的第一阶段 Rust 骨架。当前目标是可编译、可测试、host-verifiable，而不是声明完整 FlashDB 语义等价。

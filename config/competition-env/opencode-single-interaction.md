@@ -1,3 +1,5 @@
+英文镜像见 `opencode-single-interaction.en.md`。
+
 # OpenCode 单次交互比赛流程
 
 本文是中文主文档。英文镜像见 `opencode-single-interaction.en.md`。

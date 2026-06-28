@@ -1,3 +1,5 @@
+英文镜像见 `spec.en.md`。
+
 ## Purpose
 
 Define the bounded L3 FlashDB migration loop for selecting one C-to-Rust slice, preserving cross-file module relationships, validating C/Rust semantic equivalence, constraining automatic compile self-healing, and recording reusable evidence for future FlashDB or larger C project migrations.

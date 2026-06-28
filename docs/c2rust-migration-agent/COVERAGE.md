@@ -1,3 +1,5 @@
+英文镜像见 `COVERAGE.en.md`。
+
 # C 构造覆盖清单
 
 本文诚实列出当前 typed IR + clang frontend + generic emitter 管线"已支持"和"显式不支持"的 C 语言构造。英文镜像见 `COVERAGE.en.md`。

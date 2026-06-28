@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # C2Rust Migration Agent
 
 `docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。

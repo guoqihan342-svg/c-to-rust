@@ -1,3 +1,5 @@
+英文镜像见 `future-vision-and-mvp.en.md`。
+
 # 未来愿景与 MVP 路线
 
 本文是中文主文档。英文镜像见 `future-vision-and-mvp.en.md`。
@@ -28,7 +30,7 @@
 - **evidence 必须可移植**：新 evidence、manifest、cache metadata 和日志引用优先使用 repo-relative path、profile id/hash 和 artifact hash；本机 `C:\...`、`F:\...`、`/mnt/c/...` 路径只能作为 diagnostic host metadata，不得作为可复现入口或跨机器 claim 依据。
 - **默认路径必须暴露真实能力**：无 clang 的默认 CI/比赛路径不能把 legacy string translator 的成功包装成 typed-IR 成功；typed IR 因 `CLANG_PATH` 或工具缺失未运行时，evidence、metrics 和公开叙述必须明确标记 unavailable/compatibility fallback。
 - **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档到 `docs/c2rust-migration-agent/archive/`，不能作为 release 文档、外部评估入口或能力证明。
-- **文档要双语同步**：本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
+- **文档要双语同步**：维护型中文文档首行必须按格式写成：英文镜像见 `<对应文件>.en.md`。同目录必须有英文镜像；新增或修改文档时同步运行 `python -B -m unittest validation.tools.test_doc_mirror_contract`。本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
 
 ## 2. IR 分层设计（推荐工业标准）
 

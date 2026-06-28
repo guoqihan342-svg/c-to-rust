@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # Auto Translation Evidence Checklist
 
 - [ ] Slice spec is ready and references accepted L1 evidence.

@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Auto Translation Evidence Template
 
 This directory defines evidence contracts for bounded automatic translation and compile self-healing.

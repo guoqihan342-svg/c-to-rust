@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # FlashDB C Oracle Contract
 
 This directory contains the C-side oracle producer for the later Rust/C differential harness. It is intentionally small: one deterministic C runner, one build file, and one Linux/CI shell entrypoint.

@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # CFG Checklist
 
 - [ ] Every translated function has an entry block and exit block list.

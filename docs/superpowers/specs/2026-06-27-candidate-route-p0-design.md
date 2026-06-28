@@ -1,3 +1,5 @@
+英文镜像见 `2026-06-27-candidate-route-p0-design.en.md`。
+
 # Candidate Route P0 设计（当前两路线修订）
 
 本文是中文主文档。英文版本见 `2026-06-27-candidate-route-p0-design.en.md`。

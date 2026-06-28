@@ -1,3 +1,5 @@
+英文镜像见 `build-and-c2rust-baseline.en.md`。
+
 # Build Capture and C2Rust Baseline
 
 中文说明：C2Rust 在本项目中只作为 baseline/oracle，不作为最终 `flashDB_rust` 交付代码。最终代码必须走 Rust crate 骨架、安全 API、Rust 测试、差分验证和 unsafe 审计。

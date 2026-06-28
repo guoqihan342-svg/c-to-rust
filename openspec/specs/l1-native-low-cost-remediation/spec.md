@@ -1,3 +1,5 @@
+英文镜像见 `spec.en.md`。
+
 ## Purpose
 
 Define how low-cost L1 native C build/test smoke failures are selected, remediated, rerun, and reported without overclaiming Rust migration correctness.

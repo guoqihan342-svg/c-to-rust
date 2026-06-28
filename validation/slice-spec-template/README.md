@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Slice Spec Template
 
 This template defines the machine-readable input contract for a bounded automatic C-to-Rust translation run.

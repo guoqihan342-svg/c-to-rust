@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # CFG Template
 
 This template records C control-flow evidence before Rust draft generation.

@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Type Map Template
 
 This template records C-to-Rust type mapping evidence before Rust draft generation.

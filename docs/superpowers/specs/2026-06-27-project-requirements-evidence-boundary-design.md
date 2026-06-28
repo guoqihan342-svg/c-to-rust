@@ -1,3 +1,5 @@
+英文镜像见 `2026-06-27-project-requirements-evidence-boundary-design.en.md`。
+
 # 项目要求与证据边界对齐设计
 
 本文是设计文档，不是实现计划。下一步实现前，需要再把本设计拆成可执行 implementation plan。

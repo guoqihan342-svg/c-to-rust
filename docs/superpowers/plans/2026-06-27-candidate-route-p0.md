@@ -1,3 +1,5 @@
+英文镜像见 `2026-06-27-candidate-route-p0.en.md`。
+
 # Candidate Route P0 Plan - Superseded
 
 > **SUPERSEDED / DO NOT IMPLEMENT.**

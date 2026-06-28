@@ -1,3 +1,5 @@
+英文镜像见 `flashdb.en.md`。
+
 ﻿# FlashDB 用例边界
 
 - [baseline-record.json](../baseline-record.json)

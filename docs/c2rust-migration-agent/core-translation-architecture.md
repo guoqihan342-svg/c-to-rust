@@ -1,3 +1,5 @@
+英文镜像见 `core-translation-architecture.en.md`。
+
 # 核心翻译架构
 
 本页记录当前 `c-to-rust` 核心翻译链路、关键代码位置和 FlashDB crc32 泛化进度。英文镜像见 `core-translation-architecture.en.md`。

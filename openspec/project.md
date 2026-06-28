@@ -1,3 +1,5 @@
+英文镜像见 `project.en.md`。
+
 # Project Context
 
 ## Purpose

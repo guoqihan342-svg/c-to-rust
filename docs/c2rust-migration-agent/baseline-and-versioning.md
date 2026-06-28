@@ -1,3 +1,5 @@
+英文镜像见 `baseline-and-versioning.en.md`。
+
 # C2Rust Migration Agent Baseline and Versioning
 
 中文说明：本文固定本次 `design-c2rust-migration-agent` 的版本基线，并规定后续 Agent、上下文 schema、PatchPlan 和 `flashDB_rust` 的升级策略。

@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # C-to-Rust Progressive Migration Pipeline
 
 面向 Agent（Codex / OpenCode）调用的 C 到 Rust 渐进式迁移管线。本项目不是单次手工重写，而是一套可审计、fail-closed 的自动翻译器 + 强验证框架。

@@ -1,3 +1,5 @@
+英文镜像见 `bounded-auto-translation-pipeline.en.md`。
+
 # 受限自动翻译管线 Agent 使用文档
 
 本文面向 OpenCode、Codex 和其他可执行 Agent，说明 OpenSpec change `add-bounded-auto-translation-pipeline` 的受限自动 C-to-Rust 翻译流程。该流程生成的是 evidence-bound Rust draft candidate，不是默认接受的实现；最终是否通过仍由 L1-L3 evidence gates 判定。

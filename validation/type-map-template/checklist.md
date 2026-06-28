@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # Type Map Checklist
 
 - [ ] Primitive, struct, enum, pointer, integer-width, implicit-cast, typedef, and function signature mappings are represented when present.

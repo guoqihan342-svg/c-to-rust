@@ -1,3 +1,5 @@
+英文镜像见 `architecture.en.md`。
+
 ﻿# 架构与合约
 
 - [agent-contract.md](../agent-contract.md)

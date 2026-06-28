@@ -1,3 +1,5 @@
+英文镜像见 `operations.en.md`。
+
 ﻿# 运行与验证
 
 - [build-and-c2rust-baseline.md](../build-and-c2rust-baseline.md)

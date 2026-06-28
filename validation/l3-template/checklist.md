@@ -1,3 +1,5 @@
+英文镜像见 `checklist.en.md`。
+
 # L3 Validation Checklist
 
 Use this checklist before reporting any L3 semantic-equivalence claim.

@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # Pointer Dependency Graph Template
 
 This template defines the minimum pointer dependency evidence for bounded C-to-Rust migration slices. Use it before translating any slice that contains C pointers, buffers, opaque handles, callbacks, manual allocation, external mutable state, or alias-sensitive structs.

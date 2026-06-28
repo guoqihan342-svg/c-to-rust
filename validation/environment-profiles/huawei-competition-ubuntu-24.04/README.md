@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # 华为比赛环境 Profile
 
 本目录是历史 validation 兼容入口。新的默认比赛环境配置入口是 `config/competition-env/`；旧 evidence 或脚本如果已经引用本目录，可以继续读取这里的同名配置文件。

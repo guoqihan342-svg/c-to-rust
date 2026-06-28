@@ -1,3 +1,5 @@
+英文镜像见 `2026-06-24-l2-safety-ledger-deterministic-diff-fuzz.en.md`。
+
 # L2 Safety Ledger And Deterministic Diff Fuzz Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

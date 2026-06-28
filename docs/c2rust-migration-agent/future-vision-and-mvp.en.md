@@ -28,7 +28,7 @@ Phase 2/3/4 describe capability maturity stages. P0/P1/P2 is the default executi
 - **Evidence must be portable**: new evidence, manifests, cache metadata, and log references should prefer repo-relative paths, profile ids/hashes, and artifact hashes. Local `C:\...`, `F:\...`, or `/mnt/c/...` paths may appear only as diagnostic host metadata, not as reproducible entrypoints or cross-machine claim anchors.
 - **Default paths must expose real capability**: no-clang default CI or competition paths must not present a legacy string translator success as typed-IR success. When typed IR did not run because `CLANG_PATH` or another tool is missing, evidence, metrics, and public claims must mark it as unavailable or compatibility fallback.
 - **Handoff docs must stay short and auditable**: `CONTEXT.md` is only for current state, latest verification, and next-step handoff. Long session logs should be split or archived under `docs/c2rust-migration-agent/archive/`, and must not become release documentation, an external evaluation entrypoint, or capability proof.
-- **Docs must stay bilingual**: update the Chinese original `future-vision-and-mvp.md` and this English mirror together.
+- **Docs must stay bilingual**: maintained Chinese documentation must start with the repository-standard first line that points to its sibling `.en.md` mirror, and that mirror must exist in the same directory. Run `python -B -m unittest validation.tools.test_doc_mirror_contract` whenever documentation is added or edited. Update the Chinese original `future-vision-and-mvp.md` and this English mirror together.
 
 ## 2. IR Layering Design (Recommended Industrial Standard)
 

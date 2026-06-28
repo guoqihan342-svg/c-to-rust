@@ -1,3 +1,5 @@
+英文镜像见 `evidence-governance.en.md`。
+
 # Evidence Governance
 
 本文件说明 evidence 可移植性、成本和保留策略的当前工具入口。英文镜像见 `evidence-governance.en.md`。

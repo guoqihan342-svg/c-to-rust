@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 ﻿# C2Rust Migration Agent 文档索引
 
 ## 入口与状态

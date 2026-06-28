@@ -1,3 +1,5 @@
+英文镜像见 `README.en.md`。
+
 # L3 Validation Template
 
 This template defines the minimum evidence package for a bounded C-to-Rust L3 migration slice. It is based on the existing FlashDB L3 evidence chain and is intended for FlashDB and future, larger C projects.
