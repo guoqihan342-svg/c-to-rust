@@ -669,7 +669,7 @@ fn typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route() {
     assert!(rust.contains("let byte0: u8 = buf[p];"));
     assert!(rust.contains("p += 1;"));
     assert!(rust.contains(
-        "crc = (CRC32_TABLE[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));"
+        "crc = (CRC32_TABLE[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ crc.checked_shr(core::convert::TryFrom::try_from(8u32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\"));"
     ));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-crc32-global-table-generic", rust);
@@ -4285,6 +4285,279 @@ fn typed_ir_runs_signed_mul_with_checked_overflow_precondition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_runs_nonliteral_signed_division_with_runtime_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "div_i32".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "divisor".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Div,
+                ir_var("value", i32_ty.clone()),
+                ir_var("divisor", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed checked division");
+    assert!(
+        emitted.rust.contains(
+            "return value.checked_div(divisor).expect(\"division by zero or signed overflow\");"
+        ),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-signed-checked-div-defined-input",
+        &emitted.rust,
+        "assert_eq!(div_i32(84i32, 2i32), 42i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-div-zero-divisor",
+        &emitted.rust,
+        "let _ = div_i32(1i32, 0i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-div-overflow",
+        &emitted.rust,
+        "let _ = div_i32(i32::MIN, -1i32);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_nonliteral_signed_modulo_with_runtime_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "rem_i32".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "divisor".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Mod,
+                ir_var("value", i32_ty.clone()),
+                ir_var("divisor", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed checked modulo");
+    assert!(
+        emitted.rust.contains(
+            "return value.checked_rem(divisor).expect(\"modulo by zero or signed overflow\");"
+        ),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-signed-checked-rem-defined-input",
+        &emitted.rust,
+        "assert_eq!(rem_i32(85i32, 2i32), 1i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-rem-zero-divisor",
+        &emitted.rust,
+        "let _ = rem_i32(1i32, 0i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-rem-overflow",
+        &emitted.rust,
+        "let _ = rem_i32(i32::MIN, -1i32);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_nonliteral_unsigned_division_and_modulo_with_runtime_precondition() {
+    let u32_ty = ir_u32();
+    let div_ir = IrFunction {
+        name: "div_u32".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "divisor".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Div,
+                ir_var("value", u32_ty.clone()),
+                ir_var("divisor", u32_ty.clone()),
+                u32_ty.clone(),
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+    let rem_ir = IrFunction {
+        name: "rem_u32".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "divisor".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Mod,
+                ir_var("value", u32_ty.clone()),
+                ir_var("divisor", u32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let div = emit_rust_from_ir(&div_ir).expect("emit unsigned checked division");
+    let rem = emit_rust_from_ir(&rem_ir).expect("emit unsigned checked modulo");
+    assert!(
+        div.rust
+            .contains("return value.checked_div(divisor).expect(\"division by zero\");"),
+        "{}",
+        div.rust
+    );
+    assert!(
+        rem.rust
+            .contains("return value.checked_rem(divisor).expect(\"modulo by zero\");"),
+        "{}",
+        rem.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-unsigned-checked-div-defined-input",
+        &div.rust,
+        "assert_eq!(div_u32(84u32, 2u32), 42u32);",
+        false,
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-unsigned-checked-rem-defined-input",
+        &rem.rust,
+        "assert_eq!(rem_u32(85u32, 2u32), 1u32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-unsigned-checked-div-zero-divisor",
+        &div.rust,
+        "let _ = div_u32(1u32, 0u32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-unsigned-checked-rem-zero-divisor",
+        &rem.rust,
+        "let _ = rem_u32(1u32, 0u32);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_nonliteral_shift_with_runtime_precondition() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "shift_left_u32".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: u32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Shl,
+                ir_var("value", u32_ty.clone()),
+                ir_var("count", i32_ty),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit checked shift");
+    assert!(
+        emitted.rust.contains("return value.checked_shl(core::convert::TryFrom::try_from(count).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\");"),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-checked-shift-defined-input",
+        &emitted.rust,
+        "assert_eq!(shift_left_u32(1u32, 4i32), 16u32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-checked-shift-negative-count",
+        &emitted.rust,
+        "let _ = shift_left_u32(1u32, -1i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-checked-shift-width-count",
+        &emitted.rust,
+        "let _ = shift_left_u32(1u32, 32i32);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_runs_unsigned_add_with_wrapping_semantics() {
     let u32_ty = ir_u32();
     let ir = IrFunction {
@@ -4577,7 +4850,7 @@ fn typed_ir_emits_scalar_mul_div_mod() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
+    assert!(rust.contains("return value.checked_mul(3i32).expect(\"signed multiplication overflow\").checked_div(2i32).expect(\"division by zero or signed overflow\").checked_rem(5i32).expect(\"modulo by zero or signed overflow\");"));
     assert_rust_snippet_compiles("typed-ir-scalar-mul-div-mod", rust);
 }
 
@@ -4617,7 +4890,7 @@ fn typed_ir_emits_scalar_bit_or_and_left_shift() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
-    assert!(rust.contains("return ((value << 4u32) | 3u32);"));
+    assert!(rust.contains("return (value.checked_shl(core::convert::TryFrom::try_from(4u32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\") | 3u32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-scalar-bit-or-left-shift", rust);
 }
@@ -5095,7 +5368,7 @@ fn typed_ir_emits_crc_update_assignment_with_nested_byte_read() {
     assert!(rust.contains("let byte0: u8 = p[p_index];"));
     assert!(rust.contains("p_index += 1;"));
     assert!(
-        rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));")
+        rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ crc.checked_shr(core::convert::TryFrom::try_from(8u32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\"));")
     );
     assert!(rust.contains("return crc;"));
     assert!(!rust.contains("crc32_update_byte"));
@@ -12130,7 +12403,7 @@ fn typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit mul_div_mod from lowered typed IR");
 
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
+    assert!(rust.contains("return value.checked_mul(3i32).expect(\"signed multiplication overflow\").checked_div(2i32).expect(\"division by zero or signed overflow\").checked_rem(5i32).expect(\"modulo by zero or signed overflow\");"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-clang-scalar-mul-div-mod", &rust);
 }
@@ -12209,7 +12482,7 @@ fn typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit bit-or left-shift from lowered typed IR");
 
     assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
-    assert!(rust.contains("return ((value << 4u32) | 3u32);"));
+    assert!(rust.contains("return (value.checked_shl(core::convert::TryFrom::try_from(4u32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\") | 3u32);"));
     assert_rust_snippet_compiles("typed-ir-clang-bit-or-left-shift", &rust);
 }
 
@@ -12285,7 +12558,7 @@ fn typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit left shift with int shift count");
 
     assert!(rust.contains("pub fn shift_flags(value: u32) -> u32"));
-    assert!(rust.contains("return (value << 4i32);"));
+    assert!(rust.contains("return value.checked_shl(core::convert::TryFrom::try_from(4i32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\");"));
     assert_rust_snippet_compiles("typed-ir-clang-left-shift-int-count", &rust);
 }
 
@@ -12507,12 +12780,16 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
     );
     assert!(rust
         .contains("value = value.checked_mul(3i32).expect(\"signed multiplication overflow\");"));
-    assert!(rust.contains("value = (value / 4i32);"));
-    assert!(rust.contains("value = (value % 5i32);"));
+    assert!(rust.contains(
+        "value = value.checked_div(4i32).expect(\"division by zero or signed overflow\");"
+    ));
+    assert!(rust.contains(
+        "value = value.checked_rem(5i32).expect(\"modulo by zero or signed overflow\");"
+    ));
     assert!(rust.contains("value = (value & 7i32);"));
     assert!(rust.contains("value = (value | 8i32);"));
     assert!(rust.contains("value = (value ^ 9i32);"));
-    assert!(rust.contains("value = (value << 1i32);"));
+    assert!(rust.contains("value = value.checked_shl(core::convert::TryFrom::try_from(1i32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\");"));
     assert_rust_snippet_compiles("typed-ir-clang-compound-family", &rust);
 }
 
@@ -15735,7 +16012,7 @@ fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
+    assert!(rust.contains("return value.checked_mul(3i32).expect(\"signed multiplication overflow\").checked_div(2i32).expect(\"division by zero or signed overflow\").checked_rem(5i32).expect(\"modulo by zero or signed overflow\");"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-clang-scalar-mul-div-mod", rust);
 }
@@ -16636,7 +16913,7 @@ fn clang_ast_dump_emits_bit_or_and_left_shift_when_enabled() {
 
     let rust = emit_rust_from_ir(function).expect("emit bit-or left-shift from real clang AST");
     assert!(rust.contains("pub fn pack_flags(value: u32) -> u32"));
-    assert!(rust.contains("<<"));
+    assert!(rust.contains("checked_shl"));
     assert!(rust.contains("|"));
     assert_rust_snippet_compiles("typed-ir-real-clang-bit-or-left-shift", &rust);
 }
@@ -16922,9 +17199,7 @@ fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() 
     assert!(rust.contains("let mut p_index: usize = 0;"));
     assert!(rust.contains("let byte0: u8 = p[p_index];"));
     assert!(rust.contains("p_index += 1;"));
-    assert!(
-        rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ (crc >> 8u32));")
-    );
+    assert!(rust.contains("crc = (table[((crc ^ (byte0 as u32)) & 255u32) as usize] ^ crc.checked_shr(core::convert::TryFrom::try_from(8u32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\"));"));
     assert!(rust.contains("return crc;"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles(
@@ -16982,7 +17257,7 @@ fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
     );
     assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
     assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
-    assert!(rust.contains("^ (crc >> 8"));
+    assert!(rust.contains("^ crc.checked_shr("));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-clang-flashdb-crc32-generic", rust);
 }
@@ -17075,7 +17350,7 @@ fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
     );
     assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
     assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
-    assert!(rust.contains("^ (crc >> 8"));
+    assert!(rust.contains("^ crc.checked_shr("));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-flashdb-crc32-generic", rust);
 }
@@ -19564,12 +19839,16 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
     );
     assert!(rust
         .contains("value = value.checked_mul(3i32).expect(\"signed multiplication overflow\");"));
-    assert!(rust.contains("value = (value / 4i32);"));
-    assert!(rust.contains("value = (value % 5i32);"));
+    assert!(rust.contains(
+        "value = value.checked_div(4i32).expect(\"division by zero or signed overflow\");"
+    ));
+    assert!(rust.contains(
+        "value = value.checked_rem(5i32).expect(\"modulo by zero or signed overflow\");"
+    ));
     assert!(rust.contains("value = (value & 7i32);"));
     assert!(rust.contains("value = (value | 8i32);"));
     assert!(rust.contains("value = (value ^ 9i32);"));
-    assert!(rust.contains("value = (value << 1i32);"));
+    assert!(rust.contains("value = value.checked_shl(core::convert::TryFrom::try_from(1i32).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\");"));
     assert_rust_snippet_compiles("typed-ir-real-clang-compound-family", &rust);
 }
 
@@ -22071,7 +22350,10 @@ fn clang_ast_dump_emits_multi_var_decl_stmt_when_enabled() {
     assert!(rust.contains("pub fn multi_decl() -> i32"), "{rust}");
     assert!(rust.contains("let mut a: i32 = 1i32;"), "{rust}");
     assert!(rust.contains("let mut b: i32 = 2i32;"), "{rust}");
-    assert!(rust.contains("return (a + b);"), "{rust}");
+    assert!(
+        rust.contains("return a.checked_add(b).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert_rust_snippet_compiles("typed-ir-real-clang-multi-var-decl", rust);
 }
 
@@ -23525,7 +23807,7 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
     );
     assert!(rust.contains("CRC32_TABLE[((crc ^ (byte0 as u32)) &"));
     assert!(rust.contains("(255i32 as u32)") || rust.contains("255u32"));
-    assert!(rust.contains("^ (crc >> 8"));
+    assert!(rust.contains("^ crc.checked_shr("));
     assert!(!rust.contains("crc32_update_byte"));
     assert!(!rust.contains("return crc;"));
     assert!(plan["plan"]["translation_rule_ids"]

@@ -172,6 +172,8 @@
         "IrExpr::Binary.Shl",
         "IrExpr::Binary.Shr",
         "signed add/sub/mul runtime precondition",
+        "non-literal divisor/modulo runtime precondition",
+        "non-literal shift-count runtime precondition",
         "literal divisor zero refusal",
         "literal shift count refusal",
         "signed right shift refusal"
@@ -185,7 +187,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "scalar arithmetic typed IR contract tests",
+              "name": "scalar arithmetic typed IR contract tests including non-literal divisor/shift runtime preconditions",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -203,7 +205,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "unsigned wrapping runtime tests, signed checked runtime precondition tests, and legal scalar emit compile checks",
+              "name": "unsigned wrapping runtime tests, signed checked runtime precondition tests, non-literal divisor/shift runtime precondition tests, and legal scalar emit compile checks",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -241,6 +243,22 @@
         },
         {
           "name": "typed_ir_runs_signed_mul_with_checked_overflow_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_nonliteral_signed_division_with_runtime_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_nonliteral_signed_modulo_with_runtime_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_nonliteral_unsigned_division_and_modulo_with_runtime_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_nonliteral_shift_with_runtime_precondition",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

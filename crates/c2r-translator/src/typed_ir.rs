@@ -3067,6 +3067,12 @@ fn emit_binary_result_expr(
         format!("{lhs}.{method}({rhs})")
     } else if let Some((method, message)) = signed_checked_method(op, result_ty) {
         format!("{lhs}.{method}({rhs}).expect(\"{message}\")")
+    } else if let Some((method, message)) = checked_div_rem_method(op, result_ty) {
+        format!("{lhs}.{method}({rhs}).expect(\"{message}\")")
+    } else if let Some(method) = checked_shift_method(op, result_ty) {
+        format!(
+            "{lhs}.{method}(core::convert::TryFrom::try_from({rhs}).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\")"
+        )
     } else {
         format!("({lhs} {op_token} {rhs})")
     }
@@ -3092,6 +3098,34 @@ fn signed_checked_method(op: &IrBinOp, result_ty: &IrType) -> Option<(&'static s
         IrBinOp::Add => Some(("checked_add", "signed addition overflow")),
         IrBinOp::Sub => Some(("checked_sub", "signed subtraction overflow")),
         IrBinOp::Mul => Some(("checked_mul", "signed multiplication overflow")),
+        _ => None,
+    }
+}
+
+fn checked_div_rem_method(
+    op: &IrBinOp,
+    result_ty: &IrType,
+) -> Option<(&'static str, &'static str)> {
+    if !is_integer_type(result_ty) {
+        return None;
+    }
+    let signed = is_signed_integer_type(result_ty);
+    match (op, signed) {
+        (IrBinOp::Div, true) => Some(("checked_div", "division by zero or signed overflow")),
+        (IrBinOp::Div, false) => Some(("checked_div", "division by zero")),
+        (IrBinOp::Mod, true) => Some(("checked_rem", "modulo by zero or signed overflow")),
+        (IrBinOp::Mod, false) => Some(("checked_rem", "modulo by zero")),
+        _ => None,
+    }
+}
+
+fn checked_shift_method(op: &IrBinOp, result_ty: &IrType) -> Option<&'static str> {
+    if !is_integer_type(result_ty) {
+        return None;
+    }
+    match op {
+        IrBinOp::Shl => Some("checked_shl"),
+        IrBinOp::Shr => Some("checked_shr"),
         _ => None,
     }
 }
