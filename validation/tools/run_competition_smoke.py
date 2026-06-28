@@ -25,6 +25,7 @@ PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
 EVIDENCE_GOVERNANCE = REPO_ROOT / "validation" / "tools" / "evidence_governance.py"
 TRANSLATOR_COVERAGE_MATRIX = REPO_ROOT / "validation" / "tools" / "translator_coverage_matrix.py"
+VERIFY_VENDORED_CLANG = REPO_ROOT / "validation" / "tools" / "verify_vendored_clang.py"
 DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
 
 
@@ -97,6 +98,7 @@ def run_competition_smoke(
     commands = smoke_commands(
         repo_root=repo_root,
         out_root=out_root,
+        proof_class=proof_class,
         target_id=target_id,
         slice_id=slice_id,
         slice_spec=slice_spec,
@@ -125,6 +127,11 @@ def run_competition_smoke(
         )
 
     clang_source_value = clang_source(repo_root)
+    clang_lane_verified_value = (
+        clang_source_value != "missing"
+        and step_status(steps, "environment-check") == "passed"
+        and step_status(steps, "vendored-clang-verification") == "passed"
+    )
     final_gate_reasons = final_gate_reasons_for(proof_class=proof_class, steps=steps, deviations=deviations)
     status = "passed" if not final_gate_reasons else "failed"
     summary = {
@@ -134,14 +141,13 @@ def run_competition_smoke(
         "profile_id": str(profile.get("profile_id", "unknown")),
         "profile_sha256": sha256(profile_path(repo_root)),
         "clang_source": clang_source_value,
-        "clang_lane_verified": clang_source_value != "missing"
-        and step_status(steps, "environment-check") == "passed",
+        "clang_lane_verified": clang_lane_verified_value,
         "execution_environment": environment,
         "competition_profile_match": competition_profile_match(
             profile,
             environment,
             profile_sha256_actual=sha256(profile_path(repo_root)),
-            clang_source_value=clang_source_value,
+            clang_lane_verified_value=clang_lane_verified_value,
             repo_root=repo_root,
         ),
         "environment_deviations": deviations,
@@ -150,6 +156,7 @@ def run_competition_smoke(
             "script": "validation/tools/run_competition_smoke.py",
             "scope": [
                 "environment-check",
+                "vendored-clang-verification",
                 "core-auto-evidence-validator",
                 "evidence-governance",
                 "translator-coverage-matrix",
@@ -163,6 +170,14 @@ def run_competition_smoke(
             summary_path(out_root / "logs", repo_root=repo_root, out_root=out_root),
             summary_path(out_root / "reports", repo_root=repo_root, out_root=out_root),
         ],
+        "vendored_clang_verification": {
+            "path": summary_path(
+                out_root / "summary" / "vendored-clang-verification.json",
+                repo_root=repo_root,
+                out_root=out_root,
+            ),
+            "required_for_proof_class": proof_class == "competition-exact",
+        },
         "steps": steps,
         "final_gate": {
             "status": status,
@@ -183,15 +198,28 @@ def smoke_commands(
     *,
     repo_root: Path,
     out_root: Path,
+    proof_class: str,
     target_id: str,
     slice_id: str,
     slice_spec: Path,
 ) -> list[tuple[str, list[str]]]:
+    vendored_clang_command = [
+        sys.executable,
+        rel_path(VERIFY_VENDORED_CLANG, repo_root),
+        "--proof-class",
+        proof_class,
+        "--out",
+        rel_path(out_root / "summary" / "vendored-clang-verification.json", repo_root),
+    ]
+    if proof_class == "competition-exact":
+        vendored_clang_command.append("--require-clang")
+
     return [
         (
             "environment-check",
             ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"],
         ),
+        ("vendored-clang-verification", vendored_clang_command),
         (
             "core-auto-evidence-validator",
             [
@@ -373,7 +401,7 @@ def competition_profile_match(
     environment: dict[str, Any],
     *,
     profile_sha256_actual: str,
-    clang_source_value: str,
+    clang_lane_verified_value: bool,
     repo_root: Path,
 ) -> dict[str, Any]:
     expected_os = profile.get("os", {}) if isinstance(profile.get("os"), dict) else {}
@@ -384,7 +412,7 @@ def competition_profile_match(
         "os_name_match": expected_os.get("name") == environment["system"],
         "kernel_match": expected_os.get("kernel") == environment["kernel"],
         "python_version_match": expected_toolchain.get("python") == environment["python_version"],
-        "clang_lane_verified": clang_source_value != "missing",
+        "clang_lane_verified": clang_lane_verified_value,
         "cargo_mirror_config_present": (repo_root / "config" / "competition-env" / "cargo" / "config.toml").exists(),
     }
 
@@ -421,7 +449,13 @@ def profile_path(repo_root: Path) -> Path:
 def clang_source(repo_root: Path) -> str:
     if os.environ.get("CLANG_PATH"):
         return "CLANG_PATH"
-    for candidate in ("tools/llvm/bin/clang-18", "tools/llvm/bin/clang", "tools/clang/bin/clang"):
+    for candidate in (
+        "tools/llvm/bin/clang-18",
+        "tools/llvm/bin/clang",
+        "tools/clang/bin/clang",
+        "tools/llvm/bin/clang.exe",
+        "tools/clang/bin/clang.exe",
+    ):
         if (repo_root / candidate).exists():
             return "vendored"
     return "missing"

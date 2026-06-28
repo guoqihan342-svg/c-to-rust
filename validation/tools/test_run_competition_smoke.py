@@ -56,6 +56,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(any("config/competition-env/env.sh" in text for text in command_texts))
             self.assertTrue(any("toolchain-check.sh" in text for text in command_texts))
             self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
+            self.assertTrue(any("verify_vendored_clang.py" in text for text in command_texts))
             self.assertTrue(any("evidence_governance.py" in text for text in command_texts))
             self.assertTrue(any("translator_coverage_matrix.py" in text for text in command_texts))
             self.assertTrue(any("-m unittest" in text for text in command_texts))
@@ -68,6 +69,10 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertIn("os.kernel", {item["field"] for item in summary["environment_deviations"]})
             self.assertTrue(all(not Path(entry["log_path"]).is_absolute() for entry in summary["steps"]))
             self.assertTrue(all(entry["status"] == "passed" for entry in summary["steps"]))
+            self.assertEqual(
+                summary["vendored_clang_verification"]["path"],
+                "summary/vendored-clang-verification.json",
+            )
 
     def test_smoke_runner_requires_explicit_confirmation_for_competition_exact(self) -> None:
         module = load_smoke_module()
@@ -121,6 +126,29 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertEqual(environment_step["status"], "degraded")
             self.assertEqual(environment_step["proof_class_effect"], "exactness_blocker")
 
+    def test_failed_vendored_clang_verification_keeps_clang_lane_unverified(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            original_clang_source = module.clang_source
+            try:
+                module.clang_source = lambda _: "vendored"
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(fail_commands_containing={"verify_vendored_clang.py"}),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-test",
+                )
+            finally:
+                module.clang_source = original_clang_source
+
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(summary["clang_source"], "vendored")
+            self.assertFalse(summary["clang_lane_verified"])
+            self.assertFalse(summary["competition_profile_match"]["clang_lane_verified"])
+
     def test_competition_exact_fails_on_environment_drift_even_when_confirmed(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
@@ -139,6 +167,24 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertEqual(summary["final_gate"]["status"], "failed")
             environment_step = next(step for step in summary["steps"] if step["step"] == "environment-check")
             self.assertEqual(environment_step["status"], "failed")
+
+    def test_competition_exact_requires_vendored_clang_verification(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="competition-exact",
+                confirm_competition_exact=True,
+                command_runner=FakeCommandRunner(fail_commands_containing={"--require-clang"}),
+                repo_root=REPO_ROOT,
+                run_id="smoke-test",
+            )
+
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 1)
+            failed_steps = [step for step in summary["steps"] if step["status"] == "failed"]
+            self.assertIn("vendored-clang-verification", [step["step"] for step in failed_steps])
 
     def test_competition_exact_fails_when_detected_environment_has_limiting_deviations(self) -> None:
         module = load_smoke_module()
@@ -219,7 +265,18 @@ class RunCompetitionSmokeTests(unittest.TestCase):
         )
 
         self.assertIn("validation.tools.test_run_competition_smoke", workflow)
+        self.assertIn("validation.tools.test_verify_vendored_clang", workflow)
         self.assertIn("python validation/tools/run_competition_smoke.py", workflow)
+
+    def test_clang_source_detects_windows_project_local_clang_exe(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            repo_root = Path(tmp)
+            clang = repo_root / "tools" / "llvm" / "bin" / "clang.exe"
+            clang.parent.mkdir(parents=True)
+            clang.write_text("", encoding="utf-8")
+
+            self.assertEqual(module.clang_source(repo_root), "vendored")
 
 
 if __name__ == "__main__":

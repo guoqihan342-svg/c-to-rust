@@ -63,6 +63,16 @@
 4. `auto_migrate.py --competition-clang-lane` 优先用 `CLANG_PATH` 环境变量，其次自动搜索上述本地路径
 5. 两者都找不到时才返回 `missing_clang_path`
 
+需要机器可读证据时，运行独立 verifier：
+
+```bash
+python validation/tools/verify_vendored_clang.py \
+  --proof-class wsl-local-simulation \
+  --out target/competition-smoke/summary/vendored-clang-verification.json
+```
+
+该 verifier 会在缺 clang 时写出 `status=missing` / `reason=missing_clang_path`，默认不让非 clang 路线失败；传 `--require-clang` 时缺失会让 final gate 失败。有 clang 时，它会记录 clang 来源、版本、`-print-resource-dir`、`-E -v` include 搜索路径、包含 `stdint.h`/`stddef.h` 的最小 TU AST dump、命令日志和 repo/out-root-relative artifact 路径。
+
 **设计理由**：clang 只用于 `-ast-dump=json` 输出，不依赖 libclang 共享库或 CMake。把 clang 二进制 vendored 进项目目录，比赛机不需要系统级 LLVM 安装，也不需要 `sudo apt install clang`。这符合"不引入系统级依赖"的适配策略。
 
 ## 适配规则
@@ -101,7 +111,7 @@ python validation/tools/run_competition_smoke.py \
   --out-root target/competition-smoke
 ```
 
-smoke 会执行环境检查、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、各 gate 状态和日志路径。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
+smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；`competition-exact` 会把 vendored clang verifier 作为 required gate。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
 
 clang typed-IR 比赛路线是显式 opt-in：
 

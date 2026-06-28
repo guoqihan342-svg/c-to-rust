@@ -61,6 +61,16 @@ Workflow:
 4. `auto_migrate.py --competition-clang-lane` prefers `CLANG_PATH`; when it is unset, the tool searches the project-local paths above.
 5. If neither source is available, the lane returns `missing_clang_path`.
 
+Run the standalone verifier when machine-readable evidence is needed:
+
+```bash
+python validation/tools/verify_vendored_clang.py \
+  --proof-class wsl-local-simulation \
+  --out target/competition-smoke/summary/vendored-clang-verification.json
+```
+
+When clang is missing, this verifier writes `status=missing` / `reason=missing_clang_path` without failing the default non-clang route. With `--require-clang`, the same missing state fails the final gate. When clang is present, it records the clang source, version, `-print-resource-dir`, `-E -v` include search paths, the minimum TU AST dump containing `stdint.h`/`stddef.h`, command logs, and repo/out-root-relative artifact paths.
+
 Rationale: clang is used only for `-ast-dump=json`; the lane does not require libclang, CMake, or a system-wide LLVM installation.
 
 ## Adaptation Rules
@@ -99,7 +109,7 @@ python validation/tools/run_competition_smoke.py \
   --out-root target/competition-smoke
 ```
 
-The smoke runs the environment check, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, gate status, and log paths. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
+The smoke runs the environment check, the structured vendored clang verifier, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, `vendored_clang_verification.path`, gate status, and log paths. In non-`competition-exact` proof classes, missing clang is recorded as `missing_clang_path` in `vendored-clang-verification.json`; `competition-exact` treats the vendored clang verifier as a required gate. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
 
 The clang typed-IR competition lane is explicit opt-in:
 

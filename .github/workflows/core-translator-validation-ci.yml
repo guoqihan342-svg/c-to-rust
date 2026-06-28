@@ -75,6 +75,7 @@ jobs:
           python -m unittest validation.tools.test_validate_competition_run_summary
           python -m unittest validation.tools.test_run_competition
           python -m unittest validation.tools.test_run_competition_smoke
+          python -m unittest validation.tools.test_verify_vendored_clang
           python -m unittest validation.tools.test_unsafe_budget
           python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix
