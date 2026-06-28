@@ -38,6 +38,7 @@
 - `rust/rust-toolchain.toml`：Rust `1.96.0` 工具链声明，不在仓库根目录自动生效。
 - `env.sh`：比赛机 shell 会话环境变量入口（含本地 clang 自动探测）。
 - `toolchain-check.sh`：比赛机环境自检脚本。
+- `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
 
 ## Clang 策略：vendored 本地分发
@@ -86,6 +87,21 @@ bash config/competition-env/toolchain-check.sh
 ```
 
 执行 `env.sh` 后，`CARGO_HOME` 会指向 `config/competition-env/cargo`，Cargo 将读取其中的 `config.toml` 使用华为 sparse registry。
+
+轻量 Linux/WSL/CI smoke 入口：
+
+```bash
+# CI 使用 ci-approximation；WSL 使用 wsl-local-simulation；普通本机使用 local-simulation。
+bash config/competition-env/smoke.sh ci-approximation target/competition-smoke
+
+# 等价 Python 入口，可显式设置 run id。
+python validation/tools/run_competition_smoke.py \
+  --proof-class ci-approximation \
+  --run-id core-ci-smoke \
+  --out-root target/competition-smoke
+```
+
+smoke 会执行环境检查、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、各 gate 状态和日志路径。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
 
 clang typed-IR 比赛路线是显式 opt-in：
 

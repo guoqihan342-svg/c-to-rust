@@ -36,6 +36,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `rust/rust-toolchain.toml`: Rust `1.96.0` toolchain declaration; it is not active at the repository root by default.
 - `env.sh`: shell environment entrypoint for the competition host, including local clang auto-detection.
 - `toolchain-check.sh`: competition host self-check script.
+- `smoke.sh`: lightweight Linux/WSL/CI smoke entrypoint; it calls `run_competition_smoke.py` and emits a proof-classed summary.
 - `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
 
 ## Clang Policy: Project-Local Vendored Binary
@@ -84,6 +85,21 @@ bash config/competition-env/toolchain-check.sh
 ```
 
 After `env.sh`, `CARGO_HOME` points to `config/competition-env/cargo`, so Cargo reads its `config.toml` and uses the Huawei sparse registry.
+
+Lightweight Linux/WSL/CI smoke entrypoint:
+
+```bash
+# Use ci-approximation in CI, wsl-local-simulation under WSL, and local-simulation on local hosts.
+bash config/competition-env/smoke.sh ci-approximation target/competition-smoke
+
+# Equivalent Python entrypoint with an explicit run id.
+python validation/tools/run_competition_smoke.py \
+  --proof-class ci-approximation \
+  --run-id core-ci-smoke \
+  --out-root target/competition-smoke
+```
+
+The smoke runs the environment check, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, gate status, and log paths. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
 
 The clang typed-IR competition lane is explicit opt-in:
 

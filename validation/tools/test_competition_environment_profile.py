@@ -159,6 +159,16 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("#include <stdint.h>", toolchain_check)
         self.assertIn("#include <stddef.h>", toolchain_check)
 
+    def test_competition_smoke_shell_entrypoint_uses_profile_env_and_smoke_runner(self) -> None:
+        smoke_script = (PROFILE_DIR / "smoke.sh").read_text(encoding="utf-8")
+
+        self.assertIn("find_repo_root()", smoke_script)
+        self.assertIn('repo_root="$(find_repo_root)"', smoke_script)
+        self.assertIn('source "${script_dir}/env.sh"', smoke_script)
+        self.assertIn("validation/tools/run_competition_smoke.py", smoke_script)
+        self.assertIn("--proof-class", smoke_script)
+        self.assertIn("--out-root", smoke_script)
+
     def test_dependency_admission_policy_governs_current_direct_dependencies(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         policy = profile["dependency_admission_policy"]
@@ -209,10 +219,12 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         )
 
         self.assertIn("validation.tools.test_competition_environment_profile", workflow)
+        self.assertIn("validation/environment-profiles/**", workflow)
 
     def test_compatibility_profile_stays_synchronized_with_default_profile(self) -> None:
         synchronized_files = [
             "environment.json",
+            "smoke.sh",
             "toolchain-check.sh",
             "apt/sources.list",
             "pip/pip.conf",
