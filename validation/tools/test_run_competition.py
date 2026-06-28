@@ -123,6 +123,65 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
 
+    def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            log_path = out_root / "logs" / "commands.jsonl"
+            self.assertTrue(log_path.exists())
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            self.assertGreaterEqual(len(entries), 6)
+            self.assertEqual(entries[0]["step"], "environment-check")
+            self.assertIn("config/competition-env/env.sh", " ".join(entries[0]["command"]))
+            self.assertEqual(entries[0]["returncode"], 0)
+            self.assertEqual(entries[0]["stdout"], "ok")
+            self.assertEqual(entries[0]["stderr"], "")
+            self.assertTrue(all(not Path(entry["log_path"]).is_absolute() for entry in entries))
+            self.assertTrue(all("\\" not in entry["log_path"] for entry in entries))
+
+    def test_runner_archives_failed_slice_command_without_unexecuted_validator_log(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "bad-slice")
+            fake_runner = FakeCommandRunner(fail_auto_migrate_for={"bad-slice"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            auto_migrate_entries = [entry for entry in entries if entry["step"] == "auto-migrate-bad-slice"]
+            self.assertEqual(len(auto_migrate_entries), 1)
+            self.assertEqual(auto_migrate_entries[0]["returncode"], 1)
+            self.assertIn("failed bad-slice", auto_migrate_entries[0]["stderr"])
+            self.assertFalse(any(entry["step"] == "validate-evidence-bad-slice" for entry in entries))
+
     def test_runner_continues_after_slice_failure_and_marks_summary_failed(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

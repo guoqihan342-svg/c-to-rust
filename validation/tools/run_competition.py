@@ -73,7 +73,8 @@ def run_competition(
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "summary").mkdir(parents=True, exist_ok=True)
-    (out_root / "logs").mkdir(parents=True, exist_ok=True)
+    logs_dir = out_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
     evidence_root = out_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
 
@@ -87,10 +88,13 @@ def run_competition(
     refused = 0
     blocked = 0
 
-    environment_result = run_step(
+    environment_result = run_logged_step(
+        "environment-check",
         ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"],
         command_runner=command_runner,
         repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
     )
     if environment_result.returncode != 0:
         gate_failures += 1
@@ -99,7 +103,8 @@ def run_competition(
     for spec_path, spec in specs:
         target_id = required_str(spec, "target_id")
         slice_id = required_str(spec, "slice_id")
-        auto_result = run_step(
+        auto_result = run_logged_step(
+            f"auto-migrate-{slice_id}",
             [
                 sys.executable,
                 rel_script(AUTO_MIGRATE, repo_root),
@@ -111,6 +116,8 @@ def run_competition(
             ],
             command_runner=command_runner,
             repo_root=repo_root,
+            logs_dir=logs_dir,
+            out_root=out_root,
         )
         if auto_result.returncode != 0:
             slice_failures += 1
@@ -131,7 +138,8 @@ def run_competition(
                 slice_failures += 1
         typed_ir_generated += 1
 
-        validation_result = run_step(
+        validation_result = run_logged_step(
+            f"validate-evidence-{slice_id}",
             [
                 sys.executable,
                 rel_script(AUTO_EVIDENCE_VALIDATOR, repo_root),
@@ -147,19 +155,27 @@ def run_competition(
             ],
             command_runner=command_runner,
             repo_root=repo_root,
+            logs_dir=logs_dir,
+            out_root=out_root,
         )
         if validation_result.returncode != 0:
             gate_failures += 1
 
-    unsafe_result = run_step(
+    unsafe_result = run_logged_step(
+        "unsafe-budget",
         [sys.executable, rel_script(UNSAFE_BUDGET, repo_root), "--max-ratio", "0.10"],
         command_runner=command_runner,
         repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
     )
-    openspec_result = run_step(
+    openspec_result = run_logged_step(
+        "openspec-validate",
         ["bash", "-lc", "openspec validate --all --strict"],
         command_runner=command_runner,
         repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
     )
 
     if unsafe_result.returncode != 0 or openspec_result.returncode != 0:
@@ -203,10 +219,13 @@ def run_competition(
     summary_path = out_root / "summary" / "competition-run-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    summary_validation = run_step(
+    summary_validation = run_logged_step(
+        "validate-competition-summary",
         [sys.executable, rel_script(SUMMARY_VALIDATOR, repo_root), "--summary", rel_path(summary_path, repo_root)],
         command_runner=command_runner,
         repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
     )
     if summary_validation.returncode != 0:
         gate_failures += 1
@@ -222,6 +241,56 @@ def run_competition(
 
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
     return command_runner(command, cwd=repo_root, text=True, capture_output=True)
+
+
+def run_logged_step(
+    step: str,
+    command: list[str],
+    *,
+    command_runner: CommandRunner,
+    repo_root: Path,
+    logs_dir: Path,
+    out_root: Path,
+) -> subprocess.CompletedProcess[str]:
+    result = run_step(command, command_runner=command_runner, repo_root=repo_root)
+    append_command_log(
+        step=step,
+        command=command,
+        result=result,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+    )
+    return result
+
+
+def append_command_log(
+    *,
+    step: str,
+    command: list[str],
+    result: subprocess.CompletedProcess[str],
+    repo_root: Path,
+    logs_dir: Path,
+    out_root: Path,
+) -> None:
+    log_path = logs_dir / "commands.jsonl"
+    entry = {
+        "step": step,
+        "command": command,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "log_path": summary_log_path(log_path, repo_root=repo_root, out_root=out_root),
+    }
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def summary_log_path(path: Path, *, repo_root: Path, out_root: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.resolve().relative_to(out_root.resolve()).as_posix()
 
 
 def load_slice_spec(path: Path, *, repo_root: Path) -> tuple[Path, dict[str, Any]]:
