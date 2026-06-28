@@ -1643,6 +1643,7 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     }
     let op_token = emit_binary_op(op)?;
     validate_binary_operand_types(op_token, lhs, rhs, ty)?;
+    validate_binary_runtime_contract(op, lhs, rhs, ty)?;
     let rhs = emit_expr(rhs, symbols, context).map_err(|detail| {
         format!("mutable record pointer field compound assignment RHS {detail}")
     })?;
@@ -2035,6 +2036,7 @@ fn emit_expr(
             }
             let op_token = emit_binary_op(op)?;
             validate_binary_operand_types(op_token, lhs, rhs, ty)?;
+            validate_binary_runtime_contract(op, lhs, rhs, ty)?;
             let lhs = emit_expr(lhs, symbols, context)
                 .map_err(|detail| format!("binary lhs {detail}"))?;
             let rhs = emit_expr(rhs, symbols, context)
@@ -2605,6 +2607,8 @@ fn emit_expr_with_prelude(
             let op_token = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
             validate_binary_operand_types(op_token, lhs, rhs, ty)
                 .map_err(|detail| format!("{path} {detail}"))?;
+            validate_binary_runtime_contract(op, lhs, rhs, ty)
+                .map_err(|detail| format!("{path} {detail}"))?;
             let lhs = emit_expr_with_prelude(
                 lhs,
                 symbols,
@@ -3135,6 +3139,81 @@ fn validate_binary_operand_types(
             }
         }
         _ => Err(format!("binary op {op} is unsupported")),
+    }
+}
+
+fn validate_binary_runtime_contract(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+) -> Result<(), String> {
+    match op {
+        IrBinOp::Div if static_integer_value(rhs) == Some(0) => {
+            Err("division by zero literal is unsupported".to_string())
+        }
+        IrBinOp::Mod if static_integer_value(rhs) == Some(0) => {
+            Err("modulo by zero literal is unsupported".to_string())
+        }
+        IrBinOp::Shl | IrBinOp::Shr => validate_shift_runtime_contract(op, lhs, rhs, result_ty),
+        _ => Ok(()),
+    }
+}
+
+fn validate_shift_runtime_contract(
+    op: &IrBinOp,
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    result_ty: &IrType,
+) -> Result<(), String> {
+    let width = integer_width_bits(result_ty)
+        .ok_or_else(|| format!("shift result type {} is unsupported", type_label(result_ty)))?;
+    let lhs_ty = expr_type(lhs).ok_or_else(|| "shift lhs type is unsupported".to_string())?;
+    let lhs_width = integer_width_bits(lhs_ty)
+        .ok_or_else(|| format!("shift lhs type {} is unsupported", type_label(lhs_ty)))?;
+    if lhs_width != width {
+        return Err(format!(
+            "shift lhs width {lhs_width} does not match result width {width}"
+        ));
+    }
+    if let Some(count) = static_integer_value(rhs) {
+        if count < 0 {
+            return Err(format!(
+                "negative shift count literal {count} is unsupported"
+            ));
+        }
+        if count >= i128::from(width) {
+            return Err(format!(
+                "shift count literal {count} must be less than width {width}"
+            ));
+        }
+    }
+    if matches!(op, IrBinOp::Shr) && is_signed_integer_type(result_ty) {
+        return Err(format!(
+            "signed right shift for {} is implementation-defined without an explicit contract",
+            type_label(result_ty)
+        ));
+    }
+    Ok(())
+}
+
+fn static_integer_value(expr: &IrExpr) -> Option<i128> {
+    match expr {
+        IrExpr::LitInt { value, .. } => Some(i128::from(*value)),
+        IrExpr::Cast { expr, .. } => static_integer_value(expr),
+        IrExpr::Unary {
+            op: IrUnOp::Neg,
+            operand,
+            ..
+        } => static_integer_value(operand).and_then(i128::checked_neg),
+        _ => None,
+    }
+}
+
+fn integer_width_bits(ty: &IrType) -> Option<u16> {
+    match ty.kind {
+        IrTypeKind::Integer { width, .. } => Some(width),
+        _ => None,
     }
 }
 
@@ -5311,6 +5390,10 @@ fn is_integer_type(ty: &IrType) -> bool {
 
 fn is_unsigned_integer_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Integer { signed: false, .. })
+}
+
+fn is_signed_integer_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Integer { signed: true, .. })
 }
 
 fn readonly_pointer_slice_element_type(ty: &IrType) -> Option<&IrType> {

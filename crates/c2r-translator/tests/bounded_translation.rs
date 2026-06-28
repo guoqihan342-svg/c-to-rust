@@ -4167,6 +4167,159 @@ fn typed_ir_runs_unsigned_mul_with_wrapping_semantics() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_division_by_zero_literal() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_div_zero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Div,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("division by zero must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("division by zero literal"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_modulo_by_zero_literal() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_mod_zero".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Mod,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(0, "0", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("modulo by zero must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("modulo by zero literal"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_shift_count_equal_to_integer_width_literal() {
+    let u32_ty = ir_u32();
+    let ir = IrFunction {
+        name: "bad_shift_width".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Shl,
+                ir_var("value", u32_ty.clone()),
+                ir_lit(32, "32U", u32_ty.clone()),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("invalid shift count must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("shift count literal 32"));
+    assert!(error.reason.contains("width 32"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_negative_shift_count_literal() {
+    let u32_ty = ir_u32();
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_shift_negative".to_string(),
+        return_type: u32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: u32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Shr,
+                ir_var("value", u32_ty.clone()),
+                ir_neg(ir_lit(1, "1", i32_ty.clone()), i32_ty),
+                u32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("negative shift count must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("negative shift count literal"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_signed_right_shift_without_contract() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_signed_rshift".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Shr,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("signed right shift must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("signed right shift"));
+    assert!(error.reason.contains("implementation-defined"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_scalar_mul_div_mod() {
     let i32_ty = ir_i32();
     let mul = ir_binary(
@@ -12061,7 +12214,6 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
         (ClangBinaryOperator::BitOr, IrBinOp::BitOr, 8, "8"),
         (ClangBinaryOperator::BitXor, IrBinOp::BitXor, 9, "9"),
         (ClangBinaryOperator::Shl, IrBinOp::Shl, 1, "1"),
-        (ClangBinaryOperator::Shr, IrBinOp::Shr, 1, "1"),
     ];
     let mut body = Vec::new();
     for (op, _, value, spelling) in &cases {
@@ -12123,8 +12275,59 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
     assert!(rust.contains("value = (value | 8i32);"));
     assert!(rust.contains("value = (value ^ 9i32);"));
     assert!(rust.contains("value = (value << 1i32);"));
-    assert!(rust.contains("value = (value >> 1i32);"));
     assert_rust_snippet_compiles("typed-ir-clang-compound-family", &rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_signed_right_shift_compound_assignment_without_contract() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "signed_shift_compound".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::CompoundAssign {
+                target: ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty.clone(),
+                },
+                op: ClangBinaryOperator::Shr,
+                value: ClangExprSkeleton::IntegerLiteral {
+                    value: 1,
+                    spelling: "1".to_string(),
+                    ty: int_ty.clone(),
+                },
+                result_ty: int_ty.clone(),
+                compute_lhs_ty: int_ty.clone(),
+                compute_result_ty: int_ty.clone(),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower signed right shift compound");
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("signed right shift compound assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("signed right shift"));
+    assert!(error.reason.contains("implementation-defined"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -19037,7 +19240,7 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
     let source_file = out_dir.join("compound_family.c");
     fs::write(
         &source_file,
-        "int compound_family(int value) { value += 1; value -= 2; value *= 3; value /= 4; value %= 5; value &= 7; value |= 8; value ^= 9; value <<= 1; value >>= 1; return value; }\n",
+        "int compound_family(int value) { value += 1; value -= 2; value *= 3; value /= 4; value %= 5; value &= 7; value |= 8; value ^= 9; value <<= 1; return value; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -19050,8 +19253,8 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
 
     assert_eq!(report.status, "lowered", "{:?}", report.errors);
     let function = report.function_ir.as_ref().expect("function ir");
-    assert_eq!(function.body.len(), 11, "{:?}", function.body);
-    for (stmt, expected_op) in function.body.iter().take(10).zip([
+    assert_eq!(function.body.len(), 10, "{:?}", function.body);
+    for (stmt, expected_op) in function.body.iter().take(9).zip([
         IrBinOp::Add,
         IrBinOp::Sub,
         IrBinOp::Mul,
@@ -19061,7 +19264,6 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
         IrBinOp::BitOr,
         IrBinOp::BitXor,
         IrBinOp::Shl,
-        IrBinOp::Shr,
     ]) {
         let IrStmt::Assign { target, value, .. } = stmt else {
             panic!("expected desugared compound assignment, got {stmt:?}");
@@ -19085,7 +19287,6 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
     assert!(rust.contains("value = (value | 8i32);"));
     assert!(rust.contains("value = (value ^ 9i32);"));
     assert!(rust.contains("value = (value << 1i32);"));
-    assert!(rust.contains("value = (value >> 1i32);"));
     assert_rust_snippet_compiles("typed-ir-real-clang-compound-family", &rust);
 }
 

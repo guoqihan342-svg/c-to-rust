@@ -161,6 +161,110 @@
       ]
     },
     {
+      "id": "scalar-arithmetic-ub-contract-subset",
+      "status": "partial",
+      "ir_constructs": [
+        "IrExpr::Binary.Div",
+        "IrExpr::Binary.Mod",
+        "IrExpr::Binary.Shl",
+        "IrExpr::Binary.Shr",
+        "literal divisor zero refusal",
+        "literal shift count refusal",
+        "signed right shift refusal"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "gap",
+          "reason": "no committed no-clang AST fixture yet covers arithmetic UB boundary refusals"
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "scalar arithmetic typed IR contract tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "literal divisor and shift UB fail-closed tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "unsigned wrapping runtime tests and legal scalar emit compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "this row records emitter contract checks; it does not include named-slice C/Rust differential evidence"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "arithmetic UB contract checks are typed IR emitter behavior, not legacy string fallback behavior"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "generic and unsupported route assertions for scalar arithmetic",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "typed_ir_runs_unsigned_add_with_wrapping_semantics",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_scalar_mul_div_mod",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_scalar_bit_or_and_left_shift",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_division_by_zero_literal",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "literal division by zero must not emit Rust that depends on panic/profile behavior"
+        },
+        {
+          "name": "typed_ir_rejects_modulo_by_zero_literal",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "literal modulo by zero must not emit Rust that depends on panic/profile behavior"
+        },
+        {
+          "name": "typed_ir_rejects_shift_count_equal_to_integer_width_literal",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "literal shift counts must be less than the shifted integer width"
+        },
+        {
+          "name": "typed_ir_rejects_negative_shift_count_literal",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "negative shift counts have no accepted typed IR contract"
+        },
+        {
+          "name": "typed_ir_rejects_signed_right_shift_without_contract",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "signed right shift is implementation-defined without an explicit slice contract"
+        }
+      ]
+    },
+    {
       "id": "readonly-and-mutable-pointer-slice-lowering",
       "status": "covered",
       "ir_constructs": [

@@ -3095,6 +3095,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         shutil.copytree(source_dir, evidence_dir)
         self._backfill_route_baseline_profile_evidence(evidence_dir, "demo", "call-expression")
         prefix = "l3-call-expression"
+        self._refresh_call_expression_accepted_oracle_binding(evidence_dir, prefix)
         self._assert_call_expression_passed_diff_gate_fields(evidence_dir, prefix)
         self._bind_manifest_ref(evidence_dir, prefix, "schema_diff", evidence_dir / f"{prefix}-diff.json", "passed")
         self._bind_manifest_ref(
@@ -3106,6 +3107,47 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         )
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
+
+    def _refresh_call_expression_accepted_oracle_binding(self, evidence_dir: Path, prefix: str) -> None:
+        c_oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+        c_oracle = json.loads(c_oracle_path.read_text(encoding="utf-8"))
+        accepted = c_oracle.get("accepted_oracle")
+        if not isinstance(accepted, dict):
+            return
+        accepted_path = self._repo_path(accepted["path"])
+        accepted_sha = self._sha256(accepted_path)
+        accepted["sha256"] = accepted_sha
+        self._write_json(c_oracle_path, c_oracle)
+        self._bind_manifest_ref(evidence_dir, prefix, "c_oracle", c_oracle_path, "C_ORACLE_GENERATED")
+
+        diff_path = evidence_dir / f"{prefix}-diff.json"
+        diff = json.loads(diff_path.read_text(encoding="utf-8"))
+        self._refresh_embedded_ref_sha(diff, "accepted_diff")
+        self._write_json(diff_path, diff)
+
+        negative_path = evidence_dir / f"{prefix}-negative-diff.json"
+        negative = json.loads(negative_path.read_text(encoding="utf-8"))
+        self._refresh_embedded_ref_sha(negative, "accepted_negative_diff")
+        self._write_json(negative_path, negative)
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        accepted_binding = auto_manifest["accepted_evidence_binding"]
+        for key, path_text in accepted_binding["paths"].items():
+            accepted_binding["path_sha256"][key] = self._sha256(self._repo_path(path_text))
+        auto_manifest["oracle"]["accepted_oracle"]["sha256"] = accepted_sha
+        self._write_json(auto_manifest_path, auto_manifest)
+
+    def _refresh_embedded_ref_sha(self, payload: dict, key: str) -> None:
+        ref = payload.get(key)
+        if isinstance(ref, dict) and isinstance(ref.get("path"), str):
+            ref["sha256"] = self._sha256(self._repo_path(ref["path"]))
+
+    def _repo_path(self, path: str) -> Path:
+        resolved = Path(path)
+        if not resolved.is_absolute():
+            resolved = REPO_ROOT / resolved
+        return resolved
 
     def _external_callee_context_payloads(self) -> tuple[dict, dict, dict]:
         signature = {
