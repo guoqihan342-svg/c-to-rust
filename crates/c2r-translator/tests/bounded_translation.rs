@@ -809,7 +809,9 @@ fn clang_ast_fixture_rejects_array_decay_outside_subscript_without_clang() {
 
     assert_eq!(error.kind, "unsupported_clang_expr");
     assert!(error.message.contains("ArrayToPointerDecay"));
-    assert!(error.message.contains("explicit IR"));
+    assert!(error
+        .message
+        .contains("consumed only during ArraySubscriptExpr skeleton construction"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

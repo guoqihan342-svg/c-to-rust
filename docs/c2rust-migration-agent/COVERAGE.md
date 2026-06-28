@@ -115,7 +115,7 @@
 | 全局数组下标写 | 不支持 | readonly global |
 | 变长数组 (VLA) | 不支持 | |
 | 不完整数组 (无 initializer) | 不支持 | |
-| array-to-pointer decay | 不支持 | 未建模 |
+| array-to-pointer decay | 骨架识别，语义未建模 | 普通表达式位置保留为显式 clang skeleton 边界，但 typed IR/Rust lowering 仍 fail-closed；`ArraySubscriptExpr` base 中的 decay 仅在既有下标访问窄路径里被消费 |
 | 多维数组 | 不支持 | |
 | 数组作为函数参数 | 不支持 | 由 pointer lowering 间接覆盖部分场景 |
 

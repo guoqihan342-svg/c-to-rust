@@ -113,7 +113,7 @@ This document honestly lists C language constructs that are "currently supported
 | Global array subscript write | Unsupported | Readonly global |
 | Variable-length array (VLA) | Unsupported | |
 | Incomplete array (no initializer) | Unsupported | |
-| Array-to-pointer decay | Unsupported | Not modeled |
+| Array-to-pointer decay | Skeleton-identified, semantically unmodeled | Preserved as an explicit clang skeleton boundary in ordinary expression position, but typed IR/Rust lowering still fails closed; decay in an `ArraySubscriptExpr` base is consumed only by the existing narrow index-access path |
 | Multi-dimensional array | Unsupported | |
 | Array as function parameter | Unsupported | Partially covered indirectly by pointer lowering |
 

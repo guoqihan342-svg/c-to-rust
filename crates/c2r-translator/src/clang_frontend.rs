@@ -380,6 +380,10 @@ pub enum ClangExprSkeleton {
         expr: Box<ClangExprSkeleton>,
         implicit: bool,
     },
+    ArrayToPointerDecay {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+    },
     Index {
         base: Box<ClangExprSkeleton>,
         index: Box<ClangExprSkeleton>,
@@ -1769,11 +1773,9 @@ fn expr_skeleton_from_ast_with_options(
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
             }
             if cast_kind.as_deref() == Some("ArrayToPointerDecay") {
-                return Ok(ClangExprSkeleton::Unsupported {
-                    node: "ImplicitCastExpr".to_string(),
-                    reason:
-                        "castKind ArrayToPointerDecay requires explicit IR before Rust lowering"
-                            .to_string(),
+                return Ok(ClangExprSkeleton::ArrayToPointerDecay {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
                 });
             }
             if preserve_integral_casts && is_integral_conversion_cast_expr(expr) {
@@ -2397,6 +2399,9 @@ fn bounded_call_arg_rejection_reason(
         | ClangExprSkeleton::Cast { expr: operand, .. } => {
             bounded_call_arg_rejection_reason(operand, false)
         }
+        ClangExprSkeleton::ArrayToPointerDecay { .. } => Some(
+            "call arguments cannot use array-to-pointer decay before explicit lowering".to_string(),
+        ),
         ClangExprSkeleton::Conditional { .. } => {
             Some("conditional call arguments are outside the bounded call subset".to_string())
         }
@@ -2901,7 +2906,8 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         | ClangExprSkeleton::Member { ty, .. } => {
             bind_target_abi_to_type(ty, target_abi);
         }
-        ClangExprSkeleton::Cast { target, .. } => {
+        ClangExprSkeleton::Cast { target, .. }
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => {
             bind_target_abi_to_type(target, target_abi);
         }
         ClangExprSkeleton::Unsupported { .. } => {}
@@ -2932,6 +2938,9 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
             bind_target_abi_to_expr(ptr, target_abi);
         }
         ClangExprSkeleton::Cast { expr, .. } => {
+            bind_target_abi_to_expr(expr, target_abi);
+        }
+        ClangExprSkeleton::ArrayToPointerDecay { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
         ClangExprSkeleton::SizeOfType { arg_type, .. } => {
@@ -3297,6 +3306,10 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             expr: Box::new(lower_expr(expr)?),
             implicit: *implicit,
             source_span: None,
+        }),
+        ClangExprSkeleton::ArrayToPointerDecay { .. } => Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: "ImplicitCastExpr: castKind ArrayToPointerDecay is consumed only during ArraySubscriptExpr skeleton construction; ordinary expression positions require explicit typed IR lowering, which is not implemented".to_string(),
         }),
         ClangExprSkeleton::Index { base, index, ty } => Ok(IrExpr::Index {
             base: Box::new(lower_expr(base)?),
@@ -5562,7 +5575,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_array_to_pointer_decay_without_explicit_ir() {
+    fn expr_skeleton_from_ast_preserves_array_to_pointer_decay_as_explicit_skeleton() {
         let expr = serde_json::json!({
             "kind": "ImplicitCastExpr",
             "castKind": "ArrayToPointerDecay",
@@ -5578,16 +5591,69 @@ mod tests {
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("array-to-pointer decay skeleton");
 
+        let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = &skeleton else {
+            panic!("expected explicit array-to-pointer decay skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(target.kind, ClangTypeKind::Pointer { .. }));
         assert!(matches!(
-            skeleton,
-            ClangExprSkeleton::Unsupported { ref node, ref reason }
-                if node == "ImplicitCastExpr"
-                    && reason.contains("ArrayToPointerDecay")
-                    && reason.contains("explicit IR")
+            expr.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "table"
         ));
         let error = lower_expr(&skeleton).expect_err("array-to-pointer decay must fail closed");
         assert_eq!(error.kind, "unsupported_clang_expr");
         assert!(error.message.contains("ArrayToPointerDecay"));
+        assert!(error
+            .message
+            .contains("consumed only during ArraySubscriptExpr skeleton construction"));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_array_to_pointer_decay_in_pointer_arithmetic() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "+",
+            "type": { "qualType": "int *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "ArrayToPointerDecay",
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int[4]" },
+                            "referencedDecl": { "name": "table" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("array pointer arithmetic skeleton");
+
+        let ClangExprSkeleton::Binary { lhs, rhs, .. } = &skeleton else {
+            panic!("expected pointer arithmetic skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            lhs.as_ref(),
+            ClangExprSkeleton::ArrayToPointerDecay { .. }
+        ));
+        assert!(matches!(
+            rhs.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+        ));
+        let error =
+            lower_expr(&skeleton).expect_err("array decay pointer arithmetic must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("ArrayToPointerDecay"));
+        assert!(error
+            .message
+            .contains("ordinary expression positions require explicit typed IR lowering"));
     }
 
     #[test]
