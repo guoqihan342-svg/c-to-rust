@@ -1736,10 +1736,16 @@ class AutoMigrateTests(unittest.TestCase):
                 {"status": "generated", "correctness_role": "candidate_context_only"},
             )
 
-            primary = route["candidate_generation"]["primary_candidate"]
-            self.assertEqual(primary["selected"], "legacy-string-translator")
-            self.assertEqual(primary["fallback_from"], "clang-lowered-typed-ir")
-            self.assertEqual(primary["fallback_reason"], "clang_lowered_typed_ir_unavailable")
+            generation = route["candidate_generation"]
+            self.assertEqual(generation["primary_candidate"]["selected"], "unknown")
+            self.assertEqual(generation["primary_candidate"]["candidate_id"], "primary:unknown")
+            self.assertEqual(generation["selected_candidate_id"], None)
+            self.assertEqual(len(generation["compatibility_sources"]), 1)
+            compatibility = generation["compatibility_sources"][0]
+            self.assertEqual(compatibility["selected"], "legacy-string-translator")
+            self.assertEqual(compatibility["candidate_id"], "compat:legacy-string-translator")
+            self.assertEqual(compatibility["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(compatibility["fallback_reason"], "clang_lowered_typed_ir_unavailable")
 
     def test_route_decision_records_candidate_set_and_selected_candidate(self) -> None:
         module = load_auto_migrate_module()
@@ -1812,6 +1818,23 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(
                 generation["selected_candidate_id"],
                 None,
+            )
+            self.assertEqual(generation["primary_candidate"]["selected"], "unknown")
+            self.assertEqual(generation["primary_candidate"]["candidate_id"], "primary:unknown")
+            self.assertEqual(
+                generation["compatibility_sources"],
+                [
+                    {
+                        "candidate_id": "compat:legacy-string-translator",
+                        "selected": "legacy-string-translator",
+                        "fallback": True,
+                        "semantic_pass": False,
+                        "compatibility_only": True,
+                        "correctness_role": "compatibility_only",
+                        "fallback_from": "clang-lowered-typed-ir",
+                        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                    }
+                ],
             )
             candidates = {item["candidate_id"]: item for item in generation["candidate_set"]}
             self.assertEqual(

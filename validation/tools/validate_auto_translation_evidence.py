@@ -1593,6 +1593,8 @@ def validate_candidate_selection_record(
     selected_candidate_id = candidate_generation.get("selected_candidate_id")
     selection_policy = candidate_generation.get("selection_policy")
     c2rust_baseline = candidate_generation.get("c2rust_baseline")
+    primary_candidate = candidate_generation.get("primary_candidate")
+    compatibility_sources = candidate_generation.get("compatibility_sources")
     strict_generated_record = candidate_generation.get("generated_draft_semantic_pass") is False
     if candidate_generation.get("generated_draft_semantic_pass") is True:
         raise SystemExit("route_decision.candidate_generation cannot claim generated_draft_semantic_pass")
@@ -1611,6 +1613,15 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim semantic_acceptance")
         if selection_policy.get("full_router") is not False:
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim full_router")
+
+    if primary_candidate is not None:
+        if not isinstance(primary_candidate, dict):
+            raise SystemExit("route_decision.candidate_generation.primary_candidate must be an object")
+        if primary_candidate.get("selected") == "legacy-string-translator":
+            raise SystemExit(
+                "route_decision.candidate_generation.primary_candidate cannot be legacy-string-translator; "
+                "use compatibility_sources"
+            )
 
     if candidate_set is None:
         if selected_candidate_id is not None or c2rust_baseline is not None:
@@ -1646,6 +1657,7 @@ def validate_candidate_selection_record(
             )
 
     validate_legacy_string_translator_candidate_binding(candidates_by_id, selected_candidate_id)
+    validate_compatibility_sources_binding(compatibility_sources, candidates_by_id)
 
     c2rust_candidate = candidates_by_id.get("c2rust-baseline")
     if c2rust_candidate is not None and c2rust_candidate.get("correctness_role") != "candidate_context_only":
@@ -1667,6 +1679,37 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+def validate_compatibility_sources_binding(
+    compatibility_sources: Any,
+    candidates_by_id: dict[str, dict[str, Any]],
+) -> None:
+    if compatibility_sources is None:
+        return
+    if not isinstance(compatibility_sources, list):
+        raise SystemExit("route_decision.candidate_generation.compatibility_sources must be a list")
+    for index, source in enumerate(compatibility_sources):
+        if not isinstance(source, dict):
+            raise SystemExit(f"route_decision.candidate_generation.compatibility_sources[{index}] must be an object")
+        candidate_id = source.get("candidate_id")
+        if candidate_id not in candidates_by_id:
+            raise SystemExit(
+                "route_decision.candidate_generation.compatibility_sources must reference candidate_set"
+            )
+        if source.get("selected") != "legacy-string-translator":
+            raise SystemExit(
+                "route_decision.candidate_generation.compatibility_sources only supports legacy-string-translator"
+            )
+        candidate = candidates_by_id[candidate_id]
+        if candidate.get("kind") != source.get("selected"):
+            raise SystemExit("route_decision.candidate_generation.compatibility_sources drifted from candidate_set")
+        if source.get("compatibility_only") is not True:
+            raise SystemExit("route_decision.candidate_generation.compatibility_sources must be compatibility_only")
+        if source.get("correctness_role") != "compatibility_only":
+            raise SystemExit(
+                "route_decision.candidate_generation.compatibility_sources correctness_role must be compatibility_only"
+            )
 
 
 def validate_legacy_string_translator_candidate_binding(

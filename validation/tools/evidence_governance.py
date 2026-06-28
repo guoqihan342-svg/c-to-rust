@@ -135,6 +135,7 @@ def build_inventory(repo_root: Path, evidence_dir: Path) -> dict[str, Any]:
             for name in sorted(class_counts)
         },
         "pipelines": build_pipeline_inventory(repo_root, evidence_dir, files),
+        "candidate_generation": build_candidate_generation_inventory(files),
         "runtime": {
             "observation_count": len(runtime_ms_observations),
             "total_duration_ms": sum(runtime_ms_observations),
@@ -184,6 +185,57 @@ def build_pipeline_inventory(repo_root: Path, evidence_dir: Path, files: list[Pa
         pipeline.update(pipeline_identity(relative_pipeline))
         pipelines.append(pipeline)
     return pipelines
+
+
+def build_candidate_generation_inventory(files: list[Path]) -> dict[str, Any]:
+    route_files = [path for path in files if path.name.endswith("-route-decision.json")]
+    by_kind: dict[str, Counter[str]] = {}
+    by_role: Counter[str] = Counter()
+    selected_candidate_count = 0
+    candidate_record_count = 0
+
+    for path in route_files:
+        payload = load_structured_payload(path)
+        if not isinstance(payload, dict):
+            continue
+        generation = payload.get("candidate_generation")
+        if not isinstance(generation, dict):
+            continue
+        selected_candidate_id = generation.get("selected_candidate_id")
+        if selected_candidate_id:
+            selected_candidate_count += 1
+        candidate_set = generation.get("candidate_set")
+        if not isinstance(candidate_set, list):
+            continue
+        for candidate in candidate_set:
+            if not isinstance(candidate, dict):
+                continue
+            candidate_record_count += 1
+            kind = str(candidate.get("kind", "unknown"))
+            role = str(candidate.get("role", "unknown"))
+            by_role[role] += 1
+            counters = by_kind.setdefault(kind, Counter())
+            counters["candidate_count"] += 1
+            if candidate.get("compatibility_only") is True:
+                counters["compatibility_only_count"] += 1
+            if candidate.get("candidate_id") == selected_candidate_id:
+                counters["selected_count"] += 1
+            status = str(candidate.get("status", "unknown"))
+            counters[f"status:{status}"] += 1
+
+    return {
+        "route_decision_artifact_count": len(route_files),
+        "candidate_record_count": candidate_record_count,
+        "selected_candidate_count": selected_candidate_count,
+        "compatibility_only_candidate_count": sum(
+            counters.get("compatibility_only_count", 0) for counters in by_kind.values()
+        ),
+        "by_kind": {
+            kind: {key: counters[key] for key in sorted(counters)}
+            for kind, counters in sorted(by_kind.items())
+        },
+        "by_role": {role: by_role[role] for role in sorted(by_role)},
+    }
 
 
 def pipeline_root_for(evidence_dir: Path, path: Path) -> Path:

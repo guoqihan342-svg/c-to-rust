@@ -284,8 +284,15 @@ class TemplateSchemaContractTests(unittest.TestCase):
         for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
             schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
             schema = load_json(schema_path)
+            generation_schema = schema["definitions"]["candidateGenerationEvidence"]
             candidate_schema = schema["definitions"]["candidateSetItem"]
+            primary_schema = schema["definitions"]["primaryCandidateEvidence"]
 
+            self.assertIn("compatibility_sources", generation_schema["properties"])
+            self.assertNotIn(
+                "legacy-string-translator",
+                primary_schema["properties"]["selected"]["enum"],
+            )
             self.assertIn("compatibility_rust_draft", candidate_schema["properties"]["role"]["enum"])
             self.assertIn(
                 "compatibility_only",

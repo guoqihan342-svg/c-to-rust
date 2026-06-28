@@ -3401,6 +3401,7 @@ def candidate_generation_evidence(
     plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
     plan = read_json(plan_path) if plan_path.exists() else {}
     primary_candidate = primary_candidate_binding(plan)
+    compatibility_sources = compatibility_source_bindings(plan)
     typed_ir_candidate = typed_ir_candidate_binding(report_path)
     typed_ir_candidate["scalar_admission"] = scalar_admission_from_runtime_preconditions(
         spec,
@@ -3415,9 +3416,11 @@ def candidate_generation_evidence(
         "selected_candidate_id": selected_candidate_id(primary_candidate),
         "candidate_set": candidate_set_binding(
             primary_candidate,
+            compatibility_sources,
             typed_ir_candidate,
             c2rust_candidate,
         ),
+        "compatibility_sources": compatibility_sources,
         "primary_candidate": primary_candidate,
         "typed_ir": typed_ir_candidate,
         "c2rust_baseline": c2rust_candidate,
@@ -3427,21 +3430,44 @@ def candidate_generation_evidence(
 
 def primary_candidate_binding(plan: dict[str, Any]) -> dict[str, Any]:
     source = translation_source_from_plan(plan)
-    candidate_prefix = "compat" if source["selected"] == "legacy-string-translator" else "primary"
+    if source["selected"] == "legacy-string-translator":
+        return {
+            "candidate_id": "primary:unknown",
+            "selected": "unknown",
+            "fallback": False,
+            "semantic_pass": False,
+        }
+    candidate_prefix = "primary"
     binding: dict[str, Any] = {
         "candidate_id": f"{candidate_prefix}:{source['selected']}",
         "selected": source["selected"],
         "fallback": bool(source.get("fallback_from")),
         "semantic_pass": False,
     }
-    if source["selected"] == "legacy-string-translator":
-        binding["compatibility_only"] = True
-        binding["correctness_role"] = "compatibility_only"
     if source.get("fallback_from"):
         binding["fallback_from"] = source["fallback_from"]
     if source.get("fallback_reason"):
         binding["fallback_reason"] = source["fallback_reason"]
     return binding
+
+
+def compatibility_source_bindings(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    source = translation_source_from_plan(plan)
+    if source["selected"] != "legacy-string-translator":
+        return []
+    binding: dict[str, Any] = {
+        "candidate_id": "compat:legacy-string-translator",
+        "selected": "legacy-string-translator",
+        "fallback": bool(source.get("fallback_from")),
+        "semantic_pass": False,
+        "compatibility_only": True,
+        "correctness_role": "compatibility_only",
+    }
+    if source.get("fallback_from"):
+        binding["fallback_from"] = source["fallback_from"]
+    if source.get("fallback_reason"):
+        binding["fallback_reason"] = source["fallback_reason"]
+    return [binding]
 
 
 def candidate_selection_policy() -> dict[str, Any]:
@@ -3463,6 +3489,7 @@ def selected_candidate_id(primary_candidate: dict[str, Any]) -> str | None:
 
 def candidate_set_binding(
     primary_candidate: dict[str, Any],
+    compatibility_sources: list[dict[str, Any]],
     typed_ir_candidate: dict[str, Any],
     c2rust_candidate: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -3486,9 +3513,13 @@ def candidate_set_binding(
         primary["fallback_from"] = primary_candidate["fallback_from"]
     if primary_candidate.get("fallback_reason"):
         primary["fallback_reason"] = primary_candidate["fallback_reason"]
-    return [
-        primary,
-        {
+    candidates = []
+    if selected != "unknown":
+        candidates.append(primary)
+    candidates.extend(compatibility_candidate_set_items(compatibility_sources))
+    candidates.extend(
+        [
+            {
             "candidate_id": "typed-ir:clang-lowered",
             "kind": "typed-ir",
             "status": typed_ir_candidate.get("status", "missing"),
@@ -3496,8 +3527,33 @@ def candidate_set_binding(
             "rust_draft_generated": bool(typed_ir_candidate.get("rust_draft_generated", False)),
             "semantic_pass": False,
         },
-        c2rust_candidate,
-    ]
+            c2rust_candidate,
+        ]
+    )
+    return candidates
+
+
+def compatibility_candidate_set_items(compatibility_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    items = []
+    for source in compatibility_sources:
+        selected = str(source.get("selected", "unknown"))
+        item = {
+            "candidate_id": source.get("candidate_id", f"compat:{selected}"),
+            "kind": selected,
+            "status": "generated" if selected != "unknown" else "missing",
+            "role": "compatibility_rust_draft",
+            "semantic_pass": False,
+            "compatibility_only": True,
+            "correctness_role": "compatibility_only",
+        }
+        if source.get("fallback"):
+            item["fallback"] = True
+        if source.get("fallback_from"):
+            item["fallback_from"] = source["fallback_from"]
+        if source.get("fallback_reason"):
+            item["fallback_reason"] = source["fallback_reason"]
+        items.append(item)
+    return items
 
 
 def c2rust_baseline_candidate_binding(
@@ -5158,7 +5214,7 @@ def write_auto_translation_events(spec: dict[str, Any], slice_spec_path: Path, e
                 "slice_id": slice_id,
                 "event_kind": "translation_fallback",
                 "status": "recorded",
-                "message": "Primary candidate generation fell back to another translator path.",
+                "message": "Rust draft provenance recorded a compatibility fallback translator path.",
                 "selected": translation_source["selected"],
                 "fallback_from": translation_source["fallback_from"],
                 "fallback_reason": translation_source.get("fallback_reason", "unspecified"),

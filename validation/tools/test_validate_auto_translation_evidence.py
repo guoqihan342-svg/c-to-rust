@@ -801,6 +801,39 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
         self.assertIn("legacy-string-translator", str(raised.exception))
 
+    def test_rejects_legacy_string_translator_in_primary_candidate_field(self) -> None:
+        module = load_validator_module()
+        candidate_generation = self._candidate_selection_record()
+        candidate_generation["selected_candidate_id"] = None
+        candidate_generation["primary_candidate"] = {
+            "candidate_id": "primary:legacy-string-translator",
+            "selected": "legacy-string-translator",
+            "fallback": True,
+            "semantic_pass": False,
+            "fallback_from": "clang-lowered-typed-ir",
+            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        }
+        candidate_generation["candidate_set"][0] = {
+            "candidate_id": "compat:legacy-string-translator",
+            "kind": "legacy-string-translator",
+            "status": "generated",
+            "role": "compatibility_rust_draft",
+            "semantic_pass": False,
+            "correctness_role": "compatibility_only",
+            "compatibility_only": True,
+        }
+        route = {"candidate_generation": candidate_generation}
+
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                route,
+                {"candidate_generation": candidate_generation},
+            )
+
+        self.assertIn("primary_candidate", str(raised.exception))
+
     def test_rejects_c2rust_candidate_claiming_semantic_pass(self) -> None:
         module = load_validator_module()
         route = {"candidate_generation": self._candidate_selection_record()}

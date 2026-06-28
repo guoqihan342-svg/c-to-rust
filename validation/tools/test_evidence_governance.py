@@ -113,6 +113,47 @@ class EvidenceGovernanceTests(unittest.TestCase):
             for policy_name in ["compression_policy", "prune_policy"]:
                 self.assertIn(policy_name, report["inventory"]["retention_policy"])
 
+    def test_inventory_report_counts_legacy_compatibility_candidates_separately(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            self._write_json(
+                root
+                / "validation/evidence/demo/auto-translation/legacy-fallback/l3-legacy-fallback-route-decision.json",
+                {
+                    "status": "recorded",
+                    "candidate_generation": {
+                        "selected_candidate_id": None,
+                        "candidate_set": [
+                            {
+                                "candidate_id": "compat:legacy-string-translator",
+                                "kind": "legacy-string-translator",
+                                "status": "generated",
+                                "role": "compatibility_rust_draft",
+                                "semantic_pass": False,
+                                "correctness_role": "compatibility_only",
+                                "compatibility_only": True,
+                            },
+                            {
+                                "candidate_id": "typed-ir:clang-lowered",
+                                "kind": "typed-ir",
+                                "status": "missing",
+                                "role": "typed_ir_candidate_signal",
+                                "semantic_pass": False,
+                            },
+                        ],
+                    },
+                },
+            )
+
+            report = evidence_governance.build_report(root, evidence_root=Path("validation/evidence"))
+
+            metrics = report["inventory"]["candidate_generation"]
+            self.assertEqual(metrics["candidate_record_count"], 2)
+            self.assertEqual(metrics["by_kind"]["legacy-string-translator"]["candidate_count"], 1)
+            self.assertEqual(metrics["by_kind"]["legacy-string-translator"]["compatibility_only_count"], 1)
+            self.assertEqual(metrics["by_role"]["compatibility_rust_draft"], 1)
+            self.assertEqual(metrics["selected_candidate_count"], 0)
+
     def test_translator_artifact_paths_are_claim_anchor_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
             root = Path(tmp)

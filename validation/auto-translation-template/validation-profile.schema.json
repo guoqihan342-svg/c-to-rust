@@ -229,6 +229,10 @@
           "type": "array",
           "items": {"$ref": "#/definitions/candidateSetItem"}
         },
+        "compatibility_sources": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/compatibilitySourceEvidence"}
+        },
         "primary_candidate": {"$ref": "#/definitions/primaryCandidateEvidence"},
         "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
         "c2rust_baseline": {"$ref": "#/definitions/candidateSetItem"},
@@ -338,9 +342,24 @@
       "required": ["selected", "fallback"],
       "properties": {
         "selected": {
-          "enum": ["unknown", "legacy-string-translator", "clang-lowered-typed-ir"]
+          "enum": ["unknown", "clang-lowered-typed-ir"]
         },
         "fallback": {"type": "boolean"},
+        "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},
+        "fallback_reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "compatibilitySourceEvidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["candidate_id", "selected", "fallback", "semantic_pass", "compatibility_only", "correctness_role"],
+      "properties": {
+        "candidate_id": {"const": "compat:legacy-string-translator"},
+        "selected": {"const": "legacy-string-translator"},
+        "fallback": {"type": "boolean"},
+        "semantic_pass": {"const": false},
+        "compatibility_only": {"const": true},
+        "correctness_role": {"const": "compatibility_only"},
         "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},
         "fallback_reason": {"type": "string", "minLength": 1}
       }
