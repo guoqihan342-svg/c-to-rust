@@ -385,16 +385,27 @@
         "IntegralPromotion explicit typed IR cast in if/while/do/for condition contexts",
         "IntegralCast explicit typed IR cast in direct-call argument contexts",
         "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
+        "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
         "LValueToRValue transparent lvalue-read skeleton boundary",
         "NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
         "non-integer implicit castKind fail-closed",
-        "missing implicit castKind fail-closed"
+        "missing implicit castKind fail-closed",
+        "missing usual-arithmetic cast fail-closed"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
-          "status": "gap",
-          "reason": "current coverage is clang AST skeleton unit coverage for expression-level, direct-call argument, conditional-operator condition, and control-flow condition integral ImplicitCastExpr preservation; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "usual arithmetic no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/usual_arithmetic_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
         },
         "handwritten_ir": {
           "status": "not_applicable",
@@ -406,12 +417,21 @@
             {
               "name": "unmodeled, non-integer, and missing ImplicitCastExpr castKind fail-closed tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
         "runtime_emitted_rust": {
-          "status": "gap",
-          "reason": "current coverage proves clang skeleton/IR integral cast preservation in value, direct-call argument, conditional-operator condition, and control-flow condition contexts plus fail-closed boundaries only; emitted Rust compile coverage for direct-call argument casts is tracked in the direct-call row, not as a full implicit-cast runtime gate"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
         },
         "c_rust_diff": {
           "status": "gap",
@@ -427,6 +447,10 @@
         }
       },
       "positive_cases": [
+        {
+          "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
         {
           "name": "expr_skeleton_from_ast_preserves_integer_implicit_casts",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
@@ -501,6 +525,11 @@
           "name": "implicit_cast_without_cast_kind_stays_fail_closed",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "ImplicitCastExpr without castKind lacks clang semantic evidence and must fail closed"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "mixed-width usual arithmetic conversion without clang-proven IntegralCast/IntegralPromotion must fail closed instead of guessing a conversion"
         }
       ]
     },

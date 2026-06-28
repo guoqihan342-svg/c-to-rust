@@ -3328,7 +3328,7 @@ fn validate_binary_operand_types(
                 Ok(())
             } else {
                 Err(format!(
-                    "binary operand types must match result type for {op}: lhs={lhs_ty}, rhs={rhs_ty}, result={result_ty}"
+                    "usual arithmetic conversion requires explicit IntegralCast/IntegralPromotion before typed IR emission; binary operand types must match result type for {op}: lhs={lhs_ty}, rhs={rhs_ty}, result={result_ty}"
                 ))
             }
         }

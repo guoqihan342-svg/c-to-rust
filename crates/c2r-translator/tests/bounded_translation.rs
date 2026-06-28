@@ -384,6 +384,92 @@ fn clang_ast_fixture_replays_record_field_subset_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/usual_arithmetic_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let add_byte = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_byte")
+        .expect("lower clang-proven usual arithmetic fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary { rhs, ty, .. }),
+        ..
+    }] = add_byte.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected usual arithmetic return binary, got {:?}",
+            add_byte.function_ir.body
+        );
+    };
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+    assert!(
+        matches!(
+            rhs.as_ref(),
+            IrExpr::Cast {
+                implicit: true,
+                target: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ),
+        "expected clang-proven IntegralCast on RHS, got {rhs:?}"
+    );
+    let emitted = emit_rust_from_ir_with_globals(&add_byte.function_ir, &add_byte.globals)
+        .expect("emit Rust from clang-proven usual arithmetic fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn add_byte(acc: u32, byte: u8) -> u32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return acc.wrapping_add((byte as u32));"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-usual-arithmetic-cast", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/usual_arithmetic_ast.json"
+    ))
+    .expect("fixture JSON");
+    let missing_cast =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "missing_integral_cast")
+            .expect("lower malformed fixture without explicit usual arithmetic cast");
+    let error = emit_rust_from_ir_with_globals(&missing_cast.function_ir, &missing_cast.globals)
+        .expect_err("missing usual arithmetic cast must fail closed");
+    assert!(
+        error.reason.contains(
+            "usual arithmetic conversion requires explicit IntegralCast/IntegralPromotion"
+        ),
+        "{}",
+        error.reason
+    );
+    assert!(
+        error
+            .reason
+            .contains("binary operand types must match result type for +"),
+        "{}",
+        error.reason
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/pointer_value_boundary_ast.json"
