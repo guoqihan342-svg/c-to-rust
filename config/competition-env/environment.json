@@ -78,6 +78,10 @@
       "requires_env": [
         "CLANG_PATH"
       ],
+      "accepted_env": [
+        "CLANG_PATH"
+      ],
+      "required_source": "CLANG_PATH or project-local vendored clang",
       "local_fallback": {
         "enabled": true,
         "search_paths": [
@@ -105,7 +109,8 @@
       ],
       "default_paths_must_not_require": [
         "go",
-        "cmake"
+        "cmake",
+        "clang"
       ],
       "clang_policy": "clang is not required for default paths. The competition clang lane is opt-in. clang may be provided as a vendored local binary under tools/llvm/bin/ or tools/clang/bin/; this is not a system dependency and does not violate the no-default-clang rule.",
       "rust_toolchain": "stable-1.96.0",
@@ -206,6 +211,6 @@
     "Record this profile id and environment.json hash in generated validation evidence when a run is performed in the competition environment.",
     "Clang is not required for default gates. The typed-IR clang lane is opt-in. Clang may be vendored locally under tools/llvm/bin/ or tools/clang/bin/ and used via the competition clang lane; this is not a system-level dependency.",
     "LIBCLANG_PATH is explicitly ignored for AST dump JSON; only CLANG_PATH or a vendored clang binary path is accepted for the competition clang lane.",
-    "The env.sh script auto-detects vendored clang and adds it to PATH when CLANG_PATH is not already set."
+    "The env.sh script auto-detects vendored clang and exports CLANG_PATH when CLANG_PATH is not already set."
   ]
 }

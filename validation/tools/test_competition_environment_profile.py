@@ -101,6 +101,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(lane["auto_migrate_flag"], "--competition-clang-lane")
         self.assertEqual(lane["feature"], "clang-lowering-report")
         self.assertEqual(lane["requires_env"], ["CLANG_PATH"])
+        self.assertEqual(lane["accepted_env"], ["CLANG_PATH"])
+        self.assertEqual(lane["required_source"], "CLANG_PATH or project-local vendored clang")
+        self.assertTrue(lane["local_fallback"]["enabled"])
         self.assertEqual(lane["ignored_env_for_ast_dump"], ["LIBCLANG_PATH"])
         self.assertEqual(lane["missing_status"], "missing_clang_path")
 

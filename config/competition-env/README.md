@@ -54,7 +54,7 @@
 **工作流程**：
 
 1. 从本地已有安装复制 clang 二进制（不含 CMake、libclang 等）到 `tools/llvm/bin/`
-2. `env.sh` 会自动探测并加入 `PATH`
+2. `env.sh` 会自动探测并导出 `CLANG_PATH`
 3. `auto_migrate.py --competition-clang-lane` 优先用 `CLANG_PATH` 环境变量，其次自动搜索上述本地路径
 4. 两者都找不到时才返回 `missing_clang_path`
 
@@ -64,7 +64,7 @@
 
 - 默认构建、测试和验证路径不能依赖 Go。
 - 默认构建、测试和验证路径不能依赖 CMake；C/C++ oracle 路径优先使用 `gcc`、`g++` 和 GNU Make。
-- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `tools/llvm/bin/clang`（vendored 本地二进制），其次用 `CLANG_PATH` 环境变量。`env.sh` 已包含自动探测逻辑。
+- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `CLANG_PATH` 环境变量；未设置时自动搜索 `tools/llvm/bin/clang*` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。`env.sh` 已包含自动探测逻辑。
 - Rust 代码必须兼容 stable Rust `1.96.0`，不得引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
 - Node/npm 脚本按 Node `v24.13.0` / npm `11.6.2` 适配。

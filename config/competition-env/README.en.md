@@ -24,7 +24,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - g++: `13.3.0`
 - GNU Make: `4.3`
 - CMake: not found
-- clang: not required by default; the typed-IR competition lane requires an explicit clang install plus `CLANG_PATH`
+- clang: not required by default; the typed-IR competition lane requires either `CLANG_PATH` or a project-local vendored clang binary
 
 ## Files
 
@@ -34,14 +34,37 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `npm/.npmrc`: npm registry configuration.
 - `cargo/config.toml`: Cargo crates.io mirror configuration.
 - `rust/rust-toolchain.toml`: Rust `1.96.0` toolchain declaration; it is not active at the repository root by default.
-- `env.sh`: shell environment entrypoint for the competition host.
+- `env.sh`: shell environment entrypoint for the competition host, including local clang auto-detection.
 - `toolchain-check.sh`: competition host self-check script.
+- `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
+
+## Clang Policy: Project-Local Vendored Binary
+
+The competition host does not install clang by default, but the project may carry a clang binary inside the repository:
+
+```
+repository root/
+├── tools/
+│   ├── llvm/bin/clang          # recommended on Linux
+│   ├── llvm/bin/clang.exe      # recommended on Windows
+│   ├── clang/bin/clang         # fallback path
+│   └── ...
+```
+
+Workflow:
+
+1. Copy a compatible clang binary from an existing installation into `tools/llvm/bin/`.
+2. `env.sh` auto-detects it and exports `CLANG_PATH`.
+3. `auto_migrate.py --competition-clang-lane` prefers `CLANG_PATH`; when it is unset, the tool searches the project-local paths above.
+4. If neither source is available, the lane returns `missing_clang_path`.
+
+Rationale: clang is used only for `-ast-dump=json`; the lane does not require libclang, CMake, or a system-wide LLVM installation.
 
 ## Adaptation Rules
 
 - Default build, test, and validation paths must not require Go.
 - Default build, test, and validation paths must not require CMake; C/C++ oracle paths should prefer `gcc`, `g++`, and GNU Make.
-- Default build, test, and validation paths must not require clang. When the real clang AST dump typed-IR lane is needed, install clang, export `CLANG_PATH`, then use `auto_migrate.py --competition-clang-lane`; that lane must fail clearly if `CLANG_PATH` is missing.
+- Default build, test, and validation paths must not require a system clang install. When the real clang AST dump typed-IR lane is needed, use `CLANG_PATH` or a project-local vendored clang binary, then run `auto_migrate.py --competition-clang-lane`; that lane must fail clearly if neither source is available.
 - Rust code must remain compatible with stable Rust `1.96.0` and must not use nightly-only features.
 - Python scripts should target Python `3.12.3` / pip `24.0`.
 - Node/npm scripts should target Node `v24.13.0` / npm `11.6.2`.
@@ -60,7 +83,12 @@ bash config/competition-env/toolchain-check.sh
 The clang typed-IR competition lane is explicit opt-in:
 
 ```bash
+# Option 1: explicit CLANG_PATH
 export CLANG_PATH="$(command -v clang)"
+python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+
+# Option 2: project-local clang detected by env.sh
+source config/competition-env/env.sh
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
 

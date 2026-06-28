@@ -677,7 +677,7 @@ pub fn lower_function_from_clang_parse_spec_report(
     let source_file = parse_spec.source_root.join(&parse_spec.source_file);
     let arguments =
         clang_ast_dump_arguments_with_extra(&source_file, &parse_spec.clang_arguments());
-    let Some((clang_path, clang_source)) = resolve_clang_path(environment) else {
+    let Some((clang_path, _clang_source)) = resolve_clang_path(environment) else {
         return ClangLoweringReport {
             status: "unavailable".to_string(),
             frontend: "clang".to_string(),

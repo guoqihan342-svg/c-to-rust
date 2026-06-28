@@ -95,7 +95,7 @@ def main() -> int:
     parser.add_argument(
         "--competition-clang-lane",
         action="store_true",
-        help="Require the competition clang typed-IR lane: enables clang lowering report and fails clearly when CLANG_PATH is not configured.",
+        help="Require the competition clang typed-IR lane: enables clang lowering report and fails clearly when neither CLANG_PATH nor a project-local clang binary is available.",
     )
     parser.add_argument(
         "--accept-existing-evidence",
@@ -5864,15 +5864,37 @@ def competition_environment_identity() -> dict[str, str]:
     }
 
 
-def require_competition_clang_lane(*, environment: dict[str, str] | None = None) -> None:
+LOCAL_CLANG_CANDIDATES = (
+    "tools/llvm/bin/clang",
+    "tools/llvm/bin/clang-18",
+    "tools/clang/bin/clang",
+    "tools/llvm/bin/clang.exe",
+    "tools/llvm/bin/clang-18.exe",
+    "tools/clang/bin/clang.exe",
+)
+
+
+def resolve_competition_clang_path(
+    *, environment: dict[str, str] | None = None, repo_root: Path = REPO_ROOT
+) -> tuple[str, str] | None:
     env = os.environ if environment is None else environment
     clang_path = str(env.get("CLANG_PATH", "")).strip()
     if clang_path:
+        return clang_path, "CLANG_PATH"
+    for candidate in LOCAL_CLANG_CANDIDATES:
+        path = repo_root / candidate
+        if path.exists():
+            return rel(path) if repo_root == REPO_ROOT else candidate, f"vendored:{candidate}"
+    return None
+
+
+def require_competition_clang_lane(*, environment: dict[str, str] | None = None) -> None:
+    if resolve_competition_clang_path(environment=environment) is not None:
         return
     raise SystemExit(
-        "competition clang lane requires CLANG_PATH; install clang in the competition "
-        "environment and export CLANG_PATH, or omit --competition-clang-lane to keep "
-        "the diagnostic/fail-closed non-clang lane."
+        "competition clang lane requires CLANG_PATH or a project-local clang binary under "
+        "tools/llvm/bin/ or tools/clang/bin/; omit --competition-clang-lane to keep the "
+        "diagnostic/fail-closed non-clang lane."
     )
 
 
@@ -5880,7 +5902,8 @@ def clang_lowering_identity(
     *, environment: dict[str, str] | None = None, competition_clang_lane: bool = False
 ) -> dict[str, Any]:
     env = os.environ if environment is None else environment
-    clang_path = str(env.get("CLANG_PATH", "")).strip()
+    resolved_clang = resolve_competition_clang_path(environment=env)
+    clang_path = resolved_clang[0] if resolved_clang else ""
     libclang_path = str(env.get("LIBCLANG_PATH", "")).strip()
     clang_path_status = "configured" if clang_path else "not_configured"
     libclang_path_status = "configured" if libclang_path else "not_configured"

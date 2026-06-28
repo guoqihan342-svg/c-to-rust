@@ -5027,6 +5027,21 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(identity["clang_lowering_identity"]["clang_path_status"], "configured")
 
+    def test_competition_clang_lane_accepts_project_local_clang(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            repo_root = Path(tmp)
+            vendored = repo_root / "tools" / "llvm" / "bin" / "clang"
+            vendored.parent.mkdir(parents=True)
+            vendored.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            vendored.chmod(0o755)
+
+            resolved = module.resolve_competition_clang_path(
+                environment={}, repo_root=repo_root
+            )
+
+            self.assertEqual(resolved, ("tools/llvm/bin/clang", "vendored:tools/llvm/bin/clang"))
+
     def test_enrich_clang_lowering_report_records_durable_hashes(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -5171,7 +5186,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn("translator_feature_set", cache["cache_input_fields"])
             self.assertIn("clang_lowering_identity", cache["cache_input_fields"])
 
-    def test_competition_clang_lane_requires_clang_path(self) -> None:
+    def test_competition_clang_lane_requires_clang_path_or_project_local_clang(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
             environment = dict(os.environ)
@@ -5197,7 +5212,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn(
-                "competition clang lane requires CLANG_PATH",
+                "competition clang lane requires CLANG_PATH or a project-local clang binary",
                 result.stdout + result.stderr,
             )
 

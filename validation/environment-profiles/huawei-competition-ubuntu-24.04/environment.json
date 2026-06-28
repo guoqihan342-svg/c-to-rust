@@ -51,7 +51,23 @@
       "required_for": [
         "auto_migrate.py --competition-clang-lane"
       ],
-      "missing_status": "missing_clang_path"
+      "missing_status": "missing_clang_path",
+      "local_distribution": {
+        "strategy": "vendored",
+        "description": "clang can be placed as a vendored binary inside the project directory so the competition host does not need a system-wide LLVM installation.",
+        "search_paths": {
+          "linux": [
+            "tools/llvm/bin/clang",
+            "tools/llvm/bin/clang-18",
+            "tools/clang/bin/clang"
+          ],
+          "windows": [
+            "tools/llvm/bin/clang.exe",
+            "tools/clang/bin/clang.exe"
+          ]
+        },
+        "usage": "Drop a compatible clang binary into one of the search_paths above. auto_migrate.py and the clang frontend will prefer CLANG_PATH env var when set, then fall back to these local paths."
+      }
     }
   },
   "optional_lanes": {
@@ -62,6 +78,19 @@
       "requires_env": [
         "CLANG_PATH"
       ],
+      "accepted_env": [
+        "CLANG_PATH"
+      ],
+      "required_source": "CLANG_PATH or project-local vendored clang",
+      "local_fallback": {
+        "enabled": true,
+        "search_paths": [
+          "tools/llvm/bin/clang",
+          "tools/llvm/bin/clang-18",
+          "tools/clang/bin/clang"
+        ],
+        "description": "When CLANG_PATH is not set in the environment, the competition clang lane falls back to project-local vendored clang binaries before reporting missing_clang_path."
+      },
       "ignored_env_for_ast_dump": [
         "LIBCLANG_PATH"
       ],
@@ -83,6 +112,7 @@
         "cmake",
         "clang"
       ],
+      "clang_policy": "clang is not required for default paths. The competition clang lane is opt-in. clang may be provided as a vendored local binary under tools/llvm/bin/ or tools/clang/bin/; this is not a system dependency and does not violate the no-default-clang rule.",
       "rust_toolchain": "stable-1.96.0",
       "python": "3.12.3",
       "node": "v24.13.0"
@@ -178,6 +208,9 @@
     "Use Python 3.12-compatible scripts and avoid dependencies that require a newer Python runtime.",
     "Use Node/npm scripts compatible with Node v24.13.0 and npm 11.6.2.",
     "Use the configured Huawei mirrors for package-manager access in competition jobs.",
-    "Record this profile id and environment.json hash in generated validation evidence when a run is performed in the competition environment."
+    "Record this profile id and environment.json hash in generated validation evidence when a run is performed in the competition environment.",
+    "Clang is not required for default gates. The typed-IR clang lane is opt-in. Clang may be vendored locally under tools/llvm/bin/ or tools/clang/bin/ and used via the competition clang lane; this is not a system-level dependency.",
+    "LIBCLANG_PATH is explicitly ignored for AST dump JSON; only CLANG_PATH or a vendored clang binary path is accepted for the competition clang lane.",
+    "The env.sh script auto-detects vendored clang and exports CLANG_PATH when CLANG_PATH is not already set."
   ]
 }
