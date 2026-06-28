@@ -2912,7 +2912,13 @@ def emit_route_decision(
     cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
     pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
     plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
-    candidate_generation = candidate_generation_evidence(spec, evidence_dir, c2rust_baseline)
+    c2rust_baseline_artifact = c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline)
+    candidate_generation = candidate_generation_evidence(
+        spec,
+        evidence_dir,
+        c2rust_baseline,
+        baseline_manifest_ref=c2rust_baseline_artifact,
+    )
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan, candidate_generation)
     translator = route_translator(level)
     profile = validation_profile_name(level, "dev")
@@ -2920,7 +2926,7 @@ def emit_route_decision(
         "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
         "cfg": evidence_ref(evidence_dir / f"{prefix}-cfg.json", cfg.get("status", "recorded")),
         "pointer_graph": evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer.get("status", "recorded")),
-        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "c2rust_baseline": c2rust_baseline_artifact,
     }
     typed_ir_source_artifact = candidate_generation.get("typed_ir", {}).get("source_artifact")
     if isinstance(typed_ir_source_artifact, dict) and typed_ir_source_artifact.get("status") != "missing":
@@ -2958,15 +2964,22 @@ def candidate_generation_evidence(
     spec: dict[str, Any],
     evidence_dir: Path,
     c2rust_baseline: dict[str, Any] | None = None,
+    *,
+    baseline_manifest_ref: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
+    if baseline_manifest_ref is None:
+        baseline_manifest_ref = c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline)
     report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
     plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
     plan = read_json(plan_path) if plan_path.exists() else {}
     primary_candidate = primary_candidate_binding(plan)
     typed_ir_candidate = typed_ir_candidate_binding(report_path)
-    c2rust_candidate = c2rust_baseline_candidate_binding(c2rust_baseline)
+    c2rust_candidate = c2rust_baseline_candidate_binding(
+        c2rust_baseline,
+        baseline_manifest_ref=baseline_manifest_ref,
+    )
     return {
         "selection_policy": candidate_selection_policy(),
         "selected_candidate_id": selected_candidate_id(primary_candidate),
@@ -2978,6 +2991,7 @@ def candidate_generation_evidence(
         "primary_candidate": primary_candidate,
         "typed_ir": typed_ir_candidate,
         "c2rust_baseline": c2rust_candidate,
+        "generated_draft_semantic_pass": False,
     }
 
 
@@ -3045,16 +3059,41 @@ def candidate_set_binding(
     ]
 
 
-def c2rust_baseline_candidate_binding(c2rust_baseline: dict[str, Any] | None) -> dict[str, Any]:
+def c2rust_baseline_candidate_binding(
+    c2rust_baseline: dict[str, Any] | None,
+    *,
+    baseline_manifest_ref: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     baseline = c2rust_baseline or {}
-    return {
+    status = str(baseline.get("status", "missing"))
+    binding = {
         "candidate_id": "c2rust-baseline",
         "kind": "c2rust-baseline",
-        "status": str(baseline.get("status", "missing")),
+        "status": status,
         "role": "baseline_or_repair_candidate_context",
         "correctness_role": str(baseline.get("correctness_role", "candidate_context_only")),
         "reason": str(baseline.get("reason", "missing")),
+        "output_ref": c2rust_baseline_output_ref(baseline, status),
+        "generated_draft_semantic_pass": False,
         "semantic_pass": False,
+    }
+    if baseline_manifest_ref is not None:
+        binding["baseline_manifest"] = baseline_manifest_ref
+    return binding
+
+
+def c2rust_baseline_output_ref(baseline: dict[str, Any], status: str) -> dict[str, Any] | None:
+    output = baseline.get("output")
+    if not isinstance(output, dict):
+        return None
+    path = output.get("path")
+    output_sha = output.get("sha256")
+    if not path or not output_sha:
+        return None
+    return {
+        "path": str(path),
+        "status": status,
+        "sha256": str(output_sha),
     }
 
 

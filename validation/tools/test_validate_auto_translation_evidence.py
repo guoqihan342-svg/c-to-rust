@@ -660,6 +660,78 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
         self.assertIn("correctness_role", str(raised.exception))
 
+    def test_rejects_c2rust_candidate_status_reason_drift_from_baseline_manifest(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-c2rust-binding"
+            baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+            baseline = {
+                "schema_version": 1,
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "correctness_role": "candidate_context_only",
+                "output": None,
+            }
+            self._write_json(baseline_path, baseline)
+
+            candidate_generation = self._candidate_selection_record()
+            c2rust_candidate = candidate_generation["candidate_set"][2]
+            c2rust_candidate["baseline_manifest"] = self._ref(baseline_path, "skipped")
+            c2rust_candidate["output_ref"] = None
+            candidate_generation["c2rust_baseline"] = c2rust_candidate
+
+            drifted = json.loads(json.dumps(candidate_generation))
+            drifted["candidate_set"][2]["status"] = "blocked"
+            drifted["candidate_set"][2]["reason"] = "baseline_generation_not_enabled"
+            drifted["c2rust_baseline"] = drifted["candidate_set"][2]
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    {"candidate_generation": drifted},
+                    {"candidate_generation": drifted},
+                )
+            self.assertIn("c2rust_baseline status drift", str(raised.exception))
+
+    def test_rejects_c2rust_generated_output_ref_drift_from_baseline_manifest(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-c2rust-output"
+            output_path = evidence_dir / "c2rust-output.rs"
+            output_path.write_text("pub unsafe fn generated() {}\n", encoding="utf-8")
+            baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+            baseline = {
+                "schema_version": 1,
+                "status": "generated",
+                "reason": "generated_by_c2rust",
+                "correctness_role": "candidate_context_only",
+                "output": {
+                    "path": output_path.as_posix(),
+                    "sha256": self._sha256(output_path),
+                },
+            }
+            self._write_json(baseline_path, baseline)
+
+            candidate_generation = self._candidate_selection_record()
+            c2rust_candidate = candidate_generation["candidate_set"][2]
+            c2rust_candidate["status"] = "generated"
+            c2rust_candidate["reason"] = "generated_by_c2rust"
+            c2rust_candidate["baseline_manifest"] = self._ref(baseline_path, "generated")
+            c2rust_candidate["output_ref"] = None
+            candidate_generation["c2rust_baseline"] = c2rust_candidate
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    {"candidate_generation": candidate_generation},
+                    {"candidate_generation": candidate_generation},
+                )
+            self.assertIn("c2rust_baseline output_ref drift", str(raised.exception))
+
     def test_rejects_cache_missing_route_baseline_profile_identities(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

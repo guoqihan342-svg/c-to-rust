@@ -138,6 +138,24 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn(field, environment_schema["required"])
             self.assertIn(field, environment_schema["properties"])
 
+    def test_route_and_profile_candidate_set_schema_bind_c2rust_baseline_refs(self) -> None:
+        for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
+            schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
+            schema = load_json(schema_path)
+            generation_schema = schema["definitions"]["candidateGenerationEvidence"]
+            candidate_schema = schema["definitions"]["candidateSetItem"]
+
+            self.assertIn("generated_draft_semantic_pass", generation_schema["required"])
+            self.assertIn("baseline_manifest", candidate_schema["properties"])
+            self.assertIn("output_ref", candidate_schema["properties"])
+
+            baseline_manifest_schema = candidate_schema["properties"]["baseline_manifest"]
+            self.assertEqual(baseline_manifest_schema["$ref"], "#/definitions/artifactRef")
+            output_ref_schema = candidate_schema["properties"]["output_ref"]
+            self.assertEqual(output_ref_schema["anyOf"][0]["type"], "null")
+            self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
+            self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
+
 
 if __name__ == "__main__":
     unittest.main()

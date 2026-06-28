@@ -15,6 +15,7 @@ From this document onward, core translation work defaults to the P0/P1/P2 backlo
 - **Expand translation capability before expanding ceremony**: before adding a schema, manifest, or gate, explain which concrete translation risk, validation false positive, or reproducibility gap it solves.
 - **FlashDB is only a use case**: FlashDB remains useful as a regression sample, but the project must not add FlashDB-specific recognizers, templates, or special-case routes.
 - **Candidate generation is not semantic acceptance**: typed IR, C2Rust, LLMs, and handwritten rules are only candidate sources. Semantic pass is owned by the C oracle, Rust replay, diff, negative diff, unsafe ledger, and final verification.
+- **C2Rust baseline must stay traceable**: the route/profile C2Rust candidate is only `candidate_context_only` and must bind the baseline manifest. When the baseline actually generates output, it must also bind output path/status/sha256, and the validator must reject drift.
 - **Competition environment config is an adaptation reference and evidence profile**: `config/competition-env/environment.json` is the current default competition environment entrypoint. Development should follow its Ubuntu, Rust, Python, Node, gcc, mirror, and missing-tool constraints. The local machine does not need to replicate that environment exactly, but new default build, test, and validation paths must not violate it; `validation/environment-profiles/...` is compatibility-only.
 - **Docs must stay bilingual**: update this file and `future-vision-and-mvp.md` together.
 

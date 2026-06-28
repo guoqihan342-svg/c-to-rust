@@ -1465,6 +1465,16 @@ class AutoMigrateTests(unittest.TestCase):
             (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
                 json.dumps({"status": "recorded"}), encoding="utf-8"
             )
+            baseline_manifest = {
+                "schema_version": 1,
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "correctness_role": "candidate_context_only",
+                "output": None,
+            }
+            (evidence_dir / f"{prefix}-c2rust-baseline-manifest.json").write_text(
+                json.dumps(baseline_manifest), encoding="utf-8"
+            )
 
             route = module.emit_route_decision(
                 spec,
@@ -1478,6 +1488,7 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             generation = route["candidate_generation"]
+            self.assertFalse(generation["generated_draft_semantic_pass"])
             self.assertEqual(
                 generation["selection_policy"]["stage"],
                 "post_generation_provenance",
@@ -1502,7 +1513,15 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(candidates["typed-ir:clang-lowered"]["semantic_pass"])
             self.assertEqual(candidates["c2rust-baseline"]["status"], "skipped")
             self.assertEqual(candidates["c2rust-baseline"]["correctness_role"], "candidate_context_only")
+            self.assertEqual(
+                Path(candidates["c2rust-baseline"]["baseline_manifest"]["path"]).name,
+                f"{prefix}-c2rust-baseline-manifest.json",
+            )
+            self.assertEqual(candidates["c2rust-baseline"]["baseline_manifest"]["status"], "skipped")
+            self.assertIn("sha256", candidates["c2rust-baseline"]["baseline_manifest"])
+            self.assertIsNone(candidates["c2rust-baseline"]["output_ref"])
             self.assertFalse(candidates["c2rust-baseline"]["semantic_pass"])
+            self.assertEqual(generation["c2rust_baseline"], candidates["c2rust-baseline"])
 
     def test_normalized_artifacts_preserve_translation_fallback_source(self) -> None:
         module = load_auto_migrate_module()

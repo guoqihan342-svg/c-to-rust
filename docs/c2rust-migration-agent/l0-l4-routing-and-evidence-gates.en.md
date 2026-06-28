@@ -250,6 +250,7 @@ The entire pipeline follows fail-closed principles: when uncertain, refuse rathe
 - Schema requires all required properties present
 - `candidate_generation` in route and profile must be exactly identical
 - New evidence with `candidate_set` must keep ids unique, point `selected_candidate_id` at a candidate in the set, keep the C2Rust baseline as `candidate_context_only`, and keep every candidate `semantic_pass=false`
+- New-format C2Rust baseline candidates must bind the baseline manifest; manifest status/reason/correctness_role must match the candidate; generated baselines must bind output path/status/sha256, while skipped/blocked baselines must keep `output_ref=null`
 - `semantic_pass=true` is rejected in any candidate/draft evidence
 - L4/refused disallows residual `candidate_generated`, `accepted_after_gates` and similar statuses
 - `--require-semantic-pass` strongly checks sha256/status for all manifest refs

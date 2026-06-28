@@ -10167,3 +10167,77 @@ English mirror summary:
 - The unsafe budget report records scope, denominator lines, findings, ratio, registration status, failed gates, and ledger reference.
 - Added `validation/unsafe-budget-ledger.json` as the repo-level registration entrypoint.
 - Verified the current repo has 0 first-party non-test unsafe findings across 34 Rust source files and 26576 scanned lines.
+
+## 151. 2026-06-28 P0 C2Rust baseline candidate evidence binding
+
+本轮继续处理外部评价中“route/candidate schema 很重，但 C2Rust baseline 只是松散 status/reason 字段”的问题。目标不是把 C2Rust 输出升级为语义证明，而是把它作为 `candidate_context_only` 时的证据引用钉牢，避免 route/profile 中的 baseline 信息与实际 manifest 或 generated output 漂移。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `emit_route_decision()` 现在先生成同一份 `c2rust_baseline_artifact` ref，并同时用于 `source_artifacts.c2rust_baseline` 和 `candidate_generation.c2rust_baseline.baseline_manifest`。
+  - `candidate_generation_evidence()` 新增 `generated_draft_semantic_pass=false`。
+  - `c2rust_baseline_candidate_binding()` 现在输出：
+    - `baseline_manifest`
+    - `output_ref`
+    - `generated_draft_semantic_pass=false`
+  - 当 baseline manifest `output` 为 generated object 时，`output_ref` 绑定 path/status/sha256；当 baseline 为 skipped/blocked 或没有 output 时，`output_ref=null`。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - `validate_typed_ir_candidate_binding()` 把 `evidence_dir/prefix` 传给 candidate selection validator。
+  - 新增 C2Rust baseline candidate binding 校验：
+    - baseline manifest ref 必须有 path/status/sha256。
+    - candidate 的 status/reason/correctness_role 必须与 manifest 一致。
+    - generated baseline 必须校验 output_ref path/status/sha256 和实际文件 sha。
+    - skipped/blocked baseline 必须保持 `output_ref=null`。
+  - 新增 `require_file_ref()`，用于校验 Rust output 文件，避免用 JSON evidence helper 去读取 `.rs`。
+- `validation/auto-translation-template/route-decision.schema.json`
+- `validation/auto-translation-template/validation-profile.schema.json`
+  - `candidateGenerationEvidence.required` 现在包含 `generated_draft_semantic_pass`。
+  - `candidateSetItem` 新增可选 `baseline_manifest`、`output_ref`、`generated_draft_semantic_pass=false`。
+  - 对带 `baseline_manifest` 的新格式 item 做 schema 条件约束：generated baseline 必须有 output object，skipped/blocked baseline 必须 output null。
+- 测试：
+  - `test_route_decision_records_candidate_set_and_selected_candidate` 现在断言 C2Rust candidate 绑定 baseline manifest 和 output_ref。
+  - 新增 validator 负测覆盖 baseline status/reason drift 和 generated output_ref drift。
+  - 新增 schema contract 测试覆盖 route/profile candidate set 的 C2Rust baseline ref 字段。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+  - `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md` / `.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_candidate_set_and_selected_candidate
+```
+实现前失败于 `KeyError: 'generated_draft_semantic_pass'`。
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_candidate_status_reason_drift_from_baseline_manifest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_generated_output_ref_drift_from_baseline_manifest
+```
+实现前失败于未抛出 `SystemExit`。
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts.TemplateSchemaContractTests.test_route_and_profile_candidate_set_schema_bind_c2rust_baseline_refs
+```
+实现前失败于 schema 未把 `generated_draft_semantic_pass` 放入 candidate generation required，也缺 baseline/output ref 字段。
+
+已跑相关 GREEN：
+```powershell
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_template_schema_contracts
+python -m json.tool validation/auto-translation-template/route-decision.schema.json
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json
+```
+结果：147 个 Python 相关测试通过；两份 JSON schema 可解析。
+
+边界：
+- 可以说：新生成的 route/profile C2Rust baseline candidate 已绑定 manifest 与 output ref/hash，validator 会拒绝 baseline candidate 与 manifest/output 漂移。
+- 可以说：C2Rust baseline 更像真正可审计的 candidate context，而不是游离的 status/reason 摘要。
+- 不应说：C2Rust baseline 已经实际调度生成候选、C2Rust 输出已经语义通过、或完整 L2 repair/router 已完成。`correctness_role` 仍必须是 `candidate_context_only`。
+
+English mirror summary:
+
+- Bound the route/profile C2Rust baseline candidate to the baseline manifest and optional generated output ref/hash.
+- `candidate_generation` now carries `generated_draft_semantic_pass=false`; C2Rust candidate items carry `baseline_manifest`, `output_ref`, and `generated_draft_semantic_pass=false`.
+- The validator rejects baseline candidate status/reason/role drift from the manifest and generated output_ref drift from the actual file hash.
+- Route/profile schemas now describe the new C2Rust baseline candidate binding while keeping legacy evidence compatibility.
+- This improves auditability only; C2Rust remains candidate context and is not a semantic correctness source.

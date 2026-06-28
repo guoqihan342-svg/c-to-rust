@@ -95,7 +95,7 @@
     "candidateGenerationEvidence": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["typed_ir"],
+      "required": ["typed_ir", "generated_draft_semantic_pass"],
       "properties": {
         "selection_policy": {"$ref": "#/definitions/candidateSelectionPolicy"},
         "selected_candidate_id": {
@@ -143,11 +143,63 @@
         "status": {"type": "string", "minLength": 1},
         "role": {"type": "string", "minLength": 1},
         "semantic_pass": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
         "correctness_role": {"enum": ["candidate_context_only"]},
+        "baseline_manifest": {"$ref": "#/definitions/artifactRef"},
+        "output_ref": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["path", "status", "sha256"],
+              "properties": {
+                "path": {"type": "string", "minLength": 1},
+                "status": {"type": "string", "minLength": 1},
+                "sha256": {"type": "string", "minLength": 1}
+              }
+            }
+          ]
+        },
         "fallback": {"type": "boolean"},
         "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},
         "fallback_reason": {"type": "string", "minLength": 1}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["baseline_manifest"]},
+          "then": {"required": ["output_ref", "generated_draft_semantic_pass"]}
+        },
+        {
+          "if": {
+            "required": ["baseline_manifest"],
+            "properties": {
+              "baseline_manifest": {
+                "properties": {"status": {"const": "generated"}}
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "output_ref": {
+                "type": "object",
+                "required": ["path", "status", "sha256"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["baseline_manifest"],
+            "properties": {
+              "baseline_manifest": {
+                "properties": {"status": {"enum": ["skipped", "blocked"]}}
+              }
+            }
+          },
+          "then": {"properties": {"output_ref": {"type": "null"}}}
+        }
+      ]
     },
     "primaryCandidateEvidence": {
       "type": "object",

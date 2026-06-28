@@ -98,6 +98,7 @@ flowchart TD
 - `validation/tools/auto_migrate.py`
   - 归一化后的 auto-translation plan 会保留 `translation_source`，route decision 会把它绑定为 `candidate_generation.primary_candidate`。这是 route provenance，不是 semantic acceptance，也还不是完整多候选调度器。
   - route/profile evidence 现在写入 `candidate_generation.selection_policy`、`selected_candidate_id` 和 `candidate_set`：primary draft（实际生成 Rust 草稿的 translator）、typed-IR signal（clang-lowering-report 的 typed IR candidate 状态）和 `c2rust-baseline`（`candidate_context_only`）会进入同一份后生成阶段候选清单。`selection_policy.full_router=false`，所以这仍是 provenance，不是带 score/hard gate 的选择引擎。
+  - `c2rust-baseline` candidate 现在绑定 `baseline_manifest` 和 `output_ref`。`baseline_manifest` 指向同一份 `l3-<slice>-c2rust-baseline-manifest.json`，`output_ref` 在 baseline `status=generated` 时绑定生成文件 path/status/sha256，在 `skipped` 或 `blocked` 时必须为 `null`。这只证明候选上下文没有漂移，不证明 C2Rust 输出语义正确。
   - 新生成的 `route_decision.candidate_generation.typed_ir` 绑定 clang-lowering-report 中的 typed IR candidate route、readonly globals identity 和 Rust draft provenance。
   - 新生成的 `validation_profile.candidate_generation` 复述同一绑定，但仍保持 `generated_draft_semantic_pass=false`。
   - `typed_ir.status=generated` 且 route 为 `GenericTypedIr` 时作为 typed IR route signal；如果当前 slice 是 scalar-only 且 `token_cost=0`，它走 L0 deterministic candidate route；否则 generated typed IR 仍至少是 L1 signal。`typed_ir.status=unsupported` 会保留原因并作为 L2 repair/baseline route signal。硬拒绝条件、`alias_blocked`、`requires_noalias_contract` 和未知 pointer ownership floor 仍优先；typed IR provenance 会保留在 rationale 中，但不能覆盖这些风险 floor。
@@ -105,10 +106,12 @@ flowchart TD
 - `validation/auto-translation-template/*-schema.json`
   - `candidate_generation` 对旧 route/profile evidence 保持可选，避免破坏 legacy fixtures。
   - 一旦出现 `candidate_generation.typed_ir`，schema 只允许 `GenericTypedIr` / `Unsupported` 两条 typed IR route，并要求 `semantic_pass=false`。
+  - 新格式的 `candidate_generation` 必须显式写 `generated_draft_semantic_pass=false`；带 `baseline_manifest` 的 C2Rust baseline candidate 必须同时写 `output_ref`，并按 baseline status 约束 generated output 或 null。
   - 注意：旧 route/profile payload 可以不带 `candidate_generation`，不等于 semantic-pass fixture 可以缺 `c2rust_baseline`、`route_decision`、`validation_profile` refs。
 - `validation/tools/validate_auto_translation_evidence.py`
   - 校验 typed IR candidate binding 必须与 clang-lowering-report 一致，并拒绝任何 `semantic_pass=true` 的 candidate 证据。
   - 当新 evidence 带有 `candidate_set` 时，还会校验 candidate id 唯一、`selected_candidate_id` 指向集合内候选、`c2rust-baseline` 只能是 `candidate_context_only`，且所有 candidate 的 `semantic_pass` 必须为 false。
+  - 当 C2Rust baseline candidate 带 `baseline_manifest` 时，validator 会校验 manifest ref 的 path/status/sha256，比较 candidate 的 status/reason/correctness_role 与 manifest 一致性，并在 generated baseline 下校验 `output_ref` 的文件 path/status/sha256。
   - 当 slice spec 声明 external direct callee 时，默认校验路径和 `--require-semantic-pass` 都会把 spec 的 `external_direct_callees` / `signature_ref` / `source_files` 与 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings` 和逐条 `call_edge_to_callee_binding` 做一致性校验；缺 call site、source hash 漂移、signature shape 漂移、`callee_signature_id` 漂移、binding 漏项或 stub/semantics 边界漂移都会 fail closed。
   - `--require-semantic-pass` 还要求 legacy accepted auto-translation fixtures 持久化 baseline/route/profile refs、cache identities、schema-aware diff metadata 和 negative-diff mutation evidence；测试 helper 临时补字段不能替代落盘 evidence。
 - `crates/c2r-translator/tests/bounded_translation.rs`

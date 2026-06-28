@@ -1358,7 +1358,11 @@ def validate_typed_ir_candidate_binding(
     profile_candidate_generation = profile.get("candidate_generation")
     if profile_candidate_generation != route_candidate_generation:
         raise SystemExit("validation_profile.candidate_generation must match route_decision.candidate_generation")
-    validate_candidate_selection_record(route_candidate_generation)
+    validate_candidate_selection_record(
+        route_candidate_generation,
+        evidence_dir=evidence_dir,
+        prefix=prefix,
+    )
 
     typed_ir = route_candidate_generation.get("typed_ir")
     if not isinstance(typed_ir, dict):
@@ -1436,11 +1440,19 @@ def validate_typed_ir_candidate_binding(
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
 
 
-def validate_candidate_selection_record(candidate_generation: dict[str, Any]) -> None:
+def validate_candidate_selection_record(
+    candidate_generation: dict[str, Any],
+    *,
+    evidence_dir: Path | None = None,
+    prefix: str | None = None,
+) -> None:
     candidate_set = candidate_generation.get("candidate_set")
     selected_candidate_id = candidate_generation.get("selected_candidate_id")
     selection_policy = candidate_generation.get("selection_policy")
     c2rust_baseline = candidate_generation.get("c2rust_baseline")
+    strict_generated_record = candidate_generation.get("generated_draft_semantic_pass") is False
+    if candidate_generation.get("generated_draft_semantic_pass") is True:
+        raise SystemExit("route_decision.candidate_generation cannot claim generated_draft_semantic_pass")
     if (
         candidate_set is None
         and selected_candidate_id is None
@@ -1477,6 +1489,11 @@ def validate_candidate_selection_record(candidate_generation: dict[str, Any]) ->
             raise SystemExit(
                 f"route_decision.candidate_generation.candidate_set[{candidate_id}] cannot claim semantic_pass"
             )
+        if candidate.get("generated_draft_semantic_pass") is True:
+            raise SystemExit(
+                "route_decision.candidate_generation.candidate_set"
+                f"[{candidate_id}] cannot claim generated_draft_semantic_pass"
+            )
         candidates_by_id[candidate_id] = candidate
 
     if selected_candidate_id is not None:
@@ -1491,6 +1508,13 @@ def validate_candidate_selection_record(candidate_generation: dict[str, Any]) ->
             "route_decision.candidate_generation.candidate_set[c2rust-baseline].correctness_role "
             "must be candidate_context_only"
         )
+    if c2rust_candidate is not None:
+        validate_c2rust_baseline_candidate_binding(
+            c2rust_candidate,
+            evidence_dir=evidence_dir,
+            prefix=prefix,
+            strict=strict_generated_record,
+        )
     if c2rust_baseline is not None:
         if not isinstance(c2rust_baseline, dict):
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline must be an object")
@@ -1498,6 +1522,65 @@ def validate_candidate_selection_record(candidate_generation: dict[str, Any]) ->
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+def validate_c2rust_baseline_candidate_binding(
+    c2rust_candidate: dict[str, Any],
+    *,
+    evidence_dir: Path | None,
+    prefix: str | None,
+    strict: bool,
+) -> None:
+    if strict and c2rust_candidate.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.c2rust_baseline.generated_draft_semantic_pass "
+            "must be false"
+        )
+    if strict and "output_ref" not in c2rust_candidate:
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline.output_ref missing")
+    manifest_ref = c2rust_candidate.get("baseline_manifest")
+    if manifest_ref is None:
+        if strict:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline.baseline_manifest missing")
+        return
+    if not isinstance(manifest_ref, dict):
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline.baseline_manifest must be an object")
+    manifest_path = (
+        evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        if evidence_dir is not None and prefix is not None
+        else resolve_ref_path(str(manifest_ref.get("path", "")))
+    )
+    require_ref(
+        manifest_ref,
+        manifest_path,
+        "route_decision.candidate_generation.c2rust_baseline.baseline_manifest",
+        require_sha=True,
+    )
+    baseline = load_json(manifest_path)
+    for field in ["status", "reason", "correctness_role"]:
+        if c2rust_candidate.get(field) != baseline.get(field):
+            raise SystemExit(f"route_decision.candidate_generation.c2rust_baseline {field} drift")
+    output_ref = c2rust_candidate.get("output_ref")
+    baseline_status = str(baseline.get("status", "missing"))
+    baseline_output = baseline.get("output")
+    if baseline_status == "generated":
+        if not isinstance(baseline_output, dict):
+            raise SystemExit("c2rust_baseline generated status requires output object")
+        expected_output = {
+            "path": str(baseline_output.get("path", "")),
+            "status": baseline_status,
+            "sha256": str(baseline_output.get("sha256", "")),
+        }
+        if output_ref != expected_output:
+            raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+        require_file_ref(
+            output_ref,
+            "route_decision.candidate_generation.c2rust_baseline.output_ref",
+            require_status=True,
+        )
+        return
+    if output_ref is not None:
+        raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
 
 
 def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
@@ -1778,6 +1861,23 @@ def require_ref(ref: Any, expected_path: Path, label: str, *, require_sha: bool 
     payload = load_json(expected_path)
     if ref.get("status") and payload.get("status") and ref["status"] != payload["status"]:
         raise SystemExit(f"{label} status mismatch: {ref['status']} != {payload['status']}")
+
+
+def require_file_ref(ref: Any, label: str, *, require_status: bool = False) -> Path:
+    if not isinstance(ref, dict) or not ref.get("path"):
+        raise SystemExit(f"{label} missing path reference")
+    resolved = resolve_ref_path(str(ref["path"]))
+    if not resolved.exists() or not resolved.is_file():
+        raise SystemExit(f"{label} points to missing file: {resolved}")
+    ref_sha = ref.get("sha256")
+    if not isinstance(ref_sha, str) or not ref_sha:
+        raise SystemExit(f"{label} missing sha256")
+    actual_sha = sha256(resolved)
+    if ref_sha != actual_sha:
+        raise SystemExit(f"{label} sha256 mismatch: {ref_sha} != {actual_sha}")
+    if require_status and (not isinstance(ref.get("status"), str) or not ref.get("status")):
+        raise SystemExit(f"{label} missing status")
+    return resolved
 
 
 def resolve_ref_path(path: str) -> Path:

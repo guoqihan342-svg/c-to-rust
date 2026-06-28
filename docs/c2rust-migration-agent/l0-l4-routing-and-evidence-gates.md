@@ -250,6 +250,7 @@ Legacy v1 指针图可缺省 effect_graph，避免破坏历史 evidence。
 - schema 要求所有 required properties 存在
 - route 和 profile 中的 `candidate_generation` 必须完全一致
 - 带 `candidate_set` 的新证据必须保证 id 唯一、`selected_candidate_id` 指向集合内候选、C2Rust baseline 为 `candidate_context_only`，且所有 candidate `semantic_pass=false`
+- 新格式 C2Rust baseline candidate 必须绑定 baseline manifest；manifest 的 status/reason/correctness_role 必须与 candidate 一致；generated baseline 必须绑定 output path/status/sha256，skipped/blocked baseline 必须保持 `output_ref=null`
 - `semantic_pass=true` 在任何 candidate/draft evidence 中都被拒绝
 - L4/refused 下不允许残留 `candidate_generated`、`accepted_after_gates` 等状态
 - `--require-semantic-pass` 下强校验所有 manifest ref 的 sha256/status
