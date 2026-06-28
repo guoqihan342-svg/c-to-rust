@@ -10309,3 +10309,42 @@ English mirror summary:
 - `LIBCLANG_PATH` is now recorded only as ignored diagnostic metadata (`ignored_env_for_ast_dump` / `observed_libclang_path`), not as an active frontend capability.
 - Competition environment JSON, validation profile, roadmap docs, OpenSpec text, and slice-spec diagnostics were updated to match the current implementation.
 - This completes the P0 clang frontend fact-boundary item, not a real libclang parser implementation.
+
+## 153. 2026-06-28 external review triage: oracle limits, metrics, performance
+
+本轮处理用户贴出的外部评价，重点是判断哪些批评是当前项目已经承认的边界，哪些应该写入 `future-vision-and-mvp.md` 作为后续默认待办。
+
+判断：
+- 评价大方向有道理：C oracle 不是免费的真理机，fail-closed 会带来拒绝率和人工介入成本，Typed IR 仍窄，性能、平台/嵌入式行为、量化评估和公开案例不能靠愿景替代。
+- 但部分内容已经在当前项目中覆盖：candidate 不等于 correctness source、LLM 只作候选源、C2Rust baseline 只能作 context、公开叙述不能把 native-build catalogue 当作翻译成功、unsafe budget/CI/route provenance 已经进入 P0。
+- 最有增量价值的修改是把“Oracle 边界”和“量化评估”写成明确待办，而不是只在原则里泛泛说 C oracle 是 ground truth。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+- `openspec/specs/bounded-auto-translation-pipeline/spec.md`
+- `docs/c2rust-migration-agent/testing-unsafe-cache-and-milestone.md`
+
+新增/强化的待办：
+- 执行规则新增：C oracle 也有边界，必须记录 source commit、fixture、compiler/flags、target ABI、platform model、observable output contract、UB/implementation-defined、硬件/RTOS/volatile 和测试覆盖不足。
+- Phase 4 新增：sanitizer / symbolic execution / property-based exploration 作为高风险 slice 的增强 oracle，不替代 fixture contract 和 C/Rust diff。
+- P0 新增：强化 C oracle/UB/平台边界，每个 accepted slice 必须记录 observable outputs、fixture representativeness、compiler/flags、target ABI、endianness/word-size、sanitizer/diagnostic、UB/implementation-defined 和平台依赖建模情况。
+- P1 新增：生成式能力/拒绝率 metrics artifact 和 report command，统计 generated/blocked/refused/accepted、失败原因、人工介入点、unsafe ratio、fixture case count、negative diff 覆盖和 performance-smoke 状态。
+- P1 新增：把性能 smoke 前移到真实切片扩展；每个新增 L3 named slice 至少有轻量 benchmark/performance-smoke 或明确 `performance_not_claimed`。
+- P1 新增：嵌入式/平台依赖边界，FlashDB/RTOS/文件系统/flash 断电恢复/volatile/硬件寄存器/线程中断交互必须有 platform contract、host simulation、target evidence 或 L4 refusal。
+- P2 新增：milestone 必须发布量化评估和案例报告；没有真实项目/函数数、accepted/refused/blocked 比例、失败类别、人工介入、性能、unsafe、可复现命令、evidence hash、社区复核状态和 non-goals，就只能称研究原型/受限 MVP。
+- OpenSpec active spec 新增：平台依赖 slice 必须声明 mockable platform contract、accepted target evidence 或 L4 refusal；自动翻译 run 必须输出 route/refusal metrics；缺 performance-smoke 的新 L3 named slice 必须记录 `performance_not_claimed`，且性能证据不能替代语义门禁。
+- testing/unsafe/cache 文档新增：高风险 pointer/overflow slice 可声明 sanitizer、MIRI/Kani 或 symbolic-execution profile；工具缺失必须记录 skipped/blocking reason，不能声明穷尽等价。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/15
+- P1: 0/8
+- P2: 0/6
+
+边界：
+- 可以说：这次把评价里有价值的风险显式纳入 roadmap。
+- 不应说：这些新项已经实现、Oracle 完备性已解决、性能回归体系已完成、或项目已经从受限 MVP 变成通用生产工具。

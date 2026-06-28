@@ -86,6 +86,8 @@ Accepted differences must be documented. LLM judgment is not evidence.
 
 Failing generated cases must be minimized and committed as regression fixtures.
 
+High-risk pointer or overflow slices may declare sanitizer, MIRI/Kani, or symbolic-execution profiles. Unavailable tools must be recorded as skipped or blocking reasons, and exhaustive equivalence must not be claimed when those profiles are absent.
+
 ## Unsafe Budget
 
 Scope: first-party non-test Rust code only.

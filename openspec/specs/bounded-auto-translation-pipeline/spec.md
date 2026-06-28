@@ -35,6 +35,10 @@ slice spec 必须是从真实 C 源码生成的中间契约和证据锚点，而
 - **WHEN** the slice spec is normalized
 - **THEN** the build profile records include paths, defines, target triple or ABI assumption, compiler command source, preprocessing mode, tool versions, and whether clang-backed type extraction was available
 
+#### Scenario: Platform-dependent slices declare their boundary
+- **WHEN** a slice depends on RTOS APIs, hardware registers, volatile behavior, power-loss recovery, filesystem behavior, or thread/interrupt interactions
+- **THEN** the build profile or slice contract MUST declare a mockable platform contract, accepted target evidence, or L4 refusal before the Rust draft can be accepted
+
 #### Scenario: Syntax index cannot replace semantic evidence
 - **WHEN** `tree-sitter-c` or another syntax-only parser locates a function, call, type spelling, or source span
 - **THEN** the run may use that parser only for indexing, slicing, or tolerant scanning
@@ -120,6 +124,10 @@ The system SHALL generate a Rust draft only for the supported C subset and SHALL
 - **WHEN** the translator encounters unsupported syntax or semantics
 - **THEN** the run writes the unsupported node, source span, reason, and required future capability to `l3-<slice>-auto-translation-events.jsonl` and does not mark the translation gate as passed
 
+#### Scenario: Route and refusal metrics are emitted
+- **WHEN** an automatic translation run records route/profile/final-verification evidence
+- **THEN** the run also emits route/refusal metrics by C construct, route level, candidate source, project, and slice, including generated, blocked, refused, accepted counts and dominant failure reasons
+
 ### Requirement: Oracle Harness And Rust Replay Test Generation
 The system SHALL generate a C oracle harness draft and Rust replay test draft from the same slice spec and fixture contract.
 
@@ -192,6 +200,11 @@ The system SHALL accept an automatic translation run only when the generated art
 #### Scenario: Unsafe budget is enforced
 - **WHEN** final verification computes first-party non-test unsafe usage for the generated or edited Rust code
 - **THEN** the run fails if the unsafe ratio is 10% or higher, or if any unsafe usage lacks ledger evidence and test coverage
+
+#### Scenario: Performance evidence is explicit but not semantic proof
+- **WHEN** a new L3 named slice has no performance-smoke evidence
+- **THEN** the manifest MUST record `performance_not_claimed`
+- **AND** performance evidence MUST NOT replace C oracle, Rust replay, diff, negative diff, unsafe, version/cache, or OpenSpec gates
 
 ### Requirement: Traceable Cache Invalidation
 The system SHALL invalidate reusable translation artifacts when source, toolchain, schema, profile, fixture, or AI candidate inputs drift.
