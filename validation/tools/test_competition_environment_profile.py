@@ -106,6 +106,58 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertTrue(lane["local_fallback"]["enabled"])
         self.assertEqual(lane["ignored_env_for_ast_dump"], ["LIBCLANG_PATH"])
         self.assertEqual(lane["missing_status"], "missing_clang_path")
+        self.assertEqual(
+            lane["local_fallback"]["search_paths"],
+            [
+                "tools/llvm/bin/clang-18",
+                "tools/llvm/bin/clang",
+                "tools/clang/bin/clang",
+            ],
+        )
+
+        validation = lane["clang_validation"]
+        self.assertEqual(validation["resource_dir_command"], "clang -print-resource-dir")
+        self.assertEqual(validation["minimum_tu_headers"], ["stdint.h", "stddef.h"])
+        self.assertIn("-Xclang -ast-dump=json", validation["minimum_tu_command"])
+        self.assertIn("resource_dir", validation["required_evidence"])
+        self.assertIn("minimum_tu_ast_dump", validation["required_evidence"])
+
+    def test_competition_shell_entrypoints_use_repo_root_and_activate_cargo_mirror(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        activation = profile["cargo_mirror_activation"]
+        self.assertEqual(activation["method"], "CARGO_HOME")
+        self.assertEqual(activation["env_var"], "CARGO_HOME")
+        self.assertEqual(activation["path"], "config/competition-env/cargo")
+        self.assertEqual(activation["config_file"], "config/competition-env/cargo/config.toml")
+
+        expected_clang_paths = [
+            '"${repo_root}/tools/llvm/bin/clang-18"',
+            '"${repo_root}/tools/llvm/bin/clang"',
+            '"${repo_root}/tools/clang/bin/clang"',
+        ]
+        for script_path in [
+            PROFILE_DIR / "env.sh",
+            PROFILE_DIR / "toolchain-check.sh",
+            COMPAT_PROFILE_DIR / "env.sh",
+            COMPAT_PROFILE_DIR / "toolchain-check.sh",
+        ]:
+            script = script_path.read_text(encoding="utf-8")
+            with self.subTest(script=script_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("find_repo_root()", script)
+                self.assertIn('repo_root="$(find_repo_root)"', script)
+                for expected_path in expected_clang_paths:
+                    self.assertIn(expected_path, script)
+                self.assertNotIn('"tools/llvm/bin/clang"', script)
+                self.assertNotIn('"${script_dir}/../tools/llvm/bin/clang"', script)
+
+        default_env = (PROFILE_DIR / "env.sh").read_text(encoding="utf-8")
+        self.assertIn('export CARGO_HOME="${script_dir}/cargo"', default_env)
+
+        toolchain_check = (PROFILE_DIR / "toolchain-check.sh").read_text(encoding="utf-8")
+        self.assertIn("check_optional_clang_smoke()", toolchain_check)
+        self.assertIn("-print-resource-dir", toolchain_check)
+        self.assertIn("#include <stdint.h>", toolchain_check)
+        self.assertIn("#include <stddef.h>", toolchain_check)
 
     def test_dependency_admission_policy_governs_current_direct_dependencies(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")

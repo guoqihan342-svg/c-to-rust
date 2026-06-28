@@ -62,21 +62,24 @@ You are a C-to-Rust automatic translation agent. Your working directory is the r
 Run the environment check first, then process real C slices. Independent slices may run in parallel, but every worker must use an isolated output directory; final validation and summary checks must converge through the common gates.
 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
-   — Verify the environment meets the competition baseline.
+   — Verify the environment meets the competition baseline; `env.sh` activates `CARGO_HOME=config/competition-env/cargo`, and when `toolchain-check.sh` finds clang it also validates resource-dir plus a minimal TU AST dump including `stdint.h`/`stddef.h`.
 
 2. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out validation/slice-specs/<id>-<slice>.json
    — Extract a function slice from a real C source file.
 
-3. python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out --competition-clang-lane
+3. python validation/tools/run_competition.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+   — Use the unified runner for environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation.
+
+4. python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
    — Run the full auto-translation pipeline: clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile.
 
-4. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec validation/slice-specs/<id>-<slice>.json --require-semantic-pass
-   — Full evidence validation. Must pass.
+5. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec validation/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
+   — Manual expanded full evidence validation. When using the runner, this step is called by the runner.
 
-5. openspec validate --all --strict
-   — Full OpenSpec validation.
+6. openspec validate --all --strict
+   — Manual expanded OpenSpec validation. When using the runner, this step is called by the runner.
 
-6. To improve coverage and accuracy, repeat steps 2-4 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be validated by the common gates.
+7. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be validated by the common gates.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
@@ -89,6 +92,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
 - **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
+- **Prefer `run_competition.py` for aggregating existing slice specs**; the current runner still expects slice specs to be generated first by `extract_source_slice.py`, and full parallel worker status merging remains a later enhancement.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.
 - **All evidence files must be written to disk**; the validator reads disk files directly, not in-memory constructs.
 
@@ -97,6 +101,8 @@ If a command fails, record the reason and do not enter a repair loop.
 | Failure Scenario | Handling |
 |------------------|----------|
 | `CLANG_PATH` not set and no vendored clang | Write `missing_clang_path`; typed IR lane unavailable. The legacy string translator may only be used as an explicit diagnostic/demo path and must not count as L3 semantic pass. |
+| Vendored clang exists but resource-dir or the `stdint.h`/`stddef.h` minimal TU smoke fails | Record clang lane unavailable or blocked; do not treat that clang as an available typed-IR frontend. |
+| Huawei Cargo mirror is not activated through `CARGO_HOME=config/competition-env/cargo` | Record mirror activation failure; the existence of `cargo/config.toml` alone is not proof that the competition environment is adapted. |
 | C oracle harness compilation failure | Write `compiler_not_found` or specific compile error. Never fake `C_ORACLE_GENERATED`. |
 | Rust replay output mismatch with C oracle | Write diff failure evidence. Never fake `passed`. |
 | Negative diff does not catch mismatch | Write negative diff failure evidence. Never fake `caught_mismatch`. |
@@ -134,8 +140,14 @@ target/competition-out/
 ```json
 {
   "run_id": "<uuid>",
+  "proof_class": "competition-exact | ci-approximation | wsl-local-simulation | local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
   "profile_sha256": "<sha256-of-environment.json>",
+  "clang_source": "CLANG_PATH | vendored | missing",
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo"
+  },
   "elapsed_seconds": <int>,
   "translator_version": "0.1.0",
   "slices": {
@@ -143,11 +155,22 @@ target/competition-out/
     "typed_ir_generated": <int>,
     "compiled": <int>,
     "semantic_pass": <int>,
+    "refused": <int>,
+    "blocked": <int>,
     "failed": <int>
   },
   "unsafe_budget": {
     "total_first_party_non_test_unsafe": <int>,
     "ratio": <float>
+  },
+  "artifact_roots": [
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed | failed | blocked",
+    "validator": "validate_auto_translation_evidence.py --require-semantic-pass"
   }
 }
 ```

@@ -1,0 +1,189 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Competition run summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "proof_class",
+    "profile_id",
+    "profile_sha256",
+    "clang_source",
+    "cargo_mirror_activation",
+    "elapsed_seconds",
+    "translator_version",
+    "slices",
+    "unsafe_budget",
+    "artifact_roots",
+    "final_gate"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "proof_class": {
+      "type": "string",
+      "enum": [
+        "competition-exact",
+        "ci-approximation",
+        "wsl-local-simulation",
+        "local-simulation"
+      ]
+    },
+    "profile_id": {
+      "type": "string",
+      "enum": [
+        "huawei-competition-ubuntu-24.04"
+      ]
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "clang_source": {
+      "type": "string",
+      "enum": [
+        "CLANG_PATH",
+        "vendored",
+        "missing"
+      ]
+    },
+    "cargo_mirror_activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "path",
+        "config_file"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "CARGO_HOME"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "enum": [
+            "config/competition-env/cargo"
+          ]
+        },
+        "config_file": {
+          "type": "string",
+          "enum": [
+            "config/competition-env/cargo/config.toml"
+          ]
+        }
+      }
+    },
+    "elapsed_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "translator_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slices": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "typed_ir_generated",
+        "compiled",
+        "semantic_pass",
+        "refused",
+        "blocked",
+        "failed"
+      ],
+      "properties": {
+        "attempted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "typed_ir_generated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "compiled": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "semantic_pass": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "unsafe_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_first_party_non_test_unsafe",
+        "ratio"
+      ],
+      "properties": {
+        "total_first_party_non_test_unsafe": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "artifact_roots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "final_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "validator"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "blocked"
+          ]
+        },
+        "validator": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

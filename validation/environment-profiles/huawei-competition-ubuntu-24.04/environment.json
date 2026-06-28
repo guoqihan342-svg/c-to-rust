@@ -19,6 +19,13 @@
     "npm": "https://mirrors.tools.huawei.com/npm/",
     "cargo_crates_io": "sparse+http://rust.inhuawei.com/crates.io-index/"
   },
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "env_var": "CARGO_HOME",
+    "path": "config/competition-env/cargo",
+    "config_file": "config/competition-env/cargo/config.toml",
+    "description": "env.sh exports CARGO_HOME to the profile-local cargo directory so Cargo uses the Huawei crates.io sparse mirror without mutating the user's global Cargo home."
+  },
   "toolchain": {
     "python": "3.12.3",
     "pip": "24.0",
@@ -57,8 +64,8 @@
         "description": "clang can be placed as a vendored binary inside the project directory so the competition host does not need a system-wide LLVM installation.",
         "search_paths": {
           "linux": [
-            "tools/llvm/bin/clang",
             "tools/llvm/bin/clang-18",
+            "tools/llvm/bin/clang",
             "tools/clang/bin/clang"
           ],
           "windows": [
@@ -85,8 +92,8 @@
       "local_fallback": {
         "enabled": true,
         "search_paths": [
-          "tools/llvm/bin/clang",
           "tools/llvm/bin/clang-18",
+          "tools/llvm/bin/clang",
           "tools/clang/bin/clang"
         ],
         "description": "When CLANG_PATH is not set in the environment, the competition clang lane falls back to project-local vendored clang binaries before reporting missing_clang_path."
@@ -94,7 +101,20 @@
       "ignored_env_for_ast_dump": [
         "LIBCLANG_PATH"
       ],
-      "missing_status": "missing_clang_path"
+      "missing_status": "missing_clang_path",
+      "clang_validation": {
+        "resource_dir_command": "clang -print-resource-dir",
+        "minimum_tu_headers": [
+          "stdint.h",
+          "stddef.h"
+        ],
+        "minimum_tu_command": "clang -fsyntax-only -Xclang -ast-dump=json <minimum-tu.c>",
+        "required_evidence": [
+          "resource_dir",
+          "minimum_tu_ast_dump"
+        ],
+        "description": "When a clang binary is available through CLANG_PATH or a project-local vendored path, the shell self-check should prove the binary can locate its resource-dir and parse a minimal TU using standard integer/size headers before the competition clang lane is treated as available."
+      }
     }
   },
   "dependency_admission_policy": {
@@ -211,6 +231,7 @@
     "Record this profile id and environment.json hash in generated validation evidence when a run is performed in the competition environment.",
     "Clang is not required for default gates. The typed-IR clang lane is opt-in. Clang may be vendored locally under tools/llvm/bin/ or tools/clang/bin/ and used via the competition clang lane; this is not a system-level dependency.",
     "LIBCLANG_PATH is explicitly ignored for AST dump JSON; only CLANG_PATH or a vendored clang binary path is accepted for the competition clang lane.",
-    "The env.sh script auto-detects vendored clang and exports CLANG_PATH when CLANG_PATH is not already set."
+    "The env.sh script auto-detects vendored clang from repository-root tools paths and exports CLANG_PATH when CLANG_PATH is not already set.",
+    "The env.sh script exports CARGO_HOME=config/competition-env/cargo so Cargo uses the Huawei sparse registry profile without mutating the user's global Cargo configuration."
   ]
 }

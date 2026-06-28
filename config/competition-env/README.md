@@ -34,7 +34,7 @@
 - `apt/sources.list`：Ubuntu Noble APT 镜像配置。
 - `pip/pip.conf`：pip 镜像配置。
 - `npm/.npmrc`：npm registry 配置。
-- `cargo/config.toml`：Cargo crates.io 镜像配置。
+- `cargo/config.toml`：Cargo crates.io 镜像配置；`env.sh` 会把 `CARGO_HOME` 指向本目录下的 `cargo/`，让 Cargo 使用该镜像配置而不修改用户全局配置。
 - `rust/rust-toolchain.toml`：Rust `1.96.0` 工具链声明，不在仓库根目录自动生效。
 - `env.sh`：比赛机 shell 会话环境变量入口（含本地 clang 自动探测）。
 - `toolchain-check.sh`：比赛机环境自检脚本。
@@ -48,6 +48,7 @@
 项目根目录/
 ├── tools/
 │   ├── llvm/bin/clang          # 推荐（Linux）
+│   ├── llvm/bin/clang-18       # 推荐（带版本 Linux）
 │   ├── llvm/bin/clang.exe      # 推荐（Windows）
 │   ├── clang/bin/clang         # 备选路径
 │   └── ...
@@ -57,8 +58,9 @@
 
 1. 从本地已有安装复制 clang 二进制（不含 CMake、libclang 等）到 `tools/llvm/bin/`
 2. `env.sh` 会自动探测并导出 `CLANG_PATH`
-3. `auto_migrate.py --competition-clang-lane` 优先用 `CLANG_PATH` 环境变量，其次自动搜索上述本地路径
-4. 两者都找不到时才返回 `missing_clang_path`
+3. `toolchain-check.sh` 若找到 clang，会额外执行 `-print-resource-dir` 和包含 `stdint.h`/`stddef.h` 的最小 TU AST dump smoke，确认 resource-dir、标准头和 include 搜索路径可用
+4. `auto_migrate.py --competition-clang-lane` 优先用 `CLANG_PATH` 环境变量，其次自动搜索上述本地路径
+5. 两者都找不到时才返回 `missing_clang_path`
 
 **设计理由**：clang 只用于 `-ast-dump=json` 输出，不依赖 libclang 共享库或 CMake。把 clang 二进制 vendored 进项目目录，比赛机不需要系统级 LLVM 安装，也不需要 `sudo apt install clang`。这符合"不引入系统级依赖"的适配策略。
 
@@ -66,7 +68,8 @@
 
 - 默认构建、测试和验证路径不能依赖 Go。
 - 默认构建、测试和验证路径不能依赖 CMake；C/C++ oracle 路径优先使用 `gcc`、`g++` 和 GNU Make。
-- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `CLANG_PATH` 环境变量；未设置时自动搜索 `tools/llvm/bin/clang*` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。`env.sh` 已包含自动探测逻辑。
+- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `CLANG_PATH` 环境变量；未设置时自动搜索 repo root 下的 `tools/llvm/bin/clang-18`、`tools/llvm/bin/clang` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。`env.sh` 已包含自动探测逻辑，`toolchain-check.sh` 会在找到 clang 时执行最小 TU smoke。
+- Cargo 华为镜像通过 `env.sh` 设置 `CARGO_HOME=config/competition-env/cargo` 激活；不要只检查 `cargo/config.toml` 存在，也不要默认修改用户全局 Cargo 配置。
 - Rust 代码必须兼容 stable Rust `1.96.0`，不得引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
 - Node/npm 脚本按 Node `v24.13.0` / npm `11.6.2` 适配。
@@ -81,6 +84,8 @@
 source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 ```
+
+执行 `env.sh` 后，`CARGO_HOME` 会指向 `config/competition-env/cargo`，Cargo 将读取其中的 `config.toml` 使用华为 sparse registry。
 
 clang typed-IR 比赛路线是显式 opt-in：
 

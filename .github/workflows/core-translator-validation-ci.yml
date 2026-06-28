@@ -6,6 +6,7 @@ on:
       - ".github/workflows/core-translator-validation-ci.yml"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/competition-run-summary.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
@@ -21,6 +22,7 @@ on:
       - ".github/workflows/core-translator-validation-ci.yml"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/competition-run-summary.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
@@ -68,6 +70,8 @@ jobs:
         run: |
           python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
           python -m unittest validation.tools.test_competition_environment_profile
+          python -m unittest validation.tools.test_validate_competition_run_summary
+          python -m unittest validation.tools.test_run_competition
           python -m unittest validation.tools.test_unsafe_budget
           python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix

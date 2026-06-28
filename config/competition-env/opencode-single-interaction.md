@@ -64,21 +64,24 @@
 请先完成环境自检，再处理真实 C slice。可以并行处理互不依赖的多个 slice，但每个 worker 必须使用独立输出目录；最终必须统一运行 validator 和 summary 检查。
 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
-   — 确认环境满足比赛基线。
+   — 确认环境满足比赛基线；`env.sh` 会激活 `CARGO_HOME=config/competition-env/cargo`，`toolchain-check.sh` 找到 clang 时会额外验证 resource-dir 和包含 `stdint.h`/`stddef.h` 的最小 TU AST dump。
 
 2. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out validation/slice-specs/<id>-<slice>.json
    — 从真实 C 源文件提取函数切片。
 
-3. python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out --competition-clang-lane
+3. python validation/tools/run_competition.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+   — 使用统一 runner 执行环境检查、typed-IR 迁移、证据验证、unsafe、OpenSpec 和 `competition-run-summary.json` 生成。
+
+4. python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
    — 运行完整自动翻译管线：clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile。
 
-4. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec validation/slice-specs/<id>-<slice>.json --require-semantic-pass
-   — 全量证据验证。必须通过。
+5. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec validation/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
+   — 手动展开版的全量证据验证。使用 runner 时该步骤由 runner 调用。
 
-5. openspec validate --all --strict
-   — OpenSpec 全量校验。
+6. openspec validate --all --strict
+   — 手动展开版的 OpenSpec 全量校验。使用 runner 时该步骤由 runner 调用。
 
-6. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-4；互不依赖的 slice 可并行运行，但最终汇总必须统一校验。
+7. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须统一校验。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。
@@ -91,6 +94,7 @@
 - **不生成手写 `c_source` 字符串**（必须从真实 C 源文件通过 `extract_source_slice.py` 抽取）。
 - **不启动 LLM code generation**（本项目翻译只走 clang-lowered typed IR + generic emitter，不走 AI/LLM 候选生成）。
 - **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。
+- **优先使用 `run_competition.py` 汇总已有 slice spec**；当前 runner 仍要求 slice spec 先由 `extract_source_slice.py` 生成，完整并行 worker 状态合并仍是后续增强。
 - **C2Rust baseline 如果生成失败/不存在，记录 `skipped` 或 `blocked`**，不伪造 `generated`。
 - **所有 evidence 文件必须落盘**，不可在内存中构造后说 passes——validator 直接读磁盘文件。
 
@@ -99,6 +103,8 @@
 | 失败场景 | 处理方式 |
 |----------|----------|
 | `CLANG_PATH` 未设置且无 vendored clang | 写 `missing_clang_path`，typed IR lane 不可用；legacy string translator 只能作为显式 diagnostic/demo 路径，不能计入 L3 semantic pass。 |
+| vendored clang 存在但 resource-dir 或 `stdint.h`/`stddef.h` 最小 TU smoke 失败 | 记录 clang lane unavailable 或 blocked，不能把该 clang 视为可用 typed-IR 前端。 |
+| Cargo 华为镜像未通过 `CARGO_HOME=config/competition-env/cargo` 激活 | 记录 mirror activation failure；不能只用 `cargo/config.toml` 存在证明比赛环境已适配。 |
 | C oracle harness 编译失败 | 写 `compiler_not_found` 或具体编译错误。不伪造 `C_ORACLE_GENERATED`。 |
 | Rust replay 输出不匹配 C oracle | 写 diff 失败证据。不伪造 `passed`。 |
 | negative diff 未检测到错配 | 写 negative diff 失败证据。不伪造 `caught_mismatch`。 |
@@ -136,8 +142,14 @@ target/competition-out/
 ```json
 {
   "run_id": "<uuid>",
+  "proof_class": "competition-exact | ci-approximation | wsl-local-simulation | local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
   "profile_sha256": "<sha256-of-environment.json>",
+  "clang_source": "CLANG_PATH | vendored | missing",
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo"
+  },
   "elapsed_seconds": <int>,
   "translator_version": "0.1.0",
   "slices": {
@@ -145,11 +157,22 @@ target/competition-out/
     "typed_ir_generated": <int>,
     "compiled": <int>,
     "semantic_pass": <int>,
+    "refused": <int>,
+    "blocked": <int>,
     "failed": <int>
   },
   "unsafe_budget": {
     "total_first_party_non_test_unsafe": <int>,
     "ratio": <float>
+  },
+  "artifact_roots": [
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed | failed | blocked",
+    "validator": "validate_auto_translation_evidence.py --require-semantic-pass"
   }
 }
 ```

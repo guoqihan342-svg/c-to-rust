@@ -4,6 +4,25 @@ set -u
 failures=0
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
+find_repo_root() {
+  current="${script_dir}"
+  while [ -n "${current}" ] && [ "${current}" != "/" ]; do
+    if [ -r "${current}/config/competition-env/environment.json" ]; then
+      printf '%s\n' "${current}"
+      return 0
+    fi
+    next="$(dirname -- "${current}")"
+    if [ "${next}" = "${current}" ]; then
+      break
+    fi
+    current="${next}"
+  done
+  printf 'cannot locate repository root from %s\n' "${script_dir}" >&2
+  return 1
+}
+
+repo_root="$(find_repo_root)"
+
 record_failure() {
   printf 'FAIL: %s\n' "$1" >&2
   failures=$((failures + 1))
@@ -60,6 +79,34 @@ expect_file_contains() {
   fi
 }
 
+check_optional_clang_smoke() {
+  clang_bin="$1"
+  resource_dir="$("${clang_bin}" -print-resource-dir 2>&1)"
+  clang_status_code="$?"
+  if [ "$clang_status_code" -ne 0 ] || [ -z "$resource_dir" ]; then
+    record_failure "clang resource-dir smoke failed for ${clang_bin}: ${resource_dir}"
+    return
+  fi
+  printf 'OK: clang resource-dir %s\n' "$resource_dir"
+
+  smoke_source="$(mktemp "${TMPDIR:-/tmp}/c2r-clang-smoke.XXXXXX.c")"
+  cat >"$smoke_source" <<'EOF'
+#include <stdint.h>
+#include <stddef.h>
+int c2r_clang_smoke(uint32_t value) {
+  return (int)(value + sizeof(size_t));
+}
+EOF
+  smoke_output="$("${clang_bin}" -fsyntax-only -Xclang -ast-dump=json "$smoke_source" 2>&1)"
+  smoke_status_code="$?"
+  rm -f "$smoke_source"
+  if [ "$smoke_status_code" -ne 0 ]; then
+    record_failure "clang minimum TU AST dump smoke failed for ${clang_bin}: ${smoke_output}"
+  else
+    printf 'OK: clang minimum TU AST dump smoke passed\n'
+  fi
+}
+
 if [ -r /etc/os-release ]; then
   . /etc/os-release
   [ "${ID:-}" = "ubuntu" ] || record_failure "OS ID expected ubuntu, got ${ID:-unknown}"
@@ -111,20 +158,26 @@ expect_absent cmake
 
 # clang is optional; note vendored or env-var status without failing
 clang_status="absent"
+clang_bin=""
 if [ -n "${CLANG_PATH:-}" ] && command -v "${CLANG_PATH}" >/dev/null 2>&1; then
   clang_status="CLANG_PATH=${CLANG_PATH}"
+  clang_bin="$(command -v "${CLANG_PATH}")"
 else
   for vendored in \
-    "${script_dir}/../tools/llvm/bin/clang-18" \
-    "${script_dir}/../tools/llvm/bin/clang" \
-    "${script_dir}/../tools/clang/bin/clang"; do
+    "${repo_root}/tools/llvm/bin/clang-18" \
+    "${repo_root}/tools/llvm/bin/clang" \
+    "${repo_root}/tools/clang/bin/clang"; do
     if [ -x "${vendored}" ]; then
       clang_status="vendored=${vendored}"
+      clang_bin="${vendored}"
       break
     fi
   done
 fi
 printf 'clang status: %s (optional; only required for --competition-clang-lane)\n' "${clang_status}"
+if [ -n "$clang_bin" ]; then
+  check_optional_clang_smoke "$clang_bin"
+fi
 
 if [ "$failures" -eq 0 ]; then
   echo "competition environment check passed"
