@@ -64,11 +64,12 @@ Run the environment check first, then process real C slices. Independent slices 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — Verify the environment meets the competition baseline; `env.sh` activates `CARGO_HOME=config/competition-env/cargo`, and when `toolchain-check.sh` finds clang it also validates resource-dir plus a minimal TU AST dump including `stdint.h`/`stddef.h`.
 
-2. Prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`.
-   — This is the parameterized input used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
+2. Use direct runner arguments for a single real C source function, or prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`.
+   — Direct arguments and JSON extract specs are both parameterized inputs used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
 
-3. python validation/tools/run_competition.py --extract-spec target/competition-out/extract-specs/<id>-<slice>.json --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
+   — For batch or reusable inputs, use `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` instead of the direct source arguments.
 
 4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — Manual expanded real C source function slice extraction. When using runner `--extract-spec`, the runner invokes this step.
@@ -95,7 +96,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
 - **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
-- **Prefer `run_competition.py --extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and full parallel worker status merging remains a later enhancement.
+- **Prefer `run_competition.py` direct source arguments or `--extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and full parallel worker status merging remains a later enhancement.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.
 - **All evidence files must be written to disk**; the validator reads disk files directly, not in-memory constructs.
 

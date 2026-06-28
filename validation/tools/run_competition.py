@@ -29,6 +29,7 @@ UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
+ExtractionSpecInput = Path | dict[str, Any]
 
 
 class CompetitionRunResult:
@@ -42,6 +43,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--slice-spec", action="append", dest="slice_specs", type=Path, default=[])
     parser.add_argument("--extract-spec", action="append", dest="extraction_specs", type=Path, default=[])
+    parser.add_argument("--source-repo-root", "--repo-root", dest="source_repo_root")
+    parser.add_argument("--source-file")
+    parser.add_argument("--function")
+    parser.add_argument("--target-id")
+    parser.add_argument("--slice-id")
+    parser.add_argument("--source-commit")
+    parser.add_argument("--compiler-command-source")
+    parser.add_argument("--include-path", action="append", dest="include_paths", default=[])
+    parser.add_argument("--define", action="append", dest="defines", default=[])
     parser.add_argument("--out-root", type=Path, default=REPO_ROOT / "target" / "competition-out")
     parser.add_argument(
         "--proof-class",
@@ -50,12 +60,16 @@ def main() -> int:
     )
     parser.add_argument("--run-id")
     args = parser.parse_args()
-    if not args.slice_specs and not args.extraction_specs:
-        parser.error("at least one --slice-spec or --extract-spec is required")
+    extraction_specs: list[ExtractionSpecInput] = list(args.extraction_specs)
+    direct_extraction_spec = direct_extraction_spec_from_args(args, parser)
+    if direct_extraction_spec is not None:
+        extraction_specs.append(direct_extraction_spec)
+    if not args.slice_specs and not extraction_specs:
+        parser.error("at least one --slice-spec, --extract-spec, or direct extraction argument group is required")
 
     result = run_competition(
         slice_specs=args.slice_specs,
-        extraction_specs=args.extraction_specs,
+        extraction_specs=extraction_specs,
         out_root=args.out_root,
         proof_class=args.proof_class,
         run_id=args.run_id,
@@ -68,7 +82,7 @@ def main() -> int:
 def run_competition(
     *,
     slice_specs: list[Path],
-    extraction_specs: list[Path] | None = None,
+    extraction_specs: list[ExtractionSpecInput] | None = None,
     out_root: Path,
     proof_class: str,
     command_runner: CommandRunner = subprocess.run,
@@ -77,7 +91,7 @@ def run_competition(
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
     if not slice_specs and not extraction_specs:
-        raise SystemExit("at least one --slice-spec or --extract-spec is required")
+        raise SystemExit("at least one --slice-spec, --extract-spec, or direct extraction argument group is required")
 
     repo_root = repo_root.resolve()
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
@@ -267,8 +281,46 @@ def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Pa
     return command_runner(command, cwd=repo_root, text=True, capture_output=True)
 
 
+def direct_extraction_spec_from_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any] | None:
+    required = {
+        "source_repo_root": "--source-repo-root",
+        "source_file": "--source-file",
+        "function": "--function",
+        "target_id": "--target-id",
+        "slice_id": "--slice-id",
+    }
+    present = any(getattr(args, key) for key in required)
+    present = present or any(
+        [
+            args.source_commit,
+            args.compiler_command_source,
+            args.include_paths,
+            args.defines,
+        ]
+    )
+    if not present:
+        return None
+    missing = [flag for key, flag in required.items() if not getattr(args, key)]
+    if missing:
+        parser.error("direct extraction args require " + ", ".join(missing))
+    extraction: dict[str, Any] = {
+        "repo_root": args.source_repo_root,
+        "source_file": args.source_file,
+        "function": args.function,
+        "target_id": args.target_id,
+        "slice_id": args.slice_id,
+        "include_paths": list(args.include_paths),
+        "defines": list(args.defines),
+    }
+    if args.source_commit:
+        extraction["source_commit"] = args.source_commit
+    if args.compiler_command_source:
+        extraction["compiler_command_source"] = args.compiler_command_source
+    return extraction
+
+
 def extract_slice_specs(
-    extraction_specs: list[Path],
+    extraction_specs: list[ExtractionSpecInput],
     *,
     generated_slice_specs_root: Path,
     command_runner: CommandRunner,
@@ -299,7 +351,9 @@ def extract_slice_specs(
     return generated, failures
 
 
-def load_extraction_spec(path: Path, *, repo_root: Path) -> dict[str, Any]:
+def load_extraction_spec(path: ExtractionSpecInput, *, repo_root: Path) -> dict[str, Any]:
+    if isinstance(path, dict):
+        return dict(path)
     resolved = path if path.is_absolute() else repo_root / path
     return json.loads(resolved.read_text(encoding="utf-8"))
 

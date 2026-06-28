@@ -1,6 +1,9 @@
+import contextlib
+import io
 import importlib.util
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -221,6 +224,95 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 1)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
 
+    def test_runner_extracts_inline_extraction_spec_before_auto_migrate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            inline_spec = {
+                "repo_root": str(tmp_path / "source-repo"),
+                "source_file": "src/direct.c",
+                "function": "direct_slice",
+                "target_id": "demo",
+                "slice_id": "direct-slice",
+                "include_paths": ["include"],
+                "defines": ["DIRECT=1"],
+            }
+            write_final_verification(out_root / "evidence", "demo", "direct-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[inline_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            extract_command = next(text for text in command_texts if "extract_source_slice.py" in text)
+            self.assertIn("--source-file src/direct.c", extract_command)
+            self.assertIn("--function direct_slice", extract_command)
+            self.assertIn("--include-path include", extract_command)
+            self.assertIn("--define DIRECT=1", extract_command)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+
+    def test_main_accepts_direct_extraction_cli_args(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--source-repo-root",
+                str(REPO_ROOT / "source-repo"),
+                "--source-file",
+                "src/direct.c",
+                "--function",
+                "direct_slice",
+                "--target-id",
+                "demo",
+                "--slice-id",
+                "direct-slice",
+                "--include-path",
+                "include",
+                "--define",
+                "DIRECT=1",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        extraction_specs = calls["extraction_specs"]
+        self.assertEqual(len(extraction_specs), 1)
+        extraction = extraction_specs[0]
+        self.assertEqual(extraction["repo_root"], str(REPO_ROOT / "source-repo"))
+        self.assertEqual(extraction["source_file"], "src/direct.c")
+        self.assertEqual(extraction["function"], "direct_slice")
+        self.assertEqual(extraction["target_id"], "demo")
+        self.assertEqual(extraction["slice_id"], "direct-slice")
+        self.assertEqual(extraction["include_paths"], ["include"])
+        self.assertEqual(extraction["defines"], ["DIRECT=1"])
+
     def test_runner_counts_extract_failure_as_slice_failure_and_logs_it(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
@@ -299,7 +391,7 @@ class RunCompetitionTests(unittest.TestCase):
                     run_id="run-test",
                 )
 
-        self.assertIn("--slice-spec or --extract-spec", str(raised.exception))
+        self.assertIn("--slice-spec, --extract-spec, or direct extraction argument group", str(raised.exception))
 
     def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
         module = load_runner_module()
