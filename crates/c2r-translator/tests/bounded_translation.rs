@@ -107,6 +107,16 @@ fn assert_rust_snippet_compiles(name: &str, rust_code: &str) {
 
 #[cfg(feature = "typed-ir")]
 fn assert_rust_snippet_runs(name: &str, rust_code: &str, main_body: &str) {
+    assert_rust_snippet_runs_with_overflow_checks(name, rust_code, main_body, true);
+}
+
+#[cfg(feature = "typed-ir")]
+fn assert_rust_snippet_runs_with_overflow_checks(
+    name: &str,
+    rust_code: &str,
+    main_body: &str,
+    overflow_checks: bool,
+) {
     let out_dir = unique_out_dir(name);
     fs::create_dir_all(&out_dir).unwrap();
     let source = out_dir.join("main.rs");
@@ -120,7 +130,11 @@ fn assert_rust_snippet_runs(name: &str, rust_code: &str, main_body: &str) {
     let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
     let compile = Command::new(&rustc)
         .arg("-C")
-        .arg("overflow-checks=on")
+        .arg(if overflow_checks {
+            "overflow-checks=on"
+        } else {
+            "overflow-checks=off"
+        })
         .arg(&source)
         .arg("-o")
         .arg(&output)
@@ -147,6 +161,57 @@ fn assert_rust_snippet_runs(name: &str, rust_code: &str, main_body: &str) {
     fs::remove_dir_all(out_dir).unwrap();
 }
 
+#[cfg(feature = "typed-ir")]
+fn assert_rust_snippet_fails_with_overflow_checks(
+    name: &str,
+    rust_code: &str,
+    main_body: &str,
+    overflow_checks: bool,
+) {
+    let out_dir = unique_out_dir(name);
+    fs::create_dir_all(&out_dir).unwrap();
+    let source = out_dir.join("main.rs");
+    let output = out_dir.join(if cfg!(windows) { "main.exe" } else { "main" });
+    fs::write(
+        &source,
+        format!("{rust_code}\nfn main() {{\n{main_body}\n}}\n"),
+    )
+    .unwrap();
+
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let compile = Command::new(&rustc)
+        .arg("-C")
+        .arg(if overflow_checks {
+            "overflow-checks=on"
+        } else {
+            "overflow-checks=off"
+        })
+        .arg(&source)
+        .arg("-o")
+        .arg(&output)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run rustc: {error}"));
+
+    assert!(
+        compile.status.success(),
+        "rustc failed for {name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&compile.stdout),
+        String::from_utf8_lossy(&compile.stderr)
+    );
+
+    let run = Command::new(&output)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to run emitted snippet {name}: {error}"));
+    assert!(
+        !run.status.success(),
+        "emitted snippet unexpectedly succeeded for {name}\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    fs::remove_dir_all(out_dir).unwrap();
+}
+
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
@@ -161,7 +226,10 @@ fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
 
     assert!(lowered.globals.is_empty());
     assert!(rust.contains("pub fn add_one(value: i32) -> i32"), "{rust}");
-    assert!(rust.contains("return (value + 1i32);"), "{rust}");
+    assert!(
+        rust.contains("return value.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-add-one", rust);
 }
 
@@ -787,7 +855,7 @@ fn typed_ir_emits_record_value_field_compound_assignment_shape() {
     assert!(rust.contains("pub struct Point"));
     assert!(rust.contains("pub x: i32"));
     assert!(rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"));
-    assert!(rust.contains("p.x = (p.x + value);"));
+    assert!(rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return p.x;"));
     assert_rust_snippet_compiles("typed-ir-record-value-field-compound-shape", rust);
 }
@@ -1515,7 +1583,10 @@ fn typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape()
         rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"),
         "{rust}"
     );
-    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert!(
+        rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert_rust_snippet_compiles(
         "typed-ir-mutable-record-pointer-field-compound-assignment",
         rust,
@@ -1586,8 +1657,14 @@ fn typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape() {
         rust.contains("pub fn bump_point_x(mut p: &mut Point)"),
         "{rust}"
     );
-    assert!(rust.contains("p.x = (p.x + 1i32);"), "{rust}");
-    assert!(rust.contains("p.x = (p.x - 1i32);"), "{rust}");
+    assert!(
+        rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_sub(1i32).expect(\"signed subtraction overflow\");"),
+        "{rust}"
+    );
     assert_rust_snippet_compiles(
         "typed-ir-mutable-record-pointer-field-inc-dec-desugar",
         rust,
@@ -4061,9 +4138,149 @@ fn typed_ir_emits_scalar_subtraction() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
-    assert!(rust.contains("return (value - 1i32);"));
+    assert!(
+        rust.contains("return value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-scalar-subtraction", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_signed_add_with_checked_overflow_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "add_one_i32".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Add,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed checked add");
+    assert!(
+        emitted
+            .rust
+            .contains("return value.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-signed-checked-add-defined-input",
+        &emitted.rust,
+        "assert_eq!(add_one_i32(41i32), 42i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-add-overflow",
+        &emitted.rust,
+        "let _ = add_one_i32(i32::MAX);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_signed_sub_with_checked_overflow_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "sub_one_i32".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Sub,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed checked sub");
+    assert!(
+        emitted
+            .rust
+            .contains("return value.checked_sub(1i32).expect(\"signed subtraction overflow\");"),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-signed-checked-sub-defined-input",
+        &emitted.rust,
+        "assert_eq!(sub_one_i32(42i32), 41i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-sub-overflow",
+        &emitted.rust,
+        "let _ = sub_one_i32(i32::MIN);",
+        false,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_runs_signed_mul_with_checked_overflow_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "double_i32".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_binary(
+                IrBinOp::Mul,
+                ir_var("value", i32_ty.clone()),
+                ir_lit(2, "2", i32_ty.clone()),
+                i32_ty,
+            )),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit signed checked mul");
+    assert!(
+        emitted
+            .rust
+            .contains("return value.checked_mul(2i32).expect(\"signed multiplication overflow\");"),
+        "{}",
+        emitted.rust
+    );
+    assert_rust_snippet_runs_with_overflow_checks(
+        "typed-ir-signed-checked-mul-defined-input",
+        &emitted.rust,
+        "assert_eq!(double_i32(21i32), 42i32);",
+        false,
+    );
+    assert_rust_snippet_fails_with_overflow_checks(
+        "typed-ir-signed-checked-mul-overflow",
+        &emitted.rust,
+        "let _ = double_i32(1_073_741_824i32);",
+        false,
+    );
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4360,7 +4577,7 @@ fn typed_ir_emits_scalar_mul_div_mod() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
     assert_rust_snippet_compiles("typed-ir-scalar-mul-div-mod", rust);
 }
 
@@ -5781,7 +5998,9 @@ fn typed_ir_emits_scalar_assignment_with_integer_promotion_and_truncation() {
     let rust = emit_rust_from_ir(&ir).expect("emit promoted/truncated scalar assignment");
 
     assert!(rust.contains("pub fn inc8(mut value: u8) -> u8"));
-    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains(
+        "value = ((value as i32).checked_add(1i32).expect(\"signed addition overflow\") as u8);"
+    ));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-scalar-assignment-promote-truncate", &rust);
 }
@@ -5910,7 +6129,7 @@ fn typed_ir_emits_scalar_while_with_integer_condition() {
 
     assert!(rust.contains("pub fn countdown(mut count: i32) -> i32"));
     assert!(rust.contains("while count != 0i32 {"));
-    assert!(rust.contains("count = (count + !0i32);"));
+    assert!(rust.contains("count = count.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return count;"));
     assert_rust_snippet_compiles("typed-ir-scalar-while", &rust);
 }
@@ -6041,7 +6260,9 @@ fn typed_ir_emits_continue_in_scalar_while_body() {
     assert!(rust.contains("pub fn skip_large(mut value: i32) -> i32"));
     assert!(rust.contains("while value != 0i32 {"));
     assert!(rust.contains("continue;"));
-    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert_rust_snippet_compiles("typed-ir-scalar-while-continue", &rust);
 }
 
@@ -6084,7 +6305,9 @@ fn typed_ir_emits_scalar_do_while_with_condition_check_after_body() {
 
     assert!(rust.contains("pub fn do_countdown(mut value: i32) -> i32"));
     assert!(rust.contains("loop {"));
-    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(rust.contains("if !(value != 0i32) {"));
     assert!(rust.contains("break;"));
     assert!(rust.contains("return value;"));
@@ -6239,10 +6462,15 @@ fn typed_ir_for_emits_continue_after_step_in_body() {
     assert!(rust.contains("pub fn sum_skip(limit: i32) -> i32"));
     assert!(rust.contains("if (i > 3i32) {"));
     assert!(
-        rust.contains("            if (i > 3i32) {\n                i = (i + 1i32);\n                continue;\n            }"),
+        rust.contains("            if (i > 3i32) {\n                i = i.checked_add(1i32).expect(\"signed addition overflow\");\n                continue;\n            }"),
         "{rust:?}"
     );
-    assert_eq!(rust.matches("i = (i + 1i32);").count(), 2, "{rust:?}");
+    assert_eq!(
+        rust.matches("i = i.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2,
+        "{rust:?}"
+    );
     assert_rust_snippet_compiles("typed-ir-for-continue-step", &rust);
 }
 
@@ -6299,7 +6527,12 @@ fn typed_ir_for_nested_while_continue_does_not_emit_outer_step() {
 
     let rust = emit_rust_from_ir(&ir).expect("emit nested while continue in for body");
 
-    assert_eq!(rust.matches("i = (i + 1i32);").count(), 1, "{rust:?}");
+    assert_eq!(
+        rust.matches("i = i.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        1,
+        "{rust:?}"
+    );
     assert!(
         rust.contains("while limit != 0i32 {\n                continue;\n            }"),
         "{rust:?}"
@@ -6566,9 +6799,9 @@ fn typed_ir_emits_scalar_if_else_with_integer_condition() {
 
     assert!(rust.contains("pub fn adjust(mut value: i32, flag: i32) -> i32"));
     assert!(rust.contains("if flag != 0i32 {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("} else {"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-scalar-if", &rust);
 }
@@ -6618,7 +6851,7 @@ fn typed_ir_emits_scalar_if_with_comparison_condition() {
 
     assert!(rust.contains("pub fn adjust_positive(mut value: i32) -> i32"));
     assert!(rust.contains("if (value > 0i32) {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-scalar-if-comparison", &rust);
 }
@@ -6783,7 +7016,7 @@ fn typed_ir_emits_scalar_while_with_comparison_condition() {
     assert!(rust.contains("pub fn countdown_positive(mut value: i32) -> i32"));
     assert!(rust.contains("while (value > 0i32) {"));
     assert!(!rust.contains("(value > 0i32) != 0i32"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-scalar-while-comparison", &rust);
 }
 
@@ -6987,7 +7220,7 @@ fn typed_ir_emits_scalar_while_with_logical_not_integer_condition() {
 
     assert!(rust.contains("pub fn bump_until_nonzero(mut value: i32) -> i32"));
     assert!(rust.contains("while value == 0i32 {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-scalar-while-logical-not", &rust);
 }
@@ -9464,8 +9697,8 @@ fn typed_ir_for_emits_scoped_loop_with_decl_init_and_step_assignment() {
     assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
     assert!(rust.contains("let mut total: i32 = 0i32;"));
     assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
-    assert!(rust.contains("total = (total + i);"));
-    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("total = total.checked_add(i).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return total;"));
     assert_rust_snippet_compiles("typed-ir-for-scoped-loop", &rust);
 }
@@ -9551,8 +9784,8 @@ fn typed_ir_for_emits_scoped_loop_with_multi_decl_init() {
     assert!(rust.contains(
         "{\n        let mut i: i32 = 0i32;\n        let mut j: i32 = 1i32;\n        while (i < limit) {"
     ));
-    assert!(rust.contains("total = ((total + i) + j);"));
-    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("total = total.checked_add(i).expect(\"signed addition overflow\").checked_add(j).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-for-multi-decl-init", &rust);
 }
 
@@ -11740,7 +11973,7 @@ fn typed_ir_emits_add_one_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit add_one from lowered typed IR");
 
     assert!(rust.contains("pub fn add_one(value: i32) -> i32"));
-    assert!(rust.contains("return (value + 1i32);"));
+    assert!(rust.contains("return value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-add-one", &rust);
 }
@@ -11806,7 +12039,9 @@ fn typed_ir_emits_scalar_subtraction_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit sub_one from lowered typed IR");
 
     assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
-    assert!(rust.contains("return (value - 1i32);"));
+    assert!(
+        rust.contains("return value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-sub-one", &rust);
 }
@@ -11895,7 +12130,7 @@ fn typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir() {
     let rust = emit_rust_from_ir(&ir).expect("emit mul_div_mod from lowered typed IR");
 
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-clang-scalar-mul-div-mod", &rust);
 }
@@ -12266,9 +12501,12 @@ fn clang_lowering_skeleton_maps_scalar_compound_assignment_family() {
 
     let rust = emit_rust_from_ir(&ir).expect("emit scalar compound assignment family");
     assert!(rust.contains("pub fn compound_family(mut value: i32) -> i32"));
-    assert!(rust.contains("value = (value + 1i32);"));
-    assert!(rust.contains("value = (value - 2i32);"));
-    assert!(rust.contains("value = (value * 3i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(
+        rust.contains("value = value.checked_sub(2i32).expect(\"signed subtraction overflow\");")
+    );
+    assert!(rust
+        .contains("value = value.checked_mul(3i32).expect(\"signed multiplication overflow\");"));
     assert!(rust.contains("value = (value / 4i32);"));
     assert!(rust.contains("value = (value % 5i32);"));
     assert!(rust.contains("value = (value & 7i32);"));
@@ -12413,7 +12651,7 @@ fn clang_lowering_skeleton_maps_record_field_compound_assignment() {
 
     let rust = emit_rust_from_ir(&ir).expect("emit record field compound assignment skeleton");
     assert!(rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"));
-    assert!(rust.contains("p.x = (p.x + value);"));
+    assert!(rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return p.x;"));
     assert_rust_snippet_compiles("typed-ir-clang-record-field-compound", &rust);
 }
@@ -12504,8 +12742,10 @@ fn clang_lowering_skeleton_maps_record_field_compound_assignment_literal_and_cas
         .expect("lower by-value record field compound assignment literal/cast RHS");
 
     let rust = emit_rust_from_ir(&ir).expect("emit record field compound assignment literal/cast");
-    assert!(rust.contains("p.x = (p.x + 1i32);"));
-    assert!(rust.contains("p.x = (p.x + (byte as i32));"));
+    assert!(rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(
+        rust.contains("p.x = p.x.checked_add((byte as i32)).expect(\"signed addition overflow\");")
+    );
     assert_rust_snippet_compiles("typed-ir-clang-record-field-compound-literal-cast", &rust);
 }
 
@@ -13044,7 +13284,7 @@ fn clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment
     let rust = emit_rust_from_ir(&ir)
         .expect("emit mutable record pointer field compound assignment skeleton");
     assert!(rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"));
-    assert!(rust.contains("p.x = (p.x + value);"));
+    assert!(rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles(
         "typed-ir-clang-mutable-record-pointer-field-compound",
         &rust,
@@ -13223,7 +13463,9 @@ fn clang_lowering_skeleton_maps_compound_assignment_integer_promotion() {
     let rust =
         emit_rust_from_ir(&ir).expect("emit promoted compound assignment from lowered skeleton");
     assert!(rust.contains("pub fn inc8(mut value: u8) -> u8"));
-    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains(
+        "value = ((value as i32).checked_add(1i32).expect(\"signed addition overflow\") as u8);"
+    ));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-clang-compound-promotion", &rust);
 }
@@ -14029,8 +14271,8 @@ fn clang_lowering_skeleton_maps_typed_ir_for_loop() {
     let rust = emit_rust_from_ir(&ir).expect("emit typed IR for loop from skeleton");
     assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
     assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
-    assert!(rust.contains("total = (total + i);"));
-    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("total = total.checked_add(i).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-clang-for-skeleton", &rust);
 }
 
@@ -14546,9 +14788,9 @@ fn typed_ir_emits_scalar_if_from_clang_lowered_ir() {
 
     assert!(rust.contains("pub fn adjust_if(mut value: i32, flag: i32) -> i32"));
     assert!(rust.contains("if flag != 0i32 {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("} else {"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-clang-scalar-if", &rust);
@@ -15440,7 +15682,9 @@ fn clang_ast_dump_emits_real_scalar_subtraction_when_enabled() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn sub_one(value: i32) -> i32"));
-    assert!(rust.contains("return (value - 1i32);"));
+    assert!(
+        rust.contains("return value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-clang-scalar-subtraction", rust);
 }
@@ -15491,7 +15735,7 @@ fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
 
     assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
     assert!(rust.contains("pub fn mul_div_mod(value: i32) -> i32"));
-    assert!(rust.contains("return (((value * 3i32) / 2i32) % 5i32);"));
+    assert!(rust.contains("return ((value.checked_mul(3i32).expect(\"signed multiplication overflow\") / 2i32) % 5i32);"));
     assert!(!rust.contains("crc32_update_byte"));
     assert_rust_snippet_compiles("typed-ir-real-clang-scalar-mul-div-mod", rust);
 }
@@ -17033,8 +17277,8 @@ fn clang_ast_dump_emits_typed_ir_for_loop_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit typed IR for loop from real clang AST");
     assert!(rust.contains("pub fn sum_to_limit(limit: i32) -> i32"));
     assert!(rust.contains("{\n        let mut i: i32 = 0i32;\n        while (i < limit) {"));
-    assert!(rust.contains("total = (total + i);"));
-    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("total = total.checked_add(i).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-real-clang-for-loop", &rust);
 }
 
@@ -17088,10 +17332,15 @@ fn clang_ast_dump_emits_typed_ir_for_continue_when_enabled() {
     assert!(rust.contains("pub fn bad_for_continue(limit: i32) -> i32"));
     assert!(rust.contains("if i != 0i32 {"));
     assert!(
-        rust.contains("                i = (i + 1i32);\n                continue;"),
+        rust.contains("                i = i.checked_add(1i32).expect(\"signed addition overflow\");\n                continue;"),
         "{rust:?}"
     );
-    assert_eq!(rust.matches("i = (i + 1i32);").count(), 2, "{rust:?}");
+    assert_eq!(
+        rust.matches("i = i.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2,
+        "{rust:?}"
+    );
     assert_rust_snippet_compiles("typed-ir-real-clang-for-continue", &rust);
 }
 
@@ -17144,7 +17393,9 @@ fn clang_ast_dump_emits_typed_ir_while_break_when_enabled() {
     assert!(rust.contains("while value != 0i32 {"));
     assert!(rust.contains("if (value > 3i32) {"));
     assert!(rust.contains("break;"));
-    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-while-break", &rust);
 }
@@ -17244,7 +17495,9 @@ fn clang_ast_dump_emits_typed_ir_do_while_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit typed IR do-while from real clang AST");
     assert!(rust.contains("pub fn do_countdown(mut value: i32) -> i32"));
     assert!(rust.contains("loop {"));
-    assert!(rust.contains("value = (value - 1i32);"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
     assert!(rust.contains("if !(value != 0i32) {"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-do-while", &rust);
@@ -17405,8 +17658,11 @@ fn clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled() {
     assert!(rust.contains("let mut i: i32 = 0i32;"), "{rust}");
     assert!(rust.contains("let mut j: i32 = 0i32;"), "{rust}");
     assert!(rust.contains("while (i < limit) {"), "{rust}");
-    assert!(rust.contains("total = ((total + i) + j);"), "{rust}");
-    assert!(rust.contains("i = (i + 1i32);"), "{rust}");
+    assert!(rust.contains("total = total.checked_add(i).expect(\"signed addition overflow\").checked_add(j).expect(\"signed addition overflow\");"), "{rust}");
+    assert!(
+        rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert!(rust.contains("return total;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-for-multi-var-decl-init", rust);
 }
@@ -17454,7 +17710,7 @@ fn clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit prefix increment for step");
     assert!(rust.contains("pub fn sum_prefix_for(limit: i32) -> i32"));
     assert!(rust.contains("while (i < limit) {"));
-    assert!(rust.contains("i = (i + 1i32);"));
+    assert!(rust.contains("i = i.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-real-clang-for-prefix-inc-step", &rust);
 }
 
@@ -17504,7 +17760,7 @@ fn clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit prefix decrement for step");
     assert!(rust.contains("pub fn sum_prefix_down_for(limit: i32) -> i32"));
     assert!(rust.contains("while (i > 0i32) {"));
-    assert!(rust.contains("i = (i - 1i32);"));
+    assert!(rust.contains("i = i.checked_sub(1i32).expect(\"signed subtraction overflow\");"));
     assert_rust_snippet_compiles("typed-ir-real-clang-for-prefix-dec-step", &rust);
 }
 
@@ -17552,8 +17808,16 @@ fn clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled() {
 
     let rust = emit_rust_from_ir(function).expect("emit standalone inc/dec statements");
     assert!(rust.contains("pub fn standalone_inc_dec(mut value: i32) -> i32"));
-    assert_eq!(rust.matches("value = (value + 1i32);").count(), 2);
-    assert_eq!(rust.matches("value = (value - 1i32);").count(), 2);
+    assert_eq!(
+        rust.matches("value = value.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2
+    );
+    assert_eq!(
+        rust.matches("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+            .count(),
+        2
+    );
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-standalone-inc-dec", &rust);
 }
@@ -17602,8 +17866,16 @@ fn clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled() {
 
     let rust = emit_rust_from_ir(function).expect("emit record field inc/dec statements");
     assert!(rust.contains("pub fn bump_point_x(mut p: Point) -> i32"));
-    assert_eq!(rust.matches("p.x = (p.x + 1i32);").count(), 2);
-    assert_eq!(rust.matches("p.x = (p.x - 1i32);").count(), 2);
+    assert_eq!(
+        rust.matches("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2
+    );
+    assert_eq!(
+        rust.matches("p.x = p.x.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+            .count(),
+        2
+    );
     assert!(rust.contains("return p.x;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-record-field-inc-dec", &rust);
 }
@@ -17662,8 +17934,16 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enab
         rust.contains("pub fn bump_point_x(mut p: &mut Point)"),
         "{rust}"
     );
-    assert_eq!(rust.matches("p.x = (p.x + 1i32);").count(), 2);
-    assert_eq!(rust.matches("p.x = (p.x - 1i32);").count(), 2);
+    assert_eq!(
+        rust.matches("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2
+    );
+    assert_eq!(
+        rust.matches("p.x = p.x.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+            .count(),
+        2
+    );
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-mutable-record-pointer-field-inc-dec",
         rust,
@@ -18210,7 +18490,7 @@ fn clang_ast_dump_emits_while_without_braces_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit no-brace while from real clang AST");
     assert!(rust.contains("pub fn countdown_no_braces(mut value: i32) -> i32"));
     assert!(rust.contains("while (value > 0i32) {"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-while-without-braces", &rust);
 }
@@ -18273,9 +18553,9 @@ fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit simple if from real clang AST");
     assert!(rust.contains("pub fn adjust_if(mut value: i32, flag: i32) -> i32"));
     assert!(rust.contains("if flag != 0i32 {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("} else {"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if", &rust);
 }
@@ -18338,9 +18618,9 @@ fn clang_ast_dump_emits_if_without_braces_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit no-brace if from real clang AST");
     assert!(rust.contains("pub fn adjust_if_no_braces(mut value: i32, flag: i32) -> i32"));
     assert!(rust.contains("if flag != 0i32 {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("} else {"));
-    assert!(rust.contains("value = (value + !0i32);"));
+    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-without-braces", &rust);
 }
@@ -18394,7 +18674,7 @@ fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
     let rust = emit_rust_from_ir(function).expect("emit comparison if from real clang AST");
     assert!(rust.contains("pub fn adjust_positive(mut value: i32) -> i32"));
     assert!(rust.contains("if (value > 0i32) {"));
-    assert!(rust.contains("value = (value + 1i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-comparison", &rust);
 }
@@ -19278,9 +19558,12 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
     let rust =
         emit_rust_from_ir(function).expect("emit scalar compound assignments from real clang AST");
     assert!(rust.contains("pub fn compound_family(mut value: i32) -> i32"));
-    assert!(rust.contains("value = (value + 1i32);"));
-    assert!(rust.contains("value = (value - 2i32);"));
-    assert!(rust.contains("value = (value * 3i32);"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(
+        rust.contains("value = value.checked_sub(2i32).expect(\"signed subtraction overflow\");")
+    );
+    assert!(rust
+        .contains("value = value.checked_mul(3i32).expect(\"signed multiplication overflow\");"));
     assert!(rust.contains("value = (value / 4i32);"));
     assert!(rust.contains("value = (value % 5i32);"));
     assert!(rust.contains("value = (value & 7i32);"));
@@ -19362,7 +19645,9 @@ fn clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled() {
     let rust =
         emit_rust_from_ir(function).expect("emit promoted compound assignment from real clang AST");
     assert!(rust.contains("pub fn compound_assignment_integer_promotion(mut value: u8) -> u8"));
-    assert!(rust.contains("value = (((value as i32) + 1i32) as u8);"));
+    assert!(rust.contains(
+        "value = ((value as i32).checked_add(1i32).expect(\"signed addition overflow\") as u8);"
+    ));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-compound-promotion", &rust);
 }
@@ -19642,7 +19927,8 @@ fn clang_ast_dump_emits_signed_char_binary_promotion_when_enabled() {
 
     let rust = emit_rust_from_ir(function).expect("emit signed char binary promotion");
     assert!(rust.contains("pub fn signed_char_add_one(value: i8) -> i32"));
-    assert!(rust.contains("return ((value as i32) + 1i32);"));
+    assert!(rust
+        .contains("return (value as i32).checked_add(1i32).expect(\"signed addition overflow\");"));
     assert_rust_snippet_compiles("typed-ir-real-clang-signed-char-promotion", &rust);
 }
 
@@ -20545,7 +20831,10 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_en
         rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"),
         "{rust}"
     );
-    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert!(
+        rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert_rust_snippet_compiles(
         "typed-ir-real-clang-mutable-record-pointer-field-compound-assignment",
         rust,
@@ -20638,7 +20927,10 @@ fn clang_ast_dump_emits_struct_field_compound_assignment_when_enabled() {
         rust.contains("pub fn add_point_x(mut p: Point, value: i32) -> i32"),
         "{rust}"
     );
-    assert!(rust.contains("p.x = (p.x + value);"), "{rust}");
+    assert!(
+        rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
     assert!(rust.contains("return p.x;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-real-clang-struct-field-compound-assignment", rust);
 }

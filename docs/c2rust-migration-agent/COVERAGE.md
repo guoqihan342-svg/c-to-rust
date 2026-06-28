@@ -53,7 +53,7 @@
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
 | 变量引用 | 已支持 | 局部变量和参数 |
-| `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；literal `/ 0` 和 `% 0` fail closed |
+| `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | 窄支持 | 标量整数，shift 的 lhs/result 同型；literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift fail closed |
 | `~` (bitwise not) | 已支持 | |
 | `-value` (unary minus) | 窄支持 | 仅 signed integer |
@@ -160,9 +160,10 @@
 1. **所有 typed IR 成功生成都是 candidate generation，不表示 semantic pass。** `semantic_pass=false` 始终为真，直到独立 validation gates 接受 exact draft。
 2. **旧 crc32 特例模板和 string recognizer crc32 路径已删除。** 不能恢复。
 3. **无符号加减乘**：C unsigned `+` / `-` / `*` 会发射显式 wrapping Rust 运算，避免 debug/release profile 分叉；这仍只是 candidate generation，不替代 C oracle。
-4. **除法/取模**：literal zero divisor 已 fail closed；只有在 divisor 非零由 literal 或 fixture contract 约束时，才能进入后续 semantic gate 讨论。非 literal divisor 仍需要 slice precondition 或 evidence contract。
-5. **bitwise/shift**：literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift 已 fail closed；这不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
-6. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
-7. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
-8. **record/struct**：dot-field 路径的 struct definition 仍是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；whole-record return 的完整字段清单路径会拒绝同名 tag、bitfield、volatile/packed、自引用指针和非标量字段；union、nested/anonymous record 仍 fail closed。
-9. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。
+4. **有符号加减乘**：C signed `+` / `-` / `*` 发射 `checked_*().expect(...)`，用于把 no-overflow 前置条件显式带入 candidate Rust；这仍只是 candidate generation/runtime precondition，不证明输入满足该 precondition，也不替代 slice contract、evidence 字段、C oracle 或 C/Rust diff。
+5. **除法/取模**：literal zero divisor 已 fail closed；只有在 divisor 非零由 literal 或 fixture contract 约束时，才能进入后续 semantic gate 讨论。非 literal divisor 仍需要 slice precondition 或 evidence contract。
+6. **bitwise/shift**：literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift 已 fail closed；这不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
+7. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
+8. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
+9. **record/struct**：dot-field 路径的 struct definition 仍是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；whole-record return 的完整字段清单路径会拒绝同名 tag、bitfield、volatile/packed、自引用指针和非标量字段；union、nested/anonymous record 仍 fail closed。
+10. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。

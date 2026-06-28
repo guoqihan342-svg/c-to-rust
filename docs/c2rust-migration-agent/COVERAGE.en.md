@@ -53,7 +53,7 @@ This document honestly lists C language constructs that are "currently supported
 |-----------|--------|-------|
 | Integer literal | Supported | Including unsigned suffix |
 | Variable reference | Supported | Locals and params |
-| `+` `-` `*` `/` `%` | Narrow | Scalar integer, same-type operands required; unsigned-result `+` / `-` / `*` emit explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul`; literal `/ 0` and `% 0` fail closed |
+| `+` `-` `*` `/` `%` | Narrow | Scalar integer, same-type operands required; unsigned-result `+` / `-` / `*` emit explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul`; signed-result `+` / `-` / `*` emit `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`, making no signed overflow a runtime precondition; literal `/ 0` and `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | Narrow | Scalar integer, shift lhs/result must match; literal negative shift counts, `shift_count >= width`, and signed right shift without a contract fail closed |
 | `~` (bitwise not) | Supported | |
 | `-value` (unary minus) | Narrow | Signed integer only |
@@ -160,9 +160,10 @@ This document honestly lists C language constructs that are "currently supported
 1. **All typed IR successes are candidate generation, not semantic pass.** `semantic_pass=false` remains true until independent validation gates accept the exact draft.
 2. **Legacy crc32 specialty templates and string recognizer crc32 paths are deleted.** Must not be restored.
 3. **Unsigned Add/Sub/Mul**: C unsigned `+` / `-` / `*` emit explicit wrapping Rust operations to avoid debug/release profile divergence; this remains candidate generation and does not replace the C oracle.
-4. **Division/modulo**: Literal zero divisors now fail closed; only when the divisor is non-zero by literal or fixture contract constraint can it enter semantic gate discussion. Non-literal divisors still need a slice precondition or evidence contract.
-5. **Bitwise/shift**: Literal negative shift counts, `shift_count >= width`, and signed right shift without a contract now fail closed; this does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
-6. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
-7. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
-8. **Record/struct**: The dot-field path still emits a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof. The whole-record return inventory path rejects duplicate tags, bitfields, volatile/packed fields, self-pointer fields, and non-scalar fields; unions and nested/anonymous records still fail closed.
-9. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.
+4. **Signed Add/Sub/Mul**: C signed `+` / `-` / `*` emit `checked_*().expect(...)` to carry the no-overflow precondition into candidate Rust; this is still candidate generation/runtime precondition only, does not prove inputs satisfy that precondition, and does not replace slice contracts, evidence fields, the C oracle, or C/Rust diff.
+5. **Division/modulo**: Literal zero divisors now fail closed; only when the divisor is non-zero by literal or fixture contract constraint can it enter semantic gate discussion. Non-literal divisors still need a slice precondition or evidence contract.
+6. **Bitwise/shift**: Literal negative shift counts, `shift_count >= width`, and signed right shift without a contract now fail closed; this does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
+7. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
+8. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
+9. **Record/struct**: The dot-field path still emits a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof. The whole-record return inventory path rejects duplicate tags, bitfields, volatile/packed fields, self-pointer fields, and non-scalar fields; unions and nested/anonymous records still fail closed.
+10. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.

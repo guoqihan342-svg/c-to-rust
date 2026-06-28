@@ -3065,6 +3065,8 @@ fn emit_binary_result_expr(
 ) -> String {
     if let Some(method) = unsigned_wrapping_method(op, result_ty) {
         format!("{lhs}.{method}({rhs})")
+    } else if let Some((method, message)) = signed_checked_method(op, result_ty) {
+        format!("{lhs}.{method}({rhs}).expect(\"{message}\")")
     } else {
         format!("({lhs} {op_token} {rhs})")
     }
@@ -3078,6 +3080,18 @@ fn unsigned_wrapping_method(op: &IrBinOp, result_ty: &IrType) -> Option<&'static
         IrBinOp::Add => Some("wrapping_add"),
         IrBinOp::Sub => Some("wrapping_sub"),
         IrBinOp::Mul => Some("wrapping_mul"),
+        _ => None,
+    }
+}
+
+fn signed_checked_method(op: &IrBinOp, result_ty: &IrType) -> Option<(&'static str, &'static str)> {
+    if !is_signed_integer_type(result_ty) {
+        return None;
+    }
+    match op {
+        IrBinOp::Add => Some(("checked_add", "signed addition overflow")),
+        IrBinOp::Sub => Some(("checked_sub", "signed subtraction overflow")),
+        IrBinOp::Mul => Some(("checked_mul", "signed multiplication overflow")),
         _ => None,
     }
 }

@@ -164,10 +164,14 @@
       "id": "scalar-arithmetic-ub-contract-subset",
       "status": "partial",
       "ir_constructs": [
+        "IrExpr::Binary.Add",
+        "IrExpr::Binary.Sub",
+        "IrExpr::Binary.Mul",
         "IrExpr::Binary.Div",
         "IrExpr::Binary.Mod",
         "IrExpr::Binary.Shl",
         "IrExpr::Binary.Shr",
+        "signed add/sub/mul runtime precondition",
         "literal divisor zero refusal",
         "literal shift count refusal",
         "signed right shift refusal"
@@ -199,7 +203,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "unsigned wrapping runtime tests and legal scalar emit compile checks",
+              "name": "unsigned wrapping runtime tests, signed checked runtime precondition tests, and legal scalar emit compile checks",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -225,6 +229,18 @@
       "positive_cases": [
         {
           "name": "typed_ir_runs_unsigned_add_with_wrapping_semantics",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_signed_add_with_checked_overflow_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_signed_sub_with_checked_overflow_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_runs_signed_mul_with_checked_overflow_precondition",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
