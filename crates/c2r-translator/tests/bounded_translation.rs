@@ -3222,6 +3222,39 @@ fn typed_ir_emits_local_fixed_array_index_read() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_unused_readonly_pointer_param_without_slice_evidence() {
+    let i32_ty = ir_i32();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let const_i32_ptr_ty = ir_pointer("const int *", "const int *", const_i32_ty, false);
+    let ir = IrFunction {
+        name: "ignore_values".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: const_i32_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_lit(0, "0", i32_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("readonly pointer params need explicit slice lowering evidence");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("pointer-to-slice lowering evidence"),
+        "{:?}",
+        error.reason
+    );
+    assert!(error.reason.contains("values"), "{:?}", error.reason);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index() {
     let u8_ty = ir_u8();
     let const_u8_ty = ir_const(u8_ty.clone());

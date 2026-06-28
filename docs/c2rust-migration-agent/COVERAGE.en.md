@@ -20,7 +20,7 @@ This document honestly lists C language constructs that are "currently supported
 | `size_t` | Narrow | Maps to `usize` only when `build_profile.target` provides explicit target ABI width evidence; no-profile clang frontend lowering still fails closed and must not guess a fixed 64-bit width |
 | `void` | Supported | Return type and pointer pointee |
 | `const void *` (byte cursor) | Narrow | Maps to `&[u8]` only in proven byte cursor scenarios |
-| `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]`, read-only |
+| `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]` only with read-access evidence such as `*p` / `p[i]` / `*(p+i)` / `*p++`, no writes, no escape, and inferrable length/index bounds; unused or declared-only readonly pointer params fail closed and do not auto-map |
 | `T *` (mutable output pointer) | Narrow | Maps to `&mut [T]` only when used as a write target |
 | `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write, direct if-return fallthrough writes, and statement inc-dec; not a general ownership or alias model |
 | plain `char` | Unsupported | Sign unknown, clang frontend rejects |
@@ -121,7 +121,7 @@ This document honestly lists C language constructs that are "currently supported
 
 | Construct | Status | Notes |
 |-----------|--------|-------|
-| `const T *` readonly slice | Narrow | Read-only access on params |
+| `const T *` readonly slice | Narrow | Actual read-only parameter access only; missing read-access evidence, including unused readonly pointer params, fails closed |
 | `T *` mutable output slice | Narrow | Write-only access on params |
 | `*p` deref read | Narrow | Readonly pointer only |
 | `*(p+i)` bounded offset deref | Narrow | Readonly, integer offset |
@@ -164,7 +164,7 @@ This document honestly lists C language constructs that are "currently supported
 4. **Signed Add/Sub/Mul**: C signed `+` / `-` / `*` emit `checked_*().expect(...)` to carry the no-overflow precondition into candidate Rust; this is still candidate generation/runtime precondition only, does not prove inputs satisfy that precondition, and does not replace slice contracts, evidence fields, the C oracle, or C/Rust diff.
 5. **Division/modulo**: Literal zero divisors now fail closed; only when the divisor is non-zero by literal or fixture contract constraint can it enter semantic gate discussion. Non-literal divisors still need a slice precondition or evidence contract.
 6. **Bitwise/shift**: Literal negative shift counts, `shift_count >= width`, and signed right shift without a contract now fail closed; this does not represent full C bitwise semantics, usual arithmetic conversions, or signed overflow UB parity.
-7. **Pointer-to-slice lowering**: Requires audit that the pointer does not escape, is not written to (const case), and has inferrable length.
+7. **Pointer-to-slice lowering**: Requires audit that actual read-access evidence exists (`*p`, `p[i]`, `*(p+i)`, `*p++`, etc.), the pointer does not escape, is not written to (const case), and has inferrable length/index bounds. A declared-only `const T *` with no access evidence must fail closed and must not auto-lower to `&[T]`.
 8. **Mutable pointer write**: Currently has no noalias proof or multi-pointer interaction alias analysis.
 9. **Record/struct**: The dot-field path still emits a minimal Rust struct derived from actually accessed fields; it is not C layout/ABI proof. The whole-record return inventory path rejects duplicate tags, bitfields, volatile/packed fields, self-pointer fields, and non-scalar fields; unions and nested/anonymous records still fail closed.
 10. **This inventory is manually maintained.** The ultimate authority is the fail-closed tests in `crates/c2r-translator/tests/bounded_translation.rs`.

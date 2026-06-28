@@ -349,6 +349,8 @@ struct EmitContext {
     byte_slice_params: HashSet<String>,
     byte_cursor_sources: HashMap<String, String>,
     nullable_pointer_params: HashSet<String>,
+    readonly_pointer_read_params: HashSet<String>,
+    readonly_pointer_mentioned_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
     readonly_globals: HashMap<String, IrGlobal>,
@@ -370,6 +372,12 @@ struct RecordFieldUse<'a> {
 struct MutableRecordPointerFieldKey {
     base: String,
     field: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ReadonlyPointerParamUses {
+    read_params: HashSet<String>,
+    mentioned_params: HashSet<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -470,6 +478,15 @@ impl EmitContext {
         }
         let nullable_pointer_params =
             collect_nullable_pointer_params(&function.body, &function.params)?;
+        let readonly_pointer_uses =
+            collect_readonly_pointer_param_uses(&function.body, &function.params)?;
+        validate_readonly_pointer_slice_lowering_evidence(
+            &function.params,
+            &byte_slice_params,
+            &nullable_pointer_params,
+            &readonly_pointer_uses.read_params,
+            &readonly_pointer_uses.mentioned_params,
+        )?;
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params)?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
@@ -491,6 +508,8 @@ impl EmitContext {
             byte_slice_params,
             byte_cursor_sources,
             nullable_pointer_params,
+            readonly_pointer_read_params: readonly_pointer_uses.read_params,
+            readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
             mutable_record_pointer_write_params,
             mutable_record_pointer_read_fields: HashSet::new(),
             readonly_globals,
@@ -511,6 +530,14 @@ impl EmitContext {
 
     fn is_nullable_pointer_param(&self, name: &str) -> bool {
         self.nullable_pointer_params.contains(name)
+    }
+
+    fn is_readonly_pointer_read_param(&self, name: &str) -> bool {
+        self.readonly_pointer_read_params.contains(name)
+    }
+
+    fn is_readonly_pointer_mentioned_param(&self, name: &str) -> bool {
+        self.readonly_pointer_mentioned_params.contains(name)
     }
 
     fn is_mutable_record_pointer_write_param(&self, name: &str) -> bool {
@@ -676,6 +703,15 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
+    } else if readonly_pointer_slice_element_type(&param.ty).is_some()
+        && !context.is_readonly_pointer_read_param(&param.name)
+        && !context.is_readonly_pointer_mentioned_param(&param.name)
+    {
+        return Err(format!(
+            "param {} requires pointer-to-slice lowering evidence before lowering {} to &[T]",
+            param.name,
+            type_label(&param.ty)
+        ));
     } else if assigned_vars.contains(&param.name) {
         emit_assigned_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
@@ -5075,17 +5111,55 @@ fn validate_mutable_pointer_write_alias_boundary(
     // Safe Rust cannot express a potentially aliased `&[T]` read beside an
     // `&mut [T]` write without a stronger noalias fact.
     if !write_params.is_empty() {
-        let mut readonly_read_params = HashSet::new();
+        let mut readonly_pointer_uses = ReadonlyPointerParamUses::default();
         collect_readonly_pointer_read_params_from_body(
             body,
             &readonly_pointer_params,
-            &mut readonly_read_params,
+            &mut readonly_pointer_uses,
         )?;
-        if !readonly_read_params.is_empty() {
+        if !readonly_pointer_uses.read_params.is_empty() {
             return Err(
                 "mutable pointer write with readonly pointer read requires noalias proof"
                     .to_string(),
             );
+        }
+    }
+    Ok(())
+}
+
+fn collect_readonly_pointer_param_uses(
+    body: &[IrStmt],
+    params: &[IrParam],
+) -> Result<ReadonlyPointerParamUses, String> {
+    let readonly_pointer_params = params
+        .iter()
+        .filter(|param| readonly_pointer_slice_element_type(&param.ty).is_some())
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect::<HashMap<_, _>>();
+    let mut uses = ReadonlyPointerParamUses::default();
+    collect_readonly_pointer_read_params_from_body(body, &readonly_pointer_params, &mut uses)?;
+    Ok(uses)
+}
+
+fn validate_readonly_pointer_slice_lowering_evidence(
+    params: &[IrParam],
+    byte_slice_params: &HashSet<String>,
+    nullable_pointer_params: &HashSet<String>,
+    readonly_pointer_read_params: &HashSet<String>,
+    readonly_pointer_mentioned_params: &HashSet<String>,
+) -> Result<(), String> {
+    for param in params {
+        if readonly_pointer_slice_element_type(&param.ty).is_some()
+            && !byte_slice_params.contains(&param.name)
+            && !nullable_pointer_params.contains(&param.name)
+            && !readonly_pointer_read_params.contains(&param.name)
+            && !readonly_pointer_mentioned_params.contains(&param.name)
+        {
+            return Err(format!(
+                "readonly pointer param {} requires pointer-to-slice lowering evidence before lowering {} to &[T]",
+                param.name,
+                type_label(&param.ty)
+            ));
         }
     }
     Ok(())
@@ -5217,7 +5291,7 @@ fn collect_direct_mutable_pointer_write_param(
 fn collect_readonly_pointer_read_params_from_body(
     body: &[IrStmt],
     readonly_pointer_params: &HashMap<&str, &IrType>,
-    read_params: &mut HashSet<String>,
+    uses: &mut ReadonlyPointerParamUses,
 ) -> Result<(), String> {
     for stmt in body {
         match stmt {
@@ -5226,7 +5300,7 @@ fn collect_readonly_pointer_read_params_from_body(
                     collect_readonly_pointer_read_params_from_expr(
                         init,
                         readonly_pointer_params,
-                        read_params,
+                        uses,
                     )?;
                 }
             }
@@ -5234,12 +5308,12 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_expr(
                     target,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 collect_readonly_pointer_read_params_from_expr(
                     value,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::If {
@@ -5251,17 +5325,17 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_expr(
                     condition,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 collect_readonly_pointer_read_params_from_body(
                     then_body,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 collect_readonly_pointer_read_params_from_body(
                     else_body,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::While {
@@ -5270,12 +5344,12 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_expr(
                     condition,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 collect_readonly_pointer_read_params_from_body(
                     body,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::DoWhile {
@@ -5284,12 +5358,12 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_body(
                     body,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 collect_readonly_pointer_read_params_from_expr(
                     condition,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::For {
@@ -5302,26 +5376,26 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_body(
                     init,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
                 if let Some(condition) = condition {
                     collect_readonly_pointer_read_params_from_expr(
                         condition,
                         readonly_pointer_params,
-                        read_params,
+                        uses,
                     )?;
                 }
                 if let Some(step) = step {
                     collect_readonly_pointer_read_params_from_body(
                         std::slice::from_ref(step.as_ref()),
                         readonly_pointer_params,
-                        read_params,
+                        uses,
                     )?;
                 }
                 collect_readonly_pointer_read_params_from_body(
                     body,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::Return { value, .. } => {
@@ -5329,7 +5403,7 @@ fn collect_readonly_pointer_read_params_from_body(
                     collect_readonly_pointer_read_params_from_expr(
                         value,
                         readonly_pointer_params,
-                        read_params,
+                        uses,
                     )?;
                 }
             }
@@ -5337,7 +5411,7 @@ fn collect_readonly_pointer_read_params_from_body(
                 collect_readonly_pointer_read_params_from_expr(
                     expr,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
             IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
@@ -5349,48 +5423,25 @@ fn collect_readonly_pointer_read_params_from_body(
 fn collect_readonly_pointer_read_params_from_expr(
     expr: &IrExpr,
     readonly_pointer_params: &HashMap<&str, &IrType>,
-    read_params: &mut HashSet<String>,
+    uses: &mut ReadonlyPointerParamUses,
 ) -> Result<(), String> {
+    collect_direct_readonly_pointer_mentioned_param(expr, readonly_pointer_params, uses)?;
     match expr {
         IrExpr::Index { base, index, .. } => {
-            collect_direct_readonly_pointer_read_param(base, readonly_pointer_params, read_params)?;
-            collect_readonly_pointer_read_params_from_expr(
-                base,
-                readonly_pointer_params,
-                read_params,
-            )?;
-            collect_readonly_pointer_read_params_from_expr(
-                index,
-                readonly_pointer_params,
-                read_params,
-            )?;
+            collect_direct_readonly_pointer_read_param(base, readonly_pointer_params, uses)?;
+            collect_readonly_pointer_read_params_from_expr(base, readonly_pointer_params, uses)?;
+            collect_readonly_pointer_read_params_from_expr(index, readonly_pointer_params, uses)?;
         }
         IrExpr::Deref { ptr, .. } => {
-            collect_direct_readonly_pointer_read_param(ptr, readonly_pointer_params, read_params)?;
+            collect_direct_readonly_pointer_read_param(ptr, readonly_pointer_params, uses)?;
             if let Some((base, _)) = readonly_pointer_add_operands_from_expr(ptr.as_ref()) {
-                collect_direct_readonly_pointer_read_param(
-                    base,
-                    readonly_pointer_params,
-                    read_params,
-                )?;
+                collect_direct_readonly_pointer_read_param(base, readonly_pointer_params, uses)?;
             }
-            collect_readonly_pointer_read_params_from_expr(
-                ptr,
-                readonly_pointer_params,
-                read_params,
-            )?;
+            collect_readonly_pointer_read_params_from_expr(ptr, readonly_pointer_params, uses)?;
         }
         IrExpr::Binary { lhs, rhs, .. } => {
-            collect_readonly_pointer_read_params_from_expr(
-                lhs,
-                readonly_pointer_params,
-                read_params,
-            )?;
-            collect_readonly_pointer_read_params_from_expr(
-                rhs,
-                readonly_pointer_params,
-                read_params,
-            )?;
+            collect_readonly_pointer_read_params_from_expr(lhs, readonly_pointer_params, uses)?;
+            collect_readonly_pointer_read_params_from_expr(rhs, readonly_pointer_params, uses)?;
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
@@ -5399,11 +5450,7 @@ fn collect_readonly_pointer_read_params_from_expr(
         | IrExpr::IncDec {
             target: operand, ..
         } => {
-            collect_readonly_pointer_read_params_from_expr(
-                operand,
-                readonly_pointer_params,
-                read_params,
-            )?;
+            collect_readonly_pointer_read_params_from_expr(operand, readonly_pointer_params, uses)?;
         }
         IrExpr::Conditional {
             condition,
@@ -5414,17 +5461,17 @@ fn collect_readonly_pointer_read_params_from_expr(
             collect_readonly_pointer_read_params_from_expr(
                 condition,
                 readonly_pointer_params,
-                read_params,
+                uses,
             )?;
             collect_readonly_pointer_read_params_from_expr(
                 then_expr,
                 readonly_pointer_params,
-                read_params,
+                uses,
             )?;
             collect_readonly_pointer_read_params_from_expr(
                 else_expr,
                 readonly_pointer_params,
-                read_params,
+                uses,
             )?;
         }
         IrExpr::ArrayLiteral { elements, .. } => {
@@ -5432,17 +5479,13 @@ fn collect_readonly_pointer_read_params_from_expr(
                 collect_readonly_pointer_read_params_from_expr(
                     element,
                     readonly_pointer_params,
-                    read_params,
+                    uses,
                 )?;
             }
         }
         IrExpr::Call { args, .. } => {
             for arg in args {
-                collect_readonly_pointer_read_params_from_expr(
-                    arg,
-                    readonly_pointer_params,
-                    read_params,
-                )?;
+                collect_readonly_pointer_read_params_from_expr(arg, readonly_pointer_params, uses)?;
             }
         }
         IrExpr::LitInt { .. }
@@ -5463,7 +5506,30 @@ fn readonly_pointer_add_operands_from_expr(expr: &IrExpr) -> Option<(&IrExpr, &I
 fn collect_direct_readonly_pointer_read_param(
     expr: &IrExpr,
     readonly_pointer_params: &HashMap<&str, &IrType>,
-    read_params: &mut HashSet<String>,
+    uses: &mut ReadonlyPointerParamUses,
+) -> Result<(), String> {
+    match expr {
+        IrExpr::Var { name, ty, .. } => {
+            if readonly_pointer_params
+                .get(name.as_str())
+                .is_some_and(|param_ty| *param_ty == ty)
+            {
+                uses.read_params.insert(name.to_string());
+                uses.mentioned_params.insert(name.to_string());
+            }
+        }
+        IrExpr::IncDec { target, .. } => {
+            collect_direct_readonly_pointer_read_param(target, readonly_pointer_params, uses)?
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn collect_direct_readonly_pointer_mentioned_param(
+    expr: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    uses: &mut ReadonlyPointerParamUses,
 ) -> Result<(), String> {
     let IrExpr::Var { name, ty, .. } = expr else {
         return Ok(());
@@ -5472,7 +5538,7 @@ fn collect_direct_readonly_pointer_read_param(
         .get(name.as_str())
         .is_some_and(|param_ty| *param_ty == ty)
     {
-        read_params.insert(name.to_string());
+        uses.mentioned_params.insert(name.to_string());
     }
     Ok(())
 }

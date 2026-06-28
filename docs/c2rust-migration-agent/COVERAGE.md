@@ -22,7 +22,7 @@
 | `size_t` | 窄支持 | 仅在 `build_profile.target` 提供明确 target ABI 宽度证据时映射为 `usize`；无 profile 的 clang frontend 仍 fail-closed，禁止猜成固定 64-bit |
 | `void` | 已支持 | return type 和 pointer pointee |
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
-| `const T *` (readonly integer pointer) | 窄支持 | 映射为 `&[T]`，只读 |
+| `const T *` (readonly integer pointer) | 窄支持 | 仅在有 `*p` / `p[i]` / `*(p+i)` / `*p++` 等只读访问证据、未写入、不 escape 且长度/索引边界可推断时映射为 `&[T]`；未使用或仅声明的 readonly pointer 参数 fail-closed，不自动映射 |
 | `T *` (mutable output pointer) | 窄支持 | 仅在作为写目标时映射为 `&mut [T]` |
 | `struct T *` (mutable record pointer) | 窄支持 | 仅在 direct single-pointer scalar field 写/update/read-after-write、direct if-return fallthrough write、statement inc-dec 时映射为 `&mut T`；不是通用 ownership 或 alias 模型 |
 | `plain char` | 不支持 | 符号未知，clang 前端拒绝 |
@@ -123,7 +123,7 @@
 
 | 构造 | 状态 | 说明 |
 |------|------|------|
-| `const T *` readonly slice | 窄支持 | 参数上的只读访问 |
+| `const T *` readonly slice | 窄支持 | 仅参数上的实际只读访问；缺少 read-access evidence（包括 unused readonly pointer 参数）时 fail-closed |
 | `T *` mutable output slice | 窄支持 | 参数上的只写访问 |
 | `*p` deref read | 窄支持 | readonly pointer only |
 | `*(p+i)` bounded offset deref | 窄支持 | readonly, integer offset |
@@ -166,7 +166,7 @@
 4. **有符号加减乘**：C signed `+` / `-` / `*` 发射 `checked_*().expect(...)`，用于把 no-overflow 前置条件显式带入 candidate Rust；这仍只是 candidate generation/runtime precondition，不证明输入满足该 precondition，也不替代 slice contract、evidence 字段、C oracle 或 C/Rust diff。
 5. **除法/取模**：literal zero divisor 已 fail closed；只有在 divisor 非零由 literal 或 fixture contract 约束时，才能进入后续 semantic gate 讨论。非 literal divisor 仍需要 slice precondition 或 evidence contract。
 6. **bitwise/shift**：literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift 已 fail closed；这不代表完整 C 位运算语义、usual arithmetic conversions 或 signed overflow UB parity。
-7. **pointer-to-slice lowering**：需要 audit 指针不 escape、不写入（const case）、长度可推断。
+7. **pointer-to-slice lowering**：需要 audit 指针存在实际只读访问证据（`*p`、`p[i]`、`*(p+i)`、`*p++` 等）、不 escape、不写入（const case）、长度/索引边界可推断；只有 `const T *` 声明而没有访问证据时必须 fail-closed，不能自动 lowering 成 `&[T]`。
 8. **mutable pointer write**：当前没有 noalias 证明或多 pointer 交互的 alias 分析。
 9. **record/struct**：dot-field 路径的 struct definition 仍是从实际读取到的字段派生的 minimal Rust struct，不是 C layout/ABI proof；whole-record return 的完整字段清单路径会拒绝同名 tag、bitfield、volatile/packed、自引用指针和非标量字段；union、nested/anonymous record 仍 fail closed。
 10. **本清单是手动维护**。最终权威来源是 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed tests。
