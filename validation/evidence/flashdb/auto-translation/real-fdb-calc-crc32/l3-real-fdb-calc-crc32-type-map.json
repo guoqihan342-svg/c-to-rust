@@ -32,8 +32,59 @@
     }
   ],
   "level": "L3",
-  "mappings": [],
-  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "uint32_t",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "u32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "crc",
+      "c_type": "uint32_t",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "u32",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "buf",
+      "c_type": "const void *",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "&[u8]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "size",
+      "c_type": "size_t",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "unsupported",
+      "rust_type": "usize",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    },
+    {
+      "c_name": "p",
+      "c_type": "const uint8_t *",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "pointer",
+      "rust_type": "&[u8]",
+      "source": "translator_rule",
+      "translation_rule_id": "supported MVP C subset mapping"
+    }
+  ],
+  "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {

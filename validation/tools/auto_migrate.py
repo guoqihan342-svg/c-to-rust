@@ -121,6 +121,15 @@ def main() -> int:
         emit_clang_lowering_report=args.emit_clang_lowering_report,
     )
     normalize_translation_artifacts(spec, args.slice_spec, evidence_dir)
+    if args.emit_clang_lowering_report:
+        enrich_clang_lowering_report(
+            evidence_dir,
+            f"l3-{slice_id}",
+            clang_lowering_identity(
+                environment=os.environ,
+                competition_clang_lane=args.competition_clang_lane,
+            ),
+        )
     c2rust_baseline = emit_c2rust_baseline_manifest(spec, args.slice_spec, evidence_dir)
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
     mark_route_refused_candidate_artifacts(spec, evidence_dir, route_decision)
@@ -651,6 +660,40 @@ def run_translator(
     if result.returncode != 0:
         raise SystemExit(f"translator failed with exit code {result.returncode}; see {evidence_dir}")
     return json.loads(result.stdout)
+
+
+def enrich_clang_lowering_report(
+    evidence_dir: Path,
+    prefix: str,
+    clang_identity: dict[str, Any],
+) -> None:
+    report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    if not report_path.exists():
+        return
+    report = read_json(report_path)
+    typed_ir_candidate = report.get("typed_ir_candidate")
+    if not isinstance(typed_ir_candidate, dict):
+        return
+    lowering_report = report.get("lowering_report")
+    function_ir = lowering_report.get("function_ir") if isinstance(lowering_report, dict) else None
+    if function_ir is None:
+        return
+
+    rust_draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+    typed_ir_sha256 = sha256_json(function_ir)
+    rust_draft_sha256 = sha256(rust_draft_path) if rust_draft_path.exists() else "missing"
+    typed_ir_candidate["typed_ir_sha256"] = typed_ir_sha256
+    typed_ir_candidate["rust_draft_sha256"] = rust_draft_sha256
+    report["durable_evidence"] = {
+        "hash_algorithm": "sha256",
+        "typed_ir_sha256": typed_ir_sha256,
+        "rust_draft_sha256": rust_draft_sha256,
+        "clang_path": str(clang_identity.get("clang_path", "")),
+        "clang_version": str(clang_identity.get("clang_version", "")),
+        "frontend": str(clang_identity.get("frontend", "clang_ast_dump_json")),
+        "competition_environment": competition_environment_identity(),
+    }
+    write_json(report_path, report)
 
 
 def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
@@ -3327,6 +3370,10 @@ def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
         binding["reason"] = str(candidate["reason"])
     if candidate.get("unsupported_reason"):
         binding["unsupported_reason"] = str(candidate["unsupported_reason"])
+    if candidate.get("typed_ir_sha256"):
+        binding["typed_ir_sha256"] = str(candidate["typed_ir_sha256"])
+    if candidate.get("rust_draft_sha256"):
+        binding["rust_draft_sha256"] = str(candidate["rust_draft_sha256"])
     return binding
 
 
@@ -3919,6 +3966,9 @@ def emit_l3_evidence_manifest(
             "external_callee_scope": external_callee_claim_scope(external_context),
         },
     }
+    clang_report = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    if clang_report.exists():
+        manifest["evidence"]["clang_lowering_report"] = evidence_ref(clang_report, "recorded")
     path = evidence_dir / f"{prefix}-evidence-manifest.json"
     write_json(path, manifest)
     return path

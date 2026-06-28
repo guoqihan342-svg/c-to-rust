@@ -410,6 +410,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     }
                 ],
                 "rust_draft_generated": True,
+                "typed_ir_sha256": "typed-ir-sha",
+                "rust_draft_sha256": "rust-draft-sha",
                 "semantic_pass": False,
             }
             self._write_json(
@@ -510,6 +512,17 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     {"candidate_generation": runtime_drift["candidate_generation"]},
                 )
             self.assertIn("clang-lowering-report", str(raised.exception))
+
+            hash_drift = json.loads(json.dumps(route))
+            hash_drift["candidate_generation"]["typed_ir"]["typed_ir_sha256"] = "wrong-typed-ir-sha"
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    hash_drift,
+                    {"candidate_generation": hash_drift["candidate_generation"]},
+                )
+            self.assertIn("typed_ir", str(raised.exception))
 
             admission_drift = json.loads(json.dumps(route))
             admission_drift["candidate_generation"]["typed_ir"]["scalar_admission"]["status"] = "unresolved"

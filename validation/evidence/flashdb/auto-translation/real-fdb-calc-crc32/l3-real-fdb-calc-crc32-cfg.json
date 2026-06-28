@@ -13,24 +13,8 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "value_assignment",
-              "lvalue_kind": "simple_identifier",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "p = (const uint8_t *)buf",
-              "statement_index": 1,
-              "translation_rule_id": "assignment"
-            }
-          ],
-          "lvalue_kinds": [
-            "none",
-            "simple_identifier"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -43,11 +27,11 @@
             "return"
           ],
           "statements": [
-            "const uint8_t *p",
-            "p = (const uint8_t *)buf",
-            "crc = crc ^ ~0U",
-            "while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }",
-            "return crc ^ ~0U"
+            "decl p",
+            "assign p",
+            "assign crc",
+            "while",
+            "return"
           ]
         }
       ],
@@ -72,7 +56,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "crc ^ ~0U",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -96,7 +80,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
+  "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {

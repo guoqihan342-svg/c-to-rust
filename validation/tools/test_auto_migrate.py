@@ -4908,6 +4908,53 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(identity["clang_lowering_identity"]["clang_path_status"], "configured")
 
+    def test_enrich_clang_lowering_report_records_durable_hashes(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-demo"
+            function_ir = {"name": "demo", "body": [{"Return": {"expr": {"Literal": 1}}}]}
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "rust_draft_generated": True,
+                        },
+                        "lowering_report": {
+                            "function_ir": function_ir,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            draft_path.write_text("pub fn demo() -> i32 { 1 }\n", encoding="utf-8")
+            identity = {
+                "clang_path": "/usr/bin/clang",
+                "clang_version": "clang version unit-test",
+                "frontend": "clang_ast_dump_json",
+            }
+
+            module.enrich_clang_lowering_report(evidence_dir, prefix, identity)
+
+            enriched = json.loads(report_path.read_text(encoding="utf-8"))
+            typed_ir_sha = module.sha256_json(function_ir)
+            rust_draft_sha = hashlib.sha256(draft_path.read_bytes()).hexdigest()
+            self.assertEqual(enriched["typed_ir_candidate"]["typed_ir_sha256"], typed_ir_sha)
+            self.assertEqual(enriched["typed_ir_candidate"]["rust_draft_sha256"], rust_draft_sha)
+            self.assertEqual(enriched["durable_evidence"]["hash_algorithm"], "sha256")
+            self.assertEqual(enriched["durable_evidence"]["typed_ir_sha256"], typed_ir_sha)
+            self.assertEqual(enriched["durable_evidence"]["rust_draft_sha256"], rust_draft_sha)
+            self.assertEqual(enriched["durable_evidence"]["clang_path"], "/usr/bin/clang")
+            self.assertEqual(enriched["durable_evidence"]["clang_version"], "clang version unit-test")
+            self.assertEqual(
+                enriched["durable_evidence"]["competition_environment"],
+                module.competition_environment_identity(),
+            )
+
     def test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"

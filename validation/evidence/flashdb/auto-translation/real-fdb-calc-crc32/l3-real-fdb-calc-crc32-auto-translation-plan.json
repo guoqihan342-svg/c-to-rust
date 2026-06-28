@@ -13,7 +13,7 @@
     "schema_version=1",
     "alias_gate=not_applicable",
     "effect_graph",
-    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+    "effect_graph_sha256=613dc2a7f3fc0a77a329c0ea62ea8f43d8e278a3bb7154fbd217a6d036fba678"
   ],
   "generated_artifacts": [
     {
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -99,7 +99,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "status": "not_applicable"
+      "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
@@ -112,20 +112,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
+  "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "3844dd8f42c8ba470ffd65b97921350eedfc1d8c66121991d59c54fd6e03d5e7",
+    "sha256": "00fbbdd83d449703713c88153b355d647d28cd131855e338469072dfd8664e10",
     "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "status": "blocked",
+  "status": "draft_generated",
   "target_id": "flashdb",
   "translation_source": {
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -138,20 +138,27 @@
     "call_expressions": [],
     "external_direct_callee_blocks": [],
     "external_direct_callees": [],
-    "lvalue_decision_counts": {
-      "value_assignment": 1
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {
+      "byte_cursor_post_increment_read": 1
     },
-    "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
-    "translation_rule_ids": [],
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "const-void-byte-slice",
+      "byte-cursor-post-increment-read",
+      "byte-cursor-loop",
+      "structured-while",
+      "structured-return-expression"
+    ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
-    "unsupported_node_count": 2
+    "unsupported_node_count": 0
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "87e236b7f61fffe40c1c6d056ea6e8533d62818a3837a3a9d579aad577e5ca0a",
+    "sha256": "36cf1e56ed578b9539a75e3f40ceb613084db4ba3e5e1b7c733537e5b2832aaf",
     "status": "passed"
   },
   "verification_plan": [

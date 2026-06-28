@@ -1,18 +1,7 @@
 {
-  "blocked": [
-    {
-      "kind": "unsupported_syntax",
-      "reason": "expression `size--` uses increment/decrement value semantics outside the bounded MVP C subset",
-      "source_span": "while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }"
-    },
-    {
-      "kind": "unsupported_syntax",
-      "reason": "expression `crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)` uses increment/decrement value semantics outside the bounded MVP C subset",
-      "source_span": "crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)"
-    }
-  ],
+  "blocked": [],
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
-  "status": "blocked",
+  "status": "none",
   "target_id": "flashdb"
 }

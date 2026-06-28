@@ -9,8 +9,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "8cc4625870276c26275f7fac0fa573d07e01d21cf363bc471c0d21165ffbc345",
-      "unsafe_scan": "ba7abd6b6c6f42352357da12232e98e5cf6304973931653f35e022493a12c612"
+      "unsafe_ledger": "2a3c77a02f1d10e27033fced0cce6c6b28f7ecd330da1b3d3b74754afb120df4",
+      "unsafe_scan": "de11d413142a47e5b1c0109d3cf316020a37b5ae8037c72769f9d8e701242059"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -72,19 +72,46 @@
       "route_decision_identity",
       "validation_profile_identity",
       "global_dependency_identity",
-      "c_oracle_harness_identity"
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
     ],
     "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
+    "clang_lowering_identity": {
+      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+      "clang_path_status": "configured",
+      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "lane": "competition-clang-lane",
+      "required": true,
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-      "--accept-existing-evidence"
+      "--accept-existing-evidence",
+      "--emit-clang-lowering-report",
+      "--competition-clang-lane"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "d6f11af9636f9c91a89a9d67a0f41f0d047a0777590d54b0800484efbb4a11cd"
+      "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
@@ -95,13 +122,13 @@
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "3844dd8f42c8ba470ffd65b97921350eedfc1d8c66121991d59c54fd6e03d5e7",
+        "sha256": "00fbbdd83d449703713c88153b355d647d28cd131855e338469072dfd8664e10",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "87e236b7f61fffe40c1c6d056ea6e8533d62818a3837a3a9d579aad577e5ca0a",
+        "sha256": "36cf1e56ed578b9539a75e3f40ceb613084db4ba3e5e1b7c733537e5b2832aaf",
         "status": "passed"
       }
     },
@@ -148,7 +175,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "15dfb75584f82b7d6897e15a2c5a303c19f68d23171647881505eece9b8ea8b8",
+      "sha256": "f479a1ab61997626762df1a50d30012e00761708a5cee9838afa6e1d5ef61482",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -177,10 +204,13 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
+    "translator_feature_set": [
+      "clang-lowering-report"
+    ],
     "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "9559e1fde7de4eef477911a7d4fc113706ff2dea89d6e3a4ec051c499a095d1b",
+      "sha256": "751c2fe7b9eea25440ed17e52b91f471265d2f7b7cf041998db10170257bd08c",
       "status": "passed"
     }
   },
@@ -491,7 +521,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
-        "status": "blocked"
+        "status": "candidate"
       },
       "rust_report": {
         "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
@@ -511,7 +541,7 @@
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
+    "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_calc_crc32",
@@ -609,11 +639,11 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "3844dd8f42c8ba470ffd65b97921350eedfc1d8c66121991d59c54fd6e03d5e7",
+    "sha256": "00fbbdd83d449703713c88153b355d647d28cd131855e338469072dfd8664e10",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-3wv4vk6f F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-bzege5pf validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {
@@ -639,23 +669,25 @@
   "target_id": "flashdb",
   "translator": {
     "artifact_paths": [
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-events.jsonl",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-blocked-repairs.json",
-      "F:/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs"
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-events.jsonl",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-ai-candidate-manifest.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-blocked-repairs.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-dry-run.json",
+      "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json"
     ],
     "slice_id": "real-fdb-calc-crc32",
-    "status": "blocked",
+    "status": "generated",
     "target_id": "flashdb"
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "87e236b7f61fffe40c1c6d056ea6e8533d62818a3837a3a9d579aad577e5ca0a",
+    "sha256": "36cf1e56ed578b9539a75e3f40ceb613084db4ba3e5e1b7c733537e5b2832aaf",
     "status": "passed"
   }
 }

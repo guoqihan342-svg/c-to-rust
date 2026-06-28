@@ -18,8 +18,8 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "primary:legacy-string-translator",
-        "kind": "legacy-string-translator",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
         "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
@@ -28,9 +28,9 @@
         "candidate_id": "typed-ir:clang-lowered",
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
-        "rust_draft_generated": false,
+        "rust_draft_generated": true,
         "semantic_pass": false,
-        "status": "missing"
+        "status": "generated"
       },
       {
         "baseline_manifest": {
@@ -51,12 +51,12 @@
     ],
     "generated_draft_semantic_pass": false,
     "primary_candidate": {
-      "candidate_id": "primary:legacy-string-translator",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "legacy-string-translator",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": "primary:legacy-string-translator",
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -64,28 +64,89 @@
       "stage": "post_generation_provenance"
     },
     "typed_ir": {
-      "candidate_route": null,
-      "readonly_globals": [],
-      "readonly_globals_identity": {
-        "count": 0,
-        "names": [],
-        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
       },
-      "runtime_preconditions": [],
-      "rust_draft_generated": false,
+      "readonly_globals": [
+        {
+          "array_len": 256,
+          "canonical_type": "uint32_t[256]",
+          "init_kind": "integer_array",
+          "name": "crc32_table",
+          "spelled_type": "const uint32_t[256]",
+          "value_count": 256
+        }
+      ],
+      "readonly_globals_identity": {
+        "count": 1,
+        "names": [
+          "crc32_table"
+        ],
+        "sha256": "e5ace8d795b595985c101e57ee92452b5a6f065772767bc7e2d5972fb202695f"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "shift_count_in_range",
+          "detail": "C shift count must be nonnegative and smaller than the shifted integer width",
+          "ir_node": "IrExpr::Binary.Shr",
+          "source_span": null,
+          "type": {
+            "canonical": "uint32_t",
+            "kind": "integer",
+            "signed": false,
+            "spelled": "uint32_t",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
       "scalar_admission": {
         "contract_status": "recorded",
         "covered": [],
-        "precondition_count": 0,
-        "status": "not_applicable",
-        "unresolved": []
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "code": "shift_count_in_range",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.shift_count",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "unresolved"
+          }
+        ]
       },
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "status": "missing"
+        "sha256": "594b8d7e76d56ebbdc6b90ea1f97099d3d88327b3656e2407ce0bd31a3509517",
+        "status": "lowered"
       },
-      "status": "missing"
+      "status": "generated",
+      "typed_ir_sha256": "9c75816a055a0ad6e81fa9742721d967305dc9b8ab623ef8ed29b4703192d078"
     }
   },
   "level": "L4",
@@ -99,14 +160,10 @@
   },
   "rationale": [
     {
-      "feature": "blocked_artifact",
-      "values": {
-        "cfg": "recorded",
-        "plan": "blocked",
-        "translator": "blocked",
-        "type_map": "recorded"
-      },
-      "weight": "hard_refuse"
+      "feature": "typed_ir_scalar_admission_unresolved",
+      "route": "GenericTypedIr",
+      "unresolved_count": 1,
+      "weight": "requires_contract_or_domain_evidence"
     },
     {
       "feature": "accepted_evidence_authoritative",
@@ -146,21 +203,26 @@
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "52b078c970242b56aa61c7823ae71b37c8b8bb699cbb7afabe2b3028ffb76476",
+      "sha256": "b97fdda31958f1faed45586cb7434391b6074031f43eb4a4291c6de48b629771",
       "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
+      "sha256": "594b8d7e76d56ebbdc6b90ea1f97099d3d88327b3656e2407ce0bd31a3509517",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "196698dce988825e869da169b810c0d4d9c76eb19817ff63c1931c09c4f4eaaa",
-      "status": "not_applicable"
+      "sha256": "e29ba7cc03aed6ed0df0dda32203148685b029552978da05ea39e65946f7cefa",
+      "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
-      "status": "blocked"
+      "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "795e6c74da14225c199c31f8f7a88eff116ad63060fb09d90e9215b8435aa16c",
+      "sha256": "b9097a06595736c412661bdadf422a6c3035453819b929003ccfaf63fe1d7b44",
       "status": "recorded"
     }
   },

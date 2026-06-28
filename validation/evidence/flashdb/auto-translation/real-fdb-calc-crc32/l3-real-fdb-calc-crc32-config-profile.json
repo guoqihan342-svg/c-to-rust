@@ -9,8 +9,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "8cc4625870276c26275f7fac0fa573d07e01d21cf363bc471c0d21165ffbc345",
-      "unsafe_scan": "ba7abd6b6c6f42352357da12232e98e5cf6304973931653f35e022493a12c612"
+      "unsafe_ledger": "2a3c77a02f1d10e27033fced0cce6c6b28f7ecd330da1b3d3b74754afb120df4",
+      "unsafe_scan": "de11d413142a47e5b1c0109d3cf316020a37b5ae8037c72769f9d8e701242059"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
+  "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

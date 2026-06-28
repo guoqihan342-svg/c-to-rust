@@ -1455,6 +1455,10 @@ def validate_typed_ir_candidate_binding(
         expected["reason"] = report_candidate.get("reason")
     if report_candidate.get("unsupported_reason"):
         expected["unsupported_reason"] = report_candidate.get("unsupported_reason")
+    if report_candidate.get("typed_ir_sha256"):
+        expected["typed_ir_sha256"] = report_candidate.get("typed_ir_sha256")
+    if report_candidate.get("rust_draft_sha256"):
+        expected["rust_draft_sha256"] = report_candidate.get("rust_draft_sha256")
     actual = {
         "status": typed_ir.get("status"),
         "candidate_route": typed_ir.get("candidate_route"),
@@ -1468,6 +1472,10 @@ def validate_typed_ir_candidate_binding(
         actual["reason"] = typed_ir.get("reason")
     if typed_ir.get("unsupported_reason"):
         actual["unsupported_reason"] = typed_ir.get("unsupported_reason")
+    if typed_ir.get("typed_ir_sha256"):
+        actual["typed_ir_sha256"] = typed_ir.get("typed_ir_sha256")
+    if typed_ir.get("rust_draft_sha256"):
+        actual["rust_draft_sha256"] = typed_ir.get("rust_draft_sha256")
     if actual != expected:
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
     if runtime_preconditions and "scalar_admission" not in typed_ir:
