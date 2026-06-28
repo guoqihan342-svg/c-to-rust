@@ -1,0 +1,210 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "first_local_table",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "table",
+                  "type": {
+                    "qualType": "int[3]"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "InitListExpr",
+                      "type": {
+                        "qualType": "int[3]"
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "2"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "3"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "*",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "ArrayToPointerDecay",
+                      "type": {
+                        "qualType": "int *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int[3]"
+                          },
+                          "referencedDecl": {
+                            "name": "table"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "lookup_local_table",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "i",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "table",
+                  "type": {
+                    "qualType": "int[3]"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "InitListExpr",
+                      "type": {
+                        "qualType": "int[3]"
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "2"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "3"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ArraySubscriptExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "ArrayToPointerDecay",
+                      "type": {
+                        "qualType": "int *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int[3]"
+                          },
+                          "referencedDecl": {
+                            "name": "table"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "i"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

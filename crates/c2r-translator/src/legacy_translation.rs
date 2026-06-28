@@ -75,6 +75,28 @@ struct IncDecStatement {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+struct UnsupportedControlFlow {
+    kind: &'static str,
+    detail: Option<String>,
+}
+
+impl UnsupportedControlFlow {
+    fn label(&self) -> String {
+        match &self.detail {
+            Some(detail) => format!("{}:{detail}", self.kind),
+            None => self.kind.to_string(),
+        }
+    }
+
+    fn block_id(&self) -> String {
+        match &self.detail {
+            Some(detail) => format!("{}-{}", self.kind, sanitize_cfg_id(detail)),
+            None => self.kind.to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum LValue {
     SimpleIdentifier {
         name: String,
@@ -129,32 +151,36 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
 
     let statements = parse_statements(&function.body);
     let unsupported_control_flow = detect_unsupported_control_flow(&function.body);
+    let unsupported_control_flow_labels =
+        unsupported_control_flow_labels(&unsupported_control_flow);
+    let mut blocks = vec![CfgBlock {
+        id: "entry".to_string(),
+        statements: statements
+            .iter()
+            .map(|statement| statement.text.clone())
+            .collect(),
+        statement_kinds: statement_kind_labels(&statements),
+        lvalue_kinds: statement_lvalue_kinds(&statements),
+        terminator: if statements
+            .iter()
+            .any(|statement| statement.kind == StatementKind::Return)
+        {
+            "return".to_string()
+        } else {
+            "fallthrough".to_string()
+        },
+        edges: cfg_edges_for_statements(&statements, &unsupported_control_flow),
+    }];
+    blocks.extend(unsupported_control_flow_blocks(&unsupported_control_flow));
     result.cfg.functions.push(CfgFunction {
         name: function.name.clone(),
-        blocks: vec![CfgBlock {
-            id: "entry".to_string(),
-            statements: statements
-                .iter()
-                .map(|statement| statement.text.clone())
-                .collect(),
-            statement_kinds: statement_kind_labels(&statements),
-            lvalue_kinds: statement_lvalue_kinds(&statements),
-            terminator: if statements
-                .iter()
-                .any(|statement| statement.kind == StatementKind::Return)
-            {
-                "return".to_string()
-            } else {
-                "fallthrough".to_string()
-            },
-            edges: cfg_edges_for_statements(&statements),
-        }],
-        unsupported_control_flow: unsupported_control_flow.clone(),
+        blocks,
+        unsupported_control_flow: unsupported_control_flow_labels.clone(),
     });
 
     if !unsupported_control_flow.is_empty() {
-        result.plan.unsupported_node_count = unsupported_control_flow.len();
-        for node in unsupported_control_flow {
+        result.plan.unsupported_node_count = unsupported_control_flow_labels.len();
+        for node in unsupported_control_flow_labels {
             result.errors.push(TranslationError {
                 kind: "unsupported_control_flow".to_string(),
                 message: format!("{node} requires CFG/relooper support before automatic lowering"),
@@ -278,20 +304,156 @@ fn normalize_type(c_type: &str) -> String {
         .replace("* ", "*")
 }
 
-fn detect_unsupported_control_flow(body: &str) -> Vec<String> {
+fn detect_unsupported_control_flow(body: &str) -> Vec<UnsupportedControlFlow> {
     let mut unsupported = Vec::new();
+    for label in label_targets(body) {
+        push_control_flow(&mut unsupported, "label", Some(label));
+    }
+    if contains_token(body, "goto") {
+        push_control_flow(&mut unsupported, "goto", None);
+        for target in goto_targets(body) {
+            push_control_flow(&mut unsupported, "goto", Some(target));
+        }
+    }
+    if contains_token(body, "switch") {
+        push_control_flow(&mut unsupported, "switch", None);
+        for case in case_targets(body) {
+            push_control_flow(&mut unsupported, "case", Some(case));
+        }
+        if contains_token(body, "default") {
+            push_control_flow(&mut unsupported, "default", None);
+        }
+    }
     for (needle, label) in [
-        ("goto", "goto"),
-        ("switch", "switch"),
         ("setjmp", "setjmp"),
         ("longjmp", "longjmp"),
         ("asm", "inline_assembly"),
     ] {
         if contains_token(body, needle) {
-            unsupported.push(label.to_string());
+            push_control_flow(&mut unsupported, label, None);
         }
     }
     unsupported
+}
+
+fn push_control_flow(
+    unsupported: &mut Vec<UnsupportedControlFlow>,
+    kind: &'static str,
+    detail: Option<String>,
+) {
+    let candidate = UnsupportedControlFlow { kind, detail };
+    if !unsupported.iter().any(|item| item == &candidate) {
+        unsupported.push(candidate);
+    }
+}
+
+fn unsupported_control_flow_labels(items: &[UnsupportedControlFlow]) -> Vec<String> {
+    let mut labels = items
+        .iter()
+        .map(UnsupportedControlFlow::label)
+        .collect::<Vec<_>>();
+    if items.iter().any(|item| item.kind == "goto") {
+        push_unique(&mut labels, "relooper_refusal:goto");
+    }
+    if items.iter().any(|item| item.kind == "switch") {
+        push_unique(&mut labels, "relooper_refusal:switch");
+    }
+    labels
+}
+
+fn label_targets(body: &str) -> Vec<String> {
+    let mut labels = Vec::new();
+    for segment in body.split(';') {
+        let trimmed = segment.trim();
+        let Some(colon_index) = trimmed.find(':') else {
+            continue;
+        };
+        let before_colon = trimmed[..colon_index].trim();
+        if before_colon.starts_with("case ")
+            || before_colon == "default"
+            || before_colon.contains('?')
+            || before_colon.contains(' ')
+        {
+            continue;
+        }
+        if is_identifier(before_colon) {
+            push_unique(&mut labels, before_colon);
+        }
+    }
+    labels
+}
+
+fn goto_targets(body: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    for segment in body.split(';') {
+        let Some(index) = find_token(segment, "goto") else {
+            continue;
+        };
+        let after_goto = segment[index + "goto".len()..].trim();
+        let target = after_goto
+            .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+            .next()
+            .unwrap_or("")
+            .trim();
+        if is_identifier(target) {
+            push_unique(&mut targets, target);
+        }
+    }
+    targets
+}
+
+fn case_targets(body: &str) -> Vec<String> {
+    let mut cases = Vec::new();
+    let mut rest = body;
+    while let Some(index) = find_token(rest, "case") {
+        let after_case = &rest[index + "case".len()..];
+        if let Some(colon_index) = after_case.find(':') {
+            let value = after_case[..colon_index].trim();
+            if !value.is_empty() {
+                push_unique(&mut cases, &sanitize_case_label(value));
+            }
+            rest = &after_case[colon_index + 1..];
+        } else {
+            break;
+        }
+    }
+    cases
+}
+
+fn find_token(text: &str, token: &str) -> Option<usize> {
+    let mut offset = 0usize;
+    while let Some(index) = text[offset..].find(token) {
+        let absolute = offset + index;
+        let before = text[..absolute].chars().next_back();
+        let after = text[absolute + token.len()..].chars().next();
+        let before_boundary = before
+            .map(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
+            .unwrap_or(true);
+        let after_boundary = after
+            .map(|ch| !(ch.is_ascii_alphanumeric() || ch == '_'))
+            .unwrap_or(true);
+        if before_boundary && after_boundary {
+            return Some(absolute);
+        }
+        offset = absolute + token.len();
+    }
+    None
+}
+
+fn is_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_')
+        && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn sanitize_case_label(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches(|ch: char| ch == '(' || ch == ')')
+        .to_string()
 }
 
 fn contains_token(text: &str, token: &str) -> bool {
@@ -449,8 +611,11 @@ impl StatementKind {
     }
 }
 
-fn cfg_edges_for_statements(statements: &[ParsedStatement]) -> Vec<String> {
-    statements
+fn cfg_edges_for_statements(
+    statements: &[ParsedStatement],
+    unsupported_control_flow: &[UnsupportedControlFlow],
+) -> Vec<String> {
+    let mut edges = statements
         .iter()
         .enumerate()
         .filter_map(|(index, statement)| match statement.kind {
@@ -460,7 +625,113 @@ fn cfg_edges_for_statements(statements: &[ParsedStatement]) -> Vec<String> {
             StatementKind::Return => Some(format!("entry->return-{index}")),
             _ => None,
         })
-        .collect()
+        .collect::<Vec<_>>();
+    for item in unsupported_control_flow {
+        match item.kind {
+            "label" => push_unique(&mut edges, &format!("entry->{}", item.block_id())),
+            "goto" if item.detail.is_some() => {
+                push_unique(&mut edges, &format!("entry->{}", item.block_id()));
+            }
+            "switch" => push_unique(&mut edges, "entry->switch-0"),
+            _ => {}
+        }
+    }
+    edges
+}
+
+fn unsupported_control_flow_blocks(items: &[UnsupportedControlFlow]) -> Vec<CfgBlock> {
+    let mut blocks = Vec::new();
+    let labels = items
+        .iter()
+        .filter(|item| item.kind == "label")
+        .collect::<Vec<_>>();
+    let cases = items
+        .iter()
+        .filter(|item| item.kind == "case")
+        .collect::<Vec<_>>();
+    let has_default = items.iter().any(|item| item.kind == "default");
+
+    for item in items {
+        match item.kind {
+            "label" => blocks.push(CfgBlock {
+                id: item.block_id(),
+                statements: vec![item.label()],
+                statement_kinds: vec!["label".to_string()],
+                lvalue_kinds: Vec::new(),
+                terminator: "unsupported_label".to_string(),
+                edges: Vec::new(),
+            }),
+            "goto" if item.detail.is_some() => {
+                let mut edges = Vec::new();
+                if let Some(target) = &item.detail {
+                    if labels
+                        .iter()
+                        .any(|label| label.detail.as_ref() == Some(target))
+                    {
+                        push_unique(
+                            &mut edges,
+                            &format!("{}->label-{}", item.block_id(), sanitize_cfg_id(target)),
+                        );
+                    }
+                }
+                blocks.push(CfgBlock {
+                    id: item.block_id(),
+                    statements: vec![item.label()],
+                    statement_kinds: vec!["goto".to_string()],
+                    lvalue_kinds: Vec::new(),
+                    terminator: "unsupported_goto".to_string(),
+                    edges,
+                });
+            }
+            "switch" => {
+                let mut edges = Vec::new();
+                for case in &cases {
+                    push_unique(&mut edges, &format!("switch-0->{}", case.block_id()));
+                }
+                if has_default {
+                    push_unique(&mut edges, "switch-0->default");
+                }
+                blocks.push(CfgBlock {
+                    id: "switch-0".to_string(),
+                    statements: vec!["switch".to_string()],
+                    statement_kinds: vec!["switch".to_string()],
+                    lvalue_kinds: Vec::new(),
+                    terminator: "unsupported_switch".to_string(),
+                    edges,
+                });
+            }
+            "case" | "default" => blocks.push(CfgBlock {
+                id: item.block_id(),
+                statements: vec![item.label()],
+                statement_kinds: vec![item.kind.to_string()],
+                lvalue_kinds: Vec::new(),
+                terminator: format!("unsupported_{}", item.kind),
+                edges: Vec::new(),
+            }),
+            _ => {}
+        }
+    }
+    blocks
+}
+
+fn sanitize_cfg_id(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .replace('_', "-");
+    if sanitized.is_empty() {
+        "unknown".to_string()
+    } else {
+        sanitized
+    }
 }
 
 fn skip_whitespace(text: &str, mut index: usize) -> usize {

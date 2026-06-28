@@ -1,0 +1,305 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "label_refusal",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "LabelStmt",
+              "name": "again",
+              "inner": [
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "++",
+                  "isPostfix": true,
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "goto_refusal",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "GotoStmt",
+              "targetLabelDeclId": "0x1",
+              "inner": [
+                {
+                  "kind": "LabelDecl",
+                  "name": "again"
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "switch_refusal",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "SwitchStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      },
+                      "type": {
+                        "qualType": "int"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "CaseStmt",
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        },
+                        {
+                          "kind": "ReturnStmt",
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "value": "1"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "DefaultStmt",
+                      "inner": [
+                        {
+                          "kind": "ReturnStmt",
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "value": "0"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "case_refusal",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CaseStmt",
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "7"
+                },
+                {
+                  "kind": "ReturnStmt",
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "value": "7"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "default_refusal",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DefaultStmt",
+              "inner": [
+                {
+                  "kind": "ReturnStmt",
+                  "inner": [
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "value": "0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

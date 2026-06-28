@@ -2481,6 +2481,11 @@ fn emit_call_expr(
     context: &EmitContext,
 ) -> Result<String, String> {
     let callee = emit_identifier(callee, "call callee")?;
+    if reserved_c_macro_or_stdlib_callee(&callee) {
+        return Err(format!(
+            "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
+        ));
+    }
     if !is_void_type(ty) {
         emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
     }
@@ -2494,6 +2499,35 @@ fn emit_call_expr(
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     Ok(format!("{callee}({args})"))
+}
+
+fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
+    matches!(
+        callee,
+        "assert"
+            | "static_assert"
+            | "_Static_assert"
+            | "sizeof"
+            | "offsetof"
+            | "malloc"
+            | "calloc"
+            | "realloc"
+            | "free"
+            | "memcpy"
+            | "memmove"
+            | "memset"
+            | "memcmp"
+            | "strlen"
+            | "printf"
+            | "fprintf"
+            | "sprintf"
+            | "snprintf"
+            | "puts"
+            | "putchar"
+            | "getchar"
+            | "exit"
+            | "abort"
+    )
 }
 
 fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
