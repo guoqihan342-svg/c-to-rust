@@ -158,6 +158,74 @@ pub struct ClangDryRun {
     pub diagnostics: Vec<String>,
 }
 
+/// Resolve the clang binary path for AST dump JSON lowering.
+///
+/// Resolution order:
+/// 1. `CLANG_PATH` environment variable (if set and the file exists)
+/// 2. Vendored local paths under the workspace / project root
+///    - `tools/llvm/bin/clang` (or `.exe` on Windows)
+///    - `tools/llvm/bin/clang-18` (or `.exe` on Windows)
+///    - `tools/clang/bin/clang` (or `.exe` on Windows)
+///
+/// The searched paths are relative to the current working directory, which is
+/// expected to be the repository root when invoked by `auto_migrate.py`.
+///
+/// Returns `(path, source_label)` where `source_label` describes which
+/// resolution strategy succeeded.
+pub fn resolve_clang_path(environment: &BTreeMap<String, String>) -> Option<(PathBuf, String)> {
+    // 1. Prefer CLANG_PATH env var
+    if let Some(clang_path) = environment
+        .get("CLANG_PATH")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        let path = PathBuf::from(clang_path);
+        if path.exists() {
+            return Some((path, "CLANG_PATH".to_string()));
+        }
+    }
+
+    // 2. Fall back to vendored local paths (relative to cwd / repo root)
+    #[cfg(target_os = "windows")]
+    let candidates: &[&str] = &[
+        "tools/llvm/bin/clang.exe",
+        "tools/llvm/bin/clang-18.exe",
+        "tools/clang/bin/clang.exe",
+    ];
+    #[cfg(not(target_os = "windows"))]
+    let candidates: &[&str] = &[
+        "tools/llvm/bin/clang-18",
+        "tools/llvm/bin/clang",
+        "tools/clang/bin/clang",
+    ];
+
+    let cwd = env::current_dir().ok()?;
+    for candidate in candidates {
+        let path = cwd.join(candidate);
+        if path.exists() {
+            return Some((path, format!("vendored:{}", candidate)));
+        }
+    }
+
+    // 3. Also try with CARGO_MANIFEST_DIR fallback (relative to the crate root)
+    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let workspace_root = PathBuf::from(&manifest_dir)
+            .parent()
+            .unwrap_or(Path::new(&manifest_dir))
+            .parent()
+            .unwrap_or(Path::new(&manifest_dir))
+            .to_path_buf();
+        for candidate in candidates {
+            let path = workspace_root.join(candidate);
+            if path.exists() {
+                return Some((path, format!("vendored(cargo):{}", candidate)));
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(feature = "typed-ir")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClangFunctionSkeleton {
@@ -609,11 +677,7 @@ pub fn lower_function_from_clang_parse_spec_report(
     let source_file = parse_spec.source_root.join(&parse_spec.source_file);
     let arguments =
         clang_ast_dump_arguments_with_extra(&source_file, &parse_spec.clang_arguments());
-    let Some(clang_path) = environment
-        .get("CLANG_PATH")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    else {
+    let Some((clang_path, clang_source)) = resolve_clang_path(environment) else {
         return ClangLoweringReport {
             status: "unavailable".to_string(),
             frontend: "clang".to_string(),
@@ -623,11 +687,11 @@ pub fn lower_function_from_clang_parse_spec_report(
             arguments,
             environment: ClangEnvironment::detect_from_env(environment),
             diagnostics: vec![
-                "CLANG_PATH is not set; clang AST lowering is unavailable".to_string()
+                "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable".to_string()
             ],
             errors: vec![ClangFrontendError {
                 kind: "missing_clang_path".to_string(),
-                message: "clang AST lowering requires CLANG_PATH".to_string(),
+                message: "clang AST lowering requires CLANG_PATH or a vendored clang binary".to_string(),
             }],
             function_ir: None,
             globals: Vec::new(),
@@ -637,11 +701,11 @@ pub fn lower_function_from_clang_parse_spec_report(
     report_from_lowering_result(
         Some(normalized_report_path(&source_file)),
         parse_spec.function_name.clone(),
-        Some(clang_path.to_string()),
+        Some(clang_path.to_string_lossy().to_string()),
         arguments.clone(),
         environment,
         lower_function_and_globals_from_clang_ast_dump_with_arguments(
-            &PathBuf::from(clang_path),
+            &clang_path,
             &arguments,
             &parse_spec.function_name,
         ),
@@ -655,11 +719,7 @@ pub fn lower_function_from_clang_ast_dump_report(
     function_name: &str,
 ) -> ClangLoweringReport {
     let arguments = clang_ast_dump_arguments(source_file);
-    let Some(clang_path) = environment
-        .get("CLANG_PATH")
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    else {
+    let Some((clang_path, _clang_source)) = resolve_clang_path(environment) else {
         return ClangLoweringReport {
             status: "unavailable".to_string(),
             frontend: "clang".to_string(),
@@ -669,11 +729,11 @@ pub fn lower_function_from_clang_ast_dump_report(
             arguments,
             environment: ClangEnvironment::detect_from_env(environment),
             diagnostics: vec![
-                "CLANG_PATH is not set; clang AST lowering is unavailable".to_string()
+                "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable".to_string()
             ],
             errors: vec![ClangFrontendError {
                 kind: "missing_clang_path".to_string(),
-                message: "clang AST lowering requires CLANG_PATH".to_string(),
+                message: "clang AST lowering requires CLANG_PATH or a vendored clang binary".to_string(),
             }],
             function_ir: None,
             globals: Vec::new(),
@@ -683,11 +743,11 @@ pub fn lower_function_from_clang_ast_dump_report(
     report_from_lowering_result(
         Some(normalized_report_path(source_file)),
         function_name.to_string(),
-        Some(clang_path.to_string()),
+        Some(clang_path.to_string_lossy().to_string()),
         arguments.clone(),
         environment,
         lower_function_and_globals_from_clang_ast_dump_with_arguments(
-            &PathBuf::from(clang_path),
+            &clang_path,
             &arguments,
             function_name,
         ),

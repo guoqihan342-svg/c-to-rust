@@ -109,6 +109,23 @@ expect_file_contains "Cargo registry profile" "${script_dir}/cargo/config.toml" 
 expect_absent go
 expect_absent cmake
 
+# clang is optional; note vendored or env-var status without failing
+clang_status="absent"
+if [ -n "${CLANG_PATH:-}" ] && command -v "${CLANG_PATH}" >/dev/null 2>&1; then
+  clang_status="CLANG_PATH=${CLANG_PATH}"
+else
+  for vendored in \
+    "${script_dir}/../tools/llvm/bin/clang-18" \
+    "${script_dir}/../tools/llvm/bin/clang" \
+    "${script_dir}/../tools/clang/bin/clang"; do
+    if [ -x "${vendored}" ]; then
+      clang_status="vendored=${vendored}"
+      break
+    fi
+  done
+fi
+printf 'clang status: %s (optional; only required for --competition-clang-lane)\n' "${clang_status}"
+
 if [ "$failures" -eq 0 ]; then
   echo "competition environment check passed"
 else
