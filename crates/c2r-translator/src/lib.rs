@@ -1,3 +1,4 @@
+mod artifact_io;
 mod artifacts;
 #[cfg(feature = "clang-frontend")]
 pub mod clang_frontend;

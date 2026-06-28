@@ -8,6 +8,7 @@ use std::{
 
 use serde_json::json;
 
+use crate::artifact_io::{translation_events_jsonl, write_json_file, write_text_file};
 #[cfg(feature = "clang-frontend")]
 use crate::clang_frontend;
 #[cfg(feature = "clang-lowering-report")]
@@ -15,75 +16,6 @@ use crate::typed_ir;
 #[cfg(feature = "clang-lowering-report")]
 use crate::TranslationSource;
 use crate::{legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationResult};
-
-pub(crate) fn write_json_file(
-    out_dir: &Path,
-    file_name: &str,
-    value: &serde_json::Value,
-) -> Result<PathBuf, Box<dyn Error>> {
-    write_text_file(
-        out_dir,
-        file_name,
-        &(serde_json::to_string_pretty(value)? + "\n"),
-    )
-}
-
-pub(crate) fn write_text_file(
-    out_dir: &Path,
-    file_name: &str,
-    text: &str,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let path = out_dir.join(file_name);
-    fs::write(&path, text)?;
-    Ok(path)
-}
-
-pub(crate) fn translation_events_jsonl(
-    spec: &SliceSpec,
-    result: &TranslationResult,
-) -> Result<String, Box<dyn Error>> {
-    let mut lines = Vec::new();
-    lines.push(serde_json::to_string(&json!({
-        "schema_version": 1,
-        "target_id": spec.target_id,
-        "slice_id": spec.slice_id,
-        "event": "translation_started",
-        "source_commit": spec.source_commit,
-        "fixture_hash": spec.fixture_hash,
-    }))?);
-    for error in &result.errors {
-        lines.push(serde_json::to_string(&json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "event": "translation_blocked",
-            "kind": error.kind,
-            "message": error.message,
-            "source_span": error.source_span,
-        }))?);
-    }
-    if let Some(fallback_from) = &result.translation_source.fallback_from {
-        lines.push(serde_json::to_string(&json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "event": "translation_fallback",
-            "selected": result.translation_source.selected,
-            "fallback_from": fallback_from,
-            "fallback_reason": result.translation_source.fallback_reason,
-        }))?);
-    }
-    if result.errors.is_empty() {
-        lines.push(serde_json::to_string(&json!({
-            "schema_version": 1,
-            "target_id": spec.target_id,
-            "slice_id": spec.slice_id,
-            "event": "translation_generated",
-            "translation_rule_ids": result.plan.translation_rule_ids,
-        }))?);
-    }
-    Ok(lines.join("\n") + "\n")
-}
 
 pub(crate) fn write_core_translation_artifacts(
     spec: &SliceSpec,
@@ -478,32 +410,6 @@ mod core_translation_artifact_tests {
             "c2r-artifacts-{name}-{}-{nanos}",
             std::process::id()
         ))
-    }
-
-    #[test]
-    fn translation_events_jsonl_records_blocked_errors() {
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "unsupported".to_string(),
-            source_commit: "1234567".to_string(),
-            fixture_hash: "fixture-sha".to_string(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-        result.errors.push(TranslationError {
-            kind: "unsupported_syntax".to_string(),
-            message: "switch is not supported".to_string(),
-            source_span: Some("switch (value)".to_string()),
-        });
-
-        let jsonl = translation_events_jsonl(&spec, &result).unwrap();
-
-        let lines = jsonl.lines().collect::<Vec<_>>();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("\"event\":\"translation_started\""));
-        assert!(lines[1].contains("\"event\":\"translation_blocked\""));
-        assert!(lines[1].contains("\"kind\":\"unsupported_syntax\""));
-        assert!(!jsonl.contains("translation_generated"));
     }
 
     #[test]
