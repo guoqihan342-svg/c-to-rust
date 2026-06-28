@@ -10383,3 +10383,40 @@ English mirror summary:
 边界：
 - 可以说：这次把 clang 默认激活、legacy path、CI clang E2E、signed/UB contract、FlashDB showcase 和组合式 emitter 风险明确纳入 roadmap。
 - 不应说：no-clang fixture replay、legacy 退役、signed UB contract 或组合式 side-effect emitter 已经实现。
+
+## 155. 2026-06-28 external review triage: engineering debt, unsafe claims, test coverage
+
+本轮继续处理用户给出的附件评价 `d03ac6c6.../pasted-text.txt`。两个只读子智能体分别核对了代码事实和 roadmap 覆盖缺口；评价里有价值的部分已纳入 `future-vision-and-mvp.md` / `.en.md`，过时或过激的结论没有照搬。
+
+判断：
+- 成立或部分成立：`typed_ir.rs` / `clang_frontend.rs` 仍是巨文件；`bounded_translation.rs` 也过大；`flashDB_rust` 是 host-verifiable handwritten skeleton，不是完整 FlashDB 语义等价；`ffi.rs` 仍是 placeholder；L1 native build 不等于翻译能力；0 unsafe findings 不能替代 FFI/hardware/ABI/volatile/thread evidence。
+- 过时或不准确：`lib.rs` 仍 4232 行不符合当前事实（当前约 69 行，已经拆出多个模块）；“翻译器从未翻译 FlashDB 任何一行 C”已过时，`real-fdb-calc-crc32` 已有 clang AST dump -> typed IR -> Rust draft candidate，但 generated draft 仍是 candidate；“40/40 L1 通过”不符合当前 committed summary；“FlashDB 测试完全流于表面”过重，已有 fixture/diff/negative diff/abnormal data 测试，但覆盖仍需要量化。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+- `flashDB_rust/README.md`
+
+新增/强化的待办：
+- P0 新增：拆分 `typed_ir.rs` / `clang_frontend.rs` 巨文件，按 IR 数据类型、validation、emitter、side-effect helpers、clang skeleton/lowering、report/evidence builder 做行为保持拆分。
+- P0 新增：依赖与工具链引入原则。继续以 `CLANG_PATH` + clang AST dump JSON 为当前语义前端事实；libclang/bindgen/syn/quote/tracing/anyhow 等依赖只能在解决具体语义/生成/维护风险且符合 competition env 时引入。
+- P0 新增：translator coverage matrix，按 IR construct、clang fixture replay、手写 IR、负例、runtime emitted Rust、C/Rust diff、legacy fallback 和 route evidence 统计覆盖。
+- P0 新增：拆分 `bounded_translation.rs` 测试巨文件，按能力域拆分，但不能用测试文件数冒充覆盖提升。
+- P0 新增：执行 `CONTEXT.md` handoff 收敛，建立短 current-state 入口，归档或标记 superseded 旧段，release/README/roadmap 不得依赖旧会话段作为能力证明。
+- P1 强化：扩真实切片池时，FlashDB slice 必须绑定 translator-generated candidate，不能只用 `flashDB_rust` 手写 skeleton 当自动翻译证据。
+- P1 新增：FlashDB FFI/C ABI/hardware 路线，`ffi.rs`、C ABI、on-disk layout、FAL/RTOS/Zephyr/hardware backend、错误/日志接口和同步/断电语义必须有 OpenSpec change、unsafe ledger、target evidence 或明确 deferred/L4 refusal。
+- P2 新增：开源反馈循环，外部可评估 milestone 前补 `CONTRIBUTING`/issue template/review checklist 或等价文档；社区指标不是能力证明，但没有公开反馈记录时不能写成熟生产工具。
+- `flashDB_rust/README.md` 修正：0 unsafe scan 只是当前 skeleton 扫描结果，不是生产安全、硬件安全、C ABI 兼容或完整语义等价证明；手写 skeleton 不算自动翻译产物。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/26
+- P1: 0/10
+- P2: 0/7
+
+边界：
+- 可以说：这次把附件评价中仍符合当前事实的工程债务和治理风险写进 roadmap，并修正了 `flashDB_rust` README 的 unsafe/handwritten 边界。
+- 不应说：typed IR/clang frontend 已拆分、coverage matrix 已实现、FFI/C ABI/hardware 路线已实现、或项目已有成熟开源反馈循环。

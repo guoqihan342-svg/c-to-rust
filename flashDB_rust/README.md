@@ -7,7 +7,10 @@ English: this is the first Rust skeleton for the FlashDB C-to-Rust migration. Th
 ## Scope
 
 - Rust-native safe API
-- 0% first-party non-test unsafe
+- 当前 unsafe-scan 结果：当前 host-verifiable skeleton 中 0 个 first-party non-test `unsafe` findings。
+- English: current unsafe-scan result is 0 first-party non-test `unsafe` findings in the present host-verifiable skeleton.
+- 项目政策：first-party non-test `unsafe` 必须低于 repo budget；未来任何 FFI、C ABI、硬件、volatile、RTOS 或并发 unsafe 边界都必须先进入 ledger，再声明支持。
+- English: project policy is to keep first-party non-test `unsafe` below the repo budget and ledger any future FFI, C ABI, hardware, volatile, RTOS, or concurrency unsafe boundary before claiming it is supported.
 - Memory flash backend
 - File-backed flash backend
 - KVDB seed behavior: set/get/delete/iterate/compact/reopen
@@ -22,6 +25,13 @@ Deferred:
 - C2Rust baseline generation
 - FAL, RTOS, Zephyr, and hardware ports
 - async or multithreaded storage semantics
+
+Boundary note / 边界说明:
+
+- 0 finding 的 unsafe scan 不是生产级 FlashDB 安全性、硬件安全性、C ABI 兼容性或完整语义等价证明。
+- The zero-finding unsafe scan is not a proof of production FlashDB safety, hardware safety, C ABI compatibility, or full semantic equivalence.
+- Rust skeleton 是手写 seed code 和验证脚手架；除非某个函数切片绑定 translator-generated candidate 和 accepted evidence，否则不能算自动翻译产物。
+- The Rust skeleton is handwritten seed code plus validation scaffolding. It is not counted as automatic translator output unless a specific function slice is tied to a translator-generated candidate and accepted evidence.
 
 ## Fast Verification
 
