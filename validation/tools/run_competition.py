@@ -201,7 +201,8 @@ def run_competition(
         out_root=out_root,
     )
 
-    if unsafe_result.returncode != 0 or openspec_result.returncode != 0:
+    unsafe_summary = unsafe_budget_summary(unsafe_result)
+    if unsafe_summary["status"] != "passed" or openspec_result.returncode != 0:
         gate_failures += 1
 
     status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"
@@ -228,7 +229,7 @@ def run_competition(
             "blocked": blocked,
             "failed": slice_failures,
         },
-        "unsafe_budget": unsafe_budget_summary(),
+        "unsafe_budget": unsafe_summary,
         "artifact_roots": [
             "target/competition-out/evidence",
             "target/competition-out/summary",
@@ -426,10 +427,24 @@ def clang_source(repo_root: Path) -> str:
     return "missing"
 
 
-def unsafe_budget_summary() -> dict[str, Any]:
+def unsafe_budget_summary(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        report = {}
+    if not isinstance(report, dict):
+        report = {}
+    status = report.get("status") if isinstance(report.get("status"), str) else "failed"
+    if status not in {"passed", "failed"}:
+        status = "failed"
+    unsafe_count = report.get("first_party_non_test_unsafe_count")
+    unsafe_ratio = report.get("unsafe_ratio")
     return {
-        "total_first_party_non_test_unsafe": 0,
-        "ratio": 0.0,
+        "status": status if result.returncode == 0 else "failed",
+        "total_first_party_non_test_unsafe": unsafe_count
+        if isinstance(unsafe_count, int) and unsafe_count >= 0
+        else 0,
+        "ratio": unsafe_ratio if isinstance(unsafe_ratio, (int, float)) and unsafe_ratio >= 0 else 0.0,
     }
 
 

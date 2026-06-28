@@ -85,10 +85,12 @@ class FakeCommandRunner:
         *,
         fail_auto_migrate_for: set[str] | None = None,
         fail_commands_containing: set[str] | None = None,
+        stdout_by_command_marker: dict[str, str] | None = None,
     ) -> None:
         self.commands: list[list[str]] = []
         self.fail_auto_migrate_for = fail_auto_migrate_for or set()
         self.fail_commands_containing = fail_commands_containing or set()
+        self.stdout_by_command_marker = stdout_by_command_marker or {}
 
     def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.commands.append(command)
@@ -102,6 +104,19 @@ class FakeCommandRunner:
         for slice_id in self.fail_auto_migrate_for:
             if "auto_migrate.py" in command_text and slice_id in command_text:
                 return subprocess.CompletedProcess(command, 1, "", f"failed {slice_id}")
+        for marker, stdout in self.stdout_by_command_marker.items():
+            if marker in command_text:
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+        if "unsafe_budget.py" in command_text:
+            stdout = json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "passed",
+                    "first_party_non_test_unsafe_count": 0,
+                    "unsafe_ratio": 0.0,
+                }
+            )
+            return subprocess.CompletedProcess(command, 0, stdout, "")
         return subprocess.CompletedProcess(command, 0, "ok", "")
 
     def write_extracted_slice_spec(self, command: list[str], cwd: Path) -> None:
@@ -398,7 +413,80 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 1)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["unsafe_budget"]["status"], "failed")
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 0)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.0)
             self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_summary_uses_unsafe_budget_json_stdout(self) -> None:
+        module = load_runner_module()
+        unsafe_stdout = json.dumps(
+            {
+                "schema_version": 1,
+                "status": "passed",
+                "first_party_non_test_unsafe_count": 7,
+                "unsafe_ratio": 0.03125,
+            }
+        )
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(stdout_by_command_marker={"unsafe_budget.py": unsafe_stdout})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 7)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.03125)
+            self.assertEqual(summary["unsafe_budget"]["status"], "passed")
+
+    def test_runner_marks_invalid_unsafe_budget_json_stdout_as_gate_failure(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(stdout_by_command_marker={"unsafe_budget.py": "not-json"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["unsafe_budget"]["status"], "failed")
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 0)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_unsafe_budget_summary_rejects_non_object_json_stdout(self) -> None:
+        module = load_runner_module()
+
+        for stdout in ["null", "[]", '"text"', "123", "true"]:
+            with self.subTest(stdout=stdout):
+                summary = module.unsafe_budget_summary(
+                    subprocess.CompletedProcess(["unsafe_budget.py"], 0, stdout, "")
+                )
+
+                self.assertEqual(summary["status"], "failed")
+                self.assertEqual(summary["total_first_party_non_test_unsafe"], 0)
+                self.assertEqual(summary["ratio"], 0.0)
 
     def test_runner_keeps_evidence_validator_failure_out_of_terminal_slice_counts(self) -> None:
         module = load_runner_module()

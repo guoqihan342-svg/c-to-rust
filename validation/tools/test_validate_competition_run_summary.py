@@ -43,6 +43,7 @@ def valid_summary() -> dict:
             "failed": 0,
         },
         "unsafe_budget": {
+            "status": "passed",
             "total_first_party_non_test_unsafe": 0,
             "ratio": 0.0,
         },

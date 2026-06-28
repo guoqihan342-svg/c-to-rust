@@ -163,6 +163,7 @@ target/competition-out/
     "failed": <int>
   },
   "unsafe_budget": {
+    "status": "passed | failed",
     "total_first_party_non_test_unsafe": <int>,
     "ratio": <float>
   },

@@ -140,10 +140,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "status",
         "total_first_party_non_test_unsafe",
         "ratio"
       ],
       "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
         "total_first_party_non_test_unsafe": {
           "type": "integer",
           "minimum": 0
