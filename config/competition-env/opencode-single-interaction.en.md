@@ -64,22 +64,25 @@ Run the environment check first, then process real C slices. Independent slices 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — Verify the environment meets the competition baseline; `env.sh` activates `CARGO_HOME=config/competition-env/cargo`, and when `toolchain-check.sh` finds clang it also validates resource-dir plus a minimal TU AST dump including `stdint.h`/`stddef.h`.
 
-2. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out validation/slice-specs/<id>-<slice>.json
-   — Extract a function slice from a real C source file.
+2. Prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`.
+   — This is the parameterized input used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
 
-3. python validation/tools/run_competition.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
-   — Use the unified runner for environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation.
+3. python validation/tools/run_competition.py --extract-spec target/competition-out/extract-specs/<id>-<slice>.json --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+   — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
 
-4. python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
-   — Run the full auto-translation pipeline: clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile.
+4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+   — Manual expanded real C source function slice extraction. When using runner `--extract-spec`, the runner invokes this step.
 
-5. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec validation/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
+5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
+   — Manual expanded full auto-translation pipeline: clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile. When using the runner, this step is called by the runner.
+
+6. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
    — Manual expanded full evidence validation. When using the runner, this step is called by the runner.
 
-6. openspec validate --all --strict
+7. openspec validate --all --strict
    — Manual expanded OpenSpec validation. When using the runner, this step is called by the runner.
 
-7. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be validated by the common gates.
+8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be validated by the common gates.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
@@ -92,7 +95,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
 - **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
-- **Prefer `run_competition.py` for aggregating existing slice specs**; the current runner still expects slice specs to be generated first by `extract_source_slice.py`, and full parallel worker status merging remains a later enhancement.
+- **Prefer `run_competition.py --extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and full parallel worker status merging remains a later enhancement.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.
 - **All evidence files must be written to disk**; the validator reads disk files directly, not in-memory constructs.
 

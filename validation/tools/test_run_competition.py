@@ -35,6 +35,27 @@ def write_slice_spec(root: Path, target_id: str, slice_id: str) -> Path:
     return path
 
 
+def write_extract_spec(root: Path, target_id: str, slice_id: str) -> Path:
+    path = root / f"{target_id}-{slice_id}-extract.json"
+    path.write_text(
+        json.dumps(
+            {
+                "repo_root": str(root / "source-repo"),
+                "source_file": "src/demo.c",
+                "function": slice_id.replace("-", "_"),
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "source_commit": "abc123",
+                "compiler_command_source": "compile_commands.json",
+                "include_paths": ["include"],
+                "defines": ["DEMO=1"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def write_final_verification(
     evidence_root: Path,
     target_id: str,
@@ -69,16 +90,42 @@ class FakeCommandRunner:
         self.fail_auto_migrate_for = fail_auto_migrate_for or set()
         self.fail_commands_containing = fail_commands_containing or set()
 
-    def __call__(self, command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+    def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.commands.append(command)
         command_text = " ".join(command)
         for marker in self.fail_commands_containing:
             if marker in command_text:
                 return subprocess.CompletedProcess(command, 1, "", f"failed {marker}")
+        if "extract_source_slice.py" in command_text:
+            cwd = Path(kwargs.get("cwd", REPO_ROOT))
+            self.write_extracted_slice_spec(command, cwd)
         for slice_id in self.fail_auto_migrate_for:
             if "auto_migrate.py" in command_text and slice_id in command_text:
                 return subprocess.CompletedProcess(command, 1, "", f"failed {slice_id}")
         return subprocess.CompletedProcess(command, 0, "ok", "")
+
+    def write_extracted_slice_spec(self, command: list[str], cwd: Path) -> None:
+        def arg_value(name: str) -> str:
+            return command[command.index(name) + 1]
+
+        out_path = Path(arg_value("--out"))
+        if not out_path.is_absolute():
+            out_path = cwd / out_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        target_id = arg_value("--target-id")
+        slice_id = arg_value("--slice-id")
+        function_name = arg_value("--function")
+        out_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "target_id": target_id,
+                    "slice_id": slice_id,
+                    "function_name": function_name,
+                }
+            ),
+            encoding="utf-8",
+        )
 
 
 class RunCompetitionTests(unittest.TestCase):
@@ -122,6 +169,122 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 1)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_runner_extracts_slice_spec_before_auto_migrate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            extract_spec = write_extract_spec(tmp_path, "demo", "extracted-slice")
+            write_final_verification(out_root / "evidence", "demo", "extracted-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            extract_command = next(text for text in command_texts if "extract_source_slice.py" in text)
+            self.assertIn("--repo-root", extract_command)
+            self.assertIn("--source-file src/demo.c", extract_command)
+            self.assertIn("--function extracted_slice", extract_command)
+            self.assertIn("--include-path include", extract_command)
+            self.assertIn("--define DEMO=1", extract_command)
+            auto_migrate_command = next(text for text in command_texts if "auto_migrate.py" in text)
+            self.assertIn(
+                "slice-specs/demo-extracted-slice.json",
+                auto_migrate_command.replace("\\", "/"),
+            )
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+
+    def test_runner_counts_extract_failure_as_slice_failure_and_logs_it(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            extract_spec = write_extract_spec(tmp_path, "demo", "bad-extract")
+            fake_runner = FakeCommandRunner(fail_commands_containing={"extract_source_slice.py"})
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["failed"], 1)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            extract_entries = [entry for entry in entries if entry["step"] == "extract-slice-bad-extract"]
+            self.assertEqual(len(extract_entries), 1)
+            self.assertEqual(extract_entries[0]["returncode"], 1)
+            self.assertIn("failed extract_source_slice.py", extract_entries[0]["stderr"])
+
+    def test_runner_combines_existing_and_extracted_slice_specs(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            existing_spec = write_slice_spec(tmp_path, "demo", "existing-slice")
+            extract_spec = write_extract_spec(tmp_path, "demo", "extracted-slice")
+            write_final_verification(out_root / "evidence", "demo", "existing-slice", semantic_pass=True)
+            write_final_verification(out_root / "evidence", "demo", "extracted-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[existing_spec],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            auto_migrate_commands = [text for text in command_texts if "auto_migrate.py" in text]
+            self.assertEqual(len(auto_migrate_commands), 2)
+            self.assertTrue(any("existing-slice" in text for text in auto_migrate_commands))
+            self.assertTrue(any("extracted-slice" in text for text in auto_migrate_commands))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 2)
+            self.assertEqual(summary["slices"]["semantic_pass"], 2)
+
+    def test_runner_requires_slice_spec_or_extract_spec(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    out_root=Path(tmp) / "competition-out",
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+        self.assertIn("--slice-spec or --extract-spec", str(raised.exception))
 
     def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
         module = load_runner_module()
