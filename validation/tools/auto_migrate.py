@@ -144,7 +144,7 @@ def main() -> int:
     else:
         replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
     validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
-    refusal_evidence = emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
+    emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
     cache = emit_cache_metadata(
@@ -2958,6 +2958,7 @@ def write_route_refused_patch(
                 "source_span": {"file": rel(draft_path) if draft_path else "", "line_start": 1, "line_end": 1},
                 "human_action_required": True,
                 "route_decision": route_decision.get("level"),
+                **route_refused_repair_playbook(spec, evidence_dir, route_decision),
             }
         ],
     )
@@ -3017,6 +3018,7 @@ def write_blocked_patch(
                 "candidate_patch_id": event["patch_id"],
                 "source_span": {"file": rel(draft_path) if draft_path else "", "line_start": 1, "line_end": 1},
                 "human_action_required": True,
+                **compile_blocked_repair_playbook(spec, draft_path, errors),
             }
         ],
     )
@@ -3029,6 +3031,127 @@ def write_blocked_patch(
         "status": "blocked",
         "self_heal_applied": False,
     }
+
+
+def route_refused_repair_playbook(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+) -> dict[str, Any]:
+    gap = route_refused_ir_feature_gap(spec, evidence_dir, route_decision)
+    return {
+        "ir_feature_gap": gap,
+        "oracle_fixture_gap": {
+            "status": "not_blocking",
+            "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
+        },
+        "candidate_routes": repair_candidate_routes(gap["kind"]),
+        "smallest_next_test": {
+            "kind": "route_refusal_regression",
+            "command": (
+                "python -B -m unittest "
+                "validation.tools.test_auto_migrate.AutoMigrateTests."
+                "test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
+            ),
+            "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
+        },
+        "human_intervention_point": (
+            "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, "
+            "then rerun auto_migrate before promoting any candidate."
+        ),
+    }
+
+
+def route_refused_ir_feature_gap(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    cfg_path = evidence_dir / f"{prefix}-cfg.json"
+    plan = read_json(plan_path) if plan_path.exists() else {}
+    cfg = read_json(cfg_path) if cfg_path.exists() else {}
+    summary = plan.get("translation_summary", {})
+    if isinstance(summary, dict) and int(summary.get("unsupported_lvalue_count", 0) or 0) > 0:
+        return {
+            "kind": "unsupported_lvalue",
+            "source": "auto_translation_plan.translation_summary.unsupported_lvalue_count",
+            "evidence_refs": [rel(plan_path), rel(cfg_path)],
+        }
+    if cfg.get("unsupported_control_flow"):
+        return {
+            "kind": "unsupported_control_flow",
+            "source": "cfg.unsupported_control_flow",
+            "evidence_refs": [rel(cfg_path)],
+        }
+    rationale = route_decision.get("rationale", [])
+    feature = "route_refused"
+    if isinstance(rationale, list) and rationale and isinstance(rationale[0], dict):
+        feature = str(rationale[0].get("feature", feature))
+    return {
+        "kind": feature,
+        "source": "route_decision.rationale",
+        "evidence_refs": [rel(evidence_dir / f"{prefix}-route-decision.json")],
+    }
+
+
+def compile_blocked_repair_playbook(
+    spec: dict[str, Any],
+    draft_path: Path | None,
+    errors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "ir_feature_gap": {
+            "kind": "rust_compile_failure",
+            "source": "rustc_diagnostics",
+            "error_codes": [rustc_error_code(error) for error in errors],
+            "evidence_refs": [rel(draft_path)] if draft_path else [],
+        },
+        "oracle_fixture_gap": {
+            "status": "unknown_until_compile_passes",
+            "reason": "The generated Rust draft must compile before C/Rust behavior can be compared.",
+        },
+        "candidate_routes": repair_candidate_routes("rust_compile_failure"),
+        "smallest_next_test": {
+            "kind": "rust_compile_replay",
+            "command": "rustc --edition=2021 --crate-type=lib --error-format=json <draft>",
+            "expected_gate": "compile diagnostics either self-heal or remain blocked with playbook fields",
+        },
+        "human_intervention_point": (
+            "Repair the typed-IR emitter output without changing the C oracle, fixture expected behavior, "
+            "source slice boundary, or unsafe policy."
+        ),
+    }
+
+
+def repair_candidate_routes(gap_kind: str) -> list[dict[str, Any]]:
+    typed_ir_action = "extend_typed_ir_lowering_or_emitter"
+    if gap_kind == "rust_compile_failure":
+        typed_ir_action = "repair_typed_ir_emitted_rust"
+    return [
+        {
+            "route": "typed_ir",
+            "status": "blocked",
+            "next_action": typed_ir_action,
+        },
+        {
+            "route": "c2rust",
+            "status": "candidate_context_only",
+            "next_action": "generate_or_attach_baseline_output_then_run_common_validation",
+        },
+        {
+            "route": "llm",
+            "status": "candidate_only",
+            "next_action": "generate_candidate_from_bound_inputs_then_run_common_validation",
+        },
+        {
+            "route": "manual",
+            "status": "allowed_with_review",
+            "next_action": "write_reviewed_candidate_and_bind_it_to_oracle_diff_gates",
+        },
+    ]
 
 
 def emit_cache_metadata(

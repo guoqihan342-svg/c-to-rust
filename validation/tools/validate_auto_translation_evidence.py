@@ -333,6 +333,7 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
                 auto_manifest,
                 auto_manifest_path,
             )
+            validate_l4_refused_repair_playbook(evidence_dir, prefix)
     validate_route_source_artifact_refs(evidence_dir, prefix, route, baseline_path)
     require_ref(auto_manifest.get("c2rust_baseline"), baseline_path, "auto_manifest.c2rust_baseline")
     require_ref(auto_manifest.get("route_decision"), route_path, "auto_manifest.route_decision")
@@ -1977,6 +1978,53 @@ def candidate_status_paths(value: Any, path: str = "$") -> list[str]:
         for index, child in enumerate(value):
             hits.extend(candidate_status_paths(child, f"{path}[{index}]"))
     return hits
+
+
+def validate_l4_refused_repair_playbook(evidence_dir: Path, prefix: str) -> None:
+    blocked_path = evidence_dir / f"{prefix}-self-healing-blocked-repairs.json"
+    blocked = load_json(blocked_path)
+    repairs = blocked.get("blocked_repairs", [])
+    if not repairs:
+        return
+    if not isinstance(repairs, list):
+        raise SystemExit(f"repair playbook requires blocked_repairs list in {blocked_path}")
+    required = [
+        "ir_feature_gap",
+        "oracle_fixture_gap",
+        "candidate_routes",
+        "smallest_next_test",
+        "human_intervention_point",
+    ]
+    for index, repair in enumerate(repairs):
+        if not isinstance(repair, dict):
+            raise SystemExit(f"repair playbook item {index} must be an object in {blocked_path}")
+        for field in required:
+            if field not in repair:
+                raise SystemExit(f"repair playbook missing {field} in {blocked_path}:blocked_repairs[{index}]")
+        if not isinstance(repair.get("ir_feature_gap"), dict) or not repair["ir_feature_gap"].get("kind"):
+            raise SystemExit(f"repair playbook missing ir_feature_gap.kind in {blocked_path}:blocked_repairs[{index}]")
+        if not isinstance(repair.get("oracle_fixture_gap"), dict) or not repair["oracle_fixture_gap"].get("status"):
+            raise SystemExit(f"repair playbook missing oracle_fixture_gap.status in {blocked_path}:blocked_repairs[{index}]")
+        candidate_routes = repair.get("candidate_routes")
+        if not isinstance(candidate_routes, list) or not candidate_routes:
+            raise SystemExit(f"repair playbook missing candidate_routes in {blocked_path}:blocked_repairs[{index}]")
+        route_names = {
+            str(route.get("route"))
+            for route in candidate_routes
+            if isinstance(route, dict) and route.get("route")
+        }
+        if not {"typed_ir", "c2rust", "llm", "manual"}.issubset(route_names):
+            raise SystemExit(
+                f"repair playbook candidate_routes must include typed_ir/c2rust/llm/manual in "
+                f"{blocked_path}:blocked_repairs[{index}]"
+            )
+        if not isinstance(repair.get("smallest_next_test"), dict) or not repair["smallest_next_test"].get("kind"):
+            raise SystemExit(f"repair playbook missing smallest_next_test.kind in {blocked_path}:blocked_repairs[{index}]")
+        intervention = repair.get("human_intervention_point")
+        if not isinstance(intervention, str) or not intervention.strip():
+            raise SystemExit(
+                f"repair playbook missing human_intervention_point in {blocked_path}:blocked_repairs[{index}]"
+            )
 
 
 def ref_expects_existing_artifact(ref: Any) -> bool:

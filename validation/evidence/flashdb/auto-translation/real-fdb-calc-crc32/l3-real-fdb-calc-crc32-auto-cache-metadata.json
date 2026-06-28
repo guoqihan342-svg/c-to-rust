@@ -61,8 +61,6 @@
         "value": ""
       }
     },
-    "lane": "competition-clang-lane",
-    "required": true,
     "requires_env": [
       "CLANG_PATH"
     ]
@@ -72,8 +70,7 @@
     "--slice-spec",
     "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
     "--accept-existing-evidence",
-    "--emit-clang-lowering-report",
-    "--competition-clang-lane"
+    "--emit-clang-lowering-report"
   ],
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
@@ -89,7 +86,7 @@
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-      "sha256": "c4170b291c2ce884a8a90494a75c2a480c176e5ecee2e54ec0ca6ea5ddc189db",
+      "sha256": "be6f41a032970223f7e46a95acb1b5e5ad2b6a457467fe3f62870c36f5799bbd",
       "status": "refused"
     },
     "validation_profile": {
@@ -142,7 +139,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "81e9a3d384ce7293a0ea9658bbe4f68eb8ddbc010e238c141e3f5b9ff5114668",
+    "sha256": "24cb5be1d0178f2ea0aa97b338b9ab4bcb57b4754ce93f167cea30fe775c35ac",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {

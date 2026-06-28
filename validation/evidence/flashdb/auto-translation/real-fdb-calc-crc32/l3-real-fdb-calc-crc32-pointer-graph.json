@@ -89,7 +89,7 @@
       "write_effects": []
     }
   ],
-  "repo_commit": "d9468167e768ec535307cd928e90929c4cadfd23",
+  "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": false,

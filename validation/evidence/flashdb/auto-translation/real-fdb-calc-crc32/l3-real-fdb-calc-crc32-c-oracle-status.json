@@ -56,14 +56,80 @@
       "-o",
       "l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
     ],
-    "attempted": false,
-    "diagnostics": [
-      "C oracle compile execution skipped by --skip-c-oracle."
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
     ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /usr/bin/cc -std=c99 -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests l3-real-fdb-calc-crc32-c-oracle-harness-draft.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c -o l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "output_gate": {
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+        "compared_fields": [
+          "return_code"
+        ],
+        "diagnostics": [
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+        ],
+        "expected_stdout_fragments": [
+          "fixture case empty-crc-zero return_code matched",
+          "fixture case ascii-123456789-crc-zero return_code matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "matched_stdout_fragments": [
+          "fixture case empty-crc-zero return_code matched",
+          "fixture case ascii-123456789-crc-zero return_code matched"
+        ],
+        "missing_stdout_fragments": [],
+        "schema_version": 1,
+        "semantic_pass": false,
+        "status": "matched_not_oracle"
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nfixture case empty-crc-zero return_code matched\nfixture case ascii-123456789-crc-zero return_code matched\n",
+      "timeout_seconds": 30,
+      "toolchain_adapter": "wsl",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
     "semantic_pass": false,
-    "status": "skipped_by_flag",
-    "toolchain_adapter": "not_executed",
-    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",

@@ -3,16 +3,126 @@
   "title": "Blocked Repairs Evidence",
   "type": "object",
   "additionalProperties": true,
-  "required": ["schema_version", "target_id", "slice_id", "status", "blocked_repairs", "cache_invalidation_keys"],
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "status",
+    "blocked_repairs",
+    "cache_invalidation_keys"
+  ],
   "properties": {
     "schema_version": {"type": "integer", "minimum": 1},
     "target_id": {"type": "string"},
     "slice_id": {"type": "string"},
     "status": {"enum": ["none", "recorded", "stale", "incomplete"]},
-    "blocked_repairs": {"type": "array", "items": {"$ref": "#/definitions/blockedRepair"}},
+    "blocked_repairs": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/blockedRepair"}
+    },
     "cache_invalidation_keys": {"type": "array", "items": {"type": "string"}}
   },
   "definitions": {
-    "blockedRepair": {"type": "object", "required": ["repair_id", "blocked_reason", "forbidden_change", "candidate_patch_id", "human_action_required"], "properties": {"repair_id": {"type": "string"}, "blocked_reason": {"type": "string"}, "forbidden_change": {"enum": ["c_oracle_contract", "fixture_expected_behavior", "accepted_metadata_differences", "public_api_outside_impact_set", "source_slice_boundary", "unsafe_budget_policy", "missing_l1_evidence", "unsupported_control_flow", "type_uncertainty"]}, "candidate_patch_id": {"type": "string"}, "source_span": {"type": "object", "properties": {"file": {"type": "string"}, "line_start": {"type": "integer", "minimum": 1}, "line_end": {"type": "integer", "minimum": 1}}}, "human_action_required": {"type": "boolean"}}}
+    "blockedRepair": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "repair_id",
+        "blocked_reason",
+        "forbidden_change",
+        "candidate_patch_id",
+        "source_span",
+        "human_action_required",
+        "ir_feature_gap",
+        "oracle_fixture_gap",
+        "candidate_routes",
+        "smallest_next_test",
+        "human_intervention_point"
+      ],
+      "properties": {
+        "repair_id": {"type": "string"},
+        "blocked_reason": {"type": "string"},
+        "forbidden_change": {
+          "enum": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+            "missing_l1_evidence",
+            "unsupported_control_flow",
+            "type_uncertainty"
+          ]
+        },
+        "candidate_patch_id": {"type": "string"},
+        "source_span": {"$ref": "#/definitions/sourceSpan"},
+        "human_action_required": {"type": "boolean"},
+        "ir_feature_gap": {"$ref": "#/definitions/irFeatureGap"},
+        "oracle_fixture_gap": {"$ref": "#/definitions/oracleFixtureGap"},
+        "candidate_routes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/candidateRoute"}
+        },
+        "smallest_next_test": {"$ref": "#/definitions/smallestNextTest"},
+        "human_intervention_point": {"type": "string", "minLength": 1}
+      }
+    },
+    "sourceSpan": {
+      "type": "object",
+      "required": ["file", "line_start", "line_end"],
+      "properties": {
+        "file": {"type": "string"},
+        "line_start": {"type": "integer", "minimum": 1},
+        "line_end": {"type": "integer", "minimum": 1}
+      }
+    },
+    "irFeatureGap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "source": {"type": "string"},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}},
+        "error_codes": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "oracleFixtureGap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_blocking",
+            "unknown_until_compile_passes",
+            "missing_or_insufficient"
+          ]
+        },
+        "reason": {"type": "string"}
+      }
+    },
+    "candidateRoute": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["route", "status", "next_action"],
+      "properties": {
+        "route": {"enum": ["typed_ir", "c2rust", "llm", "manual"]},
+        "status": {"type": "string", "minLength": 1},
+        "next_action": {"type": "string", "minLength": 1}
+      }
+    },
+    "smallestNextTest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "command": {"type": "string"},
+        "expected_gate": {"type": "string"}
+      }
+    }
   }
 }

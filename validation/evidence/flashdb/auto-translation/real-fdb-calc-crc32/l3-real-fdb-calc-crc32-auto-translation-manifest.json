@@ -9,8 +9,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "0bffea59ef533ea88c9668e1a92e643391fdd3c2e3a3ce7156885402035777eb",
-      "unsafe_ledger": "db81f1d945ebd22dc06fe40673d4c1455e19aaaaf98599f67dd656ce0f2c909f",
-      "unsafe_scan": "7cd30dcb9cc2beea45948e7a73932302fc6a5e4ab553c32ce8e2f27f5c5ff687"
+      "unsafe_ledger": "eb162631f86bbb7b3749be30c297a3a5c314683e891aa8d991a63dca76a65026",
+      "unsafe_scan": "93f25912be2e47edd30c5f7600242963dee28b4d9a612f35451ebf80f0d5b3a3"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -94,8 +94,6 @@
           "value": ""
         }
       },
-      "lane": "competition-clang-lane",
-      "required": true,
       "requires_env": [
         "CLANG_PATH"
       ]
@@ -105,8 +103,7 @@
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
       "--accept-existing-evidence",
-      "--emit-clang-lowering-report",
-      "--competition-clang-lane"
+      "--emit-clang-lowering-report"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
@@ -122,7 +119,7 @@
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "c4170b291c2ce884a8a90494a75c2a480c176e5ecee2e54ec0ca6ea5ddc189db",
+        "sha256": "be6f41a032970223f7e46a95acb1b5e5ad2b6a457467fe3f62870c36f5799bbd",
         "status": "refused"
       },
       "validation_profile": {
@@ -175,7 +172,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "81e9a3d384ce7293a0ea9658bbe4f68eb8ddbc010e238c141e3f5b9ff5114668",
+      "sha256": "24cb5be1d0178f2ea0aa97b338b9ab4bcb57b4754ce93f167cea30fe775c35ac",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -309,14 +306,80 @@
         "-o",
         "l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
       ],
-      "attempted": false,
-      "diagnostics": [
-        "C oracle compile execution skipped by --skip-c-oracle."
+      "attempted": true,
+      "compiler_candidates": [
+        "cc",
+        "gcc",
+        "clang"
       ],
+      "compiler_name": "cc",
+      "compiler_path": "/usr/bin/cc",
+      "diagnostics": [
+        "C oracle compile command succeeded, but execution/diff gates are still required."
+      ],
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /usr/bin/cc -std=c99 -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc -I/mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests l3-real-fdb-calc-crc32-c-oracle-harness-draft.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c /mnt/c/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_file.c -o l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
+        "execution_argv": [
+          "C:\\WINDOWS\\system32\\wsl.exe",
+          "-e",
+          "sh",
+          "-lc",
+          "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_code"
+          ],
+          "diagnostics": [
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          ],
+          "expected_stdout_fragments": [
+            "fixture case empty-crc-zero return_code matched",
+            "fixture case ascii-123456789-crc-zero return_code matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [
+            "fixture case empty-crc-zero return_code matched",
+            "fixture case ascii-123456789-crc-zero return_code matched"
+          ],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "matched_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nfixture case empty-crc-zero return_code matched\nfixture case ascii-123456789-crc-zero return_code matched\n",
+        "timeout_seconds": 30,
+        "toolchain_adapter": "wsl",
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
+      },
+      "requested_compiler": "cc",
+      "returncode": 0,
       "semantic_pass": false,
-      "status": "skipped_by_flag",
-      "toolchain_adapter": "not_executed",
-      "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+      "status": "compile_succeeded_not_oracle",
+      "stderr": "",
+      "stdout": "",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
@@ -472,10 +535,49 @@
       {
         "blocked_reason": "Route decision refused candidate generation for unsupported C semantics.",
         "candidate_patch_id": "patch-route-refused-1",
+        "candidate_routes": [
+          {
+            "next_action": "extend_typed_ir_lowering_or_emitter",
+            "route": "typed_ir",
+            "status": "blocked"
+          },
+          {
+            "next_action": "generate_or_attach_baseline_output_then_run_common_validation",
+            "route": "c2rust",
+            "status": "candidate_context_only"
+          },
+          {
+            "next_action": "generate_candidate_from_bound_inputs_then_run_common_validation",
+            "route": "llm",
+            "status": "candidate_only"
+          },
+          {
+            "next_action": "write_reviewed_candidate_and_bind_it_to_oracle_diff_gates",
+            "route": "manual",
+            "status": "allowed_with_review"
+          }
+        ],
         "forbidden_change": "unsupported_control_flow",
         "human_action_required": true,
+        "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
+        "ir_feature_gap": {
+          "evidence_refs": [
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json"
+          ],
+          "kind": "typed_ir_scalar_admission_unresolved",
+          "source": "route_decision.rationale"
+        },
+        "oracle_fixture_gap": {
+          "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
+          "status": "not_blocking"
+        },
         "repair_id": "repair-route-refused-1",
         "route_decision": "L4",
+        "smallest_next_test": {
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+          "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
+          "kind": "route_refusal_regression"
+        },
         "source_span": {
           "file": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
           "line_end": 1,
@@ -542,7 +644,7 @@
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "d9468167e768ec535307cd928e90929c4cadfd23",
+    "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_calc_crc32",
@@ -640,11 +742,11 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "c4170b291c2ce884a8a90494a75c2a480c176e5ecee2e54ec0ca6ea5ddc189db",
+    "sha256": "be6f41a032970223f7e46a95acb1b5e5ad2b6a457467fe3f62870c36f5799bbd",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-myk9dlxb validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ofqmgnp5 F:\\agent\\crustpaper\\0625ctr\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-calc-crc32\\l3-real-fdb-calc-crc32-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {

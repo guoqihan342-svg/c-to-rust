@@ -3,6 +3,60 @@
   "target_id": "flashdb",
   "slice_id": "kvdb-lifecycle",
   "status": "recorded",
-  "blocked_repairs": [{"repair_id": "blocked-0001", "blocked_reason": "Candidate patch changes fixture expected behavior to make the generated Rust draft pass.", "forbidden_change": "fixture_expected_behavior", "candidate_patch_id": "patch-0002", "source_span": {"file": "validation/l2_slices/fixtures/flashdb-kvdb-lifecycle.json", "line_start": 12, "line_end": 18}, "human_action_required": true}],
-  "cache_invalidation_keys": ["fixture:example-fixture-hash", "patch:patch-0002", "schema:blocked-repairs:1"]
+  "blocked_repairs": [
+    {
+      "repair_id": "blocked-0001",
+      "blocked_reason": "Candidate patch changes fixture expected behavior to make the generated Rust draft pass.",
+      "forbidden_change": "fixture_expected_behavior",
+      "candidate_patch_id": "patch-0002",
+      "source_span": {
+        "file": "validation/l2_slices/fixtures/flashdb-kvdb-lifecycle.json",
+        "line_start": 12,
+        "line_end": 18
+      },
+      "human_action_required": true,
+      "ir_feature_gap": {
+        "kind": "fixture_expected_behavior_change",
+        "source": "patch review",
+        "evidence_refs": ["validation/evidence/flashdb/auto-translation/kvdb-lifecycle/patch-events.jsonl"]
+      },
+      "oracle_fixture_gap": {
+        "status": "missing_or_insufficient",
+        "reason": "The patch attempts to change the oracle fixture instead of making the Rust candidate match it."
+      },
+      "candidate_routes": [
+        {
+          "route": "typed_ir",
+          "status": "blocked",
+          "next_action": "repair lowering without changing fixture expectations"
+        },
+        {
+          "route": "c2rust",
+          "status": "candidate_context_only",
+          "next_action": "generate baseline output and run the same validation gates"
+        },
+        {
+          "route": "llm",
+          "status": "candidate_only",
+          "next_action": "generate a bounded candidate from hashed inputs and validate against the C oracle"
+        },
+        {
+          "route": "manual",
+          "status": "allowed_with_review",
+          "next_action": "write a reviewed candidate and bind it to diff and negative-diff gates"
+        }
+      ],
+      "smallest_next_test": {
+        "kind": "patch_policy_regression",
+        "command": "python -B -m unittest validation.tools.test_auto_migrate",
+        "expected_gate": "fixture-changing repairs remain blocked"
+      },
+      "human_intervention_point": "Review the slice contract and repair the candidate without changing C oracle or fixture behavior."
+    }
+  ],
+  "cache_invalidation_keys": [
+    "fixture:example-fixture-hash",
+    "patch:patch-0002",
+    "schema:blocked-repairs:1"
+  ]
 }

@@ -3825,6 +3825,15 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
             self.assertEqual(blocked["status"], "recorded")
+            repair = blocked["blocked_repairs"][0]
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "unsupported_lvalue")
+            self.assertEqual(repair["oracle_fixture_gap"]["status"], "not_blocking")
+            self.assertEqual(
+                [route["route"] for route in repair["candidate_routes"]],
+                ["typed_ir", "c2rust", "llm", "manual"],
+            )
+            self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
+            self.assertIn("human_intervention_point", repair)
             self.assertEqual(plan["translation_summary"]["unsupported_lvalue_count"], 1)
             self.assertIn("unsupported_lvalue", block["lvalue_kinds"])
             self.assertTrue(
@@ -4182,8 +4191,13 @@ class AutoMigrateTests(unittest.TestCase):
             blocked_path = out_root / "demo" / "auto-translation" / "bad-syntax" / "l3-bad-syntax-self-healing-blocked-repairs.json"
             blocked = json.loads(blocked_path.read_text(encoding="utf-8"))
             self.assertEqual(blocked["status"], "recorded")
-            self.assertEqual(blocked["blocked_repairs"][0]["candidate_patch_id"], "patch-blocked-1")
-            self.assertTrue(blocked["blocked_repairs"][0]["human_action_required"])
+            repair = blocked["blocked_repairs"][0]
+            self.assertEqual(repair["candidate_patch_id"], "patch-blocked-1")
+            self.assertTrue(repair["human_action_required"])
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "rust_compile_failure")
+            self.assertEqual(repair["oracle_fixture_gap"]["status"], "unknown_until_compile_passes")
+            self.assertEqual(repair["smallest_next_test"]["kind"], "rust_compile_replay")
+            self.assertIn("human_intervention_point", repair)
 
     def test_keyword_identifier_compile_failure_is_self_healed(self) -> None:
         spec = {

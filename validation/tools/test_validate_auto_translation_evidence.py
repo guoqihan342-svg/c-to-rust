@@ -1276,6 +1276,79 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         self.assertIn("$.generated_artifacts[1].status", paths)
         self.assertIn("$.generated_artifacts[2].status", paths)
 
+    def test_l4_refused_repair_playbook_rejects_missing_required_fields(self) -> None:
+        validator = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            blocked_path = evidence_dir / "l3-demo-self-healing-blocked-repairs.json"
+            blocked_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "target_id": "demo",
+                        "slice_id": "demo",
+                        "status": "recorded",
+                        "blocked_repairs": [
+                            {
+                                "repair_id": "repair-route-refused-1",
+                                "blocked_reason": "route refused",
+                                "forbidden_change": "unsupported_control_flow",
+                                "candidate_patch_id": "patch-route-refused-1",
+                                "source_span": {"file": "candidate.rs", "line_start": 1, "line_end": 1},
+                                "human_action_required": True,
+                            }
+                        ],
+                        "cache_invalidation_keys": ["source_commit=1234567"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                validator.validate_l4_refused_repair_playbook(evidence_dir, "l3-demo")
+
+            self.assertIn("repair playbook", str(raised.exception))
+
+    def test_l4_refused_repair_playbook_accepts_minimal_required_fields(self) -> None:
+        validator = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            blocked_path = evidence_dir / "l3-demo-self-healing-blocked-repairs.json"
+            blocked_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "target_id": "demo",
+                        "slice_id": "demo",
+                        "status": "recorded",
+                        "blocked_repairs": [
+                            {
+                                "repair_id": "repair-route-refused-1",
+                                "blocked_reason": "route refused",
+                                "forbidden_change": "unsupported_control_flow",
+                                "candidate_patch_id": "patch-route-refused-1",
+                                "source_span": {"file": "candidate.rs", "line_start": 1, "line_end": 1},
+                                "human_action_required": True,
+                                "ir_feature_gap": {"kind": "unsupported_lvalue"},
+                                "oracle_fixture_gap": {"status": "not_blocking"},
+                                "candidate_routes": [
+                                    {"route": "typed_ir"},
+                                    {"route": "c2rust"},
+                                    {"route": "llm"},
+                                    {"route": "manual"},
+                                ],
+                                "smallest_next_test": {"kind": "route_refusal_regression"},
+                                "human_intervention_point": "extend typed IR support",
+                            }
+                        ],
+                        "cache_invalidation_keys": ["source_commit=1234567"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            validator.validate_l4_refused_repair_playbook(evidence_dir, "l3-demo")
+
     def test_rejects_toolchain_generated_spoof_without_generated_oracle_status(self) -> None:
         validator = load_validator_module()
 

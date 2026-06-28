@@ -272,6 +272,29 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
             self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
 
+    def test_blocked_repairs_schema_requires_repair_playbook_fields(self) -> None:
+        schema_path = REPO_ROOT / "validation" / "auto-translation-template" / "blocked-repairs.schema.json"
+        example_path = REPO_ROOT / "validation" / "auto-translation-template" / "blocked-repairs.example.json"
+        schema = load_json(schema_path)
+        example = load_json(example_path)
+
+        repair_schema = schema["definitions"]["blockedRepair"]
+        for field in [
+            "ir_feature_gap",
+            "oracle_fixture_gap",
+            "candidate_routes",
+            "smallest_next_test",
+            "human_intervention_point",
+        ]:
+            self.assertIn(field, repair_schema["required"])
+            self.assertIn(field, repair_schema["properties"])
+
+        jsonschema.validate(example, schema)
+        incomplete = json.loads(json.dumps(example))
+        incomplete["blocked_repairs"][0].pop("ir_feature_gap")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(incomplete, schema)
+
 
 if __name__ == "__main__":
     unittest.main()
