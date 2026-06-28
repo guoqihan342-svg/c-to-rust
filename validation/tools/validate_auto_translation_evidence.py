@@ -1570,6 +1570,8 @@ def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | 
         return "signed_division_overflow", "runtime_precondition_excludes_min_div_minus_one"
     if code == "shift_count_in_range":
         return "shift_count", "runtime_precondition_in_range"
+    if code == "signed_right_shift_implementation_defined":
+        return "signed_right_shift", "explicit_implementation_defined_contract"
     return None, None
 
 

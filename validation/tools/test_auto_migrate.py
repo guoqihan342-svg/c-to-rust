@@ -1615,6 +1615,7 @@ class AutoMigrateTests(unittest.TestCase):
                     "division_by_zero": "runtime_precondition_nonzero_divisor",
                     "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
                     "shift_count": "runtime_precondition_in_range",
+                    "signed_right_shift": "explicit_implementation_defined_contract",
                 }
             },
             "fixture_contract": {
@@ -1634,6 +1635,7 @@ class AutoMigrateTests(unittest.TestCase):
             {"code": "signed_division_no_overflow"},
             {"code": "signed_modulo_no_overflow"},
             {"code": "shift_count_in_range"},
+            {"code": "signed_right_shift_implementation_defined"},
         ]
 
         covered = module.scalar_admission_from_runtime_preconditions(spec, preconditions)
@@ -1660,6 +1662,20 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertEqual(
             wrong_shift["unresolved"][0]["missing"],
             ["c_boundary.scalar_arithmetic_contract.shift_count"],
+        )
+
+        wrong_signed_shift = json.loads(json.dumps(spec))
+        wrong_signed_shift["c_boundary"]["scalar_arithmetic_contract"][
+            "signed_right_shift"
+        ] = "fail_closed_without_explicit_contract"
+        signed_shift = module.scalar_admission_from_runtime_preconditions(
+            wrong_signed_shift,
+            [{"code": "signed_right_shift_implementation_defined"}],
+        )
+        self.assertEqual(signed_shift["status"], "unresolved")
+        self.assertEqual(
+            signed_shift["unresolved"][0]["missing"],
+            ["c_boundary.scalar_arithmetic_contract.signed_right_shift"],
         )
 
         mixed = module.scalar_admission_from_runtime_preconditions(
