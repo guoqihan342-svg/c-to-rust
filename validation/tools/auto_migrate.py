@@ -722,6 +722,38 @@ def unsupported_control_flow_kind(label: str) -> str:
     return "unknown"
 
 
+def structured_control_flow_recovery_evidence(
+    unsupported_labels: list[str], unsupported_items: list[dict[str, Any]]
+) -> dict[str, Any]:
+    kinds = {item.get("kind") for item in unsupported_items}
+    labels = [str(label) for label in unsupported_labels]
+    label_targets = {label.split(":", 1)[1] for label in labels if label.startswith("label:")}
+    goto_targets = {label.split(":", 1)[1] for label in labels if label.startswith("goto:")}
+    preconditions: list[str] = []
+    if "goto" in kinds and goto_targets and goto_targets.issubset(label_targets):
+        preconditions.append("goto_target_resolved")
+    if "switch" in kinds and ({"case", "default"} & kinds):
+        preconditions.append("switch_cases_enumerated")
+
+    refusals: list[str] = []
+    if "goto" in kinds:
+        refusals.append("goto_requires_structured_recovery")
+    if "switch" in kinds:
+        refusals.append("switch_requires_structured_recovery")
+
+    return {
+        "recovery_status": "refused" if unsupported_items else "structured",
+        "relooper_preconditions": preconditions,
+        "relooper_refusals": refusals,
+        "scope_note": (
+            "minimal structured-recovery evidence only; no Rust candidate lowering "
+            "or C/Rust semantic pass is claimed"
+        )
+        if unsupported_items
+        else "structured control flow does not require relooper recovery",
+    }
+
+
 def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
     """Rewrite raw translator output into schema-bound candidate evidence.
 
@@ -838,6 +870,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                     "has_goto": any(item.get("kind") == "goto" for item in function_unsupported_cf),
                     "has_switch": any(item.get("kind") == "switch" for item in function_unsupported_cf),
                     "relooper_required": bool(unsupported),
+                    **structured_control_flow_recovery_evidence(unsupported, function_unsupported_cf),
                 },
             }
         )

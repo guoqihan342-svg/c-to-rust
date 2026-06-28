@@ -24767,6 +24767,22 @@ fn unsupported_goto_records_minimal_cfg_blocks_and_edges() {
         .unsupported_control_flow
         .iter()
         .any(|node| node == "relooper_refusal:goto"));
+    let structured = function
+        .structured_control_flow
+        .as_ref()
+        .expect("goto refusal should carry structured recovery evidence");
+    assert!(structured.has_goto);
+    assert!(!structured.has_switch);
+    assert!(structured.relooper_required);
+    assert!(structured
+        .relooper_preconditions
+        .iter()
+        .any(|item| item == "goto_target_resolved"));
+    assert!(structured
+        .relooper_refusals
+        .iter()
+        .any(|item| item == "goto_requires_structured_recovery"));
+    assert!(structured.scope_note.contains("no Rust candidate lowering"));
     assert!(function
         .blocks
         .iter()
@@ -24846,6 +24862,22 @@ fn unsupported_switch_records_case_default_cfg_edges() {
         .unsupported_control_flow
         .iter()
         .any(|node| node == "relooper_refusal:switch"));
+    let structured = function
+        .structured_control_flow
+        .as_ref()
+        .expect("switch refusal should carry structured recovery evidence");
+    assert!(!structured.has_goto);
+    assert!(structured.has_switch);
+    assert!(structured.relooper_required);
+    assert!(structured
+        .relooper_preconditions
+        .iter()
+        .any(|item| item == "switch_cases_enumerated"));
+    assert!(structured
+        .relooper_refusals
+        .iter()
+        .any(|item| item == "switch_requires_structured_recovery"));
+    assert!(structured.scope_note.contains("no Rust candidate lowering"));
     assert!(function.blocks.iter().any(|block| block.id == "switch-0"));
     assert!(function.blocks.iter().any(|block| block.id == "case-1"));
     assert!(function.blocks.iter().any(|block| block.id == "default"));

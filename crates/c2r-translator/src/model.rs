@@ -177,6 +177,23 @@ pub struct CfgFunction {
     pub name: String,
     pub blocks: Vec<CfgBlock>,
     pub unsupported_control_flow: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structured_control_flow: Option<StructuredControlFlowEvidence>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StructuredControlFlowEvidence {
+    pub if_count: usize,
+    pub loop_count: usize,
+    pub has_goto: bool,
+    pub has_switch: bool,
+    pub relooper_required: bool,
+    pub recovery_status: String,
+    #[serde(default)]
+    pub relooper_preconditions: Vec<String>,
+    #[serde(default)]
+    pub relooper_refusals: Vec<String>,
+    pub scope_note: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

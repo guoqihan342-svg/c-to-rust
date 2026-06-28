@@ -1269,7 +1269,9 @@
         "IrStmt::For",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
-        "relooper_refusal evidence for goto/switch"
+        "relooper_refusal evidence for goto/switch",
+        "minimal structured_control_flow recovery evidence for goto/switch",
+        "relooper_precondition evidence for resolved goto targets and enumerated switch cases"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1320,7 +1322,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "legacy string translator switch/goto minimal CFG evidence tests",
+              "name": "legacy string translator switch/goto minimal CFG and structured recovery evidence tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1395,12 +1397,12 @@
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "goto requires CFG/relooper support, records relooper_refusal evidence, and must keep the Rust draft empty"
+          "fail_closed_reason": "goto requires CFG/relooper support, records structured_control_flow precondition/refusal evidence, and must keep the Rust draft empty"
         },
         {
           "name": "unsupported_switch_blocks_translation_until_cfg_relooper_exists",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "switch requires CFG/relooper support, records relooper_refusal evidence, and must keep the Rust draft empty"
+          "fail_closed_reason": "switch requires CFG/relooper support, records structured_control_flow precondition/refusal evidence, and must keep the Rust draft empty"
         },
         {
           "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",

@@ -3960,6 +3960,22 @@ class AutoMigrateTests(unittest.TestCase):
                 self.assertTrue(structured["relooper_required"])
                 self.assertEqual(structured["has_goto"], expected_kind == "goto")
                 self.assertEqual(structured["has_switch"], expected_kind == "switch")
+                if expected_kind == "goto":
+                    self.assertIn("goto_target_resolved", structured["relooper_preconditions"])
+                    self.assertIn(
+                        "goto_requires_structured_recovery",
+                        structured["relooper_refusals"],
+                    )
+                if expected_kind == "switch":
+                    self.assertIn(
+                        "switch_cases_enumerated",
+                        structured["relooper_preconditions"],
+                    )
+                    self.assertIn(
+                        "switch_requires_structured_recovery",
+                        structured["relooper_refusals"],
+                    )
+                self.assertIn("no Rust candidate lowering", structured["scope_note"])
                 self.assertEqual(manifest["translator"]["status"], "blocked")
                 self.assertEqual(plan["status"], "blocked")
                 self.assertEqual(route["level"], "L4")

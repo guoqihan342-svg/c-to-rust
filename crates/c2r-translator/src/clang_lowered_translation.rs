@@ -96,6 +96,7 @@ fn record_clang_lowered_ir_evidence(
             edges: ir_cfg_edges(&function.body),
         }],
         unsupported_control_flow: Vec::new(),
+        structured_control_flow: None,
     });
     emit_ir_pointer_graph(function, result);
     push_rule_once(

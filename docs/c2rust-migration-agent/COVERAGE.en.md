@@ -97,10 +97,10 @@ This document honestly lists C language constructs that are "currently supported
 | `for` (scoped) | Narrow | Simple init/condition/step forms; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
 | `break` | Narrow | Inside loop body only |
 | `continue` | Narrow | Inside loop body only |
-| `switch` | Unsupported | CFG/relooper/route refusal evidence exists; full CFG + relooper still required before lowering |
-| `goto` | Unsupported | CFG/relooper/route refusal evidence exists; full CFG + relooper still required before lowering |
-| label | Unsupported | |
-| `case` / `default` | Unsupported | |
+| `switch` | Unsupported | CFG/relooper/route refusal evidence and minimal structured-recovery precondition/refusal evidence exist; full CFG + relooper + Rust candidate lowering are still required before support |
+| `goto` | Unsupported | CFG/relooper/route refusal evidence and minimal structured-recovery precondition/refusal evidence exist; full CFG + relooper + Rust candidate lowering are still required before support |
+| label | Unsupported | Recorded only as CFG/relooper evidence for `goto` refusal |
+| `case` / `default` | Unsupported | Recorded only as CFG/relooper evidence for `switch` refusal |
 
 ## Arrays
 

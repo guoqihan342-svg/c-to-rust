@@ -8,8 +8,8 @@
 
 use crate::{
     BuildProfile, CallExpressionEvidence, CfgBlock, CfgFunction, PointerEdge, PointerNode,
-    SliceSpec, TranslationError, TranslationPlan, TranslationResult, TranslationSource,
-    TypeMapping, TypeUncertainty,
+    SliceSpec, StructuredControlFlowEvidence, TranslationError, TranslationPlan, TranslationResult,
+    TranslationSource, TypeMapping, TypeUncertainty,
 };
 #[derive(Clone, Debug)]
 struct ParsedFunction {
@@ -176,6 +176,10 @@ pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
         name: function.name.clone(),
         blocks,
         unsupported_control_flow: unsupported_control_flow_labels.clone(),
+        structured_control_flow: structured_control_flow_evidence(
+            &statements,
+            &unsupported_control_flow,
+        ),
     });
 
     if !unsupported_control_flow.is_empty() {
@@ -359,6 +363,67 @@ fn unsupported_control_flow_labels(items: &[UnsupportedControlFlow]) -> Vec<Stri
         push_unique(&mut labels, "relooper_refusal:switch");
     }
     labels
+}
+
+fn structured_control_flow_evidence(
+    statements: &[ParsedStatement],
+    items: &[UnsupportedControlFlow],
+) -> Option<StructuredControlFlowEvidence> {
+    if items.is_empty() {
+        return None;
+    }
+    let has_goto = items.iter().any(|item| item.kind == "goto");
+    let has_switch = items.iter().any(|item| item.kind == "switch");
+    let label_names = items
+        .iter()
+        .filter(|item| item.kind == "label")
+        .filter_map(|item| item.detail.as_deref())
+        .collect::<Vec<_>>();
+    let mut preconditions = Vec::new();
+    if has_goto
+        && items
+            .iter()
+            .filter(|item| item.kind == "goto")
+            .filter_map(|item| item.detail.as_deref())
+            .all(|target| label_names.iter().any(|label| *label == target))
+    {
+        push_unique(&mut preconditions, "goto_target_resolved");
+    }
+    if has_switch
+        && items
+            .iter()
+            .any(|item| matches!(item.kind, "case" | "default"))
+    {
+        push_unique(&mut preconditions, "switch_cases_enumerated");
+    }
+
+    let mut refusals = Vec::new();
+    if has_goto {
+        push_unique(&mut refusals, "goto_requires_structured_recovery");
+    }
+    if has_switch {
+        push_unique(&mut refusals, "switch_requires_structured_recovery");
+    }
+
+    Some(StructuredControlFlowEvidence {
+        if_count: statements
+            .iter()
+            .filter(|statement| statement.kind == StatementKind::If)
+            .count(),
+        loop_count: statements
+            .iter()
+            .filter(|statement| {
+                matches!(statement.kind, StatementKind::While | StatementKind::For)
+            })
+            .count(),
+        has_goto,
+        has_switch,
+        relooper_required: has_goto || has_switch,
+        recovery_status: "refused".to_string(),
+        relooper_preconditions: preconditions,
+        relooper_refusals: refusals,
+        scope_note: "minimal structured-recovery evidence only; no Rust candidate lowering or C/Rust semantic pass is claimed".to_string(),
+    })
 }
 
 fn label_targets(body: &str) -> Vec<String> {

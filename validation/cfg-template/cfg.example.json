@@ -22,7 +22,7 @@
     "edges": [{"from": "bb0", "to": "bb1", "kind": "fallthrough"}, {"from": "bb1", "to": "bb2", "kind": "true_branch", "condition": "len > 0"}, {"from": "bb2", "to": "bb1", "kind": "loop_back"}, {"from": "bb1", "to": "bb3", "kind": "false_branch", "condition": "len == 0"}],
     "branches": [{"id": "br-null", "kind": "if", "condition": "buf == Z_NULL", "source_span": {"file": "adler32.c", "line_start": 67, "line_end": 67}}, {"id": "br-loop", "kind": "while", "condition": "len > 0", "source_span": {"file": "adler32.c", "line_start": 91, "line_end": 120}}],
     "returns": [{"block": "bb3", "expression": "sum1 | (sum2 << 16)", "source_span": {"file": "adler32.c", "line_start": 147, "line_end": 147}}],
-    "structured_control_flow": {"if_count": 1, "loop_count": 1, "has_goto": false, "has_switch": false, "relooper_required": false}
+    "structured_control_flow": {"if_count": 1, "loop_count": 1, "has_goto": false, "has_switch": false, "relooper_required": false, "recovery_status": "structured", "relooper_preconditions": [], "relooper_refusals": [], "scope_note": "structured control flow does not require relooper recovery"}
   }],
   "unsupported_control_flow": [],
   "cache_invalidation_keys": ["source_commit:0123456789abcdef", "slice_spec:example-slice-spec-hash", "schema:cfg:1"]
