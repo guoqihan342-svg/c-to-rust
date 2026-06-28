@@ -3629,6 +3629,72 @@ fn typed_ir_emits_mutable_pointer_index_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_nullable_mutable_pointer_index_assignment() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_nullable_out_write".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("out", mutable_i32_ptr.clone()),
+                    ir_null_ptr(mutable_i32_ptr.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: Some(ir_lit(-1i64 as u64, "-1", i32_ty.clone())),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("out", mutable_i32_ptr)),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("nullable mutable pointer write must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("nullable mutable pointer param out cannot be lowered to &mut [T]"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_mutable_pointer_add_index_deref_assignment() {
     let i32_ty = ir_i32();
     let usize_ty = ir_usize();
