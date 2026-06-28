@@ -470,6 +470,7 @@ impl EmitContext {
         }
         let nullable_pointer_params =
             collect_nullable_pointer_params(&function.body, &function.params)?;
+        validate_mutable_pointer_write_alias_boundary(&function.body, &function.params)?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let mut readonly_globals = HashMap::new();
@@ -4993,6 +4994,152 @@ fn collect_mutable_record_pointer_write_params(
         );
     }
     Ok(write_params)
+}
+
+fn validate_mutable_pointer_write_alias_boundary(
+    body: &[IrStmt],
+    params: &[IrParam],
+) -> Result<(), String> {
+    let mutable_pointer_params = params
+        .iter()
+        .filter(|param| mutable_pointer_slice_element_type(&param.ty).is_some())
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect::<HashMap<_, _>>();
+    let mut write_params = HashSet::new();
+    collect_mutable_pointer_write_params_from_body(
+        body,
+        &mutable_pointer_params,
+        &mut write_params,
+    )?;
+    if write_params.len() > 1 {
+        return Err(
+            "mutable pointer write requires exactly one pointer param for alias proof".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn collect_mutable_pointer_write_params_from_body(
+    body: &[IrStmt],
+    mutable_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, .. } => {
+                collect_mutable_pointer_write_param_from_target(
+                    target,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_mutable_pointer_write_params_from_body(
+                    then_body,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+                collect_mutable_pointer_write_params_from_body(
+                    else_body,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_mutable_pointer_write_params_from_body(
+                    body,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_mutable_pointer_write_params_from_body(
+                    init,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+                if let Some(step) = step {
+                    collect_mutable_pointer_write_params_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        mutable_pointer_params,
+                        write_params,
+                    )?;
+                }
+                collect_mutable_pointer_write_params_from_body(
+                    body,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::Decl { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_mutable_pointer_write_param_from_target(
+    target: &IrExpr,
+    mutable_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    match target {
+        IrExpr::Index { base, .. } => {
+            collect_direct_mutable_pointer_write_param(base, mutable_pointer_params, write_params)
+        }
+        IrExpr::Deref { ptr, .. } => match ptr.as_ref() {
+            IrExpr::Binary { .. } => {
+                if let Some((base, _)) = mutable_pointer_add_operands_from_expr(ptr.as_ref()) {
+                    collect_direct_mutable_pointer_write_param(
+                        base,
+                        mutable_pointer_params,
+                        write_params,
+                    )?;
+                }
+                Ok(())
+            }
+            expr => collect_direct_mutable_pointer_write_param(
+                expr,
+                mutable_pointer_params,
+                write_params,
+            ),
+        },
+        _ => Ok(()),
+    }
+}
+
+fn mutable_pointer_add_operands_from_expr(expr: &IrExpr) -> Option<(&IrExpr, &IrExpr)> {
+    let IrExpr::Binary { lhs, rhs, .. } = expr else {
+        return None;
+    };
+    mutable_pointer_add_operands(lhs, rhs)
+}
+
+fn collect_direct_mutable_pointer_write_param(
+    expr: &IrExpr,
+    mutable_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Ok(());
+    };
+    if mutable_pointer_params
+        .get(name.as_str())
+        .is_some_and(|param_ty| *param_ty == ty)
+    {
+        write_params.insert(name.to_string());
+    }
+    Ok(())
 }
 
 fn collect_mutable_record_pointer_write_params_from_body(

@@ -3695,6 +3695,68 @@ fn typed_ir_rejects_nullable_mutable_pointer_index_assignment() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_multiple_mutable_pointer_index_assignments_without_alias_proof() {
+    let i32_ty = ir_i32();
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_two_out_writes".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("left", mutable_i32_ptr.clone())),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(1, "1", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("right", mutable_i32_ptr)),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_lit(2, "2", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("multiple mutable pointer writes need alias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write requires exactly one pointer param for alias proof"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_mutable_pointer_add_index_deref_assignment() {
     let i32_ty = ir_i32();
     let usize_ty = ir_usize();
