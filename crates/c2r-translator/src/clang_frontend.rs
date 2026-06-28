@@ -263,6 +263,7 @@ pub enum ClangTypeKind {
     },
     Pointer {
         pointee: Box<ClangTypeSkeleton>,
+        width: Option<u16>,
     },
     Array {
         element: Box<ClangTypeSkeleton>,
@@ -1488,7 +1489,7 @@ fn compound_assignment_target_is_mutable_record_pointer_field(target: &ClangExpr
 fn clang_type_is_mutable_record_pointer(ty: &ClangTypeSkeleton) -> bool {
     matches!(
         &ty.kind,
-        ClangTypeKind::Pointer { pointee }
+        ClangTypeKind::Pointer { pointee, .. }
             if !clang_type_is_const(pointee)
                 && matches!(&pointee.kind, ClangTypeKind::Record { .. })
     )
@@ -2070,6 +2071,7 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         arg_type.kind,
         ClangTypeKind::Integer { .. }
             | ClangTypeKind::Array { .. }
+            | ClangTypeKind::Pointer { .. }
             | ClangTypeKind::Unsupported { .. }
     ) {
         return Err(ClangFrontendError {
@@ -2536,6 +2538,7 @@ fn type_from_qual_type_with_target_abi(
             canonical: format!("{} *", pointee.canonical),
             kind: ClangTypeKind::Pointer {
                 pointee: Box::new(pointee),
+                width: target_abi.and_then(|abi| nonzero_width(abi.pointer_width)),
             },
         });
     }
@@ -2948,7 +2951,7 @@ fn bind_target_abi_to_type(ty: &mut ClangTypeSkeleton, target_abi: &TargetAbiPro
         }
     }
     match &mut ty.kind {
-        ClangTypeKind::Pointer { pointee } => bind_target_abi_to_type(pointee, target_abi),
+        ClangTypeKind::Pointer { pointee, .. } => bind_target_abi_to_type(pointee, target_abi),
         ClangTypeKind::Array { element, .. } => bind_target_abi_to_type(element, target_abi),
         _ => {}
     }
@@ -3389,6 +3392,25 @@ fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> 
                     ),
                 })
         }
+        ClangTypeKind::Pointer {
+            width: Some(width), ..
+        } if *width > 0 && *width % 8 == 0 => Ok(u64::from(*width / 8)),
+        ClangTypeKind::Pointer {
+            width: Some(width), ..
+        } => Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({}) has non-byte-addressable pointer width {width}; typed IR lowering requires explicit target ABI provenance",
+                ty.spelled
+            ),
+        }),
+        ClangTypeKind::Pointer { width: None, .. } => Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({}) requires target ABI pointer-width provenance before typed IR lowering",
+                ty.spelled
+            ),
+        }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_sizeof_type".to_string(),
             message: format!(
@@ -3495,7 +3517,7 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             width_bits: Some(*width),
             source_span: None,
         }),
-        ClangTypeKind::Pointer { pointee } => Ok(IrType {
+        ClangTypeKind::Pointer { pointee, .. } => Ok(IrType {
             spelled: ty.spelled.clone(),
             canonical: ty.canonical.clone(),
             kind: IrTypeKind::Pointer {
@@ -6317,6 +6339,31 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_with_target_abi_binds_pointer_width() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+
+        let ty = type_from_qual_type_with_target_abi("const int *", Some(&abi))
+            .expect("pointer type skeleton");
+
+        assert_eq!(ty.spelled, "const int *");
+        let ClangTypeKind::Pointer { pointee, width } = ty.kind else {
+            panic!("expected pointer type, got {:?}", ty.kind);
+        };
+        assert_eq!(width, Some(64));
+        assert_eq!(pointee.canonical, "int");
+    }
+
+    #[test]
     fn type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported() {
         let abi = TargetAbiProfile {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
@@ -6462,6 +6509,59 @@ mod tests {
         };
         assert_eq!(value, 8);
         assert_eq!(ty.spelled, "size_t");
+    }
+
+    #[test]
+    fn sizeof_pointer_type_lowers_from_target_pointer_width_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "const int *"}
+        });
+
+        let mut skeleton =
+            expr_skeleton_from_ast(&expr).expect("sizeof pointer skeleton should parse");
+        bind_target_abi_to_expr(&mut skeleton, &abi);
+        let ir = lower_expr(&skeleton).expect("sizeof pointer should lower with ABI profile");
+
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected sizeof(pointer) to lower to LitInt, got {ir:?}");
+        };
+        assert_eq!(value, 8);
+        assert_eq!(ty.spelled, "size_t");
+    }
+
+    #[test]
+    fn sizeof_pointer_type_stays_fail_closed_without_pointer_width_profile() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "sizeof",
+            "argType": {"qualType": "const int *"}
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("sizeof pointer skeleton should parse");
+        let error = lower_expr(&skeleton).expect_err("sizeof pointer requires target profile");
+
+        assert_eq!(error.kind, "unsupported_sizeof_type");
+        assert!(
+            error.message.contains("pointer-width provenance"),
+            "unexpected error: {error:?}"
+        );
     }
 
     #[test]

@@ -391,6 +391,36 @@
     },
     {
       "kind": "FunctionDecl",
+      "name": "sizeof_const_int_ptr_bytes",
+      "type": {
+        "qualType": "size_t (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "sizeof",
+                  "argType": {
+                    "qualType": "const int *"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
       "name": "alignof_int_bytes",
       "type": {
         "qualType": "size_t (void)"

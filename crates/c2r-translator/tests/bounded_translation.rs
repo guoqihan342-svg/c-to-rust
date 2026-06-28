@@ -476,6 +476,43 @@ fn clang_ast_fixture_replays_sizeof_expression_with_target_abi_profile() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_sizeof_pointer_with_target_abi_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "sizeof_const_int_ptr_bytes",
+        Some(&target_abi),
+    )
+    .expect("lower sizeof(const int *) fixture with target ABI profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from sizeof(const int *) fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn sizeof_const_int_ptr_bytes() -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 8usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-sizeof-pointer", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_sizeof_int_array_with_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"
@@ -4797,6 +4834,7 @@ fn typed_ir_emits_mutable_pointer_index_assignment_from_clang_lowered_ir() {
         canonical: "int *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(i32_ty.clone()),
+            width: None,
         },
     };
     let out_ref = || ClangExprSkeleton::DeclRef {
@@ -4881,6 +4919,7 @@ fn typed_ir_emits_mutable_pointer_add_index_deref_assignment_from_clang_lowered_
         canonical: "int *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(i32_ty.clone()),
+            width: None,
         },
     };
     let out_ref = || ClangExprSkeleton::DeclRef {
@@ -14448,6 +14487,7 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_non_integer_
         canonical: "int *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(int_ty.clone()),
+            width: None,
         },
     };
     let point_ty = ClangTypeSkeleton {
@@ -14516,6 +14556,7 @@ fn clang_lowering_skeleton_rejects_record_field_compound_assignment_deref_target
         canonical: "int *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(int_ty.clone()),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -14637,6 +14678,7 @@ fn clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment
         canonical: "struct point *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(point_ty.clone()),
+            width: None,
         },
     };
     let void_ty = ClangTypeSkeleton {
@@ -14986,6 +15028,7 @@ fn clang_lowering_skeleton_rejects_compound_assignment_non_var_target() {
         canonical: "int *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(int_ty.clone()),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -16317,6 +16360,7 @@ fn clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params() {
         canonical: "void *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_void_ty),
+            width: None,
         },
     };
     let size_ty = ClangTypeSkeleton {
@@ -16398,6 +16442,7 @@ fn clang_lowering_skeleton_maps_const_uint8_pointer_decl() {
         canonical: "uint8_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint8_ty),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -16466,6 +16511,7 @@ fn clang_lowering_skeleton_maps_pointer_cast_assignment() {
         canonical: "void *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_void_ty),
+            width: None,
         },
     };
     let const_uint8_ty = ClangTypeSkeleton {
@@ -16481,6 +16527,7 @@ fn clang_lowering_skeleton_maps_pointer_cast_assignment() {
         canonical: "uint8_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint8_ty),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -16574,6 +16621,7 @@ fn clang_lowering_skeleton_maps_pointer_deref_expr() {
         canonical: "uint8_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint8_ty),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -16637,6 +16685,7 @@ fn clang_lowering_skeleton_maps_pointer_add_deref_expr() {
         canonical: "uint8_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint8_ty),
+            width: None,
         },
     };
     let size_ty = ClangTypeSkeleton {
@@ -16732,6 +16781,7 @@ fn clang_lowering_skeleton_maps_postfix_increment_in_deref_expr() {
         canonical: "uint8_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint8_ty),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
@@ -16809,6 +16859,7 @@ fn clang_lowering_skeleton_maps_array_subscript_expr() {
         canonical: "uint32_t *".to_string(),
         kind: ClangTypeKind::Pointer {
             pointee: Box::new(const_uint32_ty),
+            width: None,
         },
     };
     let skeleton = ClangFunctionSkeleton {
