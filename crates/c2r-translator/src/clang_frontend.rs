@@ -1747,15 +1747,22 @@ fn expr_skeleton_from_ast_with_options(
 ) -> Result<ClangExprSkeleton, ClangFrontendError> {
     match string_field(expr, "kind").as_deref() {
         Some("ImplicitCastExpr") => {
+            let cast_kind = string_field(expr, "castKind");
+            if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: "castKind FunctionToPointerDecay creates a function pointer value and requires explicit function-pointer lowering outside direct callee position".to_string(),
+                });
+            }
             let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
             let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
-            if string_field(expr, "castKind").as_deref() == Some("NullToPointer") {
+            if cast_kind.as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
             }
-            if string_field(expr, "castKind").as_deref() == Some("ArrayToPointerDecay") {
+            if cast_kind.as_deref() == Some("ArrayToPointerDecay") {
                 return Ok(ClangExprSkeleton::Unsupported {
                     node: "ImplicitCastExpr".to_string(),
                     reason:
@@ -4901,6 +4908,42 @@ mod tests {
         assert!(error
             .message
             .contains("callee is not a direct function identifier"));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_function_to_pointer_decay_value_argument() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "FunctionToPointerDecay",
+            "type": { "qualType": "int (*)(int)" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int (int)" },
+                    "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "helper"
+                    }
+                }
+            ]
+        });
+
+        let skeleton =
+            expr_skeleton_from_ast(&expr).expect("function-to-pointer decay value skeleton");
+
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::Unsupported { ref node, ref reason }
+                if node == "ImplicitCastExpr"
+                    && reason.contains("FunctionToPointerDecay")
+                    && reason.contains("function pointer value")
+                    && reason.contains("explicit function-pointer lowering")
+        ));
+        let error =
+            lower_expr(&skeleton).expect_err("function-to-pointer decay value must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("FunctionToPointerDecay"));
+        assert!(error.message.contains("function pointer value"));
     }
 
     #[test]

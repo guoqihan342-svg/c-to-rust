@@ -817,6 +817,7 @@
         "direct CallExpr",
         "bounded external callee context",
         "reserved C macro/stdlib/extern callee fail-closed",
+        "function-to-pointer decay value fail-closed",
         "pointer value call argument/return fail-closed",
         "route candidate evidence"
       ],
@@ -835,6 +836,10 @@
             {
               "name": "pointer value call/return no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/pointer_value_boundary_ast.json"
+            },
+            {
+              "name": "function-to-pointer decay value no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/function_decay_boundary_ast.json"
             }
           ]
         },
@@ -856,6 +861,10 @@
             },
             {
               "name": "pointer value call/return boundary tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "function-to-pointer decay value boundary test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -931,6 +940,11 @@
           "name": "clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "no-clang AST replay must lower pointer-value C shapes to typed IR and keep Rust lowering fail-closed at the explicit ABI/lifetime boundary"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_function_decay_value_argument_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "function-to-pointer decay outside direct callee position creates a function pointer value and requires explicit function-pointer lowering"
         }
       ]
     },

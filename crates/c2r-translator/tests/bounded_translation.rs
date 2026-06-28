@@ -314,6 +314,36 @@ fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/function_decay_boundary_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "call_with_function_value")
+            .expect_err("function-to-pointer decay outside the callee position must fail closed");
+
+    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert!(
+        error.message.contains("FunctionToPointerDecay"),
+        "{:?}",
+        error.message
+    );
+    assert!(
+        error.message.contains("function pointer value"),
+        "{:?}",
+        error.message
+    );
+    assert!(
+        error.message.contains("explicit function-pointer lowering"),
+        "{:?}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_size_t_without_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"
