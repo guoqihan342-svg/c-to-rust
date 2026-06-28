@@ -10348,3 +10348,38 @@ English mirror summary:
 边界：
 - 可以说：这次把评价里有价值的风险显式纳入 roadmap。
 - 不应说：这些新项已经实现、Oracle 完备性已解决、性能回归体系已完成、或项目已经从受限 MVP 变成通用生产工具。
+
+## 154. 2026-06-28 external review triage: clang activation, legacy path, emitter composition
+
+本轮继续处理用户贴出的外部评价，重点核对 typed IR 默认激活、legacy 字符串扫描、CI clang 端到端、signed/UB 语义、组合式 emitter、FlashDB showcase 和 `CONTEXT.md` 体积问题。
+
+判断：
+- 评价大方向成立：默认/比赛非 clang 路径仍可能走 legacy string translator；当前 CI 覆盖 all-features 和缺 clang 行为，但不等于真实 clang -> AST -> typed IR -> Rust 的端到端；value-position/raw `IrExpr::IncDec` 和复杂 side effect 仍主要 fail closed 或靠窄形状 helper；`flashDB_rust` 是手写安全 skeleton/验证基线，不是自动翻译产物。
+- 需要修正的地方：`--competition-clang-lane` 缺 `CLANG_PATH` 会 fail-fast，不是静默 fallback；signed overflow 不能无条件改成 wrapping，因为 C signed overflow 是 UB，只有 `-fwrapv`/二补码 profile 或 slice contract 明确时才能走 wrapping；写自研最小 C parser 不适合作为主线，容易丢宏展开、类型、ABI 和 implicit cast 事实。
+- 最有价值的下一步是让 typed-IR 核心在无 clang 环境也有 fixture replay 回归，同时保留真实 clang lane 做前端集成；再把 legacy string translator 降级为 compatibility-only，并推进组合式 side-effect expression lowering。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：无 clang 默认 CI/比赛路径不能把 legacy string translator 成功包装成 typed-IR success；typed IR 未运行必须在 evidence/metrics/公开叙述中标记 unavailable 或 compatibility fallback。
+- 执行规则新增：`CONTEXT.md` 只能作为短 handoff，长会话日志要拆分或归档，不能当 release 文档、外部评估入口或能力证明。
+- P0 新增：no-clang typed-IR fixture replay CI，提交小型 clang AST JSON 或 skeleton fixture，默认 CI 能跑 `AST JSON/skeleton -> typed IR -> generic emitter -> rustc/check`；手写 IR 单测不能替代这条回归。
+- P0 新增：signed overflow/division/modulo/shift UB contract。signed wrapping 只能在 `-fwrapv`/二补码 profile 或 slice contract 明确时启用；division/modulo zero、非法 shift count 和实现定义 signed shift 必须有 negative test、evidence 字段和 refusal reason。
+- P0 新增：showcase boundary，`flashDB_rust` 是手写安全实现/验证基线，不得当自动翻译产物展示。
+- P0 新增：legacy string translator 降级并退役，标成 compatibility-only candidate source，在 route/metrics 中单独计数；no-clang fixture replay 和真实 clang lane 覆盖最小切片后从 primary candidate path 移除。
+- P1 新增：组合式 side-effect expression lowering，把 sequence point、求值顺序、value-position/statement-position、`++`/`--`、deref/index/member/call side effect 建模为可组合 IR/emitter 规则；整段语句形状 helper 只作为过渡实现。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/19
+- P1: 0/9
+- P2: 0/6
+
+边界：
+- 可以说：这次把 clang 默认激活、legacy path、CI clang E2E、signed/UB contract、FlashDB showcase 和组合式 emitter 风险明确纳入 roadmap。
+- 不应说：no-clang fixture replay、legacy 退役、signed UB contract 或组合式 side-effect emitter 已经实现。
