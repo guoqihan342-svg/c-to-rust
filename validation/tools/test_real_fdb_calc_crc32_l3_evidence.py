@@ -50,13 +50,21 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
             "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
         )
         self.assertEqual(
+            c_oracle["source_boundary"]["files"],
+            ["src/fdb_utils.c"],
+        )
+        self.assertEqual(
+            rust_report["source_boundary"]["files"],
+            ["src/fdb_utils.c"],
+        )
+        self.assertEqual(
             [case["return_code"] for case in c_oracle["cases"]],
             [0, 3421780262],
         )
         provenance = c_oracle["provenance"]
         self.assertEqual(
             provenance["fixture_sha256"],
-            "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+            "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
         )
         self.assertEqual(
             provenance["source_file_hashes"]["src/fdb_utils.c"],
@@ -79,15 +87,15 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
             provenance["harness_draft_ref"]["sha256"],
             "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
         )
-        self.assertEqual(provenance["compile_execution"]["toolchain_adapter"], "wsl")
+        self.assertEqual(provenance["compile_execution"]["toolchain_adapter"], "not_executed")
         self.assertEqual(
             provenance["compile_execution"]["status"],
-            "compile_succeeded_not_oracle",
+            "skipped_by_flag",
         )
         self.assertFalse(provenance["compile_execution"]["semantic_pass"])
         self.assertEqual(
             provenance["compile_execution"]["toolchain_status_after_attempt"],
-            "COMPILE_SUCCEEDED_NOT_ORACLE",
+            "DRAFT_NOT_EXECUTED",
         )
         self.assertEqual(
             provenance["evidence_refs"]["c_oracle_status"],

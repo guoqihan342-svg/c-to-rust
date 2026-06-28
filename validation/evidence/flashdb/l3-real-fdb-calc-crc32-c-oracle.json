@@ -23,9 +23,9 @@
   "provenance": {
     "compile_execution": {
       "semantic_pass": false,
-      "status": "compile_succeeded_not_oracle",
-      "toolchain_adapter": "wsl",
-      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+      "status": "skipped_by_flag",
+      "toolchain_adapter": "not_executed",
+      "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED"
     },
     "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
     "evidence_refs": {
@@ -34,7 +34,7 @@
       "slice_spec": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
       "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json"
     },
-    "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "global_dependencies": [
       {
         "definition_status": "same_file_top_level_declared",
@@ -69,7 +69,7 @@
   "slice_id": "real-fdb-calc-crc32",
   "source_boundary": {
     "files": [
-      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c"
+      "src/fdb_utils.c"
     ],
     "functions": [
       "fdb_calc_crc32"

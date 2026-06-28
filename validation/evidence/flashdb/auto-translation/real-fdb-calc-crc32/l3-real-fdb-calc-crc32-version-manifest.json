@@ -2,15 +2,15 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "fixture_sha256": "779c291e6923a62596006437709d051b375d5de48aee23765009e0cfc7d8f510",
+    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "1ee9b240ea08cb1d32b2cb8f1c3108bdbc826e6994192a63034302eb1d063334",
+      "c_oracle": "0c182f2c54b80db71a370f4e57ffbe0d73ed38b92983736881efdff9b45f20a4",
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
-      "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "2a3c77a02f1d10e27033fced0cce6c6b28f7ecd330da1b3d3b74754afb120df4",
-      "unsafe_scan": "de11d413142a47e5b1c0109d3cf316020a37b5ae8037c72769f9d8e701242059"
+      "rust_report": "0bffea59ef533ea88c9668e1a92e643391fdd3c2e3a3ce7156885402035777eb",
+      "unsafe_ledger": "db81f1d945ebd22dc06fe40673d4c1455e19aaaaf98599f67dd656ce0f2c909f",
+      "unsafe_scan": "7cd30dcb9cc2beea45948e7a73932302fc6a5e4ab553c32ce8e2f27f5c5ff687"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -117,7 +117,7 @@
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "00fbbdd83d449703713c88153b355d647d28cd131855e338469072dfd8664e10",
+        "sha256": "c4170b291c2ce884a8a90494a75c2a480c176e5ecee2e54ec0ca6ea5ddc189db",
         "status": "refused"
       },
       "validation_profile": {
@@ -170,7 +170,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "f479a1ab61997626762df1a50d30012e00761708a5cee9838afa6e1d5ef61482",
+      "sha256": "81e9a3d384ce7293a0ea9658bbe4f68eb8ddbc010e238c141e3f5b9ff5114668",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -209,7 +209,7 @@
       "status": "passed"
     }
   },
-  "repo_commit": "3bc55739393aa2e130a1c7ee495f84d89c4ed866",
+  "repo_commit": "d9468167e768ec535307cd928e90929c4cadfd23",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

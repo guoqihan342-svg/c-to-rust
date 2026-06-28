@@ -38,7 +38,7 @@
   "slice_id": "real-fdb-calc-crc32",
   "source_boundary": {
     "files": [
-      "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c"
+      "src/fdb_utils.c"
     ],
     "functions": [
       "fdb_calc_crc32"

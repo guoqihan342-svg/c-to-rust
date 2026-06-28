@@ -2765,6 +2765,7 @@ class AutoMigrateTests(unittest.TestCase):
                     "attempted": False,
                     "argv": oracle_status["compile_command_draft"]["argv"],
                     "working_directory": str(evidence_dir).replace("\\", "/"),
+                    "toolchain_adapter": "not_executed",
                     "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
                     "semantic_pass": False,
                     "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],

@@ -1789,6 +1789,7 @@ def c_oracle_compile_execution(
             **base,
             "status": "skipped_by_flag",
             "attempted": False,
+            "toolchain_adapter": "not_executed",
             "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
             "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
         }
