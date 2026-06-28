@@ -9833,3 +9833,75 @@ English mirror summary:
 - `struct T *p; p->scalar_field++; ++p->scalar_field; p->scalar_field--; --p->scalar_field;` now lowers from real clang AST into assignment desugar shapes and emits `p: &mut T` plus direct Rust field updates, under the existing single-pointer-param gate.
 - Raw `IrExpr::IncDec` is still unsupported; value-position inc/dec, `ForStmt` step record-field inc/dec, complex targets, nullable mutable pointers, multi-pointer aliasing, layout/ABI claims, and semantic acceptance remain fail-closed.
 - Updated Chinese and English docs/coverage/backlog to mark this narrow statement-position path as supported while keeping broader pointer ownership and value-position update semantics open.
+
+## 144. 2026-06-28 P1 mutable record pointer field if-return definite assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 读路径，不写 FlashDB/crc32 特例。只读代理一致建议：上一节的字段级 definite-write/read 仍过于保守，`if (cond) { p->x = value; } else { return 0; } return p->x;` 这类真实 C 叶子函数应进入 generic typed IR candidate；但不能把它写成通用 path-sensitive 或通用 alias 支持。主线实现为极窄的 branch merge：只有会继续执行的路径都写入同一个字段，未写入路径能被当前 guard 证明直接 return，后续读取才可通过。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `body_definitely_returns()` / `stmt_definitely_returns()`，目前只有直接 `Return` 和 then/else 两边都 definite-return 的 `If` 算作分支级返回证明。
+  - 新增 `merge_definite_branch_set()`，用于合并 scalar local initialized 集合和 mutable record pointer field definite-write 集合。
+  - `IrStmt::If` 的 definite-assignment merge 现在区分 fallthrough 和 returning 分支：returning 分支不要求提供后续事实，但也不会把只在 returning 分支里写入的事实带到后续路径。
+  - both branches return 时只保留 `before`，避免 unreachable 后续代码拿到虚假的新事实。
+  - branch-local scalar declarations 仍不会泄漏到父作用域。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_else_return`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_then_return_else_write`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_uninitialized_scalar_local_after_if_return_assignment`，因为 scalar initialized 集合复用同一合并逻辑。
+  - 新增 direct typed IR 负例覆盖 returning 分支读早于写、只在 returning 分支写入、loop-body return 不算分支级 return。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_when_enabled`。
+- `docs/c2rust-migration-agent/README.md` / `.en.md`、`COVERAGE.md` / `.en.md`、`core-translation-architecture.md` / `.en.md`、`future-vision-and-mvp.md` / `.en.md`
+  - 同步标注 direct if-return fallthrough write 已进入窄 typed IR candidate 子集。
+  - 明确普通 maybe-write、只在 returning 分支写入、loop/复杂路径 return、多 pointer alias、nullable mutable pointer、复杂 base/target/RHS、layout/ABI 和 semantic acceptance 仍 fail closed。
+
+定向验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_else_return -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir read_after_if -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_uninitialized_scalar_local_after_if_return_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_when_only_returning_branch_writes -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_loop_return_branch -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_when_enabled -- --nocapture
+```
+
+结果：
+- RED 已观察：新增正例在实现前按 `mutable record pointer field p.x is read before definite assignment` 失败。
+- direct typed IR if-else-return / then-return-else-write 正例均通过，并通过 rustc snippet smoke。
+- scalar local if-return assignment 正例通过，并通过 rustc snippet smoke。
+- returning branch read-before-write、returning-branch-only write、loop-body return 负例均按预期 fail closed。
+- 真实 clang AST `if (cond) { p->x = value; } else { return 0; } return p->x;` smoke 通过，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：single-pointer gate 下，direct mutable record pointer scalar field 的同字段读取现在支持一个窄化 if-return 分支公差：all fallthrough paths write; non-writing branches must definitely return。
+- 可以说：无初始化 scalar local 的 assignment-before-read proof 也获得同样的窄化 if-return 分支合并。
+- 不应说：已支持通用 path-sensitive definite assignment、通用 maybe-write、通用 alias/noalias、nullable mutable pointer、loop/CFG return proof、复杂 base/target/RHS、field pointer arithmetic、non-scalar field、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow if-return definite-assignment merge for mutable record pointer field reads.
+- `if (cond) { p->scalar_field = value; } else { return 0; } return p->scalar_field;` now emits `p: &mut T` and `return p.scalar_field;` only when every fallthrough path writes the same direct scalar field and the non-writing branch definitely returns.
+- The same merge improves uninitialized scalar local assignment-before-read for direct if-return shapes.
+- Writes that occur only on returning branches, reads before writes, ordinary maybe-writes, loop/complex-path returns, nullable mutable pointers, multi-pointer aliasing, complex targets/RHS, layout/ABI claims, and semantic acceptance remain fail-closed.
+- Updated Chinese and English docs/coverage/backlog to move this narrow direct if-return path into the supported typed IR candidate subset while keeping broader path-sensitive/CFG and alias work open.
+
+## 145. 2026-06-28 external review triage: route/wrapping/competition clang
+
+本轮收到外部评价，主线和 3 个只读代理做了代码核查。结论如下：
+
+- route 评价基本成立：`crates/c2r-translator/src/translation_route.rs` 目前只有 `GenericTypedIr` / `Unsupported` 两个 route，以及 `GenericTypedIrEmitter` / `None` 两个 generator；`generic_typed_ir_route()` 和 `unsupported_route()` 是静态 metadata 构造器。`emit_rust_from_ir()` / `emit_rust_from_ir_with_globals()` 只是 emitter 成功贴 `GenericTypedIr`，失败贴 `Unsupported`。这不是多候选调度器，更准确说是 typed IR candidate provenance。
+- legacy fallback 评价方向成立但位置要修正：不是 `lib.rs` 直接 `.unwrap_or_else(legacy)`，实际在 `crates/c2r-translator/src/artifacts.rs` 的 `translate_slice_with_optional_clang_lowered_ir()`：`try_translate_slice_with_clang_lowered_ir(spec).unwrap_or_else(|| translate_slice(spec))`。启用 lowering report 时会另写 artifact，但主翻译结果存在静默 fallback 风险。
+- pipeline route-decision 有规则门禁和 L0/L1/L2/L4 映射，但仍不是候选生成前的真选择引擎；它没有候选列表、score、fallback chain 或 C2Rust/LLM 调度。
+- unsigned wrapping 评价成立且优先级最高：`emit_binary_op()` 对 `Add` / `Sub` / `Mul` 发裸 `+` / `-` / `*`；`uint32_t` 等 C unsigned arithmetic 需要模 `2^n`，而 Rust debug/overflow-checks 下裸运算会 panic。主线用 `rustc -C overflow-checks=on` 复现 `0u32 - 1u32` runtime panic。shift 要分开处理：合法 shift count 的 Rust/C unsigned 结果通常一致，非法 shift count 在 C 中本来就是 UB，因此这是 contract/fail-closed 问题，不是 wrapping 替换问题。
+- competition clang 评价要修正措辞：`config/competition-env/environment.json` 没有把 clang 列为 baseline tool，也没有声明 clang not_found；`cmake` 才明确 unavailable。`auto_migrate.py --emit-clang-lowering-report` 是 opt-in，不传时不会启用 typed IR clang lowering feature。结论是必须显式声明/安装/检测 `CLANG_PATH` 和比赛 clang lane，不能静默依赖本机 Windows clang。
+
+已同步待办：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md` P0 新增 competition clang lane。
+- P0 新增 unsigned integer modulo semantics 修复项，要求先加 debug/overflow-checks runtime RED tests，再发射 wrapping 或等价策略。
+- P0 新增 route metadata/provenance 与真 candidate-selection layer 的边界项，要求禁止无遥测静默 fallback。
+- P2 新增多候选 router 研究项，明确只能在 P0 语义稳定后做，且不能替代 C oracle。
+
+下一刀建议：
+1. 先提交当前 if-return definite-assignment 切片。
+2. 下一提交优先做 unsigned wrapping 红测和修复：新增运行 emitted Rust snippet 的测试 helper，覆盖 `u32::MAX + 1`, `0u32 - 1`, unsigned multiply。修复应只对 unsigned `Add` / `Sub` / `Mul` 使用 wrapping；signed overflow、division/modulo zero、invalid shift count 继续 fail closed 或进入后续 contract。
+3. 再做 competition clang lane：明确 `optional_tools.clang` 或 required clang 配置，补 `CLANG_PATH` 检查和 opt-in wrapper。

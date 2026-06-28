@@ -54,6 +54,7 @@
 use crate::translation_route::{generic_typed_ir_route, unsupported_route, EmittedRust};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceSpan {
@@ -3640,6 +3641,60 @@ fn validate_definite_assignment_labeled_body(
     Ok(())
 }
 
+fn body_definitely_returns(body: &[IrStmt]) -> bool {
+    body.iter().any(stmt_definitely_returns)
+}
+
+fn stmt_definitely_returns(stmt: &IrStmt) -> bool {
+    match stmt {
+        IrStmt::Return { .. } => true,
+        IrStmt::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            !else_body.is_empty()
+                && body_definitely_returns(then_body)
+                && body_definitely_returns(else_body)
+        }
+        IrStmt::Decl { .. }
+        | IrStmt::Assign { .. }
+        | IrStmt::While { .. }
+        | IrStmt::DoWhile { .. }
+        | IrStmt::For { .. }
+        | IrStmt::Break { .. }
+        | IrStmt::Continue { .. }
+        | IrStmt::Expr { .. }
+        | IrStmt::Unsupported { .. } => false,
+    }
+}
+
+fn merge_definite_branch_set<T>(
+    before: &HashSet<T>,
+    then_set: &HashSet<T>,
+    then_returns: bool,
+    else_set: &HashSet<T>,
+    else_returns: bool,
+) -> HashSet<T>
+where
+    T: Clone + Eq + Hash,
+{
+    if then_returns && else_returns {
+        return before.clone();
+    }
+    before
+        .iter()
+        .chain(then_set.iter())
+        .chain(else_set.iter())
+        .filter(|item| {
+            before.contains(*item)
+                || ((then_returns || then_set.contains(*item))
+                    && (else_returns || else_set.contains(*item)))
+        })
+        .cloned()
+        .collect()
+}
+
 fn validate_definite_assignment_stmt(
     stmt: &IrStmt,
     state: &mut DefiniteAssignmentState,
@@ -3695,29 +3750,26 @@ fn validate_definite_assignment_stmt(
             validate_definite_assignment_labeled_body(then_body, &mut then_state, "if then")?;
             let mut else_state = before.clone();
             validate_definite_assignment_labeled_body(else_body, &mut else_state, "if else")?;
+            let then_returns = body_definitely_returns(then_body);
+            let else_returns = body_definitely_returns(else_body);
 
-            state.initialized = before
-                .declared
-                .iter()
-                .filter(|name| {
-                    before.initialized.contains(*name)
-                        || (then_state.initialized.contains(*name)
-                            && else_state.initialized.contains(*name))
-                })
-                .cloned()
-                .collect();
-            state.mutable_record_pointer_fields = before
-                .mutable_record_pointer_fields
-                .iter()
-                .chain(then_state.mutable_record_pointer_fields.iter())
-                .chain(else_state.mutable_record_pointer_fields.iter())
-                .filter(|key| {
-                    before.mutable_record_pointer_fields.contains(*key)
-                        || (then_state.mutable_record_pointer_fields.contains(*key)
-                            && else_state.mutable_record_pointer_fields.contains(*key))
-                })
-                .cloned()
-                .collect();
+            state.initialized = merge_definite_branch_set(
+                &before.initialized,
+                &then_state.initialized,
+                then_returns,
+                &else_state.initialized,
+                else_returns,
+            );
+            state
+                .initialized
+                .retain(|name| before.declared.contains(name));
+            state.mutable_record_pointer_fields = merge_definite_branch_set(
+                &before.mutable_record_pointer_fields,
+                &then_state.mutable_record_pointer_fields,
+                then_returns,
+                &else_state.mutable_record_pointer_fields,
+                else_returns,
+            );
             state
                 .validated_mutable_record_pointer_read_fields
                 .extend(then_state.validated_mutable_record_pointer_read_fields);

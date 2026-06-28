@@ -20,7 +20,7 @@ This document honestly lists C language constructs that are "currently supported
 | `const void *` (byte cursor) | Narrow | Maps to `&[u8]` only in proven byte cursor scenarios |
 | `const T *` (readonly integer pointer) | Narrow | Maps to `&[T]`, read-only |
 | `T *` (mutable output pointer) | Narrow | Maps to `&mut [T]` only when used as a write target |
-| `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write/statement inc-dec; not a general ownership or alias model |
+| `struct T *` (mutable record pointer) | Narrow | Maps to `&mut T` only for direct single-pointer scalar field writes/updates/read-after-write, direct if-return fallthrough writes, and statement inc-dec; not a general ownership or alias model |
 | plain `char` | Unsupported | Sign unknown, clang frontend rejects |
 | `short` / `unsigned short` | Unsupported | Target-dependent spelling, rejected |
 | `long` / `unsigned long` | Unsupported | Target ABI width inference not modeled |
@@ -36,7 +36,7 @@ This document honestly lists C language constructs that are "currently supported
 | Construct | Status | Notes |
 |-----------|--------|-------|
 | Single scalar decl + init | Supported | `int x = 1;` |
-| Single scalar decl without init | Narrow | Only with assignment-before-read proof |
+| Single scalar decl without init | Narrow | Only with assignment-before-read proof, including direct if-return branches where every fallthrough path assigns |
 | Local record decl + copy init | Narrow | `struct point q = p;`, candidate-only when later scalar field uses are modeled |
 | Multi-decl `int a = 1, b = 2;` | Supported | Compound body and for-init |
 | `const` local variable | Not explicit | Clang lowers to non-const |
@@ -65,7 +65,7 @@ This document honestly lists C language constructs that are "currently supported
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
-| `p->field` (arrow member) | Narrow | Readonly `const struct T *p` scalar field reads, null-presence/guarded readonly reads, and direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/statement inc-dec are supported; multi-pointer aliasing, nullable mutable pointers, read-before-write, maybe-write reads, complex bases/targets/RHS, non-scalar fields, value-position inc-dec, `ForStmt` step inc-dec, layout/ABI claims, and semantic acceptance remain unsupported |
+| `p->field` (arrow member) | Narrow | Readonly `const struct T *p` scalar field reads, null-presence/guarded readonly reads, and direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/direct if-return fallthrough write/statement inc-dec are supported; multi-pointer aliasing, nullable mutable pointers, read-before-write, ordinary maybe-write reads, writes only on returning branches, loop/complex-path returns, complex bases/targets/RHS, non-scalar fields, value-position inc-dec, `ForStmt` step inc-dec, layout/ABI claims, and semantic acceptance remain unsupported |
 | `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, statement-position `p.field += value` (RHS limited to a simple integer variable, literal, or integer cast), standalone statement-position `p.field++` / `++p.field` / `p.field--` / `--p.field` (base must be a direct by-value record variable and the field must be a supported integer), and field access after local copy only; value-position `p.field++`, complex RHS/base forms, and pointer/alias-sensitive field writes remain unsupported |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
