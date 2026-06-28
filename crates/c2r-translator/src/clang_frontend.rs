@@ -1778,7 +1778,20 @@ fn expr_skeleton_from_ast_with_options(
                     implicit: true,
                 });
             }
-            Ok(operand)
+            match cast_kind.as_deref() {
+                Some("LValueToRValue" | "NoOp") => Ok(operand),
+                Some(cast_kind) => Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: format!(
+                        "castKind {cast_kind} is outside the current clang lowering skeleton"
+                    ),
+                }),
+                None => Ok(ClangExprSkeleton::Unsupported {
+                    node: "ImplicitCastExpr".to_string(),
+                    reason: "missing castKind is outside the current clang lowering skeleton"
+                        .to_string(),
+                }),
+            }
         }
         Some("ParenExpr") => inner(expr)
             .first()
@@ -4091,6 +4104,111 @@ mod tests {
                         width: 32
                     }
                 )
+        ));
+    }
+
+    #[test]
+    fn implicit_cast_with_unmodeled_cast_kind_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "FloatingToIntegral",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "float" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("unmodeled implicit cast should parse as unsupported skeleton");
+        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
+            panic!("expected unsupported skeleton, got {skeleton:?}");
+        };
+        assert_eq!(node, "ImplicitCastExpr");
+        assert!(reason.contains("FloatingToIntegral"), "{reason}");
+
+        let error = lower_expr(&skeleton).expect_err("unsupported implicit cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("FloatingToIntegral"), "{error:?}");
+    }
+
+    #[test]
+    fn implicit_cast_with_integral_to_floating_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "IntegralToFloating",
+            "type": { "qualType": "float" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("non-integral implicit cast should parse as unsupported skeleton");
+        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
+            panic!("expected unsupported skeleton, got {skeleton:?}");
+        };
+        assert_eq!(node, "ImplicitCastExpr");
+        assert!(reason.contains("IntegralToFloating"), "{reason}");
+
+        let error = lower_expr(&skeleton).expect_err("unsupported implicit cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("IntegralToFloating"), "{error:?}");
+    }
+
+    #[test]
+    fn implicit_cast_without_cast_kind_stays_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("implicit cast without castKind should parse as unsupported skeleton");
+        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
+            panic!("expected unsupported skeleton, got {skeleton:?}");
+        };
+        assert_eq!(node, "ImplicitCastExpr");
+        assert!(reason.contains("missing castKind"), "{reason}");
+
+        let error = lower_expr(&skeleton).expect_err("unsupported implicit cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert!(error.message.contains("missing castKind"), "{error:?}");
+    }
+
+    #[test]
+    fn implicit_cast_noop_preserves_operand() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "NoOp",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("NoOp cast should preserve operand");
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
 

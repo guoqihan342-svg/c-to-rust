@@ -61,7 +61,7 @@ This document honestly lists C language constructs that are "currently supported
 | `==` `!=` `<` `<=` `>` `>=` | Narrow | Condition and value-position C int 0/1 |
 | `&&` `\|\|` (short-circuit) | Narrow | Condition and value-position C int 0/1 |
 | `?:` (conditional) | Narrow | Pure integer value-position only |
-| Integer cast (explicit/implicit) | Narrow | Clang-proven integral cast, source/target both supported integers |
+| Integer cast (explicit/implicit) | Narrow | Clang-proven `IntegralCast` / `IntegralPromotion`, source/target both supported integers; `FloatingToIntegral`, `IntegralToFloating`, and unknown/missing `ImplicitCastExpr.castKind` in ordinary expressions fail closed, and only modeled integer casts plus the `LValueToRValue`/`NoOp` skeleton boundary continue |
 | Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, while reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
 | Nested direct call | Narrow | One-level single nested arg only |
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |

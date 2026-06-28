@@ -373,6 +373,86 @@
       ]
     },
     {
+      "id": "implicit-cast-boundary",
+      "status": "partial",
+      "ir_constructs": [
+        "ImplicitCastExpr",
+        "IntegralCast explicit typed IR cast in preserved value contexts",
+        "IntegralPromotion explicit typed IR cast in preserved value contexts",
+        "LValueToRValue transparent lvalue-read skeleton boundary",
+        "NoOp transparent skeleton boundary",
+        "unmodeled implicit castKind fail-closed",
+        "non-integer implicit castKind fail-closed",
+        "missing implicit castKind fail-closed"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "gap",
+          "reason": "current coverage is expression-level clang AST skeleton unit coverage; no no-clang AST JSON fixture replay is claimed yet for the unmodeled/missing castKind boundary"
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "this row covers clang AST skeleton lowering before hand-built typed IR exists"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "unmodeled, non-integer, and missing ImplicitCastExpr castKind fail-closed tests",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "current coverage proves clang skeleton/IR cast preservation and fail-closed boundaries only; no emitted Rust compile or runtime behavior gate is claimed for this row"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "implicit-cast skeleton hardening is not a named-slice C/Rust differential gate"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "clang AST skeleton cast handling does not call the legacy string translator"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "expression-level clang frontend unit tests do not produce route-decision evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "expr_skeleton_from_ast_preserves_integer_implicit_casts",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "implicit_cast_noop_preserves_operand",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "implicit_cast_with_unmodeled_cast_kind_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "unmodeled ImplicitCastExpr castKind must not be transparently stripped before explicit typed IR or lowering support exists"
+        },
+        {
+          "name": "implicit_cast_with_integral_to_floating_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "non-integer implicit conversions require explicit typed IR/lowering semantics before they can be accepted"
+        },
+        {
+          "name": "implicit_cast_without_cast_kind_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "ImplicitCastExpr without castKind lacks clang semantic evidence and must fail closed"
+        }
+      ]
+    },
+    {
       "id": "target-abi-integer-width-provenance",
       "status": "partial",
       "scope_limitations": [
