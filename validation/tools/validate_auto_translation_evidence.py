@@ -2286,6 +2286,14 @@ def validate_semantic_oracle_boundary_contract(
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} missing")
         if not positive_int_like(target.get(key)):
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
+    for key in ["char_width", "short_width", "long_long_width"]:
+        if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
+            raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
+    if (
+        not missing_boundary_value(target.get("plain_char_signed"))
+        and not isinstance(target.get("plain_char_signed"), bool)
+    ):
+        raise SystemExit("semantic pass oracle boundary contract target.plain_char_signed invalid")
 
     sanitizer = require_dict(
         profile_contract.get("sanitizer_diagnostics"),

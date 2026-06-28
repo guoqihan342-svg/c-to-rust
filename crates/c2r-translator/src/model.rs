@@ -20,7 +20,15 @@ pub struct TargetAbiProfile {
     #[serde(default)]
     pub endianness: Option<String>,
     pub int_width: u16,
+    #[serde(default)]
+    pub char_width: u16,
+    #[serde(default)]
+    pub plain_char_signed: Option<bool>,
+    #[serde(default)]
+    pub short_width: u16,
     pub long_width: u16,
+    #[serde(default)]
+    pub long_long_width: u16,
     pub pointer_width: u16,
 }
 

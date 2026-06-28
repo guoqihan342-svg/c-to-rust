@@ -188,7 +188,19 @@
             "int_width": {
               "type": "integer"
             },
+            "char_width": {
+              "type": "integer"
+            },
+            "plain_char_signed": {
+              "type": "boolean"
+            },
+            "short_width": {
+              "type": "integer"
+            },
             "long_width": {
+              "type": "integer"
+            },
+            "long_long_width": {
               "type": "integer"
             },
             "pointer_width": {

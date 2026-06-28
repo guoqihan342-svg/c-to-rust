@@ -2845,6 +2845,57 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("oracle_boundary_contract", result.stderr + result.stdout)
 
+    def test_semantic_pass_rejects_invalid_optional_target_abi_width_contract(self) -> None:
+        for key, value, expected in [
+            ("char_width", 0, "target.char_width invalid"),
+            ("short_width", "not-a-width", "target.short_width invalid"),
+            ("long_long_width", -64, "target.long_long_width invalid"),
+            ("plain_char_signed", "signed", "target.plain_char_signed invalid"),
+        ]:
+            with self.subTest(key=key):
+                with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+                    tmp_path = Path(tmp)
+                    spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(
+                        tmp_path
+                    )
+                    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+                    spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+                    spec_path = tmp_path / "demo-call-expression-authoritative.json"
+                    self._write_json(spec_path, spec)
+                    self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+                    self._add_call_expression_oracle_boundary_contract(evidence_dir)
+
+                    for artifact in [
+                        evidence_dir / "l3-call-expression-validation-profile.json",
+                        evidence_dir / "l3-call-expression-final-verification.json",
+                    ]:
+                        payload = json.loads(artifact.read_text(encoding="utf-8"))
+                        payload["oracle_boundary_contract"]["target"][key] = value
+                        self._write_json(artifact, payload)
+                    self._refresh_call_expression_validation_profile_refs(evidence_dir)
+
+                    result = subprocess.run(
+                        [
+                            "python",
+                            str(VALIDATOR),
+                            "--target-id",
+                            "demo",
+                            "--slice-id",
+                            "call-expression",
+                            "--slice-spec",
+                            str(spec_path),
+                            "--evidence-root",
+                            str(out_root),
+                            "--require-semantic-pass",
+                        ],
+                        cwd=REPO_ROOT,
+                        text=True,
+                        capture_output=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected, result.stderr + result.stdout)
+
     def test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -3745,6 +3796,50 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             "status": profile.get("status", "unknown"),
             "sha256": self._sha256_json(profile),
         }
+        cache["oracle_boundary_contract_identity"] = {
+            "status": contract.get("status", "unknown"),
+            "sha256": self._sha256_json(contract),
+        }
+        fields = cache.setdefault("cache_input_fields", [])
+        if "oracle_boundary_contract_identity" not in fields:
+            fields.append("oracle_boundary_contract_identity")
+        cache["dependent_artifacts"]["validation_profile"] = profile_ref
+        self._write_json(cache_path, cache)
+        cache_ref = self._ref(cache_path, "recorded")
+
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["validation_profile"] = profile_ref
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["validation_profile"] = profile_ref
+        manifest["evidence"]["final_verification"] = final_ref
+        manifest["evidence"]["cache_metadata"] = cache_ref
+        self._write_json(manifest_path, manifest)
+
+    def _refresh_call_expression_validation_profile_refs(self, evidence_dir: Path) -> None:
+        prefix = "l3-call-expression"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile_ref = self._ref(profile_path, profile.get("status", "passed"))
+        profile_ref["profile"] = profile.get("profile")
+
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["validation_profile"] = profile_ref
+        self._write_json(final_path, final)
+        final_ref = self._ref(final_path, final.get("status", "passed"))
+
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["validation_profile_identity"] = {
+            "status": profile.get("status", "unknown"),
+            "sha256": self._sha256_json(profile),
+        }
+        contract = profile.get("oracle_boundary_contract", {})
         cache["oracle_boundary_contract_identity"] = {
             "status": contract.get("status", "unknown"),
             "sha256": self._sha256_json(contract),

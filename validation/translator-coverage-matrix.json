@@ -378,8 +378,9 @@
       "ir_constructs": [
         "target ABI integer width provenance",
         "fixed-width integer spelling acceptance",
-        "plain long/unsigned long/size_t width binding",
-        "plain char/short/long long explicit-width-field refusal",
+        "plain char/short/long/long long/size_t width binding",
+        "plain char signedness provenance",
+        "explicit-width-field refusal",
         "profile-bound target integer width lowering",
         "fail_closed_without_abi_profile",
         "translator input target ABI profile preservation"
@@ -420,7 +421,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "clang_ast_fixture_binds_size_t_with_target_abi_profile",
+              "name": "clang_ast_fixture_binds_extended_target_abi_integer_widths",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -456,6 +457,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_binds_extended_target_abi_integer_widths",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "test_translator_input_preserves_target_abi_width_profile",
           "path": "validation/tools/test_auto_migrate.py"
         }
@@ -474,12 +479,17 @@
         {
           "name": "type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "char/short/long long still need explicit signedness or width fields beyond int/long/pointer width"
+          "fail_closed_reason": "char/short/long long still fail closed when their explicit signedness or width fields are absent"
         },
         {
           "name": "clang_ast_fixture_rejects_size_t_without_target_abi_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "clang AST size_t must fail closed unless build_profile.target supplies ABI width evidence"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_extended_target_abi_integer_widths_without_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "clang AST char/short/long long must fail closed unless build_profile.target supplies explicit width and plain-char signedness evidence"
         }
       ]
     },

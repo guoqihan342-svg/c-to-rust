@@ -27,9 +27,9 @@ use c2r_translator::typed_ir::{
     EmitPolicy, IrBinOp, IrExpr, IrFunction, IrGlobal, IrGlobalInit, IrIncDecOp, IrParam,
     IrRecordField, IrStmt, IrType, IrTypeKind, IrUnOp, SignedRightShiftPolicy,
 };
-use c2r_translator::{
-    translate_slice, write_translation_artifacts, BuildProfile, SliceSpec, TargetAbiProfile,
-};
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+use c2r_translator::TargetAbiProfile;
+use c2r_translator::{translate_slice, write_translation_artifacts, BuildProfile, SliceSpec};
 use serde_json::Value;
 
 fn profile(clang_available: bool) -> BuildProfile {
@@ -271,7 +271,11 @@ fn clang_ast_fixture_binds_size_t_with_target_abi_profile() {
         triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
         endianness: Some("little".to_string()),
         int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
         long_width: 64,
+        long_long_width: 64,
         pointer_width: 64,
     };
 
@@ -291,6 +295,85 @@ fn clang_ast_fixture_binds_size_t_with_target_abi_profile() {
     );
     assert!(rust.contains("return value;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-target-abi-size-t", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_binds_extended_target_abi_integer_widths() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    for (function, signature) in [
+        ("identity_char", "pub fn identity_char(value: i8) -> i8"),
+        ("identity_short", "pub fn identity_short(value: i16) -> i16"),
+        (
+            "identity_ushort",
+            "pub fn identity_ushort(value: u16) -> u16",
+        ),
+        (
+            "identity_long_long",
+            "pub fn identity_long_long(value: i64) -> i64",
+        ),
+        (
+            "identity_ulong_long",
+            "pub fn identity_ulong_long(value: u64) -> u64",
+        ),
+    ] {
+        let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+            &ast,
+            function,
+            Some(&target_abi),
+        )
+        .expect("lower extended target ABI fixture");
+        let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+            .expect("emit Rust from extended target ABI fixture");
+
+        assert!(emitted.rust.contains(signature), "{}", emitted.rust);
+        assert!(emitted.rust.contains("return value;"), "{}", emitted.rust);
+        assert_rust_snippet_compiles(function, &emitted.rust);
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_extended_target_abi_integer_widths_without_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    for function in [
+        "identity_char",
+        "identity_short",
+        "identity_ushort",
+        "identity_long_long",
+        "identity_ulong_long",
+    ] {
+        let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function)
+            .expect_err("extended target ABI integers must fail closed without target profile");
+
+        assert_eq!(error.kind, "unsupported_clang_type");
+        assert!(
+            error
+                .message
+                .contains("requires target ABI width provenance"),
+            "{}",
+            error.message
+        );
+    }
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -12501,7 +12584,11 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
                 "triple_or_abi": "x86_64-unknown-linux-gnu",
                 "endianness": "little",
                 "int_width": 32,
+                "char_width": 8,
+                "plain_char_signed": true,
+                "short_width": 16,
                 "long_width": 64,
+                "long_long_width": 64,
                 "pointer_width": 64
             },
             "target_triple": "x86_64-unknown-linux-gnu",
@@ -12517,7 +12604,11 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
 
     assert_eq!(target_abi.triple_or_abi, "x86_64-unknown-linux-gnu");
     assert_eq!(target_abi.int_width, 32);
+    assert_eq!(target_abi.char_width, 8);
+    assert_eq!(target_abi.plain_char_signed, Some(true));
+    assert_eq!(target_abi.short_width, 16);
     assert_eq!(target_abi.long_width, 64);
+    assert_eq!(target_abi.long_long_width, 64);
     assert_eq!(target_abi.pointer_width, 64);
 }
 

@@ -28,7 +28,9 @@
 //! - **Type mapping is conservative**: fixed-width integer typedef aliases (int8_t through
 //!   uint64_t) and `signed char` map directly to typed IR integer types. Target-dependent
 //!   spellings fail closed unless an explicit target ABI profile provides the required evidence;
-//!   the current profile-bound path only lowers `long`/`unsigned long` and `size_t`.
+//!   the current profile-bound path lowers `char`, `short`, `long`,
+//!   `long long`, and `size_t` only when the target profile provides the
+//!   required width and signedness evidence.
 //!
 //! # Coverage
 //!
@@ -2642,8 +2644,17 @@ fn target_dependent_integer_width(
 ) -> Option<(bool, u16)> {
     let abi = target_abi?;
     match spelling {
+        "char" => {
+            let width = nonzero_width(abi.char_width)?;
+            let signed = abi.plain_char_signed?;
+            Some((signed, width))
+        }
+        "short" => nonzero_width(abi.short_width).map(|width| (true, width)),
+        "unsigned short" => nonzero_width(abi.short_width).map(|width| (false, width)),
         "long" => nonzero_width(abi.long_width).map(|width| (true, width)),
         "unsigned long" => nonzero_width(abi.long_width).map(|width| (false, width)),
+        "long long" => nonzero_width(abi.long_long_width).map(|width| (true, width)),
+        "unsigned long long" => nonzero_width(abi.long_long_width).map(|width| (false, width)),
         "size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
         _ => None,
     }
@@ -6010,13 +6021,22 @@ mod tests {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
             endianness: Some("little".to_string()),
             int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
             long_width: 64,
+            long_long_width: 64,
             pointer_width: 64,
         };
 
         for (spelling, expected_signed, expected_width) in [
+            ("char", true, 8),
+            ("short", true, 16),
+            ("unsigned short", false, 16),
             ("long", true, 64),
             ("unsigned long", false, 64),
+            ("long long", true, 64),
+            ("unsigned long long", false, 64),
             ("size_t", false, 64),
         ] {
             let ty =
@@ -6037,7 +6057,11 @@ mod tests {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
             endianness: Some("little".to_string()),
             int_width: 32,
+            char_width: 0,
+            plain_char_signed: None,
+            short_width: 0,
             long_width: 64,
+            long_long_width: 0,
             pointer_width: 64,
         };
 

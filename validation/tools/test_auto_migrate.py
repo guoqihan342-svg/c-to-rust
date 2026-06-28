@@ -4729,7 +4729,11 @@ class AutoMigrateTests(unittest.TestCase):
                 "triple_or_abi": "x86_64-unknown-linux-gnu",
                 "endianness": "little",
                 "int_width": 32,
+                "char_width": 8,
+                "plain_char_signed": True,
+                "short_width": 16,
                 "long_width": 64,
+                "long_long_width": 64,
                 "pointer_width": 64,
             }
             spec = {
