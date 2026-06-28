@@ -134,6 +134,7 @@ This document honestly lists C language constructs that are "currently supported
 | Pointer comparison (general) | Unsupported | NULL comparison only |
 | Void pointer (general) | Unsupported | Proven byte cursor scenarios only |
 | Function pointer | Unsupported | |
+| Pointer value as function argument/return | Unsupported | Ordinary pointer values do not auto-lower to slices, references, or raw pointers; explicit ownership/lifetime/ABI lowering is required |
 | Double/triple pointer | Unsupported | `T **` |
 | Pointer cast (non-integer) | Unsupported | |
 | `const T *` write | Unsupported | |

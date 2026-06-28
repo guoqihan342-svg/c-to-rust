@@ -807,6 +807,7 @@
         "direct CallExpr",
         "bounded external callee context",
         "reserved C macro/stdlib/extern callee fail-closed",
+        "pointer value call argument/return fail-closed",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -820,6 +821,10 @@
             {
               "name": "direct call no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "pointer value call/return no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/pointer_value_boundary_ast.json"
             }
           ]
         },
@@ -837,6 +842,10 @@
           "evidence": [
             {
               "name": "unsupported call expressions fail closed",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "pointer value call/return boundary tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -897,6 +906,21 @@
           "name": "typed_ir_rejects_reserved_c_macro_direct_call",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "reserved C macro/stdlib/extern-like callees must not be emitted as plain Rust function calls without explicit lowering or extern binding"
+        },
+        {
+          "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "ordinary pointer values passed to unknown callees require explicit ownership/lifetime/ABI lowering instead of being treated as slices"
+        },
+        {
+          "name": "typed_ir_rejects_pointer_value_return_with_explicit_boundary",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "ordinary pointer return values require explicit ownership/lifetime/ABI lowering instead of being emitted as Rust references, slices, or raw pointers"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "no-clang AST replay must lower pointer-value C shapes to typed IR and keep Rust lowering fail-closed at the explicit ABI/lifetime boundary"
         }
       ]
     },

@@ -270,6 +270,50 @@ fn clang_ast_fixture_replays_direct_call_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/pointer_value_boundary_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered_call = lower_function_and_globals_from_clang_ast_json_value(&ast, "call_take_ptr")
+        .expect("lower pointer value call fixture without invoking clang");
+    let call_error =
+        emit_rust_from_ir_with_globals(&lowered_call.function_ir, &lowered_call.globals)
+            .expect_err("pointer value call arg must fail closed");
+    assert!(
+        call_error
+            .reason
+            .contains("call arg[0] pointer value argument"),
+        "{:?}",
+        call_error.reason
+    );
+    assert!(
+        call_error.reason.contains("const int *"),
+        "{:?}",
+        call_error.reason
+    );
+
+    let lowered_return =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "return_pointer")
+            .expect("lower pointer value return fixture without invoking clang");
+    let return_error =
+        emit_rust_from_ir_with_globals(&lowered_return.function_ir, &lowered_return.globals)
+            .expect_err("pointer value return must fail closed");
+    assert!(
+        return_error.reason.contains("pointer value return"),
+        "{:?}",
+        return_error.reason
+    );
+    assert!(
+        return_error.reason.contains("const int *"),
+        "{:?}",
+        return_error.reason
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_size_t_without_target_abi_profile() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/target_abi_width_ast.json"
@@ -5916,6 +5960,88 @@ fn typed_ir_rejects_record_value_direct_call_arguments() {
     assert!(error
         .reason
         .contains("call arg[0] record type point is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let ir = IrFunction {
+        name: "call_take_ptr".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "take_ptr".to_string(),
+                args: vec![ir_var("values", ptr_ty)],
+                ty: i32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("pointer value direct call arguments must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("call arg[0] pointer value argument"),
+        "{:?}",
+        error.reason
+    );
+    assert!(error.reason.contains("const int *"), "{:?}", error.reason);
+    assert!(
+        error
+            .reason
+            .contains("explicit ownership/lifetime/ABI lowering"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_pointer_value_return_with_explicit_boundary() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty), true);
+    let ir = IrFunction {
+        name: "return_pointer".to_string(),
+        return_type: ptr_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("values", ptr_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer value returns must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("pointer value return"),
+        "{:?}",
+        error.reason
+    );
+    assert!(error.reason.contains("const int *"), "{:?}", error.reason);
+    assert!(
+        error
+            .reason
+            .contains("explicit ownership/lifetime/ABI lowering"),
+        "{:?}",
+        error.reason
+    );
 }
 
 #[cfg(feature = "typed-ir")]

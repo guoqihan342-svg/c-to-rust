@@ -1,0 +1,122 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "call_take_ptr",
+      "type": {
+        "qualType": "int (const int *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "values",
+          "type": {
+            "qualType": "const int *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "CallExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "FunctionToPointerDecay",
+                      "type": {
+                        "qualType": "int (*)(const int *)"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int (const int *)"
+                          },
+                          "referencedDecl": {
+                            "kind": "FunctionDecl",
+                            "name": "take_ptr"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "const int *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "const int *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "values"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "return_pointer",
+      "type": {
+        "qualType": "const int *(const int *)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "values",
+          "type": {
+            "qualType": "const int *"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "const int *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "const int *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "values"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -136,6 +136,7 @@
 | pointer comparison (general) | 不支持 | 仅 NULL 比较 |
 | void pointer (general) | 不支持 | 仅 proven byte cursor 场景 |
 | 函数指针 | 不支持 | |
+| pointer value 作为函数参数/返回值 | 不支持 | 普通 pointer value 不能自动映射成 slice/reference/raw pointer；需要显式 ownership/lifetime/ABI lowering |
 | double/triple pointer | 不支持 | `T **` |
 | pointer cast (non-integer) | 不支持 | |
 | `const T *` write | 不支持 | |

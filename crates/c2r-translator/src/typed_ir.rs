@@ -1049,6 +1049,11 @@ fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
 fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
     if is_void_type(ty) {
         Ok(None)
+    } else if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+        Err(format!(
+            "pointer value return {} requires explicit ownership/lifetime/ABI lowering",
+            type_label(ty)
+        ))
     } else if let IrTypeKind::Record {
         fields: Some(_), ..
     } = &ty.kind
@@ -2486,6 +2491,12 @@ fn emit_call_expr(
             "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
         ));
     }
+    if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+        return Err(format!(
+            "call result has pointer value return {} requires explicit ownership/lifetime/ABI lowering",
+            type_label(ty)
+        ));
+    }
     if !is_void_type(ty) {
         emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
     }
@@ -2553,6 +2564,12 @@ fn validate_bounded_call_arg(
 ) -> Result<(), String> {
     match expr {
         IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
+            if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+                return Err(format!(
+                    "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
+                    type_label(ty)
+                ));
+            }
             emit_scalar_type(ty)?;
             Ok(())
         }
