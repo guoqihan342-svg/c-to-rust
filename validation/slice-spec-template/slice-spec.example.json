@@ -104,6 +104,14 @@
           "addr"
         ]
       ]
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "division_by_zero": "runtime_precondition_nonzero_divisor",
+      "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_right_shift": "fail_closed_without_explicit_contract"
     }
   },
   "build_profile": {
@@ -149,7 +157,22 @@
       "addr.sin_family",
       "addr.sin_port",
       "addr.sin_addr"
-    ]
+    ],
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "port",
+          "type": "int32",
+          "range": [
+            0,
+            65535
+          ],
+          "excludes": []
+        }
+      ],
+      "covers_overflow_boundaries": false
+    }
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",
@@ -186,7 +209,9 @@
     "build_profile:libuv-linux-x86_64-clang",
     "schema:slice-spec:1",
     "c_boundary.pointer_contract.aliasing_proven",
-    "c_boundary.pointer_contract.noalias_required"
+    "c_boundary.pointer_contract.noalias_required",
+    "c_boundary.scalar_arithmetic_contract",
+    "fixture_contract.scalar_input_domain"
   ],
   "memory_model": {
     "alias_contract": {

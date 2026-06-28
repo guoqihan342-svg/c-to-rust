@@ -178,12 +178,32 @@
         "route/profile typed_ir runtime_preconditions binding",
         "literal divisor zero refusal",
         "literal shift count refusal",
-        "signed right shift refusal"
+        "signed right shift refusal",
+        "slice spec c_boundary.scalar_arithmetic_contract",
+        "fixture_contract.scalar_input_domain admission evidence",
+        "route/profile scalar_ub_contract binding",
+        "typed_ir_candidate.scalar_admission covered/unresolved gate",
+        "scalar_ub_contract_identity cache invalidation",
+        "typed_ir_scalar_admission_unresolved route floor",
+        "no-clang AST fixture replay for scalar runtime preconditions/refusals"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
-          "status": "gap",
-          "reason": "no committed no-clang AST fixture yet covers arithmetic UB boundary refusals"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "scalar runtime preconditions AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/scalar_runtime_preconditions_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
         },
         "handwritten_ir": {
           "status": "covered",
@@ -233,6 +253,22 @@
             },
             {
               "name": "typed_ir runtime_preconditions drift rejection",
+              "path": "validation/tools/test_validate_auto_translation_evidence.py"
+            },
+            {
+              "name": "slice spec scalar arithmetic contract and scalar input domain schema/template exposure",
+              "path": "validation/tools/test_template_schema_contracts.py"
+            },
+            {
+              "name": "route/profile scalar_ub_contract and scalar_admission binding",
+              "path": "validation/tools/test_auto_migrate.py"
+            },
+            {
+              "name": "uncovered scalar runtime preconditions prevent zero-token L0 route",
+              "path": "validation/tools/test_auto_migrate.py"
+            },
+            {
+              "name": "typed_ir scalar_admission drift and missing-field rejection",
               "path": "validation/tools/test_validate_auto_translation_evidence.py"
             }
           ]
@@ -285,6 +321,26 @@
         },
         {
           "name": "typed_ir_emits_scalar_bit_or_and_left_shift",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "test_slice_spec_template_exposes_memory_model_contract",
+          "path": "validation/tools/test_template_schema_contracts.py"
+        },
+        {
+          "name": "test_scalar_admission_requires_matching_contract_and_input_domain",
+          "path": "validation/tools/test_auto_migrate.py"
+        },
+        {
+          "name": "test_uncovered_scalar_runtime_preconditions_from_clang_report_stay_l1",
+          "path": "validation/tools/test_auto_migrate.py"
+        },
+        {
+          "name": "clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],

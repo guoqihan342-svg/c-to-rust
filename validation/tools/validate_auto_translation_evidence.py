@@ -1469,6 +1469,99 @@ def validate_typed_ir_candidate_binding(
         actual["unsupported_reason"] = typed_ir.get("unsupported_reason")
     if actual != expected:
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
+    if runtime_preconditions and "scalar_admission" not in typed_ir:
+        raise SystemExit("route_decision.candidate_generation.typed_ir.scalar_admission missing")
+    if "scalar_admission" in typed_ir:
+        expected_admission = scalar_admission_from_runtime_preconditions(
+            route.get("scalar_ub_contract", {}),
+            runtime_preconditions,
+        )
+        if typed_ir.get("scalar_admission") != expected_admission:
+            raise SystemExit("route_decision.candidate_generation.typed_ir.scalar_admission drift")
+
+
+def scalar_admission_from_runtime_preconditions(
+    scalar_contract: Any,
+    runtime_preconditions: Any,
+) -> dict[str, Any]:
+    preconditions = runtime_preconditions if isinstance(runtime_preconditions, list) else []
+    contract = scalar_contract if isinstance(scalar_contract, dict) else {}
+    if not preconditions:
+        return {
+            "status": "not_applicable",
+            "precondition_count": 0,
+            "covered": [],
+            "unresolved": [],
+            "contract_status": str(contract.get("status", "not_declared")),
+        }
+    covered = []
+    unresolved = []
+    for item in preconditions:
+        code = str(item.get("code", "unknown")) if isinstance(item, dict) else "unknown"
+        admission = scalar_precondition_admission(code, contract)
+        if admission["status"] == "covered":
+            covered.append(admission)
+        else:
+            unresolved.append(admission)
+    return {
+        "status": "covered" if not unresolved else "unresolved",
+        "precondition_count": len(preconditions),
+        "covered": covered,
+        "unresolved": unresolved,
+        "contract_status": str(contract.get("status", "not_declared")),
+        "source_fields": [
+            "c_boundary.scalar_arithmetic_contract",
+            "fixture_contract.scalar_input_domain",
+            "claim_boundary.must_not_claim",
+        ],
+    }
+
+
+def scalar_precondition_admission(code: str, contract: dict[str, Any]) -> dict[str, Any]:
+    required_field, required_value = scalar_precondition_required_contract(code)
+    c_contract = contract.get("c_boundary", {})
+    if not isinstance(c_contract, dict):
+        c_contract = {}
+    fixture_contract = contract.get("fixture_contract", {})
+    if not isinstance(fixture_contract, dict):
+        fixture_contract = {}
+    parameters = fixture_contract.get("parameters", [])
+    has_input_domain = isinstance(parameters, list) and bool(parameters)
+    if required_field and c_contract.get(required_field) == required_value and has_input_domain:
+        return {
+            "code": code,
+            "status": "covered",
+            "covered_by": [
+                f"c_boundary.scalar_arithmetic_contract.{required_field}",
+                "fixture_contract.scalar_input_domain",
+            ],
+        }
+    missing = []
+    if not required_field or c_contract.get(required_field) != required_value:
+        missing.append(f"c_boundary.scalar_arithmetic_contract.{required_field or 'unknown'}")
+    if not has_input_domain:
+        missing.append("fixture_contract.scalar_input_domain")
+    return {
+        "code": code,
+        "status": "unresolved",
+        "missing": missing,
+    }
+
+
+def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | None]:
+    if code in {
+        "signed_add_no_overflow",
+        "signed_sub_no_overflow",
+        "signed_mul_no_overflow",
+    }:
+        return "signed_overflow", "runtime_precondition_no_overflow"
+    if code in {"division_divisor_nonzero", "modulo_divisor_nonzero"}:
+        return "division_by_zero", "runtime_precondition_nonzero_divisor"
+    if code in {"signed_division_no_overflow", "signed_modulo_no_overflow"}:
+        return "signed_division_overflow", "runtime_precondition_excludes_min_div_minus_one"
+    if code == "shift_count_in_range":
+        return "shift_count", "runtime_precondition_in_range"
+    return None, None
 
 
 def validate_candidate_selection_record(

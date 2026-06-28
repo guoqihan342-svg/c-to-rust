@@ -1,0 +1,241 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "scalar_runtime_preconditions",
+      "type": {
+        "qualType": "int (int, int, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "divisor",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "%",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": "/",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "BinaryOperator",
+                              "opcode": "+",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "ImplicitCastExpr",
+                                  "castKind": "LValueToRValue",
+                                  "type": {
+                                    "qualType": "int"
+                                  },
+                                  "inner": [
+                                    {
+                                      "kind": "DeclRefExpr",
+                                      "referencedDecl": {
+                                        "kind": "ParmVarDecl",
+                                        "name": "value"
+                                      },
+                                      "type": {
+                                        "qualType": "int"
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "kind": "IntegerLiteral",
+                                  "type": {
+                                    "qualType": "int"
+                                  },
+                                  "value": "1"
+                                }
+                              ]
+                            },
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "castKind": "LValueToRValue",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "referencedDecl": {
+                                    "kind": "ParmVarDecl",
+                                    "name": "divisor"
+                                  },
+                                  "type": {
+                                    "qualType": "int"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "5"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "<<",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "value"
+                              },
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "count"
+                              },
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "literal_divide_by_zero",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "/",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          },
+                          "type": {
+                            "qualType": "int"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "value": "0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -65,7 +65,9 @@ class TemplateSchemaContractTests(unittest.TestCase):
         self.assertIn("memory_model", example)
         c_boundary_props = schema["properties"]["c_boundary"]["properties"]
         self.assertIn("pointer_contract", c_boundary_props)
+        self.assertIn("scalar_arithmetic_contract", c_boundary_props)
         self.assertIn("pointer_contract", example["c_boundary"])
+        self.assertIn("scalar_arithmetic_contract", example["c_boundary"])
 
         pointer_contract_schema = resolve_schema_ref(schema, c_boundary_props["pointer_contract"])
         pointer_contract_props = pointer_contract_schema["properties"]
@@ -79,6 +81,26 @@ class TemplateSchemaContractTests(unittest.TestCase):
         ]:
             self.assertIn(field, pointer_contract_props)
 
+        scalar_contract_schema = resolve_schema_ref(schema, c_boundary_props["scalar_arithmetic_contract"])
+        scalar_contract_props = scalar_contract_schema["properties"]
+        for field in [
+            "wrapping_profile",
+            "signed_overflow",
+            "division_by_zero",
+            "signed_division_overflow",
+            "shift_count",
+            "signed_right_shift",
+        ]:
+            self.assertIn(field, scalar_contract_props)
+
+        fixture_props = schema["properties"]["fixture_contract"]["properties"]
+        self.assertIn("scalar_input_domain", fixture_props)
+        self.assertIn("scalar_input_domain", example["fixture_contract"])
+        scalar_domain_schema = resolve_schema_ref(schema, fixture_props["scalar_input_domain"])
+        scalar_domain_props = scalar_domain_schema["properties"]
+        for field in ["case_source", "parameters", "covers_overflow_boundaries"]:
+            self.assertIn(field, scalar_domain_props)
+
         memory_schema = resolve_schema_ref(schema, schema["properties"]["memory_model"])
         memory_props = memory_schema["properties"]
         for field in [
@@ -89,6 +111,9 @@ class TemplateSchemaContractTests(unittest.TestCase):
         ]:
             self.assertIn(field, memory_props)
             self.assertIn(field, example["memory_model"])
+
+        self.assertIn("c_boundary.scalar_arithmetic_contract", example["cache_invalidation_keys"])
+        self.assertIn("fixture_contract.scalar_input_domain", example["cache_invalidation_keys"])
 
         jsonschema.validate(example, schema)
 

@@ -128,6 +128,9 @@
         },
         "pointer_contract": {
           "$ref": "#/definitions/pointerContract"
+        },
+        "scalar_arithmetic_contract": {
+          "$ref": "#/definitions/scalarArithmeticContract"
         }
       }
     },
@@ -256,6 +259,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "scalar_input_domain": {
+          "$ref": "#/definitions/scalarInputDomain"
         }
       }
     },
@@ -452,6 +458,111 @@
         },
         "expected_ref": {
           "type": "string"
+        }
+      }
+    },
+    "scalarArithmeticContract": {
+      "type": "object",
+      "required": [
+        "wrapping_profile",
+        "signed_overflow",
+        "division_by_zero",
+        "signed_division_overflow",
+        "shift_count",
+        "signed_right_shift"
+      ],
+      "properties": {
+        "wrapping_profile": {
+          "enum": [
+            "not_declared",
+            "fwrapv",
+            "two_complement_wrapping",
+            "fail_closed"
+          ]
+        },
+        "signed_overflow": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_no_overflow",
+            "wrapping_defined_by_profile",
+            "fail_closed"
+          ]
+        },
+        "division_by_zero": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_nonzero_divisor",
+            "fail_closed"
+          ]
+        },
+        "signed_division_overflow": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_excludes_min_div_minus_one",
+            "fail_closed"
+          ]
+        },
+        "shift_count": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_in_range",
+            "fail_closed"
+          ]
+        },
+        "signed_right_shift": {
+          "enum": [
+            "not_declared",
+            "explicit_implementation_defined_contract",
+            "fail_closed_without_explicit_contract"
+          ]
+        }
+      }
+    },
+    "scalarInputDomain": {
+      "type": "object",
+      "required": [
+        "case_source",
+        "parameters",
+        "covers_overflow_boundaries"
+      ],
+      "properties": {
+        "case_source": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "range": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "excludes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "covers_overflow_boundaries": {
+          "type": "boolean"
         }
       }
     },

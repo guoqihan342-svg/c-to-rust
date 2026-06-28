@@ -233,6 +233,60 @@ fn clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust() {
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-add-one", rust);
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/scalar_runtime_preconditions_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "scalar_runtime_preconditions")
+            .expect("lower committed clang AST scalar runtime preconditions fixture");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from scalar runtime preconditions fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(lowered.globals.is_empty());
+    assert!(rust.contains(
+        "pub fn scalar_runtime_preconditions(value: i32, divisor: i32, count: i32) -> i32"
+    ));
+    assert!(rust.contains(".checked_add(1i32).expect(\"signed addition overflow\")"), "{rust}");
+    assert!(
+        rust.contains(".checked_div(divisor).expect(\"division by zero or signed overflow\")"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(".checked_rem(5i32).expect(\"modulo by zero or signed overflow\")"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "checked_shl(core::convert::TryFrom::try_from(count).expect(\"shift count must be nonnegative and fit u32\")).expect(\"shift count out of range\")"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-scalar-runtime-preconditions", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/scalar_runtime_preconditions_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "literal_divide_by_zero")
+            .expect("lower committed clang AST scalar refusal fixture");
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("literal division by zero from fixture must fail closed");
+
+    assert!(error.reason.contains("division by zero literal"));
+}
+
 #[cfg(feature = "typed-ir")]
 fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
     IrType {

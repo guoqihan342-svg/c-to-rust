@@ -58,7 +58,10 @@ jobs:
         run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
 
       - name: Run no-clang typed IR fixture replay
-        run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --no-default-features --features clang-frontend,typed-ir clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust -- --exact
+        run: |
+          cargo test --manifest-path crates/c2r-translator/Cargo.toml --no-default-features --features clang-frontend,typed-ir clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust -- --exact
+          cargo test --manifest-path crates/c2r-translator/Cargo.toml --no-default-features --features clang-frontend,typed-ir clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang -- --exact
+          cargo test --manifest-path crates/c2r-translator/Cargo.toml --no-default-features --features clang-frontend,typed-ir clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang -- --exact
 
       - name: Run core validation Python tests
         run: |

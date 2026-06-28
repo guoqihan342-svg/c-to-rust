@@ -428,11 +428,49 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     json.dumps(report_candidate["readonly_globals"], sort_keys=True).encode("utf-8")
                 ).hexdigest(),
             }
+            typed_ir["scalar_admission"] = {
+                "status": "covered",
+                "precondition_count": 1,
+                "covered": [
+                    {
+                        "code": "shift_count_in_range",
+                        "status": "covered",
+                        "covered_by": [
+                            "c_boundary.scalar_arithmetic_contract.shift_count",
+                            "fixture_contract.scalar_input_domain",
+                        ],
+                    }
+                ],
+                "unresolved": [],
+                "contract_status": "recorded",
+                "source_fields": [
+                    "c_boundary.scalar_arithmetic_contract",
+                    "fixture_contract.scalar_input_domain",
+                    "claim_boundary.must_not_claim",
+                ],
+            }
             route = {
                 "source_artifacts": {
                     "clang_lowering_report": self._ref(report_path, "lowered"),
                 },
                 "candidate_generation": {"typed_ir": typed_ir},
+                "scalar_ub_contract": {
+                    "status": "recorded",
+                    "c_boundary": {
+                        "wrapping_profile": "not_declared",
+                        "signed_overflow": "runtime_precondition_no_overflow",
+                        "division_by_zero": "runtime_precondition_nonzero_divisor",
+                        "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
+                        "shift_count": "runtime_precondition_in_range",
+                        "signed_right_shift": "fail_closed_without_explicit_contract",
+                    },
+                    "fixture_contract": {
+                        "case_source": "unit-test",
+                        "parameters": [{"name": "size", "type": "size_t", "range": [0, 1024]}],
+                        "covers_overflow_boundaries": False,
+                    },
+                    "claim_boundary": {"must_not_claim": []},
+                },
             }
             profile = {"candidate_generation": route["candidate_generation"]}
 
@@ -472,6 +510,39 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     {"candidate_generation": runtime_drift["candidate_generation"]},
                 )
             self.assertIn("clang-lowering-report", str(raised.exception))
+
+            admission_drift = json.loads(json.dumps(route))
+            admission_drift["candidate_generation"]["typed_ir"]["scalar_admission"]["status"] = "unresolved"
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    admission_drift,
+                    {"candidate_generation": admission_drift["candidate_generation"]},
+                )
+            self.assertIn("scalar_admission", str(raised.exception))
+
+            contract_drift = json.loads(json.dumps(route))
+            contract_drift.pop("scalar_ub_contract")
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    contract_drift,
+                    {"candidate_generation": contract_drift["candidate_generation"]},
+                )
+            self.assertIn("scalar_admission", str(raised.exception))
+
+            missing_admission = json.loads(json.dumps(route))
+            missing_admission["candidate_generation"]["typed_ir"].pop("scalar_admission")
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(
+                    evidence_dir,
+                    prefix,
+                    missing_admission,
+                    {"candidate_generation": missing_admission["candidate_generation"]},
+                )
+            self.assertIn("scalar_admission", str(raised.exception))
 
     def test_rejects_unsupported_typed_ir_candidate_reason_drift(self) -> None:
         module = load_validator_module()

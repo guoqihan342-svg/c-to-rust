@@ -42,6 +42,7 @@ CACHE_INPUT_FIELDS = [
     "command_arguments",
     "alias_gate_identity",
     "effect_graph_identity",
+    "scalar_ub_contract_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
     "validation_profile_identity",
@@ -1160,6 +1161,133 @@ def alias_gate_evidence(spec: dict[str, Any], pointer_nodes: list[dict[str, Any]
             f"aliasing_proven={str(aliasing_proven).lower()}",
         ],
     }
+
+
+def scalar_ub_contract(spec: dict[str, Any]) -> dict[str, Any]:
+    c_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
+    if not isinstance(c_contract, dict):
+        c_contract = {}
+    fixture_domain = spec.get("fixture_contract", {}).get("scalar_input_domain", {})
+    if not isinstance(fixture_domain, dict):
+        fixture_domain = {}
+    must_not_claim = spec.get("claim_boundary", {}).get("must_not_claim", [])
+    if not isinstance(must_not_claim, list):
+        must_not_claim = []
+    status = "recorded" if c_contract or fixture_domain or must_not_claim else "not_declared"
+    parameters = fixture_domain.get("parameters", [])
+    if not isinstance(parameters, list):
+        parameters = []
+    return {
+        "status": status,
+        "c_boundary": {
+            "wrapping_profile": str(c_contract.get("wrapping_profile", "not_declared")),
+            "signed_overflow": str(c_contract.get("signed_overflow", "not_declared")),
+            "division_by_zero": str(c_contract.get("division_by_zero", "not_declared")),
+            "signed_division_overflow": str(
+                c_contract.get("signed_division_overflow", "not_declared")
+            ),
+            "shift_count": str(c_contract.get("shift_count", "not_declared")),
+            "signed_right_shift": str(c_contract.get("signed_right_shift", "not_declared")),
+        },
+        "fixture_contract": {
+            "case_source": str(fixture_domain.get("case_source", "not_declared")),
+            "parameters": parameters,
+            "covers_overflow_boundaries": bool(
+                fixture_domain.get("covers_overflow_boundaries", False)
+            ),
+        },
+        "claim_boundary": {
+            "must_not_claim": [str(item) for item in must_not_claim],
+        },
+    }
+
+
+def scalar_ub_contract_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    contract = scalar_ub_contract(spec)
+    return {
+        "status": contract["status"],
+        "sha256": sha256_json(contract),
+    }
+
+
+def scalar_admission_from_runtime_preconditions(
+    spec: dict[str, Any],
+    runtime_preconditions: Any,
+) -> dict[str, Any]:
+    preconditions = runtime_preconditions if isinstance(runtime_preconditions, list) else []
+    contract = scalar_ub_contract(spec)
+    if not preconditions:
+        return {
+            "status": "not_applicable",
+            "precondition_count": 0,
+            "covered": [],
+            "unresolved": [],
+            "contract_status": contract["status"],
+        }
+    covered = []
+    unresolved = []
+    for item in preconditions:
+        code = str(item.get("code", "unknown")) if isinstance(item, dict) else "unknown"
+        admission = scalar_precondition_admission(code, contract)
+        if admission["status"] == "covered":
+            covered.append(admission)
+        else:
+            unresolved.append(admission)
+    return {
+        "status": "covered" if not unresolved else "unresolved",
+        "precondition_count": len(preconditions),
+        "covered": covered,
+        "unresolved": unresolved,
+        "contract_status": contract["status"],
+        "source_fields": [
+            "c_boundary.scalar_arithmetic_contract",
+            "fixture_contract.scalar_input_domain",
+            "claim_boundary.must_not_claim",
+        ],
+    }
+
+
+def scalar_precondition_admission(code: str, contract: dict[str, Any]) -> dict[str, Any]:
+    required_field, required_value = scalar_precondition_required_contract(code)
+    c_contract = contract.get("c_boundary", {})
+    fixture_contract = contract.get("fixture_contract", {})
+    parameters = fixture_contract.get("parameters", [])
+    has_input_domain = isinstance(parameters, list) and bool(parameters)
+    if required_field and c_contract.get(required_field) == required_value and has_input_domain:
+        return {
+            "code": code,
+            "status": "covered",
+            "covered_by": [
+                f"c_boundary.scalar_arithmetic_contract.{required_field}",
+                "fixture_contract.scalar_input_domain",
+            ],
+        }
+    missing = []
+    if not required_field or c_contract.get(required_field) != required_value:
+        missing.append(f"c_boundary.scalar_arithmetic_contract.{required_field or 'unknown'}")
+    if not has_input_domain:
+        missing.append("fixture_contract.scalar_input_domain")
+    return {
+        "code": code,
+        "status": "unresolved",
+        "missing": missing,
+    }
+
+
+def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | None]:
+    if code in {
+        "signed_add_no_overflow",
+        "signed_sub_no_overflow",
+        "signed_mul_no_overflow",
+    }:
+        return "signed_overflow", "runtime_precondition_no_overflow"
+    if code in {"division_divisor_nonzero", "modulo_divisor_nonzero"}:
+        return "division_by_zero", "runtime_precondition_nonzero_divisor"
+    if code in {"signed_division_no_overflow", "signed_modulo_no_overflow"}:
+        return "signed_division_overflow", "runtime_precondition_excludes_min_div_minus_one"
+    if code == "shift_count_in_range":
+        return "shift_count", "runtime_precondition_in_range"
+    return None, None
 
 
 def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip: bool) -> dict[str, Any]:
@@ -2969,6 +3097,7 @@ def emit_route_decision(
         "verification_profile": profile,
         "source_artifacts": source_artifacts,
         "candidate_generation": candidate_generation,
+        "scalar_ub_contract": scalar_ub_contract(spec),
         "policy": {
             "goal": "dev",
             "fixed_loop_count_required": False,
@@ -2996,6 +3125,10 @@ def candidate_generation_evidence(
     plan = read_json(plan_path) if plan_path.exists() else {}
     primary_candidate = primary_candidate_binding(plan)
     typed_ir_candidate = typed_ir_candidate_binding(report_path)
+    typed_ir_candidate["scalar_admission"] = scalar_admission_from_runtime_preconditions(
+        spec,
+        typed_ir_candidate.get("runtime_preconditions", []),
+    )
     c2rust_candidate = c2rust_baseline_candidate_binding(
         c2rust_baseline,
         baseline_manifest_ref=baseline_manifest_ref,
@@ -3291,6 +3424,18 @@ def typed_ir_candidate_route_signal(
     route = candidate_route.get("route") if isinstance(candidate_route, dict) else None
     token_cost = candidate_route.get("token_cost") if isinstance(candidate_route, dict) else None
     if status == "generated" and route == "GenericTypedIr" and typed_ir.get("rust_draft_generated") is True:
+        scalar_admission = typed_ir.get("scalar_admission", {})
+        if isinstance(scalar_admission, dict) and scalar_admission.get("status") == "unresolved":
+            unresolved = scalar_admission.get("unresolved", [])
+            return (
+                "L1",
+                {
+                    "feature": "typed_ir_scalar_admission_unresolved",
+                    "route": "GenericTypedIr",
+                    "unresolved_count": len(unresolved) if isinstance(unresolved, list) else 0,
+                    "weight": "requires_contract_or_domain_evidence",
+                },
+            )
         if scalar_only and token_cost == 0:
             return (
                 "L0",
@@ -3395,6 +3540,7 @@ def emit_validation_profile(
             "c_oracle_diff": oracle.get("status"),
         },
         "candidate_generation": route_decision.get("candidate_generation", {}),
+        "scalar_ub_contract": route_decision.get("scalar_ub_contract", scalar_ub_contract(spec)),
         "accepted_evidence_authoritative": accepted_authoritative,
         "generated_draft_semantic_pass": False,
         "loop_policy": {
@@ -5149,6 +5295,7 @@ def cache_identity(
         "command_arguments": command_arguments,
         "alias_gate_identity": alias_gate_identity(spec),
         "effect_graph_identity": effect_graph_identity(spec),
+        "scalar_ub_contract_identity": scalar_ub_contract_identity(spec),
         "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
         "route_decision_identity": artifact_cache_identity(route_decision),
         "validation_profile_identity": artifact_cache_identity(validation_profile),

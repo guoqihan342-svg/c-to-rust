@@ -83,7 +83,7 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["matrix"]["path"], "validation/translator-coverage-matrix.json")
         self.assertGreaterEqual(report["capability_count"], 5)
-        self.assertEqual(report["dimensions"]["clang_fixture_replay"]["covered"], 1)
+        self.assertGreaterEqual(report["dimensions"]["clang_fixture_replay"]["covered"], 2)
         self.assertGreaterEqual(report["dimensions"]["handwritten_ir"]["covered"], 1)
         self.assertGreaterEqual(report["dimensions"]["runtime_emitted_rust"]["covered"], 1)
         self.assertGreaterEqual(report["dimensions"]["c_rust_diff"]["covered"], 1)
