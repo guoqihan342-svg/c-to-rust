@@ -3,6 +3,8 @@
 本文诚实列出当前 typed IR + clang frontend + generic emitter 管线"已支持"和"显式不支持"的 C 语言构造。英文镜像见 `COVERAGE.en.md`。
 
 > 原则：坦诚的边界比夸大的 demo 可信。本文件由最新代码状态手动整理，若有疏漏以 `crates/c2r-translator/tests/bounded_translation.rs` 中的 fail-closed 测试为准。
+>
+> 矩阵门禁：本人工清单只是阅读入口；覆盖声明现在由 `validation/translator-coverage-matrix.json` 和 `validation/tools/translator_coverage_matrix.py` 约束，要求代表性正例、负例、fail-closed reason、runtime/evidence 维度和可解析链接。该矩阵不是完整 C99/C11 支持率，也不是语义通过证明。
 
 ## 类型系统
 

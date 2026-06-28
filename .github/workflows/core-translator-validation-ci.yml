@@ -6,6 +6,7 @@ on:
       - ".github/workflows/core-translator-validation-ci.yml"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
       - "validation/auto-translation-template/**"
@@ -20,6 +21,7 @@ on:
       - ".github/workflows/core-translator-validation-ci.yml"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
       - "validation/auto-translation-template/**"
@@ -62,9 +64,13 @@ jobs:
         run: |
           python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
           python -m unittest validation.tools.test_unsafe_budget
+          python -m unittest validation.tools.test_translator_coverage_matrix
 
       - name: Run repository unsafe budget gate
         run: python validation/tools/unsafe_budget.py --max-ratio 0.10
+
+      - name: Run translator coverage matrix gate
+        run: python validation/tools/translator_coverage_matrix.py
 
       - name: Check diff whitespace
         run: git diff --check

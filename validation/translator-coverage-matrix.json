@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "status": "recorded",
+  "claim_boundary": "translator coverage matrix records representative regression evidence only; it is not a line coverage percentage, not proof of complete C99/C11 support, and not semantic acceptance without the C oracle/diff gates.",
+  "required_dimensions": [
+    "clang_fixture_replay",
+    "handwritten_ir",
+    "negative_case",
+    "runtime_emitted_rust",
+    "c_rust_diff",
+    "legacy_fallback",
+    "route_evidence"
+  ],
+  "capabilities": [
+    {
+      "id": "no-clang-ast-json-replay",
+      "status": "covered",
+      "ir_constructs": [
+        "FunctionDecl",
+        "ReturnStmt",
+        "BinaryOperator.Add",
+        "IrFunction",
+        "IrStmt::Return",
+        "IrExpr::Binary"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "reduced add_one AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/add_one_ast.json"
+            },
+            {
+              "name": "fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "this row is intentionally AST JSON replay, not hand-built IR"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "missing readonly global remains fail-closed",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "assert_rust_snippet_compiles for add_one replay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "fixture replay proves frontend/emitter plumbing only; no C oracle or Rust replay diff is claimed for this row"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "fixture replay bypasses legacy string translation"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "unit fixture replay does not produce route-decision evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "clang_ast_fixture_replays_without_clang_path_to_typed_ir_and_rust",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_flashdb_crc32_without_readonly_global_table",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly global table dependency must be modeled before emitted Rust is accepted"
+        }
+      ]
+    },
+    {
+      "id": "handwritten-ir-readonly-global-crc32",
+      "status": "covered",
+      "ir_constructs": [
+        "IrGlobal",
+        "IrExpr::Index",
+        "IrExpr::Deref",
+        "IrStmt::While",
+        "unsigned wrapping arithmetic"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "not_applicable",
+          "reason": "this row uses hand-built typed IR to pin emitter behavior"
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "flashdb_crc32_typed_ir",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed_ir_rejects_flashdb_crc32_without_readonly_global_table",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "handwritten IR emitter regression is not a named-slice C/Rust differential gate"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "generic typed IR emitter does not call the legacy string translator"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "generic typed IR route assertion",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_flashdb_crc32_without_readonly_global_table",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly global array dependency is required for table lookup emission"
+        }
+      ]
+    },
+    {
+      "id": "readonly-and-mutable-pointer-slice-lowering",
+      "status": "covered",
+      "ir_constructs": [
+        "readonly pointer deref/index read",
+        "mutable pointer deref/index write",
+        "pointer add index deref",
+        "slice boundary"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "gap",
+          "reason": "no committed no-clang AST fixture yet covers pointer slice lowering"
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "typed IR pointer slice tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "complex pointer offsets remain fail-closed",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "pointer slice emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "sum_i32_ptr_arith diff evidence",
+              "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-diff.json"
+            },
+            {
+              "name": "sum_i32_ptr_arith negative diff evidence",
+              "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-negative-diff.json"
+            }
+          ]
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "this row records typed IR and named-slice evidence, not a legacy fallback"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "sum_i32_ptr_arith route decision",
+              "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "typed_ir_emits_readonly_pointer_add_index_deref_read",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_pointer_add_index_deref_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_readonly_pointer_add_call_index_deref_read",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "call expressions inside pointer offsets are not modeled as safe slice indexes"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_pointer_complex_offset_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "complex mutable pointer offsets lack alias and bounds proof"
+        }
+      ]
+    },
+    {
+      "id": "record-field-subset",
+      "status": "covered",
+      "ir_constructs": [
+        "record value field read",
+        "record field assignment",
+        "readonly record pointer field read",
+        "mutable record pointer field write"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "gap",
+          "reason": "no committed no-clang AST fixture yet covers record field lowering"
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "record field typed IR tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "record field fail-closed tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "record field emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "record field subset currently has unit/runtime emitter checks but no committed named-slice C/Rust diff"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "record field subset is typed IR only"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "record field subset does not yet have committed route-decision evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "typed_ir_emits_record_value_field_read",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_arrow_field_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_multiple_pointer_params",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "multi-pointer mutable record writes lack alias/noalias proof"
+        },
+        {
+          "name": "typed_ir_rejects_record_return_value_with_non_scalar_field_inventory",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "whole-record return only supports complete direct scalar field inventory"
+        }
+      ]
+    },
+    {
+      "id": "direct-call-expression-subset",
+      "status": "covered",
+      "ir_constructs": [
+        "direct CallExpr",
+        "bounded external callee context",
+        "route candidate evidence"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "gap",
+          "reason": "no committed no-clang AST fixture yet covers direct call expressions"
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "direct call expression translator tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "unsupported call expressions fail closed",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "direct call emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "call expression diff evidence",
+              "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-diff.json"
+            },
+            {
+              "name": "call expression negative diff evidence",
+              "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-negative-diff.json"
+            }
+          ]
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "direct call expression route evidence is not a legacy fallback check"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "call expression route decision",
+              "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "translates_direct_call_expressions_and_records_callee_evidence",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "blocks_unsupported_call_expressions_without_rust_draft",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "calls outside the bounded direct-callee subset must not produce a Rust draft"
+        }
+      ]
+    },
+    {
+      "id": "legacy-fallback-telemetry",
+      "status": "partial",
+      "ir_constructs": [
+        "translation_source",
+        "fallback_from",
+        "fallback_reason",
+        "translation_fallback event"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "not_applicable",
+          "reason": "this row records fallback telemetry, not AST replay"
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "fallback telemetry is orchestration behavior"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "fallback telemetry regression test",
+              "path": "crates/c2r-translator/src/artifacts.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "gap",
+          "reason": "fallback telemetry is currently validated by artifact fields/events, not rustc execution"
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "fallback telemetry is provenance coverage and does not imply C/Rust semantic equivalence"
+        },
+        "legacy_fallback": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events",
+              "path": "crates/c2r-translator/src/artifacts.rs"
+            },
+            {
+              "name": "translation_events_jsonl_preserves_fallback_then_generated_order",
+              "path": "crates/c2r-translator/src/artifact_io.rs"
+            }
+          ]
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "route candidate set binds fallback source",
+              "path": "validation/tools/test_validate_auto_translation_evidence.py"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events",
+          "path": "crates/c2r-translator/src/artifacts.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "validator rejects candidate selection id drift",
+          "path": "validation/tools/test_validate_auto_translation_evidence.py",
+          "fail_closed_reason": "route metadata must not let fallback or baseline candidates masquerade as accepted semantic sources"
+        }
+      ]
+    }
+  ]
+}
