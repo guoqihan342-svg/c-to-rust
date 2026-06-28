@@ -2589,6 +2589,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             spec_path = tmp_path / "demo-call-expression-authoritative.json"
             self._write_json(spec_path, spec)
             self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+            self._add_call_expression_oracle_boundary_contract(evidence_dir)
 
             result = subprocess.run(
                 [
@@ -2624,6 +2625,42 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertIs(payload["generated_draft_semantic_pass"], False)
             self.assertEqual(payload["semantic"]["semantic_claim_source"], "accepted_evidence_binding")
             self.assertIs(payload["semantic"]["generated_draft_semantic_pass"], False)
+
+    def test_semantic_pass_rejects_missing_oracle_boundary_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+            spec_path = tmp_path / "demo-call-expression-authoritative.json"
+            self._write_json(spec_path, spec)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+            profile_path = evidence_dir / "l3-call-expression-validation-profile.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile.pop("oracle_boundary_contract", None)
+            self._write_json(profile_path, profile)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("oracle_boundary_contract", result.stderr + result.stdout)
 
     def test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
@@ -3499,6 +3536,113 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         manifest["claim_boundary"]["generated_draft_semantic_pass"] = False
         self._write_json(manifest_path, manifest)
 
+    def _add_call_expression_oracle_boundary_contract(self, evidence_dir: Path) -> None:
+        prefix = "l3-call-expression"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        contract = self._call_expression_oracle_boundary_contract()
+
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile["oracle_boundary_contract"] = contract
+        self._write_json(profile_path, profile)
+        profile_ref = self._ref(profile_path, profile.get("status", "passed"))
+        profile_ref["profile"] = profile.get("profile")
+
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["oracle_boundary_contract"] = contract
+        final["validation_profile"] = profile_ref
+        self._write_json(final_path, final)
+        final_ref = self._ref(final_path, final.get("status", "passed"))
+
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["validation_profile_identity"] = {
+            "status": profile.get("status", "unknown"),
+            "sha256": self._sha256_json(profile),
+        }
+        cache["oracle_boundary_contract_identity"] = {
+            "status": contract.get("status", "unknown"),
+            "sha256": self._sha256_json(contract),
+        }
+        fields = cache.setdefault("cache_input_fields", [])
+        if "oracle_boundary_contract_identity" not in fields:
+            fields.append("oracle_boundary_contract_identity")
+        cache["dependent_artifacts"]["validation_profile"] = profile_ref
+        self._write_json(cache_path, cache)
+        cache_ref = self._ref(cache_path, "recorded")
+
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["validation_profile"] = profile_ref
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["validation_profile"] = profile_ref
+        manifest["evidence"]["final_verification"] = final_ref
+        manifest["evidence"]["cache_metadata"] = cache_ref
+        self._write_json(manifest_path, manifest)
+
+    def _call_expression_oracle_boundary_contract(self) -> dict:
+        return {
+            "schema_version": 1,
+            "status": "sufficient_for_semantic_pass",
+            "insufficient_reasons": [],
+            "observable_outputs": [
+                "return_value",
+                "status",
+                "call_expression_count",
+                "call_expression_contexts",
+                "source_calls",
+            ],
+            "fixture_representativeness": {
+                "fixture_path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+                "fixture_hash": "call-expression-fixture",
+                "declared_case_count": 4,
+                "accepted_oracle_case_count": 7,
+                "case_source": "fixture_contract",
+                "representativeness": "bounded_fixture_contract",
+                "limitations": [],
+            },
+            "compiler": {
+                "command_source": "validation/l2_slices/tools/generate_call_expression_oracle.py",
+                "include_paths": [],
+                "defines": [],
+                "flags": [],
+                "tool_versions": {
+                    "gcc": "captured_by_wsl_oracle",
+                    "rustc": "captured_at_validation",
+                },
+            },
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "long_width": 64,
+                "pointer_width": 64,
+                "word_size_bits": 64,
+            },
+            "sanitizer_diagnostics": {
+                "sanitizer_status": "not_run",
+                "diagnostic_status": "recorded",
+                "diagnostics": ["demo slice uses explicit C source and no external headers"],
+                "clang_type_extraction_available": False,
+            },
+            "ub_and_implementation_defined": {
+                "known_ub": [],
+                "implementation_defined_behavior": [],
+                "scalar_arithmetic_contract": {},
+            },
+            "platform_model": {
+                "hardware_dependencies": [],
+                "rtos_dependencies": [],
+                "volatile_dependencies": [],
+                "hardware_dependency_status": "not_applicable",
+                "rtos_dependency_status": "not_applicable",
+                "volatile_dependency_status": "not_applicable",
+            },
+        }
+
     def _assert_call_expression_passed_diff_gate_fields(self, evidence_dir: Path, prefix: str) -> None:
         diff_path = evidence_dir / f"{prefix}-diff.json"
         diff = json.loads(diff_path.read_text(encoding="utf-8"))
@@ -3696,6 +3840,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         }
         self._write_json(route_path, route)
 
+        contract = self._call_expression_oracle_boundary_contract()
         profile = {
             "schema_version": 1,
             "target_id": target_id,
@@ -3713,6 +3858,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 "c_ub": ["clang_diagnostics", "sanitizer_oracle", "unsupported_evidence"],
                 "rust_ub": ["miri", "unsafe_ledger", "rust_verification_tools"],
             },
+            "oracle_boundary_contract": contract,
         }
         self._write_json(profile_path, profile)
 
@@ -3729,6 +3875,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         final["validation_profile"] = profile_ref
         final["skipped_gates"] = []
         final["validation_profile_status"] = "passed"
+        final["oracle_boundary_contract"] = contract
         self._write_json(final_path, final)
 
         cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
@@ -3736,8 +3883,17 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         cache["c2rust_baseline_identity"] = {"status": "skipped", "sha256": self._sha256_json(baseline)}
         cache["route_decision_identity"] = {"status": "recorded", "sha256": self._sha256_json(route)}
         cache["validation_profile_identity"] = {"status": "passed", "sha256": self._sha256_json(profile)}
+        cache["oracle_boundary_contract_identity"] = {
+            "status": contract["status"],
+            "sha256": self._sha256_json(contract),
+        }
         fields = cache.setdefault("cache_input_fields", [])
-        for key in ["c2rust_baseline_identity", "route_decision_identity", "validation_profile_identity"]:
+        for key in [
+            "c2rust_baseline_identity",
+            "route_decision_identity",
+            "validation_profile_identity",
+            "oracle_boundary_contract_identity",
+        ]:
             if key not in fields:
                 fields.append(key)
         cache["dependent_artifacts"] = {

@@ -361,6 +361,7 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
         "c2rust_baseline_identity": artifact_cache_identity(baseline),
         "route_decision_identity": artifact_cache_identity(route),
         "validation_profile_identity": artifact_cache_identity(profile),
+        "oracle_boundary_contract_identity": oracle_boundary_contract_identity(profile),
     }
     if "competition_environment" in profile:
         required_identities["competition_environment_identity"] = profile["competition_environment"]
@@ -533,7 +534,7 @@ def validate_compile_execution(
         raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
     promoted_accepted = is_promoted_accepted_oracle_wrapper(oracle)
     if compile_execution.get("toolchain_status_after_attempt") != oracle.get("toolchain_status") and not (
-        promoted_accepted and expected_toolchain_status == "COMPILE_SUCCEEDED_NOT_ORACLE"
+        promoted_accepted and expected_toolchain_status in {"COMPILE_SUCCEEDED_NOT_ORACLE", "DRAFT_NOT_EXECUTED"}
     ):
         raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
 
@@ -2073,6 +2074,11 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
     if not reports["final_verification"].get("semantic_pass"):
         raise SystemExit("semantic pass requires final_verification.semantic_pass=true")
     require_status(reports["version_or_config_binding"], "version_or_config_binding", {"recorded", "passed"})
+    validate_semantic_oracle_boundary_contract(
+        reports["validation_profile"].get("oracle_boundary_contract"),
+        reports["final_verification"].get("oracle_boundary_contract"),
+        slice_spec,
+    )
 
     expected_commit = source_commit(slice_spec)
     for label, report in reports.items():
@@ -2101,6 +2107,101 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "fixture_sha256": fixture.get("sha256"),
         "checked": sorted(reports),
     }
+
+
+def validate_semantic_oracle_boundary_contract(
+    profile_contract: Any,
+    final_contract: Any,
+    slice_spec: dict[str, Any],
+) -> None:
+    if not isinstance(profile_contract, dict):
+        raise SystemExit("semantic pass oracle boundary contract missing from validation_profile")
+    if not isinstance(final_contract, dict):
+        raise SystemExit("semantic pass oracle boundary contract missing from final_verification")
+    if final_contract != profile_contract:
+        raise SystemExit("semantic pass oracle boundary contract drift between validation_profile and final_verification")
+    if profile_contract.get("status") != "sufficient_for_semantic_pass":
+        raise SystemExit("semantic pass oracle boundary contract must be sufficient_for_semantic_pass")
+
+    observable_outputs = require_string_list(
+        profile_contract.get("observable_outputs"),
+        "semantic pass oracle boundary contract observable_outputs missing",
+    )
+    expected_outputs = behavior_fields_from_spec(slice_spec)
+    if expected_outputs and not set(expected_outputs).issubset(set(observable_outputs)):
+        raise SystemExit("semantic pass oracle boundary contract observable_outputs missing behavior fields")
+
+    fixture = require_dict(
+        profile_contract.get("fixture_representativeness"),
+        "semantic pass oracle boundary contract fixture_representativeness missing",
+    )
+    declared_case_count = fixture.get("declared_case_count")
+    accepted_case_count = fixture.get("accepted_oracle_case_count")
+    if not positive_int_like(declared_case_count):
+        raise SystemExit("semantic pass oracle boundary contract declared_case_count missing")
+    if not positive_int_like(accepted_case_count):
+        raise SystemExit("semantic pass oracle boundary contract accepted_oracle_case_count missing")
+    if accepted_case_count < declared_case_count:
+        raise SystemExit("semantic pass oracle boundary contract accepted_oracle_case_count below declared")
+
+    compiler = require_dict(profile_contract.get("compiler"), "semantic pass oracle boundary contract compiler missing")
+    if missing_boundary_value(compiler.get("command_source")):
+        raise SystemExit("semantic pass oracle boundary contract compiler command_source missing")
+
+    target = require_dict(profile_contract.get("target"), "semantic pass oracle boundary contract target missing")
+    if missing_boundary_value(target.get("triple_or_abi")):
+        raise SystemExit("semantic pass oracle boundary contract target.triple_or_abi missing")
+    if missing_boundary_value(target.get("endianness")) or target.get("endianness") not in {"little", "big"}:
+        raise SystemExit("semantic pass oracle boundary contract target.endianness missing")
+    for key in ["int_width", "long_width", "pointer_width", "word_size_bits"]:
+        if missing_boundary_value(target.get(key)):
+            raise SystemExit(f"semantic pass oracle boundary contract target.{key} missing")
+        if not positive_int_like(target.get(key)):
+            raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
+
+    sanitizer = require_dict(
+        profile_contract.get("sanitizer_diagnostics"),
+        "semantic pass oracle boundary contract sanitizer_diagnostics missing",
+    )
+    if missing_boundary_value(sanitizer.get("sanitizer_status"), allow_not_run=True):
+        raise SystemExit("semantic pass oracle boundary contract sanitizer_status missing")
+
+    ub = require_dict(
+        profile_contract.get("ub_and_implementation_defined"),
+        "semantic pass oracle boundary contract ub_and_implementation_defined missing",
+    )
+    if not isinstance(ub.get("known_ub"), list):
+        raise SystemExit("semantic pass oracle boundary contract known_ub missing")
+    if not isinstance(ub.get("implementation_defined_behavior"), list):
+        raise SystemExit("semantic pass oracle boundary contract implementation_defined_behavior missing")
+
+    platform = require_dict(
+        profile_contract.get("platform_model"),
+        "semantic pass oracle boundary contract platform_model missing",
+    )
+    for key in ["hardware_dependency_status", "rtos_dependency_status", "volatile_dependency_status"]:
+        if missing_boundary_value(platform.get(key)) or platform.get(key) == "unmodeled":
+            raise SystemExit(f"semantic pass oracle boundary contract platform_model.{key} missing")
+
+
+def require_dict(value: Any, message: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SystemExit(message)
+    return value
+
+
+def missing_boundary_value(value: Any, allow_not_run: bool = False) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        if allow_not_run and value == "not_run":
+            return False
+        return value.strip() in {"", "unknown", "not_recorded", "missing"}
+    return False
+
+
+def positive_int_like(value: Any) -> bool:
+    return isinstance(value, int) and value > 0
 
 
 def validate_accepted_c_oracle_file_binding(evidence_dir: Path, prefix: str, c_oracle: dict[str, Any]) -> None:
@@ -2658,6 +2759,16 @@ def artifact_cache_identity(artifact: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": artifact.get("status", "unknown"),
         "sha256": sha256_json(artifact),
+    }
+
+
+def oracle_boundary_contract_identity(profile: dict[str, Any]) -> dict[str, Any]:
+    contract = profile.get("oracle_boundary_contract")
+    if not isinstance(contract, dict):
+        return {"status": "missing", "sha256": "missing"}
+    return {
+        "status": contract.get("status", "unknown"),
+        "sha256": sha256_json(contract),
     }
 
 

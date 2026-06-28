@@ -9,8 +9,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "048e51d55a11c48e43614b17520154213d61ccd959da2ae9500b6f1bf16bcd91",
-      "unsafe_scan": "2db95b5794b8f25bc008e090b855cc4a982089b5268120045f189b4df0330be0"
+      "unsafe_ledger": "8cc4625870276c26275f7fac0fa573d07e01d21cf363bc471c0d21165ffbc345",
+      "unsafe_scan": "ba7abd6b6c6f42352357da12232e98e5cf6304973931653f35e022493a12c612"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -31,9 +31,9 @@
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=77332691ce9b557a4ec21d4b60222ff90b7a9229d9c9ad46e98b946b9c1b277e",
+    "slice_spec_sha256=84aa1215dc3114b245a8a6141bb009ca00642dc423796ac42cc1cfbd536a8480",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
+    "build_profile_hash=08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -51,7 +51,7 @@
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "77332691ce9b557a4ec21d4b60222ff90b7a9229d9c9ad46e98b946b9c1b277e"
+    "sha256": "84aa1215dc3114b245a8a6141bb009ca00642dc423796ac42cc1cfbd536a8480"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "4b89e9dcc5b0c411242089e284927b686be40811",
+  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
@@ -84,6 +84,6 @@
     "cargo_version": "captured_by_validation",
     "openspec_version": "captured_by_validation",
     "rustc_version": "captured_by_rust_check",
-    "target_triple_or_abi": "unknown"
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
   }
 }

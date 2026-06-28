@@ -21,9 +21,7 @@ fn replay_real_fdb_calc_crc32_fixture_contract() {
     assert_eq!(fixture_cases.len(), 2usize, "fixture case count drifted");
     for case in fixture_cases {
         assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);
-        let _crc = case.crc;
-        let _return_code = case.return_code;
-        // TODO: call generated Rust API and compare actual return_code to return_code.
+        let actual = fdb_calc_crc32(case.crc, case.buf, case.size);
+        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);
     }
-    panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");
 }

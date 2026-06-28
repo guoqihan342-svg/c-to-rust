@@ -9,8 +9,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "048e51d55a11c48e43614b17520154213d61ccd959da2ae9500b6f1bf16bcd91",
-      "unsafe_scan": "2db95b5794b8f25bc008e090b855cc4a982089b5268120045f189b4df0330be0"
+      "unsafe_ledger": "8cc4625870276c26275f7fac0fa573d07e01d21cf363bc471c0d21165ffbc345",
+      "unsafe_scan": "ba7abd6b6c6f42352357da12232e98e5cf6304973931653f35e022493a12c612"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -36,9 +36,9 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "4a3eeb054b8f9a58798cfb53ef524bf99bf52a37d6f03d7664afcf5d25520335",
+    "build_profile_hash": "08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
     "c2rust_baseline_identity": {
-      "sha256": "07ce3d9a734a01dadce214d2be553c59f954943a7854f33029cf4e2f2fbb00ec",
+      "sha256": "530983427c21025614a3878ec1b6de7d5ca0013f4c357e772b0b29cc07b9e1e1",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -52,6 +52,7 @@
       "slice_spec_sha256",
       "fixture_hash",
       "build_profile_hash",
+      "competition_environment_identity",
       "cargo_lock_hash",
       "tool_versions",
       "schema_versions",
@@ -59,6 +60,9 @@
       "translator_manifest_sha256",
       "command_arguments",
       "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
       "c2rust_baseline_identity",
       "route_decision_identity",
       "validation_profile_identity",
@@ -72,24 +76,39 @@
       "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
       "--accept-existing-evidence"
     ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "d6f11af9636f9c91a89a9d67a0f41f0d047a0777590d54b0800484efbb4a11cd"
+    },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "b7d025fadee6eb13b86364ef632b7b17659fa91cea2eb5053c55d3ec298cc392",
+        "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "3b0c73314cea2b97437d98d4849493ca86e5ad8d4b4836f7c22ca2854b2977c7",
+        "sha256": "3844dd8f42c8ba470ffd65b97921350eedfc1d8c66121991d59c54fd6e03d5e7",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "d7ff44ab6833a8c559c6bf0d281e8688dfd1ddbbaefb16981561352e1037e5a1",
+        "sha256": "87e236b7f61fffe40c1c6d056ea6e8533d62818a3837a3a9d579aad577e5ca0a",
         "status": "passed"
       }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "not_applicable",
+      "alias_sensitive": false,
+      "read_effect_count": 0,
+      "read_nodes": [],
+      "schema_version": 2,
+      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+      "write_effect_count": 0,
+      "write_nodes": []
     },
     "fixture_hash": "real-fdb-calc-crc32-fixture",
     "global_dependency_identity": {
@@ -119,9 +138,17 @@
       "auto_translation_manifest",
       "summary"
     ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "add1a68d1d58dfaec75e47d3b09b69e90df7ce7426dc950c75ad6c7bd3fec543",
+      "status": "sufficient_for_semantic_pass"
+    },
     "route_decision_identity": {
-      "sha256": "12d02cc77368e24efc9c154e9da8d4f22b6210ebd06745b54c960d192757a2d6",
+      "sha256": "15dfb75584f82b7d6897e15a2c5a303c19f68d23171647881505eece9b8ea8b8",
       "status": "refused"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "8786dcdd4c6bca0c61668a2bd9d3d9fcd9cf00a3869e4e9584d5f282b9b49d91",
+      "status": "recorded"
     },
     "schema_version": 1,
     "schema_versions": {
@@ -129,11 +156,11 @@
       "auto_translation_plan": 1,
       "cfg": 1,
       "evidence_manifest": 1,
-      "pointer_graph": 1,
+      "pointer_graph": 2,
       "type_map": 1
     },
     "slice_id": "real-fdb-calc-crc32",
-    "slice_spec_sha256": "849b7268a36d8e00073b40f6bda97399123f6be542c42958098ba79d76d11e4a",
+    "slice_spec_sha256": "8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
     "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -145,14 +172,14 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "61381f092cf486ac4d8ca152e2102287224b57e7575c1cb0db559aa1f129e595",
+    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "4ffa86682202d3dcc89a7e421f0c7d9a4f7fb41015d6d48d1ab79fe0f3013315",
+      "sha256": "9559e1fde7de4eef477911a7d4fc113706ff2dea89d6e3a4ec051c499a095d1b",
       "status": "passed"
     }
   },
-  "repo_commit": "4b89e9dcc5b0c411242089e284927b686be40811",
+  "repo_commit": "2be2be5f56ba34b085b34a7614cd454032adc32d",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

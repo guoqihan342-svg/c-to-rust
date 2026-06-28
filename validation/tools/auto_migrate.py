@@ -43,6 +43,7 @@ CACHE_INPUT_FIELDS = [
     "alias_gate_identity",
     "effect_graph_identity",
     "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
     "validation_profile_identity",
@@ -2951,6 +2952,18 @@ def artifact_cache_identity(artifact: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def oracle_boundary_contract_identity(validation_profile: dict[str, Any] | None) -> dict[str, Any]:
+    if validation_profile is None:
+        return {"status": "missing", "sha256": "missing"}
+    contract = validation_profile.get("oracle_boundary_contract")
+    if not isinstance(contract, dict):
+        return {"status": "missing", "sha256": "missing"}
+    return {
+        "status": contract.get("status", "unknown"),
+        "sha256": sha256_json(contract),
+    }
+
+
 def oracle_harness_identity(oracle: dict[str, Any] | None) -> dict[str, Any]:
     if oracle is None:
         return {"path": "missing", "status": "missing", "sha256": "missing"}
@@ -3522,6 +3535,15 @@ def emit_validation_profile(
         skipped.append({"gate": gate, "reason": "required_gate_not_available_in_dev_evidence"})
     compile_passed = rust_check.get("status") == "passed"
     oracle_passed = oracle.get("status") == "C_ORACLE_GENERATED"
+    oracle_contract = oracle_boundary_contract(spec, accepted=accepted, oracle=oracle)
+    if accepted is not None and oracle_contract.get("status") != "sufficient_for_semantic_pass":
+        skipped.append(
+            {
+                "gate": "oracle_boundary_contract",
+                "reason": oracle_contract.get("status", "missing"),
+                "insufficient": oracle_contract.get("insufficient_reasons", []),
+            }
+        )
     result = "passed" if not skipped and compile_passed and oracle_passed else "blocked" if level == "L4" else "incomplete"
     payload = {
         "schema_version": 1,
@@ -3541,6 +3563,7 @@ def emit_validation_profile(
         },
         "candidate_generation": route_decision.get("candidate_generation", {}),
         "scalar_ub_contract": route_decision.get("scalar_ub_contract", scalar_ub_contract(spec)),
+        "oracle_boundary_contract": oracle_contract,
         "accepted_evidence_authoritative": accepted_authoritative,
         "generated_draft_semantic_pass": False,
         "loop_policy": {
@@ -3631,6 +3654,8 @@ def semantic_pass_for_run(
         validation_profile.get("accepted_evidence_authoritative") is True
         and validation_profile.get("generated_draft_semantic_pass") is False
     ):
+        return False
+    if not oracle_boundary_contract_sufficient(validation_profile.get("oracle_boundary_contract")):
         return False
     return not validation_profile.get("skipped_gates")
 
@@ -4552,8 +4577,8 @@ def write_accepted_supporting_evidence(
             "schema_version": 1,
             "target_id": spec.get("target_id"),
             "slice_id": slice_id,
-            "status": "passed",
-            "semantic_pass": True,
+            "status": "passed" if semantic_pass else "incomplete",
+            "semantic_pass": semantic_pass,
             "source_commit": source_commit(spec),
             "fixture": {"path": fixture_path(spec), "sha256": accepted["fixture_sha256"]},
             "rust_check_status": rust_check.get("status"),
@@ -4571,6 +4596,7 @@ def write_accepted_supporting_evidence(
             "version_config_status": "recorded",
             "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
             "generated_draft_semantic_pass": False,
+            "oracle_boundary_contract": validation_profile.get("oracle_boundary_contract"),
             "alias_gate": alias_gate,
             "external_callee_scope": external_callee_claim_scope(external_context),
             "accepted_evidence_binding": accepted_binding_summary(accepted),
@@ -5028,6 +5054,178 @@ def behavior_fields(spec: dict[str, Any]) -> list[str]:
     return [str(item) for item in fields]
 
 
+def oracle_boundary_contract(
+    spec: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+    oracle: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    fixture = spec.get("fixture_contract", {})
+    build = spec.get("build_profile", {})
+    c_boundary = spec.get("c_boundary", {})
+    target = build.get("target", {})
+    if not isinstance(target, dict):
+        target = {}
+    accepted_reports = accepted.get("reports", {}) if isinstance(accepted, dict) else {}
+    accepted_oracle = accepted_reports.get("c_oracle", {}) if isinstance(accepted_reports, dict) else {}
+    if not isinstance(accepted_oracle, dict):
+        accepted_oracle = {}
+    oracle_report = oracle if isinstance(oracle, dict) else {}
+    platform = c_boundary.get("platform_contract", {})
+    if not isinstance(platform, dict):
+        platform = {}
+
+    declared_case_count = len(fixture.get("cases") or [])
+    accepted_case_count = accepted_oracle.get("case_count") or oracle_report.get("case_count")
+    diagnostics = list_of_strings(build.get("diagnostics"))
+    clang_type = build.get("clang_type_extraction", {})
+    if isinstance(clang_type, dict):
+        diagnostics.extend(list_of_strings(clang_type.get("diagnostics")))
+    diagnostics.extend(list_of_strings(c_boundary.get("diagnostics")))
+
+    hardware_dependencies = list_of_strings(
+        c_boundary.get("hardware_dependencies") or platform.get("hardware_dependencies")
+    )
+    rtos_dependencies = list_of_strings(c_boundary.get("rtos_dependencies") or platform.get("rtos_dependencies"))
+    volatile_dependencies = list_of_strings(
+        c_boundary.get("volatile_dependencies") or platform.get("volatile_dependencies")
+    )
+    pointer_width = target.get("pointer_width", build.get("pointer_width", build.get("word_size_bits", "unknown")))
+    compiler_command_source = (
+        build.get("compiler_command_source")
+        or build.get("compile_commands")
+        or build.get("compile_commands_path")
+        or "unknown"
+    )
+    contract = {
+        "schema_version": 1,
+        "observable_outputs": behavior_fields(spec),
+        "fixture_representativeness": {
+            "fixture_path": fixture_path(spec),
+            "fixture_hash": fixture_hash(spec),
+            "declared_case_count": declared_case_count,
+            "case_source": fixture.get("case_source", "fixture_contract"),
+            "representativeness": fixture.get("representativeness", "bounded_fixture_contract"),
+            "limitations": list_of_strings(fixture.get("limitations")),
+        },
+        "compiler": {
+            "command_source": compiler_command_source,
+            "compile_commands": build.get("compile_commands") or build.get("compile_commands_path"),
+            "include_paths": list_of_strings(build.get("include_paths")),
+            "defines": list_of_strings(build.get("defines")),
+            "flags": list_of_strings(build.get("flags") or build.get("cflags")),
+            "tool_versions": build.get("tool_versions", {}),
+        },
+        "target": {
+            "triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or build.get("abi") or "unknown",
+            "endianness": target.get("endianness", build.get("endianness", "unknown")),
+            "int_width": target.get("int_width", build.get("int_width", "unknown")),
+            "long_width": target.get("long_width", build.get("long_width", "unknown")),
+            "pointer_width": pointer_width,
+            "word_size_bits": pointer_width,
+        },
+        "sanitizer_diagnostics": {
+            "sanitizer_status": c_boundary.get("sanitizer_status", build.get("sanitizer_status", "not_run")),
+            "diagnostic_status": "recorded" if diagnostics else "none_recorded",
+            "diagnostics": diagnostics,
+            "clang_type_extraction_available": clang_type.get("available") if isinstance(clang_type, dict) else None,
+        },
+        "ub_and_implementation_defined": {
+            "known_ub": list_of_strings(c_boundary.get("known_ub")),
+            "implementation_defined_behavior": list_of_strings(c_boundary.get("implementation_defined_behavior")),
+            "scalar_arithmetic_contract": c_boundary.get("scalar_arithmetic_contract", {}),
+        },
+        "platform_model": {
+            "hardware_dependencies": hardware_dependencies,
+            "rtos_dependencies": rtos_dependencies,
+            "volatile_dependencies": volatile_dependencies,
+            "hardware_dependency_status": dependency_status(platform, "hardware_dependency_status", hardware_dependencies),
+            "rtos_dependency_status": dependency_status(platform, "rtos_dependency_status", rtos_dependencies),
+            "volatile_dependency_status": dependency_status(platform, "volatile_dependency_status", volatile_dependencies),
+        },
+    }
+    if isinstance(accepted_case_count, int):
+        contract["fixture_representativeness"]["accepted_oracle_case_count"] = accepted_case_count
+    insufficient = oracle_boundary_insufficient_reasons(contract)
+    contract["status"] = "insufficient" if insufficient else "sufficient_for_semantic_pass"
+    contract["insufficient_reasons"] = insufficient
+    return contract
+
+
+def oracle_boundary_contract_sufficient(contract: Any) -> bool:
+    return isinstance(contract, dict) and contract.get("status") == "sufficient_for_semantic_pass"
+
+
+def dependency_status(platform: dict[str, Any], key: str, dependencies: list[str]) -> str:
+    status = platform.get(key)
+    if isinstance(status, str) and status:
+        return status
+    return "unmodeled" if dependencies else "not_applicable"
+
+
+def list_of_strings(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def oracle_boundary_insufficient_reasons(contract: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    if not contract.get("observable_outputs"):
+        reasons.append("observable_outputs_missing")
+    fixture = contract.get("fixture_representativeness", {})
+    declared_case_count = fixture.get("declared_case_count")
+    accepted_case_count = fixture.get("accepted_oracle_case_count")
+    if not positive_int_like(declared_case_count):
+        reasons.append("fixture_declared_case_count_missing")
+    if not positive_int_like(accepted_case_count):
+        reasons.append("fixture_accepted_oracle_case_count_missing")
+    if positive_int_like(declared_case_count) and positive_int_like(accepted_case_count):
+        if accepted_case_count < declared_case_count:
+            reasons.append("fixture_accepted_oracle_case_count_below_declared")
+    compiler = contract.get("compiler", {})
+    if missing_boundary_value(compiler.get("command_source")):
+        reasons.append("compiler_command_source_missing")
+    target = contract.get("target", {})
+    if missing_boundary_value(target.get("triple_or_abi")):
+        reasons.append("target_triple_or_abi_missing")
+    if missing_boundary_value(target.get("endianness")) or target.get("endianness") not in {"little", "big"}:
+        reasons.append("target_endianness_missing")
+    for key in ["int_width", "long_width", "pointer_width", "word_size_bits"]:
+        if missing_boundary_value(target.get(key)):
+            reasons.append(f"target_{key}_missing")
+        elif not positive_int_like(target.get(key)):
+            reasons.append(f"target_{key}_invalid")
+    sanitizer = contract.get("sanitizer_diagnostics", {})
+    if missing_boundary_value(sanitizer.get("sanitizer_status"), allow_not_run=True):
+        reasons.append("sanitizer_status_missing")
+    ub = contract.get("ub_and_implementation_defined", {})
+    if not isinstance(ub.get("known_ub"), list):
+        reasons.append("known_ub_boundary_missing")
+    if not isinstance(ub.get("implementation_defined_behavior"), list):
+        reasons.append("implementation_defined_boundary_missing")
+    platform = contract.get("platform_model", {})
+    for key in ["hardware_dependency_status", "rtos_dependency_status", "volatile_dependency_status"]:
+        if missing_boundary_value(platform.get(key)) or platform.get(key) == "unmodeled":
+            reasons.append(f"platform_{key}_missing")
+    return reasons
+
+
+def missing_boundary_value(value: Any, allow_not_run: bool = False) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        if allow_not_run and value == "not_run":
+            return False
+        return value.strip() in {"", "unknown", "not_recorded", "missing"}
+    return False
+
+
+def positive_int_like(value: Any) -> bool:
+    return isinstance(value, int) and value > 0
+
+
 def accepted_metadata_differences(spec: dict[str, Any]) -> list[str]:
     boundary = spec.get("claim_boundary", {})
     values = spec.get("accepted_metadata_differences") or boundary.get("accepted_metadata_differences") or []
@@ -5296,6 +5494,7 @@ def cache_identity(
         "alias_gate_identity": alias_gate_identity(spec),
         "effect_graph_identity": effect_graph_identity(spec),
         "scalar_ub_contract_identity": scalar_ub_contract_identity(spec),
+        "oracle_boundary_contract_identity": oracle_boundary_contract_identity(validation_profile),
         "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
         "route_decision_identity": artifact_cache_identity(route_decision),
         "validation_profile_identity": artifact_cache_identity(validation_profile),

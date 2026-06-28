@@ -163,6 +163,97 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn(field, environment_schema["required"])
             self.assertIn(field, environment_schema["properties"])
 
+    def test_passed_validation_profile_requires_oracle_boundary_contract(self) -> None:
+        schema_path = (
+            REPO_ROOT
+            / "validation"
+            / "auto-translation-template"
+            / "validation-profile.schema.json"
+        )
+        schema = load_json(schema_path)
+
+        self.assertIn("oracle_boundary_contract", schema["properties"])
+        self.assertIn("oracleBoundaryContract", schema["definitions"])
+        contract_schema = resolve_schema_ref(schema, schema["properties"]["oracle_boundary_contract"])
+        for field in [
+            "status",
+            "observable_outputs",
+            "fixture_representativeness",
+            "compiler",
+            "target",
+            "sanitizer_diagnostics",
+            "ub_and_implementation_defined",
+            "platform_model",
+        ]:
+            self.assertIn(field, contract_schema["required"])
+            self.assertIn(field, contract_schema["properties"])
+
+        minimal_passed_profile = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "slice",
+            "status": "passed",
+            "profile": "L3-dev",
+            "route_level": "L3",
+            "goal": "dev",
+            "required_gates": ["compile", "c_oracle_diff"],
+            "optional_gates": [],
+            "skipped_gates": [],
+            "required_gate_status": {"compile": "passed", "c_oracle_diff": "C_ORACLE_GENERATED"},
+            "loop_policy": {"source": "run_policy", "fixed_project_loop_count_required": False},
+            "tool_boundaries": {"c_ub": [], "rust_ub": []},
+        }
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(minimal_passed_profile, schema)
+
+        minimal_passed_profile["oracle_boundary_contract"] = {
+            "schema_version": 1,
+            "status": "sufficient_for_semantic_pass",
+            "observable_outputs": ["return_code"],
+            "fixture_representativeness": {
+                "fixture_path": "fixtures/demo.json",
+                "fixture_hash": "fixture-hash",
+                "declared_case_count": 1,
+                "accepted_oracle_case_count": 1,
+                "representativeness": "bounded_fixture_contract",
+                "limitations": [],
+            },
+            "compiler": {
+                "command_source": "unit-test",
+                "include_paths": [],
+                "defines": [],
+                "flags": [],
+                "tool_versions": {},
+            },
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "long_width": 64,
+                "pointer_width": 64,
+                "word_size_bits": 64,
+            },
+            "sanitizer_diagnostics": {
+                "sanitizer_status": "not_run",
+                "diagnostic_status": "none_recorded",
+                "diagnostics": [],
+            },
+            "ub_and_implementation_defined": {
+                "known_ub": [],
+                "implementation_defined_behavior": [],
+                "scalar_arithmetic_contract": {},
+            },
+            "platform_model": {
+                "hardware_dependencies": [],
+                "rtos_dependencies": [],
+                "volatile_dependencies": [],
+                "hardware_dependency_status": "not_applicable",
+                "rtos_dependency_status": "not_applicable",
+                "volatile_dependency_status": "not_applicable",
+            },
+        }
+        jsonschema.validate(minimal_passed_profile, schema)
+
     def test_route_and_profile_candidate_set_schema_bind_c2rust_baseline_refs(self) -> None:
         for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
             schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name

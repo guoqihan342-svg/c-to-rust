@@ -2,11 +2,6 @@
   "blocked": [
     {
       "kind": "unsupported_syntax",
-      "reason": "statement `const uint8_t *p` is outside the bounded MVP C subset",
-      "source_span": "const uint8_t *p"
-    },
-    {
-      "kind": "unsupported_syntax",
       "reason": "expression `size--` uses increment/decrement value semantics outside the bounded MVP C subset",
       "source_span": "while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }"
     },

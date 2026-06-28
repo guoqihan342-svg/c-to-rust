@@ -1220,9 +1220,14 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertIn("route_decision_identity", cache["cache_input_fields"])
             self.assertIn("scalar_ub_contract_identity", cache["cache_input_fields"])
+            self.assertIn("oracle_boundary_contract_identity", cache["cache_input_fields"])
             self.assertEqual(
                 cache["scalar_ub_contract_identity"]["status"],
                 "recorded",
+            )
+            self.assertEqual(
+                cache["oracle_boundary_contract_identity"]["status"],
+                profile["oracle_boundary_contract"]["status"],
             )
             self.assertEqual(diff["diff_gate"], "schema_aware_c_rust_diff")
             self.assertEqual(diff["status"], "incomplete")
@@ -2422,10 +2427,22 @@ class AutoMigrateTests(unittest.TestCase):
         accepted = {"status": "accepted"}
         rust_check = {"status": "passed"}
         profile = {"status": "incomplete", "skipped_gates": [{"gate": "c_oracle_diff", "reason": "SKIPPED"}]}
+        sufficient_contract = {"status": "sufficient_for_semantic_pass"}
 
         self.assertFalse(auto_migrate.semantic_pass_for_run(accepted, rust_check, profile))
         self.assertFalse(auto_migrate.semantic_pass_for_run(None, rust_check, {"status": "passed"}))
-        self.assertTrue(auto_migrate.semantic_pass_for_run(accepted, rust_check, {"status": "passed", "skipped_gates": []}))
+        self.assertFalse(auto_migrate.semantic_pass_for_run(accepted, rust_check, {"status": "passed", "skipped_gates": []}))
+        self.assertTrue(
+            auto_migrate.semantic_pass_for_run(
+                accepted,
+                rust_check,
+                {
+                    "status": "passed",
+                    "skipped_gates": [],
+                    "oracle_boundary_contract": sufficient_contract,
+                },
+            )
+        )
         self.assertFalse(
             auto_migrate.semantic_pass_for_run(
                 accepted,
@@ -2443,6 +2460,7 @@ class AutoMigrateTests(unittest.TestCase):
                     "skipped_gates": [],
                     "accepted_evidence_authoritative": True,
                     "generated_draft_semantic_pass": False,
+                    "oracle_boundary_contract": sufficient_contract,
                 },
             )
         )
@@ -4007,6 +4025,7 @@ class AutoMigrateTests(unittest.TestCase):
             final = json.loads(
                 (evidence_dir / "l3-unbounded-authoritative-final-verification.json").read_text(encoding="utf-8")
             )
+            final_path = evidence_dir / "l3-unbounded-authoritative-final-verification.json"
 
             self.assertEqual(manifest["status"], "accepted_evidence_bound")
             self.assertTrue(manifest["semantic_pass"])
@@ -4021,6 +4040,23 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertTrue(final["accepted_evidence_authoritative"])
             self.assertFalse(final["generated_draft_semantic_pass"])
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            contract = profile["oracle_boundary_contract"]
+            self.assertEqual(contract["status"], "sufficient_for_semantic_pass")
+            self.assertEqual(contract["observable_outputs"], ["value"])
+            self.assertEqual(contract["fixture_representativeness"]["declared_case_count"], 1)
+            self.assertEqual(contract["fixture_representativeness"]["accepted_oracle_case_count"], 1)
+            self.assertEqual(contract["compiler"]["command_source"], "unit-test")
+            self.assertEqual(contract["compiler"]["defines"], [])
+            self.assertEqual(contract["target"]["triple_or_abi"], "x86_64-unknown-linux-gnu")
+            self.assertEqual(contract["target"]["endianness"], "little")
+            self.assertEqual(contract["target"]["word_size_bits"], 64)
+            self.assertEqual(contract["sanitizer_diagnostics"]["sanitizer_status"], "not_run")
+            self.assertEqual(contract["ub_and_implementation_defined"]["known_ub"], [])
+            self.assertEqual(contract["ub_and_implementation_defined"]["implementation_defined_behavior"], [])
+            self.assertEqual(contract["platform_model"]["hardware_dependency_status"], "not_applicable")
+            self.assertEqual(contract["platform_model"]["rtos_dependency_status"], "not_applicable")
+            self.assertEqual(contract["platform_model"]["volatile_dependency_status"], "not_applicable")
+            self.assertEqual(final["oracle_boundary_contract"], contract)
 
             validation_result = subprocess.run(
                 [
@@ -4047,6 +4083,37 @@ class AutoMigrateTests(unittest.TestCase):
                 f"stdout:\n{validation_result.stdout}\nstderr:\n{validation_result.stderr}",
             )
             self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
+
+            broken_final = dict(final)
+            broken_final.pop("oracle_boundary_contract")
+            final_path.write_text(json.dumps(broken_final), encoding="utf-8")
+            manifest_path = evidence_dir / "l3-unbounded-authoritative-evidence-manifest.json"
+            evidence_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            evidence_manifest["evidence"]["final_verification"]["sha256"] = hashlib.sha256(
+                final_path.read_bytes()
+            ).hexdigest()
+            manifest_path.write_text(json.dumps(evidence_manifest), encoding="utf-8")
+            broken_validation = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "unbounded-authoritative",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(broken_validation.returncode, 0)
+            self.assertIn("oracle boundary contract", broken_validation.stderr + broken_validation.stdout)
 
     def test_compile_failure_records_blocked_patch_evidence(self) -> None:
         spec = {
@@ -4268,15 +4335,23 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(summary["generated_draft_semantic_pass"])
             self.assertEqual(summary["paths"]["c_oracle"], accepted["paths"]["c_oracle"])
 
-    def test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass(self) -> None:
+    def test_real_fdb_calc_crc32_accept_existing_evidence_with_unknown_target_boundary_stays_blocked(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            source_spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+            spec = json.loads(source_spec_path.read_text(encoding="utf-8"))
+            target = spec.setdefault("build_profile", {}).setdefault("target", {})
+            target["triple_or_abi"] = "unknown"
+            target["endianness"] = "unknown"
+            spec_path = tmp_path / "flashdb-real-fdb-calc-crc32-unknown-target.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
                     "python",
                     str(AUTO_MIGRATE),
                     "--slice-spec",
-                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    str(spec_path),
                     "--out-root",
                     str(out_root),
                     "--accept-existing-evidence",
@@ -4302,25 +4377,34 @@ class AutoMigrateTests(unittest.TestCase):
             profile = json.loads(
                 (evidence_dir / "l3-real-fdb-calc-crc32-validation-profile.json").read_text(encoding="utf-8")
             )
+            final = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-final-verification.json").read_text(encoding="utf-8")
+            )
 
-            self.assertEqual(manifest["status"], "accepted_evidence_bound")
-            self.assertTrue(manifest["semantic_pass"])
+            self.assertEqual(manifest["status"], "candidate_refused")
+            self.assertFalse(manifest["semantic_pass"])
             self.assertTrue(manifest["claim_boundary"]["accepted_evidence_authoritative"])
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
-            claim_scope = manifest["claim_boundary"]["scope"]
-            self.assertIn("accepted_evidence_binding", claim_scope)
-            self.assertIn("generated_draft_semantic_pass remains false", claim_scope)
-            self.assertTrue(
-                "generated Rust draft remains candidate/provenance" in claim_scope
-                or "generated Rust draft remains a candidate/provenance" in claim_scope
-            )
-            self.assertNotIn("unless", claim_scope)
-            self.assertNotIn("generated_draft_semantic_pass is true", claim_scope)
             self.assertEqual(route["level"], "L4")
             self.assertEqual(route["status"], "refused")
             self.assertTrue(route["policy"]["accepted_evidence_authoritative"])
-            self.assertEqual(profile["status"], "passed")
+            self.assertEqual(profile["status"], "blocked")
             self.assertEqual(profile["profile"], "L4-accepted-evidence")
+            contract = profile["oracle_boundary_contract"]
+            self.assertEqual(contract["status"], "insufficient")
+            self.assertIn("target_triple_or_abi_missing", contract["insufficient_reasons"])
+            self.assertIn("target_endianness_missing", contract["insufficient_reasons"])
+            self.assertIn(
+                {
+                    "gate": "oracle_boundary_contract",
+                    "reason": "insufficient",
+                    "insufficient": contract["insufficient_reasons"],
+                },
+                profile["skipped_gates"],
+            )
+            self.assertEqual(final["oracle_boundary_contract"], contract)
+            self.assertEqual(final["status"], "incomplete")
+            self.assertFalse(final["semantic_pass"])
             self.assertEqual(oracle["status"], "C_ORACLE_GENERATED")
             self.assertEqual(oracle["toolchain_status"], "C_ORACLE_GENERATED")
             self.assertEqual(oracle["global_linkage_requirements"][0]["name"], "crc32_table")
@@ -4338,7 +4422,7 @@ class AutoMigrateTests(unittest.TestCase):
                     "--slice-id",
                     "real-fdb-calc-crc32",
                     "--slice-spec",
-                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    str(spec_path),
                     "--evidence-root",
                     str(out_root),
                     "--require-semantic-pass",
@@ -4347,12 +4431,8 @@ class AutoMigrateTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
             )
-            self.assertEqual(
-                validation_result.returncode,
-                0,
-                f"stdout:\n{validation_result.stdout}\nstderr:\n{validation_result.stderr}",
-            )
-            self.assertTrue(json.loads(validation_result.stdout)["semantic_pass"])
+            self.assertNotEqual(validation_result.returncode, 0)
+            self.assertIn("semantic pass requires manifest.status=passed", validation_result.stderr + validation_result.stdout)
 
     def test_real_fdb_calc_crc32_clang_typed_ir_translator_generates_candidate_route(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:

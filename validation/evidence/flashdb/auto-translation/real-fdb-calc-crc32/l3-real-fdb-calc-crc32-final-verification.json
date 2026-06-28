@@ -10,8 +10,8 @@
       "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
       "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
       "rust_report": "a510e3a0c468cd33bf30c9d5c6a3aa76029ef17dcdd6a300bd611fec65beaf4c",
-      "unsafe_ledger": "048e51d55a11c48e43614b17520154213d61ccd959da2ae9500b6f1bf16bcd91",
-      "unsafe_scan": "2db95b5794b8f25bc008e090b855cc4a982089b5268120045f189b4df0330be0"
+      "unsafe_ledger": "8cc4625870276c26275f7fac0fa573d07e01d21cf363bc471c0d21165ffbc345",
+      "unsafe_scan": "ba7abd6b6c6f42352357da12232e98e5cf6304973931653f35e022493a12c612"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -37,7 +37,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "b7d025fadee6eb13b86364ef632b7b17659fa91cea2eb5053c55d3ec298cc392",
+    "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
@@ -54,10 +54,69 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "inc",
+        "tests"
+      ],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 2,
+      "case_source": "fixture_contract",
+      "declared_case_count": 2,
+      "fixture_hash": "real-fdb-calc-crc32-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "3b0c73314cea2b97437d98d4849493ca86e5ad8d4b4836f7c22ca2854b2977c7",
+    "sha256": "3844dd8f42c8ba470ffd65b97921350eedfc1d8c66121991d59c54fd6e03d5e7",
     "status": "refused"
   },
   "rust_check_status": "passed",
@@ -75,7 +134,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "d7ff44ab6833a8c559c6bf0d281e8688dfd1ddbbaefb16981561352e1037e5a1",
+    "sha256": "87e236b7f61fffe40c1c6d056ea6e8533d62818a3837a3a9d579aad577e5ca0a",
     "status": "passed"
   },
   "validation_profile_status": "passed",

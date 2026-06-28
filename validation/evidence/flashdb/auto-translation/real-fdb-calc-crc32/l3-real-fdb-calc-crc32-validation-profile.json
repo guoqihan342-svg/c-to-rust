@@ -1,5 +1,99 @@
 {
   "accepted_evidence_authoritative": true,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+        "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:legacy-string-translator",
+        "kind": "legacy-string-translator",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "missing"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+          "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "primary_candidate": {
+      "candidate_id": "primary:legacy-string-translator",
+      "fallback": false,
+      "selected": "legacy-string-translator",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:legacy-string-translator",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "post_generation_provenance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
+        "status": "missing"
+      },
+      "status": "missing"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "d6f11af9636f9c91a89a9d67a0f41f0d047a0777590d54b0800484efbb4a11cd"
+  },
   "generated_draft_semantic_pass": false,
   "goal": "dev",
   "loop_policy": {
@@ -12,6 +106,65 @@
     "evidence_cleanliness",
     "kani"
   ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "inc",
+        "tests"
+      ],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 2,
+      "case_source": "fixture_contract",
+      "declared_case_count": 2,
+      "fixture_hash": "real-fdb-calc-crc32-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "profile": "L4-accepted-evidence",
   "required_gate_status": {
     "c_oracle_diff": "C_ORACLE_GENERATED",
@@ -22,6 +175,29 @@
     "c_oracle_diff"
   ],
   "route_level": "L4",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-project migration",
+        "semantic equivalence without C oracle and Rust replay evidence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "skipped_gates": [],
   "slice_id": "real-fdb-calc-crc32",

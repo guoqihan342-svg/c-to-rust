@@ -119,8 +119,8 @@
     ],
     "defines": [],
     "target": {
-      "triple_or_abi": "unknown",
-      "endianness": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
       "int_width": 32,
       "long_width": 64,
       "pointer_width": 64
@@ -206,6 +206,7 @@
     "source.source_file_hashes",
     "c_boundary.signatures[0].source_span.sha256",
     "build_profile.profile_id",
+    "build_profile.target",
     "translator_version"
   ]
 }
