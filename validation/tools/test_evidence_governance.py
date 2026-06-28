@@ -157,6 +157,31 @@ class EvidenceGovernanceTests(unittest.TestCase):
                 "$.source_boundary.files[0]",
             )
 
+    def test_historical_l1_worker_result_sources_are_diagnostic_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            self._write_json(
+                root / "validation/evidence/l1-native-summary.json",
+                {
+                    "status": "historical",
+                    "worker_result_sources": {
+                        "network-event": {
+                            "path": "C:\\Users\\Administrator\\Documents\\c-to-rust-l1-work\\network-event\\results.json",
+                        }
+                    },
+                },
+            )
+
+            report = evidence_governance.build_report(root, evidence_root=Path("validation/evidence"))
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["portability"]["claim_anchor_issue_count"], 0)
+            self.assertEqual(report["portability"]["diagnostic_host_metadata_count"], 1)
+            self.assertEqual(
+                report["portability"]["diagnostic_host_metadata"][0]["json_path"],
+                "$.worker_result_sources.network-event.path",
+            )
+
     def test_skipped_c2rust_reference_tree_is_diagnostic_metadata(self) -> None:
         with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
             root = Path(tmp)

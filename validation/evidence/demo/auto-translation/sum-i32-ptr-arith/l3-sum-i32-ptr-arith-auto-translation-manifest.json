@@ -418,14 +418,14 @@
   "target_id": "demo",
   "translator": {
     "artifact_paths": [
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-translation-plan.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-translation-events.jsonl",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-type-map.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-cfg.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-ai-candidate-manifest.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-blocked-repairs.json",
-      "C:/Users/Administrator/Documents/c-to-rust-flashdb/validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-draft.rs"
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-translation-plan.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-auto-translation-events.jsonl",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-type-map.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-cfg.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-pointer-graph.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-ai-candidate-manifest.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-blocked-repairs.json",
+      "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-rust-draft.rs"
     ],
     "slice_id": "sum-i32-ptr-arith",
     "status": "generated",

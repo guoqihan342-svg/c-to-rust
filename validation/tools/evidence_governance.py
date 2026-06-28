@@ -52,6 +52,7 @@ DIAGNOSTIC_SEGMENTS = {
     "host",
     "environment",
     "reference_tree",
+    "worker_result_sources",
 }
 DIAGNOSTIC_KEYS = {
     "clang_path",
