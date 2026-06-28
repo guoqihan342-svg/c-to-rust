@@ -107,11 +107,20 @@
 | `docs/superpowers/` | 历史设计 specs 和 plans；不作为当前全局待办来源 |
 | `openspec/` | OpenSpec 治理（specs、changes、config） |
 | `scripts/` | 自动化脚本（全量回归等） |
-| `config/competition-env/` | 比赛环境配置（Ubuntu 24.04、华为镜像、工具链版本） |
+| `config/competition-env/` | 比赛环境配置（Ubuntu 24.04、华为镜像、工具链版本、OpenCode 单次交互流程） |
 
 ## 待办来源
 
 全局 roadmap/backlog 只维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md`。其它清单只允许是局部用途：OpenSpec `tasks.md` 是单个 change 的交付步骤，`validation/**/checklist.md` 是证据模板验收清单，`docs/superpowers/plans/**` 是历史实施计划，`validation/evidence/**/*.md` 是历史证据记录。
+
+## OpenCode 比赛单次交互
+
+比赛使用 OpenCode 直接调用本仓库，一次交互完成 C→Rust 迁移，超时上限 **600 分钟**。详见 `config/competition-env/opencode-single-interaction.md`：
+
+- 单次 prompt 模板（顺序执行所有阶段）
+- 管线时间预估（单 slice < 20 分钟）
+- Agent 行为约束（不修改源码、不并行、fail-closed）
+- 容错设计和比赛输出结构
 
 ## 快速命令
 
