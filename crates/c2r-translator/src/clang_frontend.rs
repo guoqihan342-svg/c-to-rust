@@ -1599,6 +1599,12 @@ fn value_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, Clang
 }
 
 #[cfg(feature = "typed-ir")]
+/// Converts one clang JSON expression into the conservative skeleton layer.
+///
+/// This is the AST semantic boundary before typed IR. It accepts only node
+/// shapes whose C meaning is explicitly modeled, preserves integral casts when
+/// value contexts need them, and returns `Unsupported` skeletons or structured
+/// errors instead of guessing through unfamiliar clang nodes.
 fn expr_skeleton_from_ast_with_options(
     expr: &Value,
     preserve_integral_casts: bool,
@@ -2285,6 +2291,12 @@ fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFront
 }
 
 #[cfg(feature = "typed-ir")]
+/// Parses clang `qualType` spelling into the frontend's narrow type skeleton.
+///
+/// The mapper is intentionally conservative: pointers, `const`, arrays, record
+/// names, and fixed-width integer spellings are accepted; target-dependent or
+/// ambiguous C spellings fail closed so the typed IR emitter never receives a
+/// type whose width or layout was inferred by string guesswork.
 fn type_from_qual_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     let trimmed = qual_type.trim();
     if let Some(pointee) = trimmed.strip_suffix('*') {
@@ -2476,6 +2488,11 @@ fn split_array_qual_type(
 }
 
 #[cfg(feature = "typed-ir")]
+/// Lowers an accepted statement skeleton into typed IR without choosing Rust.
+///
+/// Unsupported skeletons become `unsupported_clang_stmt` errors, and every
+/// nested expression or body is lowered through the same fail-closed path. This
+/// keeps frontend semantics separate from the later Rust emitter.
 fn lower_stmt(stmt: &ClangStmtSkeleton) -> Result<IrStmt, ClangFrontendError> {
     match stmt {
         ClangStmtSkeleton::Decl { name, ty, init } => Ok(IrStmt::Decl {
@@ -2675,6 +2692,11 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
+/// Lowers an accepted expression skeleton into typed IR with clang-derived type data.
+///
+/// The conversion preserves casts, pointer/member/index structure, and source
+/// type boundaries for the emitter and validators. Unknown expression nodes are
+/// rejected here rather than represented as best-effort Rust.
 fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
     match expr {
         ClangExprSkeleton::DeclRef { name, ty } => Ok(IrExpr::Var {
@@ -3056,6 +3078,12 @@ fn attach_record_inventory_to_function(
 }
 
 #[cfg(feature = "typed-ir")]
+/// Recursively attaches discovered record fields to statement-local IR types.
+///
+/// Clang skeleton lowering may initially carry only a record name; this pass
+/// enriches matching types from the translation-unit inventory before emission.
+/// It does not infer missing layouts, so absent inventory remains a later
+/// fail-closed type or member-access error.
 fn attach_record_inventory_to_stmt(
     stmt: &mut IrStmt,
     inventory: &BTreeMap<String, Vec<IrRecordField>>,

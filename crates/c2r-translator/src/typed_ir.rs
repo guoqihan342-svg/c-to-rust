@@ -533,6 +533,12 @@ pub fn emit_rust_from_ir(function: &IrFunction) -> Result<EmittedRust, IrEmitErr
 }
 
 #[allow(clippy::result_large_err)]
+/// Emits Rust for typed IR with readonly globals, preserving fail-closed errors.
+///
+/// This is the public typed-IR generation boundary used by clang-lowered
+/// translation. Unsupported IR does not fall back to legacy templates; it is
+/// returned as an `IrEmitError` with the same route metadata used by evidence
+/// gates.
 pub fn emit_rust_from_ir_with_globals(
     function: &IrFunction,
     globals: &[IrGlobal],
@@ -558,6 +564,12 @@ fn emit_scalar_rust_from_ir(function: &IrFunction) -> Result<String, String> {
     emit_scalar_rust_from_ir_with_globals(function, &[])
 }
 
+/// Lowers the supported scalar subset into one Rust function plus constants.
+///
+/// The function first builds the semantic emission context and runs
+/// fail-closed validation, then emits globals, record definitions, parameters,
+/// and statements. Anything outside the current typed IR contract returns a
+/// path-rich error before a partial Rust candidate can escape.
 fn emit_scalar_rust_from_ir_with_globals(
     function: &IrFunction,
     globals: &[IrGlobal],
@@ -1094,6 +1106,12 @@ enum LoopContext<'a> {
     For { step: &'a IrStmt },
 }
 
+/// Emits one statement while enforcing symbol, type, and loop-context rules.
+///
+/// This is the statement-level semantic boundary for the generic emitter.
+/// Every arm either proves the local lowering rule it needs or returns a
+/// specific error; the caller prefixes those errors with the statement index so
+/// evidence can point back to the rejected IR node.
 fn emit_stmt(
     stmt: &IrStmt,
     return_type: &IrType,
@@ -2551,6 +2569,12 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
     }
 }
 
+/// Emits an expression and any required prelude without losing side effects.
+///
+/// Most expressions lower to a single Rust value, but post-increment byte reads
+/// and nested expressions can require preceding statements. Keeping that split
+/// explicit prevents the emitter from reordering C-side effects or pretending
+/// an unsupported side-effect pattern is a pure value expression.
 fn emit_expr_with_prelude(
     expr: &IrExpr,
     symbols: &mut HashSet<String>,
@@ -3727,6 +3751,12 @@ where
         .collect()
 }
 
+/// Checks one statement against the emitter's conservative initialization model.
+///
+/// This pass is intentionally narrower than full C data-flow analysis. It only
+/// carries facts that are definitely true on all non-returning paths, avoids
+/// assuming loops execute, and treats mutable record-pointer fields as separate
+/// facts so reads cannot be emitted before an observed write.
 fn validate_definite_assignment_stmt(
     stmt: &IrStmt,
     state: &mut DefiniteAssignmentState,
@@ -4745,6 +4775,12 @@ fn validate_nullable_pointer_param_uses_in_body(
     Ok(())
 }
 
+/// Enforces the semantic boundary for nullable pointer parameters in one stmt.
+///
+/// Nullable pointers may only be dereferenced, indexed, or member-accessed after
+/// a local guard has proven the parameter non-null on that path. The checker
+/// carries simple branch and early-return facts but does not infer loop
+/// invariants or global alias guarantees.
 fn validate_nullable_pointer_param_uses_in_stmt(
     stmt: &IrStmt,
     nullable_params: &HashSet<String>,

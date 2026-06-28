@@ -102,12 +102,15 @@
 | `validation/evidence/` | 生成证据（demo、flashdb、libuv、zlib-ng 及 40+ 项目） |
 | `validation/*-template/` | JSON Schema 和模板（pointer graph、slice spec、route、profile、L3 manifest 等） |
 | `validation/l2_slices/` | Rust L2 参考实现和 C oracle fixture |
-| `docs/c2rust-migration-agent/` | 设计文档、架构说明、contract |
-| `docs/superpowers/` | 设计 specs 和 plans |
+| `docs/c2rust-migration-agent/` | C2Rust migration agent 专题文档、分类索引、架构说明、contract、analysis 和 context archive |
+| `docs/superpowers/` | 历史设计 specs 和 plans；不作为当前全局待办来源 |
 | `openspec/` | OpenSpec 治理（specs、changes、config） |
 | `scripts/` | 自动化脚本（全量回归等） |
 | `config/competition-env/` | 比赛环境配置（Ubuntu 24.04、华为镜像、工具链版本） |
-| `codex/` | 分析文档 |
+
+## 待办来源
+
+全局 roadmap/backlog 只维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md`。其它清单只允许是局部用途：OpenSpec `tasks.md` 是单个 change 的交付步骤，`validation/**/checklist.md` 是证据模板验收清单，`docs/superpowers/plans/**` 是历史实施计划，`validation/evidence/**/*.md` 是历史证据记录。
 
 ## 快速命令
 
@@ -146,7 +149,10 @@ openspec validate --all --strict
 
 ## 贡献与文档
 
-- 会话上下文（最新状态）：`CONTEXT.md`
+- 会话接手短交接：`CONTEXT.md`
+- C2Rust 专题文档索引：`docs/c2rust-migration-agent/README.md`
+- 文档分类索引：`docs/c2rust-migration-agent/index/README.md`
+- 唯一全局待办：`docs/c2rust-migration-agent/future-vision-and-mvp.md`
 - 验证框架：`validation/README.md`
 - 验证门禁：`validation/gates.md`
 - 核心翻译架构：`docs/c2rust-migration-agent/core-translation-architecture.md`

@@ -3,6 +3,7 @@
 > Date: 2026-06-27
 > Based on the current `codex/flashdb-rust-skeleton` branch
 > Chinese primary: `translator-strengthening-analysis.md`
+> Note: this is analysis material, not the canonical backlog; the current global todo source is `../future-vision-and-mvp.md`.
 
 ## Current Judgment
 

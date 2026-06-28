@@ -10,7 +10,7 @@ The boundary must stay explicit: `validation/evidence/*/l1-native-build.json` on
 
 ## 1.1. Todo Execution Rules
 
-From this document onward, core translation work defaults to the P0/P1/P2 backlog in this file. Unless a blocking bug appears, temporary demos or a single project should not reorder the main work.
+From this document onward, core translation work defaults to the P0/P1/P2 backlog in this file. Unless a blocking bug appears, temporary demos or a single project should not reorder the main work. **This file is the only global roadmap/backlog source**; checklists, tasks, Next sections, or P0/P1/P2 wording elsewhere may only be local validation templates, OpenSpec change tasks, historical implementation plans, or analysis notes, and must not override this file's priorities.
 
 - **Expand translation capability before expanding ceremony**: before adding a schema, manifest, or gate, explain which concrete translation risk, validation false positive, or reproducibility gap it solves.
 - **FlashDB is only a use case**: FlashDB remains useful as a regression sample, but the project must not add FlashDB-specific recognizers, templates, or special-case routes.
@@ -25,7 +25,7 @@ From this document onward, core translation work defaults to the P0/P1/P2 backlo
 - **Public reproduction paths default to Linux/CI**: PowerShell/Windows commands may remain as local convenience entrypoints, but externally assessable quickstarts, verification, and evidence generation must provide competition Linux/CI equivalents. When no equivalent path exists, mark the command as local-only.
 - **Evidence must be portable**: new evidence, manifests, cache metadata, and log references should prefer repo-relative paths, profile ids/hashes, and artifact hashes. Local `C:\...`, `F:\...`, or `/mnt/c/...` paths may appear only as diagnostic host metadata, not as reproducible entrypoints or cross-machine claim anchors.
 - **Default paths must expose real capability**: no-clang default CI or competition paths must not present a legacy string translator success as typed-IR success. When typed IR did not run because `CLANG_PATH` or another tool is missing, evidence, metrics, and public claims must mark it as unavailable or compatibility fallback.
-- **Handoff docs must stay short and auditable**: `CONTEXT.md` is only for current state, latest verification, and next-step handoff. Long session logs should be split or archived, and must not become release documentation, an external evaluation entrypoint, or capability proof.
+- **Handoff docs must stay short and auditable**: `CONTEXT.md` is only for current state, latest verification, and next-step handoff. Long session logs should be split or archived under `docs/c2rust-migration-agent/archive/`, and must not become release documentation, an external evaluation entrypoint, or capability proof.
 - **Docs must stay bilingual**: update this file and `future-vision-and-mvp.md` together.
 
 ## 2. IR Layering Design (Recommended Industrial Standard)

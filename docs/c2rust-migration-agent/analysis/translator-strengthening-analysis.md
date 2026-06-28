@@ -3,6 +3,7 @@
 > 日期：2026-06-27
 > 基于当前 `codex/flashdb-rust-skeleton` 分支代码审查
 > 英文镜像：`translator-strengthening-analysis.en.md`
+> 说明：本文是分析材料，不是 canonical backlog；当前全局待办只看 `../future-vision-and-mvp.md`。
 
 ## 一、当前判断
 

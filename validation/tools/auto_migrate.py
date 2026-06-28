@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Run the bounded auto-translation pipeline for a slice spec."""
+"""Run the bounded auto-translation pipeline for a slice spec.
+
+This module emits candidate evidence and, separately, accepted semantic-pass
+evidence. Generated Rust drafts, typed-IR candidates, and C2Rust baselines are
+provenance inputs until the validation profile and accepted evidence gates bind
+them to a final verification report.
+"""
 
 from __future__ import annotations
 
@@ -646,7 +652,13 @@ def run_translator(
 
 
 def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
-    """Rewrite raw translator artifacts to the stricter evidence template schemas."""
+    """Rewrite raw translator output into schema-bound candidate evidence.
+
+    Normalization records what the translator observed and generated, but it is
+    still before route selection, validation-profile gating, and any accepted
+    evidence binding. Artifacts written here must therefore remain provenance
+    for candidates, not semantic-pass proof.
+    """
     target_id = required_str(spec, "target_id")
     slice_id = required_str(spec, "slice_id")
     source = source_commit(spec)
@@ -2906,6 +2918,14 @@ def emit_route_decision(
     translator_summary: dict[str, Any],
     c2rust_baseline: dict[str, Any],
 ) -> dict[str, Any]:
+    """Emit the route/profile decision and candidate provenance bundle.
+
+    The route chooses which verification profile must later pass; it does not
+    accept a generated draft. The candidate set records primary, typed-IR, and
+    C2Rust-baseline inputs with semantic flags pinned false so downstream
+    validators can reject candidate evidence that tries to act like accepted
+    evidence.
+    """
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     type_map = read_json(evidence_dir / f"{prefix}-type-map.json")
@@ -3180,6 +3200,13 @@ def route_level(
     plan: dict[str, Any],
     candidate_generation: dict[str, Any] | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
+    """Classify the slice route from fail-closed artifact and alias risk.
+
+    Typed-IR candidate signals may select a cheaper route for generated drafts,
+    but they never override blocked artifacts, unsupported control flow, alias
+    floors, or the later requirement that a validation profile produce the
+    semantic-pass claim.
+    """
     rationale: list[dict[str, Any]] = []
     blocked_statuses = {
         "translator": translator_summary.get("status"),
@@ -3305,6 +3332,13 @@ def emit_validation_profile(
     rust_check: dict[str, Any],
     accepted: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Write the profile that owns required gates for this route.
+
+    Route status selects the profile; profile status records whether every
+    required gate is present and passed. Generated candidate replay or diff
+    evidence remains diagnostic unless accepted evidence is explicitly
+    authoritative for the route and all profile gates are satisfied.
+    """
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     goal = route_decision.get("policy", {}).get("goal", "dev")
@@ -3812,6 +3846,13 @@ def write_l3_candidate_supporting_evidence(
     validation_profile: dict[str, Any],
     accepted: dict[str, Any] | None = None,
 ) -> None:
+    """Write supporting evidence for a generated L3 candidate.
+
+    Without accepted evidence, this function deliberately emits diagnostic
+    draft reports: replay and candidate diff may show useful agreement, but
+    generated_draft_semantic_pass and semantic_pass remain false. If accepted
+    evidence is provided, control moves to the accepted writer below.
+    """
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
@@ -4228,6 +4269,13 @@ def write_accepted_supporting_evidence(
     validation_profile: dict[str, Any],
     accepted: dict[str, Any],
 ) -> None:
+    """Bind accepted evidence into semantic-pass supporting artifacts.
+
+    This path is the boundary where C oracle, Rust report, schema diff,
+    negative diff, unsafe checks, route decision, and validation profile agree.
+    The generated draft is still tracked as a draft, while semantic_pass comes
+    from the accepted evidence binding and final verification artifacts.
+    """
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     accepted_paths = accepted["paths"]
@@ -5056,6 +5104,13 @@ def cache_identity(
     oracle: dict[str, Any] | None = None,
     environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """Build the cache key material for drift-sensitive evidence reuse.
+
+    The identity includes route decision, validation profile, C2Rust baseline,
+    global dependencies, clang-lowering options, and oracle-harness inputs so a
+    reused run cannot silently cross route/profile/cache boundaries after any
+    semantically relevant artifact changes.
+    """
     effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:

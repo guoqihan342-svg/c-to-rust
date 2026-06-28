@@ -1,3 +1,11 @@
+//! Evidence bridge for clang-lowered typed IR.
+//!
+//! This module connects the clang frontend and typed IR emitter to
+//! `TranslationResult`. It is not a Rust generator: `typed_ir` decides whether a
+//! function can be emitted and fails closed when it cannot. This layer records
+//! the accepted IR as route, CFG, call-expression, type-map, and pointer
+//! evidence for downstream gates and reports.
+
 use std::collections::BTreeMap;
 
 use crate::{
@@ -35,6 +43,11 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
     Some(result)
 }
 
+/// Mirrors an already-emitted typed IR function into translator evidence.
+///
+/// Rust code has already been produced by `typed_ir` before this runs. The job
+/// here is to describe the semantic route that was accepted: type mappings,
+/// call expressions, coarse CFG shape, pointer boundaries, and rule ids.
 fn record_clang_lowered_ir_evidence(
     spec: &SliceSpec,
     function: &typed_ir::IrFunction,
@@ -122,6 +135,11 @@ fn record_ir_decl_type_mappings(
     }
 }
 
+/// Records direct-call evidence across all statement positions in typed IR.
+///
+/// The traversal keeps statement context labels because the validation reports
+/// need to distinguish calls in initializers, assignments, loop conditions, and
+/// returns. It recurses through nested control flow without changing the IR.
 fn record_ir_call_expression_evidence(
     statements: &[typed_ir::IrStmt],
     result: &mut TranslationResult,
@@ -251,6 +269,11 @@ fn record_ir_call_expression_evidence_for_expr(
     }
 }
 
+/// Renders typed IR expressions as source-like text for evidence fields only.
+///
+/// The output is intentionally diagnostic, not a round-trippable C or Rust
+/// emitter. Rust generation remains in `typed_ir`; this helper gives reviewers
+/// stable labels for call arguments and pointer graph evidence.
 fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
     match expr {
         typed_ir::IrExpr::Var { name, .. } => name.clone(),
@@ -503,6 +526,11 @@ fn ir_cfg_edges(statements: &[typed_ir::IrStmt]) -> Vec<String> {
         .collect()
 }
 
+/// Derives pointer-boundary evidence from accepted typed IR parameters and uses.
+///
+/// This is a narrow evidence projection, not alias analysis. Today it recognizes
+/// const inputs and byte-cursor reads such as `*p++`; unrecognized pointer
+/// behavior must stay outside the emitted route or be rejected earlier.
 fn emit_ir_pointer_graph(function: &typed_ir::IrFunction, result: &mut TranslationResult) {
     for param in &function.params {
         if !matches!(param.ty.kind, typed_ir::IrTypeKind::Pointer { .. }) {

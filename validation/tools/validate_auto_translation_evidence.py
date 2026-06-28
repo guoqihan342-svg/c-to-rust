@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Validate bounded auto-translation evidence against committed schemas."""
+"""Validate bounded auto-translation evidence against committed schemas.
+
+Schema validity is only the first layer. These checks also enforce protocol
+boundaries between generated candidate evidence and accepted semantic-pass
+evidence, and they detect route/profile/cache drift across linked artifacts.
+"""
 
 from __future__ import annotations
 
@@ -280,6 +285,13 @@ def validate_alias_sensitive_effect_graph(
 
 
 def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    """Validate the cross-file route, baseline, profile, and cache contract.
+
+    The C2Rust baseline must stay candidate_context_only; the route-selected
+    validation profile must match the emitted profile artifact; and cache
+    metadata must include the same dependent artifact identities. This catches
+    stale evidence reuse after route/profile/cache drift.
+    """
     baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
     route_path = evidence_dir / f"{prefix}-route-decision.json"
     profile_path = evidence_dir / f"{prefix}-validation-profile.json"
@@ -1088,6 +1100,13 @@ def validate_generated_candidate_diff_boundary(
     oracle: dict[str, Any] | None = None,
     rust_report: dict[str, Any] | None = None,
 ) -> None:
+    """Ensure generated candidate diffs remain diagnostic, not semantic proof.
+
+    A generated draft may replay and match the draft oracle output, but the
+    report must remain blocked on accepted oracle evidence and must not set
+    semantic_pass or generated_draft_semantic_pass. Accepted schema-diff checks
+    are validated elsewhere.
+    """
     candidate_pass = report.get("generated_candidate_diff_pass") is True
     if not candidate_pass:
         if "candidate_diff" in report:
@@ -1350,6 +1369,13 @@ def validate_typed_ir_candidate_binding(
     route: dict[str, Any],
     profile: dict[str, Any],
 ) -> None:
+    """Bind typed-IR candidate metadata across route, profile, and clang report.
+
+    Typed-IR can influence candidate routing and draft generation, but the same
+    candidate_generation object must appear in route and profile evidence, and
+    readonly-global identity must match the lowering report. The binding never
+    upgrades typed-IR output to semantic-pass evidence.
+    """
     route_candidate_generation = route.get("candidate_generation")
     if not isinstance(route_candidate_generation, dict):
         if profile.get("candidate_generation") is not None:
@@ -1446,6 +1472,13 @@ def validate_candidate_selection_record(
     evidence_dir: Path | None = None,
     prefix: str | None = None,
 ) -> None:
+    """Validate candidate selection provenance without accepting a candidate.
+
+    The selected id must refer to the candidate set, the policy must not claim a
+    full router or semantic acceptance, and each candidate must keep semantic
+    flags false. The C2Rust candidate is additionally constrained to
+    candidate_context_only.
+    """
     candidate_set = candidate_generation.get("candidate_set")
     selected_candidate_id = candidate_generation.get("selected_candidate_id")
     selection_policy = candidate_generation.get("selection_policy")
@@ -1886,6 +1919,13 @@ def resolve_ref_path(path: str) -> Path:
 
 
 def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> dict[str, Any]:
+    """Validate the accepted-evidence path that is allowed to claim semantics.
+
+    This is the semantic-pass boundary: manifest, route, validation profile,
+    C oracle, Rust report, schema diff, negative diff, unsafe evidence, version
+    binding, and final verification all have to agree. Generated draft success
+    remains explicitly false even in the returned summary.
+    """
     slice_spec = load_json(slice_spec_path)
     manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
     manifest = load_json(manifest_path)
@@ -2026,6 +2066,13 @@ def validate_external_direct_callee_context(
     manifest: dict[str, Any],
     final_verification: dict[str, Any],
 ) -> None:
+    """Validate compile-only boundaries for external direct callees.
+
+    Declared active callees must bind slice-spec signatures, real source files,
+    context-pack descriptors, and translation-plan call edges. These stubs are
+    allowed to support compilation context, but they must not claim verified
+    semantics or silently widen the final verification scope.
+    """
     declared = slice_spec.get("c_boundary", {}).get("external_direct_callees", [])
     if not declared:
         return

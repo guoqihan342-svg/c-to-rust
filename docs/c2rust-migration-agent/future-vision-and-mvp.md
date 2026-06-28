@@ -10,7 +10,7 @@
 
 ## 1.1. 待办执行规则
 
-从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。
+从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。**本文件是唯一全局 roadmap/backlog 来源**；其它文档若出现 checklist、tasks、Next 或 P0/P1/P2 文字，只能是局部验收模板、OpenSpec change 任务、历史实施计划或分析材料，不能覆盖本文优先级。
 
 - **先扩翻译能力，再扩仪式**：新增 schema、manifest、gate 前，必须能说明它解决了具体翻译风险、验证误判或复现问题。
 - **FlashDB 只是用例**：可以继续用 FlashDB 做回归样本，但不能写 FlashDB 专用 recognizer、模板或特判路径。
@@ -25,7 +25,7 @@
 - **公开复现路径以 Linux/CI 为准**：PowerShell/Windows 命令可以保留为本机便利入口，但外部可评估的 quickstart、验证和 evidence 生成必须提供 competition Linux/CI 等价命令；没有等价路径时要标记为 local-only。
 - **evidence 必须可移植**：新 evidence、manifest、cache metadata 和日志引用优先使用 repo-relative path、profile id/hash 和 artifact hash；本机 `C:\...`、`F:\...`、`/mnt/c/...` 路径只能作为 diagnostic host metadata，不得作为可复现入口或跨机器 claim 依据。
 - **默认路径必须暴露真实能力**：无 clang 的默认 CI/比赛路径不能把 legacy string translator 的成功包装成 typed-IR 成功；typed IR 因 `CLANG_PATH` 或工具缺失未运行时，evidence、metrics 和公开叙述必须明确标记 unavailable/compatibility fallback。
-- **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档，不能作为 release 文档、外部评估入口或能力证明。
+- **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档到 `docs/c2rust-migration-agent/archive/`，不能作为 release 文档、外部评估入口或能力证明。
 - **文档要双语同步**：本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
 
 ## 2. IR 分层设计（推荐工业标准）

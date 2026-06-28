@@ -1,6 +1,6 @@
 # C2Rust Migration Agent
 
-这里是 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
+`docs/c2rust-migration-agent/` 是 C2Rust migration agent 的专题文档文件夹，收纳 `design-c2rust-migration-agent` 的可执行设计文档集合，供 OpenCode、Codex 或其他智能体按 OpenSpec 分阶段执行 C 到 Rust 迁移。英文镜像见 `README.en.md`。
 
 ## 当前状态
 
@@ -35,23 +35,16 @@
 - 修改已有文档时，如果改动超过小修小补，应同步维护对应英文镜像。
 - OpenSpec parser anchors 必须保留英文，例如 `## ADDED Requirements`、`### Requirement:`、`#### Scenario:`、`WHEN`、`THEN`。
 - 本目录仍有早期文档采用“中文说明 + English summary”混合格式；后续触及时按上述约定拆成完整双语版本。
+- 全局待办唯一来源是 `future-vision-and-mvp.md`；`future-vision-and-mvp.en.md` 只是同步镜像，不另立待办来源。
 
 ## 文档地图
 
-- `README.md` / `README.en.md`：本目录索引、状态和双语文档约定。
-- `baseline-record.json`：机器可读的版本、hash、源码和工具可用性记录。
-- `baseline-and-versioning.md`：Agent、schema、PatchPlan 和 `flashDB_rust` 的版本策略。
-- `build-and-c2rust-baseline.md`：FlashDB build capture、C2Rust baseline 和 C oracle fallback。
-- `agent-contract.md`：OpenCode/Codex runtime contract、phase、IO、subagent、AI policy、async/thread policy。
-- `context-store-and-self-healing.md`：SQLite/JSONL schema、ContextPack、impact set、rustc repair loop、PatchPlan。
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`：当前 `clang_frontend -> typed IR + globals -> translation_route -> validation` 架构、核心代码地图、两路线 typed IR candidate model、candidate_generation evidence schema、clang-lowered direct-call evidence、external direct-callee binding validator 和 typed IR legacy cleanup 边界。
-- `flashdb-rust-skeleton-and-milestone.md`：`flashDB_rust` crate layout 和首个 host-verifiable milestone。
-- `testing-unsafe-cache-and-milestone.md`：测试、differential oracle、unsafe budget、cache policy、performance gates。
-- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`：受限自动翻译管线 Agent 使用文档，包含 pointer graph v2、`effect_graph`、alias gate cache identity 和验证门禁说明。
-- `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`：L0-L4 路由决策、证据流拓扑和验证门禁的详细设计文档，解释 route decision、validation profile、candidate route、alias risk floor、fail-closed 原则和证据引用链一致性。
-- `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`：未来愿景与 MVP 路线，包含 IR 三层设计（Semantic IR / Control IR / Typed Value IR）和分阶段计划。
-- `COVERAGE.md` / `COVERAGE.en.md`：当前 typed IR + clang frontend + generic emitter 的 C 构造支持/不支持清单，坦诚列出已支持和显式拒绝的 C 语言特性。
-- `../../config/competition-env/`：比赛环境配置入口，记录 Ubuntu 24.04.4、Rust 1.96.0、Python 3.12.3、Node 24.13.0、华为镜像源、Go/CMake 缺失边界和自检脚本。
+- 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，机器可读状态见 `baseline-record.json`。
+- 架构与合约：见 `index/architecture.md`。覆盖 `agent-contract.md`、`baseline-and-versioning.md`、`context-store-and-self-healing.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`、`l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`。
+- 运行与验证：见 `index/operations.md`。覆盖 `build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
+- 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
+- FlashDB 用例边界：见 `index/flashdb.md`。覆盖 `baseline-record.json`、`build-and-c2rust-baseline.md`、`flashdb-rust-skeleton-and-milestone.md`、`full-regression-runner.md`。
+- 归档/分析：见 `index/archive.md`。覆盖 `archive/context-history-2026-06-28.md`、`analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。
 
 
 ## 快速使用

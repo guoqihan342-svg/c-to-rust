@@ -1,0 +1,10494 @@
+# CONTEXT.md
+
+本文件用于把当前会话的关键上下文固化到仓库中。一个完全看不到聊天记录的新 Codex 会话，读取本文件和代码仓库后，应能准确理解当前项目状态，并直接继续工作。
+
+## 1. 当前仓库与路径
+
+- 当前应继续工作的本地路径：`F:\agent\crustpaper\0625ctr`
+- GitHub 仓库：`https://github.com/guoqihan342-svg/c-to-rust`
+- 当前分支：`codex/flashdb-rust-skeleton`
+- 当前远端分支：`origin/codex/flashdb-rust-skeleton`
+- 最近已推送提交：
+  - `8dd4b4f8ed2867b1477e2582666c6fb78a7eebcc`
+  - message: `Add typed IR continue and competition env profile`
+- 注意：`C:\Users\Administrator\Documents\c-to-rust` 和 `C:\Users\Administrator\Documents\c-to-rust-flashdb` 是早期工作区路径，当前这轮 C2Rust pipeline 工作不要误切回那里继续开发，除非用户明确要求。
+- C2Rust 参考源码路径：`F:\agent\c2rust-master`
+  - 这是参考项目和潜在工具链来源。
+  - 当前工作区没有确认可直接调用的 `c2rust` 可执行文件。
+
+如果默认 Git HTTPS push 遇到 `Recv failure: Connection was reset`，此前可用的推送命令是：
+
+```powershell
+git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 push origin codex/flashdb-rust-skeleton
+```
+
+## 2. 用户当前项目要求
+
+项目目标是构建一个面向 Codex、OpenCode 或其他 Agent 调用的 C 到 Rust 渐进式迁移 Agent / pipeline。它不是只服务一个人工 demo，而是要逐步走向真实 C 项目的受限自动翻译与强验证。
+
+当前明确要求：
+
+- 使用 OpenSpec 管理需求、设计、任务和验收。
+- 复杂任务可以开多个智能体或并行子任务，但共享文件写入必须受控，不能互相覆盖。
+- 项目不再要求“小而精”，可以适当扩大规模以补齐真实翻译能力。
+- 不再把 10000 轮回归作为每次开发的阻塞条件。
+- 日常当前先跑 10 轮、默认 10000 轮等固定轮数要求已经去掉。
+- 回归轮数应作为 validation profile 或运行策略输入，而不是硬编码全局门禁。
+- Rust first-party non-test `unsafe` 比例必须小于 10%。
+- “最好为 0% unsafe”已从硬性要求中去掉，不能把 0% 当作验收条件。
+- 实际只有一个 Agent/LLM 接口，不再区分廉价模型和强模型。
+- C2Rust、LLM、手写规则都只能提供 candidate，不是 correctness source。
+- 正确性以原始 C 行为和证据链为准。
+- 真正的翻译证据必须来自真实 C 源文件自动抽取的 slice/context，不应把手写 `c_source` demo 当作真实迁移成果。
+- 需要跨文件深度关联性上下文管理，在不破坏项目模块调用关系的前提下，实现单点渐进式重构。
+- 编译/编译自愈需要双向闭环：根据 error stack 精确定位、自动打补丁、重新验证。
+- 语义等价性要求非常高：业务逻辑不能被破坏，测试和 oracle 证据必须覆盖主干路径。
+- 重构后的 FlashDB Rust 目录名目标仍可使用 `flashDB_rust`，但当前本分支重点已经从手写 FlashDB 重写转向“受限自动翻译器 + 强验证项目”。
+
+一个重要边界：不要再恢复旧的 `flashdb-10000` 自动心跳或默认长跑监控。用户已经明确表示自动化消息让人困扰，并取消了 10000 轮作为日常阻塞条件。
+
+## 3. 当前核心方案
+
+当前采用的是治理优先的混合式 C 到 Rust 迁移 pipeline：
+
+```mermaid
+flowchart TD
+    A["Real C repository / source file"] --> B["Source slice extraction"]
+    B --> C["Context pack: build profile, include graph, type facts, callees, fixtures"]
+    C --> D["Route decision L0-L4"]
+    D --> E1["Tier 1 deterministic / bounded translator"]
+    D --> E2["Tier 2 Agent or LLM translator"]
+    D --> E3["C2Rust baseline candidate context"]
+    E1 --> F["Rust candidate"]
+    E2 --> F
+    E3 --> F
+    F --> G["Compile and repair loop"]
+    G --> H["Original C oracle + Rust replay"]
+    H --> I["Schema-aware diff, negative diff, unsafe ledger, validation profile"]
+    I --> J["Evidence manifest"]
+    J --> K{"Accepted?"}
+    K -->|yes| L["Progressive Rust migration"]
+    K -->|no| M["Fail closed with repair evidence"]
+```
+
+设计原则：
+
+- C2Rust baseline 用于候选上下文、对照和 cross-check，不作为正确性证明。
+- LLM/Agent 翻译可以作为兜底，但所有候选必须走统一验证门禁。
+- Tree-sitter 或手写语法扫描只能提供 syntax indexing，不能直接证明类型、别名和 UB 语义。
+- 真实 typed semantic facts 需要 compile profile、clang/libclang、原始 C oracle 或显式 unsupported/block 记录。
+- C-side UB 和 Rust-side UB 证据要分开。MIRI 不是 C UB 证明。
+- OpenSpec 管能力和批次，slice evidence manifest 管每个函数迁移证据。
+- 不支持的情况必须 fail closed，不能假装翻译成功。
+
+## 4. 已完成的主要实现
+
+最近完成并推送的 OpenSpec change：
+
+- `openspec/changes/add-c2rust-baseline-migration-pipeline/`
+
+该 change 的任务已全部勾选完成，核心目标是把 C2Rust baseline、route decision 和 validation profile 纳入 L3 自动翻译证据链。
+
+关键新增或修改：
+
+- `validation/tools/auto_migrate.py`
+  - 生成 C2Rust baseline manifest。
+  - 生成 route decision。
+  - 生成 validation profile。
+  - 将这三类证据绑定到 auto manifest、L3 evidence manifest、final verification、cache metadata 和 generated artifacts。
+  - cache identity 包含 `c2rust_baseline_identity`、`route_decision_identity`、`validation_profile_identity`。
+  - route 为 L4 时 fail closed，写出 blocked repair evidence。
+  - semantic pass 改为基于 `accepted`、Rust compile/check 和 validation profile 共同判定，不能绕过 profile。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 校验 C2Rust baseline manifest schema。
+  - 校验 route decision schema。
+  - 校验 validation profile schema。
+  - 校验 auto manifest、L3 manifest、final verification、cache metadata 之间的引用一致性。
+  - 校验 sha256、status consistency、route/profile consistency、cache identity fields。
+  - semantic pass 要求 profile passed、没有 skipped gates、route 不是 L4，并且 C2Rust 仍保持 `candidate_context_only`。
+
+- `validation/tools/extract_source_slice.py`
+  - 用于从真实 C 源文件自动抽取函数 slice。
+  - 真实源函数迁移必须先走这个工具或等价自动抽取路径。
+
+- `validation/tools/test_extract_source_slice.py`
+  - 覆盖真实源 slice 抽取行为。
+
+- 新增 schema：
+  - `validation/auto-translation-template/c2rust-baseline-manifest.schema.json`
+  - `validation/auto-translation-template/route-decision.schema.json`
+  - `validation/auto-translation-template/validation-profile.schema.json`
+
+- 修改 schema：
+  - `validation/l3-template/evidence-manifest.schema.json`
+    - 已要求 L3 evidence manifest 包含 `c2rust_baseline`、`route_decision`、`validation_profile`。
+
+- 文档更新：
+  - `validation/README.md`
+  - `validation/gates.md`
+
+- OpenSpec active spec 更新：
+  - `openspec/specs/flashdb-l3-agent-migration-loop/spec.md`
+  - 已将 `unsafe` 要求改为 first-party non-test `<10%`，不再写 0% 硬性要求。
+
+## 5. 当前真实证据状态
+
+真实 FlashDB slice spec：
+
+- `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+
+对应证据目录：
+
+- `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+
+此前运行命令：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --skip-c-oracle
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+当前结果必须如实理解：
+
+- schema validation 通过。
+- semantic pass 不成立。
+- route decision 是 `L4`。
+- route status 是 `refused`。
+- `translator.kind` 是 `refuse`。
+- `candidate_generation_allowed` 是 `false`。
+- validation profile 是 `L4-dev`，status 是 `blocked`。
+- C2Rust baseline manifest status 是 `skipped`，原因是本机当前没有可用的 `c2rust` 可执行工具链。
+- C2Rust baseline 的 `correctness_role` 是 `candidate_context_only`。
+- auto manifest status 是 `candidate_generated`，但 `semantic_pass=false`，并且没有 accepted evidence binding。
+
+严禁误判：
+
+- 不要声称 `real-fdb-calc-crc32` 已经完成语义接受。
+- 不要声称当前工具已经能自动翻译真实 FlashDB 函数并通过 L3。
+- 当前完成的是“证据合约、路线决策、C2Rust baseline 接入点、fail-closed 机制和验证器硬化”，不是完整真实函数迁移成功。
+
+## 6. 最近验证结果
+
+最近一次代码提交前完成的验证：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+```
+
+结果：
+
+```text
+Ran 32 tests in 37.812s
+OK
+```
+
+OpenSpec 验证：
+
+```powershell
+openspec validate --all --strict
+```
+
+结果：
+
+```text
+37 passed, 0 failed
+```
+
+空白和补丁检查：
+
+```powershell
+git diff --check
+```
+
+结果：通过。Windows 下曾出现 CRLF warning，但不是失败。
+
+当前分支已推送到远端，推送后远端验证为：
+
+```text
+3d12e65c5599441e9886acb29c8ac40f196d7b22 refs/heads/codex/flashdb-rust-skeleton
+```
+
+## 7. 新会话接手后的第一组命令
+
+建议新会话先运行：
+
+```powershell
+cd C:\Users\Administrator\Documents\c-to-rust-flashdb
+git status --short --branch --untracked-files=all
+git log -3 --oneline --decorate
+openspec validate --all --strict
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+如果只是文档改动，不需要重跑完整迁移。若要继续开发 translator、validator 或 evidence schema，至少跑上面的 unittest 和 OpenSpec validate。
+
+## 8. 代码地图
+
+核心 pipeline：
+
+- `validation/tools/auto_migrate.py`
+  - 自动迁移主入口。
+  - 负责生成 candidate、manifest、route、profile、cache metadata 和最终证据。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 自动迁移证据校验器。
+  - 是防止证据链退化的关键门禁。
+
+- `validation/tools/extract_source_slice.py`
+  - 从真实 C 源文件抽取函数 slice。
+  - 后续真实函数迁移应优先扩展这里，而不是继续手写 `c_source` demo。
+
+关键 schema：
+
+- `validation/auto-translation-template/auto-translation-manifest.schema.json`
+- `validation/auto-translation-template/c2rust-baseline-manifest.schema.json`
+- `validation/auto-translation-template/route-decision.schema.json`
+- `validation/auto-translation-template/validation-profile.schema.json`
+- `validation/l3-template/evidence-manifest.schema.json`
+
+关键 docs：
+
+- `validation/README.md`
+- `validation/gates.md`
+- `openspec/specs/flashdb-l3-agent-migration-loop/spec.md`
+- `openspec/changes/add-c2rust-baseline-migration-pipeline/design.md`
+- `openspec/changes/add-c2rust-baseline-migration-pipeline/tasks.md`
+
+## 9. 下一步建议
+
+建议优先级如下：
+
+1. 不要继续堆 demo 规则。先把真实源函数自动抽取、typed context 和 oracle harness 做实。
+2. 安装或接入可用 C2Rust 工具链，让 baseline manifest 从 `skipped` 进入真实 `generated` 或明确 `blocked`。
+3. 选一个比 `fdb_calc_crc32` 更小、更清晰的真实 FlashDB 函数，目标是跑出第一个真实 accepted L3 semantic pass。
+4. 将当前 route 逻辑提前到 candidate generation 之前，避免“先生成再 backfill route”的时序不够干净。
+5. 接入 clang/libclang 或等价 typed semantic fact provider，补足 tree-sitter/字符串扫描无法提供的类型、别名、宏和 include 事实。
+6. 自动生成 C oracle harness 初稿和 Rust replay test 初稿。
+7. 对 compile error stack 做结构化 repair hints，并将修复循环限制为 fail-closed。
+8. 增加 fuzz/property profile，但不要恢复 10000 轮硬阻塞。
+9. 如用户要求提交或发 PR，再基于当前分支创建 PR；当前不要擅自改变目标仓库或路径。
+
+## 10. 与外部评价和论文对齐后的结论
+
+用户接受过的关键判断：
+
+- 之前的手写翻译规则和少量 demo 不能代表真实自动翻译能力。
+- `flashDB_rust` 更接近手写 safe Rust 重写 + 差分验证成果，不能当作翻译器自动产出的证据。
+- Corrode 的优点是能作为通用 C99 到 Rust 翻译器处理广度，即使输出不够 idiomatic 或 unsafe 偏多；当前项目需要吸收的是自动读取 C 文件、解析函数、生成候选和证据的 pipeline 能力。
+- Rustine/SACTOR/Syzygy 等方案说明，“LLM/Agent 候选 + 强验证 + 修复闭环”比只靠手写规则更现实。
+- 本项目差异化不应吹成“验证世界第一”或“翻译已规模化”，而应定位为：
+  - Agent 编排友好。
+  - OpenSpec 治理。
+  - 机器可读证据交接。
+  - fail-closed。
+  - 原始 C oracle 驱动的可审计渐进迁移。
+
+## 11. 工作习惯与沟通注意
+
+- 用户偏好中文状态、中文文档和清晰的路径说明。
+- 用户反复强调“开多几个智能体干活”，但并行应只用于互不冲突的分析、测试、调研或独立文件任务。
+- 用户不喜欢无意义等待和频繁自动消息。长跑监控不应主动恢复。
+- 如果问“好了没有”，必须回答已验证状态、剩余缺口和下一步，不要把 partial pass 说成 done。
+- 如果要提交或推送，必须先验证，并且只有实际完成 git action 后才能在最终答复里发 git directive。
+- 如果工作涉及 OpenSpec artifact，保留 parser-required anchors，例如 `Purpose`、`Requirements`、`Scenario`、`WHEN`、`THEN`、`## ADDED Requirements` 和任务 checkbox 语法。
+
+## 12. 2026-06-26 最新接手状态
+
+本轮继续推进了两个 fail-closed 证据硬化点：
+
+1. L4/refused route 不再被记录为 `candidate_generated`。
+   - `validation/tools/auto_migrate.py` 会把 L4/refused 自动迁移 run 的 auto manifest 标为 `candidate_refused`。
+   - 对应 plan/events/replay 里的 Rust draft 状态为 `blocked` diagnostic，而不是 candidate evidence。
+   - `validation/tools/validate_auto_translation_evidence.py` 会拒绝 L4/refused 下顶层或嵌套残留的 `candidate_generated` / `status: candidate` 证据。
+
+2. 真实源码 slice 抽取开始记录同文件顶层全局对象依赖。
+   - `validation/tools/extract_source_slice.py` 现在会从 masked function body 中识别同文件顶层对象引用。
+   - 已加测试覆盖：真实引用会记录 global dependency；注释、字符串、参数同名 shadowing 和局部变量同名 shadowing 不会误报。
+   - 局部同名 shadowing 现在按作用域 span 判断，不会因为内层 block 声明过同名局部变量，就漏掉 block 外对同文件全局对象的真实引用。
+   - 复审后又修了一个 `:` 解析边界：三元表达式初始化（如 `value ? 1U : 2U`）不会被误当成 C label，从而不会漏记局部 shadow binding。
+   - `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 已刷新，`c_boundary.direct_dependencies` 现在包含 `crc32_table`：
+     - `kind: global`
+     - `name: crc32_table`
+     - `source: extracted_function_body_reference`
+     - `definition_status: same_file_top_level_declared`
+     - `source_span.file: src/fdb_utils.c`
+     - `source_span.line_start: 21`
+     - `source_span.line_end: 66`
+
+真实 `real-fdb-calc-crc32` evidence 已用当前工具刷新，但状态仍必须如实理解：
+
+- auto manifest status: `candidate_refused`
+- route level/status: `L4` / `refused`
+- validation profile: `L4-dev` / `blocked`
+- semantic pass: `false`
+- C2Rust baseline: `skipped`
+- 不要声明该 slice 已 accepted L3，也不要声明当前工具已能自动翻译真实 FlashDB 函数通过语义门禁。
+- 即使将来对 L4/refused 路线使用 `--accept-existing-evidence`，生成 draft 的 evidence status 也必须保持 `blocked`，不能被 promotion 路径重新写成 `candidate`。
+
+本轮已验证过的命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+```
+
+建议下一步优先级：
+
+1. 继续把真实源 context 做实：把 `direct_dependencies` 中的 `global` 依赖喂给 context pack/type-map/oracle harness draft。
+2. 针对 `crc32_table` 这类同文件全局 const 数据，生成明确的 harness/linkage requirement，而不是继续把 oracle harness 停留在占位 `puts()`。
+3. 仍然不要恢复 10000 轮硬阻塞；验证轮数只作为 profile/run-policy 输入。
+
+## 13. 2026-06-26 继续推进：global dependency 进入证据链
+
+本轮把 `c_boundary.direct_dependencies` 里的同文件 global 依赖从“原始 metadata”提升为一等证据字段：
+
+1. `validation/tools/auto_migrate.py`
+   - 新增 `global_dependency_requirements(spec)`，统一从 slice spec 过滤 `kind=global` 依赖。
+   - `context-pack` 现在写入：
+     - `global_dependencies`
+     - `source_boundary.globals`
+   - `type-map` 现在写入 `global_dependencies`，不再让全局对象依赖在 type-map 中静默空白。
+   - `pointer-graph.source_boundary.globals` 现在来自同一份 global dependency 列表。
+   - C oracle status 现在写入 `global_linkage_requirements`。
+   - C oracle harness draft 现在至少在注释中记录 `global dependency: <name>`，用于提醒后续真实 harness 必须把该全局对象纳入同一编译/链接边界。
+   - cache metadata 增加 `global_dependency_identity`，并把它列入 `cache_input_fields`。
+
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - 新增跨 artifact invariant：只要 slice spec 存在 `kind=global` 依赖，就要求 context-pack、type-map、oracle status、pointer source boundary、cache identity 和 harness draft 同步声明该依赖。
+   - 已加负测：删除 type-map 的 `global_dependencies` 或删除 oracle status 的 `global_linkage_requirements` 时，schema-only validator 也必须失败。
+   - 复审后继续加严：global dependency 不再只按 `name` 校验，还会校验完整 canonical object，包括 `source_span`、`sha256`、`definition_status`、`linkage_requirement` 和 `semantic_status`。
+   - validator 现在也检查 `slice-contract.c_boundary.direct_dependencies`，防止 slice-contract 陈旧但其它 artifact 看似同步。
+   - cache metadata 的 `global_dependency_identity.count/names/sha256` 会按 canonical global dependency 列表重算校验。
+   - L4/refused 下的状态扫描扩展为拒绝 `candidate`、`candidate_generated`、`draft_generated` 和 `accepted_after_gates`，避免 refused route 混入候选或接受态 artifact。
+
+3. `real-fdb-calc-crc32` 已刷新：
+   - `crc32_table` 已出现在 `context-pack.global_dependencies`。
+   - `crc32_table` 已出现在 `type-map.global_dependencies`。
+   - `crc32_table` 已出现在 `pointer-graph.source_boundary.globals`。
+   - `crc32_table` 已出现在 `c-oracle-status.global_linkage_requirements`。
+   - harness draft 中已有 `global dependency: crc32_table` 注释。
+   - cache metadata 中已有 `global_dependency_identity.names: ["crc32_table"]`。
+
+状态仍然是 fail-closed：
+
+- auto manifest status: `candidate_refused`
+- route level/status: `L4` / `refused`
+- validation profile: `L4-dev` / `blocked`
+- semantic pass: `false`
+- 不要把这次证据链补强解释成 accepted L3 或真实语义通过。
+
+下一步建议：
+
+1. 把 oracle harness 从注释要求推进到可编译初稿：包含真实函数 prototype、fixture 输入绑定、同文件 global/source linkage 说明和待编译命令。
+2. 为 global dependency 增加更强 typed fact：数组维度、元素类型、const/extern/static/linkage 属性。
+3. 继续保持 validator 的 fail-closed 风格：任何将来要 claim semantic pass 的路径，都必须证明 global dependency 被 oracle/replay/diff 一致覆盖。
+
+## 14. 2026-06-26 路由内嵌证据引用和 cache identity 继续加固
+
+本轮复核发现 real-fdb 的 `route_decision.source_artifacts.translation_plan.sha256`
+曾经保留旧值，validator 只检查顶层 manifest/final/cache 引用时会漏过这种嵌套
+artifact drift。已修复：
+
+1. `validation/tools/validate_auto_translation_evidence.py`
+   - 新增 `validate_route_source_artifact_refs()`。
+   - 强校验 route 内的 `type_map`、`cfg`、`pointer_graph`、`c2rust_baseline`
+     路径、状态和 sha。
+   - 对 `translation_plan` 校验 path/status；如果 route 中出现 sha，则必须匹配
+     当前 plan 文件，否则拒绝。
+2. `validation/tools/auto_migrate.py`
+   - 生成 route decision 时，`source_artifacts.translation_plan` 不再写 sha。
+   - 原因是后续 `bind_route_decision_to_generated_artifacts()` 会把 route ref 反向写入
+     plan；route 若同时绑定 plan 文件 hash，会形成不稳定的循环引用。
+3. `validation/tools/test_validate_auto_translation_evidence.py`
+   - 新增 route source artifact stale sha 负测。
+   - `cache` identity drift 负测现在覆盖 `c2rust_baseline_identity`、
+     `route_decision_identity`、`validation_profile_identity` 三类字段。
+   - no-global 场景下也会拒绝残留的 `global_dependency_identity`。
+
+当前 `real-fdb-calc-crc32` 已刷新，`route_decision.source_artifacts.translation_plan`
+只保留 path/status，不再保留旧 sha。状态仍是 fail-closed：
+
+- auto manifest status: `candidate_refused`
+- route level/status: `L4` / `refused`
+- validation profile: `L4-dev` / `blocked`
+- semantic pass: `false`
+
+本轮最终验证命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+## 15. 2026-06-26 C oracle harness draft 可审计化推进
+
+本轮把 C oracle harness draft 从“只有占位 puts 和 global 注释”推进到更可审计的
+draft，但仍然保持 fail-closed，不声明语义通过。
+
+1. `validation/tools/auto_migrate.py`
+   - `generate_oracle_harness_draft()` 现在从 slice spec 生成目标函数 prototype。
+   - harness draft 现在写入：
+     - draft-only 边界注释；
+     - fixture input 路径；
+     - source file/hash 绑定；
+     - global dependency trace；
+     - 目标函数 prototype；
+     - TODO 占位，明确还没有 fixture value load 和 observable assertion。
+   - `c-oracle-status.json` 新增：
+     - `toolchain_status: DRAFT_NOT_EXECUTED`
+     - `fixture_binding`
+     - `harness_contract`
+     - `compile_command_draft`
+   - `status` 仍是 `SKIPPED_LOCAL_NO_C_TOOLCHAIN` 或 `DRAFT_GENERATED`，`semantic_pass` 仍是 `false`。
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - 新增 `validate_oracle_harness_contract()`。
+   - 当 slice spec 有 global dependency 时，强制 oracle status 提供 `harness_contract`。
+   - 校验 function prototype、fixture binding、source file list、compile command draft 和
+     `harness_contract.global_dependencies` 与 canonical global dependency 列表一致。
+   - 新增 draft oracle fail-closed invariant：如果 C oracle 不是 `C_ORACLE_GENERATED`
+     且 `semantic_pass=true`，则 final verification、evidence manifest、validation profile
+     不得宣称 passed 或 semantic pass。
+   - 为兼容旧无 global 的静态 demo evidence，`harness_contract` 只在存在 global dependency
+     或 artifact 自己声明该 contract 时强制。
+3. `real-fdb-calc-crc32` 已刷新：
+   - `harness_contract.function_prototype` 为
+     `uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size);`
+   - `fixture_binding.binding_status` 为 `missing_or_empty`。
+   - `toolchain_status` 为 `DRAFT_NOT_EXECUTED`。
+   - 没有写入 `C_ORACLE_GENERATED`、`semantic_pass=true` 或 `accepted_evidence_bound`。
+
+本轮验证命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
+```
+
+下一步建议：
+
+1. 给 harness draft 增加 `harness_draft_ref` 或 `c_oracle_harness_identity`，并放进
+   cache input fields，防止 harness 文件内容漂移但 status/cache 不失效。
+2. 把 compile command 从 evidence-dir 相对 `-Iinc` 推进到 source-root 解析后的 include/source
+   linkage plan。
+3. 只有在 fixture cases、expected outputs、编译执行和 diff/negative/unsafe gates 都齐全时，
+   才允许推进 `C_ORACLE_GENERATED`。
+
+## 16. 2026-06-26 C oracle harness draft identity 纳入 cache
+
+本轮把 harness draft 文件本身纳入证据身份，防止 C harness 文件内容变化但
+`c-oracle-status.json` 和 cache metadata 不失效。
+
+1. `validation/tools/auto_migrate.py`
+   - `generate_oracle_harness_draft()` 写完 harness 文件后生成 `harness_draft_ref`。
+   - `harness_draft_ref` 绑定：
+     - `path`
+     - `status: draft`
+     - harness 文件内容 `sha256`
+   - `CACHE_INPUT_FIELDS` 新增 `c_oracle_harness_identity`。
+   - `cache_identity()` 新增 `c_oracle_harness_identity`，值来自 oracle status 的
+     `harness_draft_ref`，只 hash harness 文件，不 hash 整个 oracle status，避免自引用或过宽失效。
+   - `promote_accepted_oracle()` 保留 draft harness identity；accepted oracle 语义仍来自外部
+     accepted evidence，不来自 draft harness。
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - `validate_oracle_harness_contract()` 现在校验 `harness_draft_ref` 指向同一个 harness 文件，
+     且 sha/status 匹配。
+   - cache metadata 必须包含 `c_oracle_harness_identity`，并且该字段必须列在
+     `cache_input_fields` 中。
+   - cache 中的 `c_oracle_harness_identity` 必须完整等于 oracle status 的 `harness_draft_ref`。
+   - draft/pass 判断改为以 `toolchain_status == C_ORACLE_GENERATED` 为准；仅伪造顶层
+     `status: C_ORACLE_GENERATED` 不能越过 draft fail-closed 检查。
+3. `validation/tools/test_auto_migrate.py`
+   - 覆盖生成端 `harness_draft_ref` 和 cache identity 输出。
+4. `validation/tools/test_validate_auto_translation_evidence.py`
+   - 覆盖 harness draft ref sha 漂移。
+   - 覆盖 cache oracle harness identity 漂移。
+   - 覆盖顶层 oracle status 伪装通过但 `toolchain_status` 仍为 draft 的拒绝路径。
+
+当前 `real-fdb-calc-crc32` 已刷新：
+
+- `c-oracle-status.json` 有 `harness_draft_ref`。
+- `auto-cache-metadata.json` 有 `c_oracle_harness_identity`，并列入 `cache_input_fields`。
+- 状态仍是 fail-closed：`toolchain_status: DRAFT_NOT_EXECUTED`、`semantic_pass: false`、
+  `candidate_refused`、`L4/refused`。
+
+下一步建议：
+
+1. 把 `compile_command_draft` 从 evidence-dir 相对 `-Iinc` 推进到 source-root 解析后的 include/source linkage plan。
+2. 给 fixture cases 和 expected outputs 建立真实 oracle 输入输出绑定。
+3. 只有在 C oracle 编译/执行和 diff/negative/unsafe gates 齐全时，才考虑推进 `C_ORACLE_GENERATED`。
+
+## 17. 2026-06-26 C oracle compile draft source-root linkage
+
+本轮把 `compile_command_draft` 从只包含 evidence-dir 相对 `-Iinc` 的弱 draft，推进为可由 validator
+复算的 source-root include/source linkage plan。状态仍然 fail-closed，不声明 C oracle 已编译或语义通过。
+
+1. `validation/tools/auto_migrate.py`
+   - `c_oracle_compile_command()` 现在写入：
+     - `source_root`
+     - `defines`
+     - `resolved_include_paths`
+     - `link_source_files`
+     - `link_strategy: compile_harness_with_declared_c_boundary_sources`
+     - 精确 `argv`
+   - include path 由 `source.source_root + build_profile.include_paths[]` 解析。
+   - C source linkage 由 `source.source_root + c_boundary.files[]` 解析，并保留原始 path、role、sha256。
+   - 已兼容 `c_boundary.files[].path` 已经带 source-root 前缀的历史样本，避免生成 `unit/unit/...`。
+   - `build_profile.defines[]` 现在显式进入 `defines` 和 `argv` 的 `-D...`。
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - `validate_oracle_harness_contract()` 不再只检查 argv 中有 harness 文件名。
+   - 新增 `validate_compile_command_draft()`，按 slice spec 复算并强校验：
+     - `working_directory`
+     - `source_root`
+     - `defines`
+     - `resolved_include_paths`
+     - `link_source_files`
+     - `link_strategy`
+     - 完整 `argv`
+     - `status: draft_not_executed`
+   - 额外 object、response-file、错误 include 或漏掉 source file 都会因 argv 不匹配而失败。
+3. `validation/tools/test_auto_migrate.py`
+   - `test_global_dependency_flows_into_context_type_map_and_oracle_requirements` 覆盖：
+     - `source_root: unit`
+     - `-DUNIT_TEST=1`
+     - `-Iunit/inc`
+     - `unit/global.c` source linkage
+4. `validation/tools/test_validate_auto_translation_evidence.py`
+   - 新增 include path drift 负测。
+   - 新增 source linkage drift 负测。
+
+当前 `real-fdb-calc-crc32` 已刷新：
+
+- `compile_command_draft.resolved_include_paths` 为
+  `C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc`。
+- `compile_command_draft.link_source_files[0].resolved_path` 为
+  `C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c`。
+- `compile_command_draft.defines` 为空数组，符合当前 slice spec。
+- 状态仍是 fail-closed：`toolchain_status: DRAFT_NOT_EXECUTED`、`semantic_pass: false`、
+  `candidate_refused`、`L4/refused`。
+
+本轮最终验证命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 59 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 给 fixture cases 和 expected outputs 建立真实 oracle 输入输出绑定。
+2. 将 compile draft 推进到可实际执行的 C oracle 编译命令，但只有执行和输出 diff 证据齐全后才允许
+   `C_ORACLE_GENERATED`。
+3. 继续保持 validator fail-closed：任何新路径要 claim semantic pass，必须同时覆盖 C oracle、Rust replay、
+   diff、negative diff、unsafe gates 和版本/config 绑定。
+
+## 18. 2026-06-26 C oracle fixture case/output binding
+
+本轮把 `fixture_contract.cases` 和 expected outputs 纳入 C oracle draft 的可审计绑定，但仍不执行
+C oracle，也不声明语义通过。
+
+1. `validation/tools/auto_migrate.py`
+   - `oracle_fixture_binding()` 现在写入：
+     - `observable_outputs`
+     - `case_bindings`
+     - `expected_output_status`
+   - `case_bindings[]` 记录：
+     - `id`
+     - `input_ref`
+     - `expected_ref`
+     - `expected_outputs`
+     - `observable_outputs`
+     - `missing_observable_outputs`
+     - `binding_status`
+   - 支持两类 expected output 来源：
+     - case 内联 `expected_outputs`
+     - JSON fixture/expected 文件中的 `{ "cases": [...] }` 或顶层数组，并按 `cases[N]` 引用解析
+   - 解析时只抽取 `observable_outputs` 指定字段，避免把 input-only 字段误标成 oracle output。
+   - harness draft 新增审计注释：
+     - `fixture cases: <N>`
+     - `observable outputs: ...`
+     - `fixture case: <id> input_ref=... expected_ref=... expected_outputs=...`
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - 新增同构 fixture binding 复算逻辑。
+   - `validate_oracle_harness_contract()` 现在强制：
+     - `oracle.fixture_binding` 等于从 slice spec 复算的 binding
+     - `harness_contract.fixture` 等于同一份 binding
+     - harness draft 文本包含 fixture case/output 审计注释
+   - 顶层 fixture binding 或 harness contract fixture 任一处 expected output 漂移都会失败。
+3. `validation/tools/test_auto_migrate.py`
+   - 新增 direct unit test：从临时 fixture JSON 的 `cases[1]` 提取 `value: 42`，并确认不会抽取
+     `input_only` 字段。
+   - 既有 global dependency 测试现在覆盖内联 expected output、harness 注释和
+     `harness_contract.fixture == fixture_binding`。
+4. `validation/tools/test_validate_auto_translation_evidence.py`
+   - 新增顶层 `fixture_binding.case_bindings[].expected_outputs` 漂移负测。
+   - 新增 `harness_contract.fixture.case_bindings[].expected_outputs` 漂移负测。
+
+当前 `real-fdb-calc-crc32` 已刷新：
+
+- `fixture_binding.case_bindings` 为空数组。
+- `fixture_binding.expected_output_status` 为 `missing_or_empty`。
+- harness draft 包含 `fixture cases: 0` 和 `observable outputs: return_code`。
+- 状态仍是 fail-closed：`toolchain_status: DRAFT_NOT_EXECUTED`、`semantic_pass: false`、
+  `candidate_refused`、`L4/refused`。
+
+本轮最终验证命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 62 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 将 C oracle compile draft 推进到真实可执行的编译步骤，但先只记录 execution attempt/diagnostics，
+   不直接提升 `C_ORACLE_GENERATED`。
+2. 给 real-fdb 增加最小 fixture cases/expected outputs，或显式记录当前缺少 fixture cases 的阻塞原因。
+3. 只有 C oracle 编译、执行、Rust replay、diff/negative/unsafe/version gates 全部通过后，才允许
+   语义通过路径。
+
+## 19. 2026-06-26 C oracle compile execution diagnostics
+
+本轮把 C oracle compile draft 推进到可执行的编译尝试记录，但仍只作为诊断证据；
+不会因为 C draft 编译成功就声明 `C_ORACLE_GENERATED` 或 `semantic_pass=true`。
+
+1. `validation/tools/auto_migrate.py`
+   - `generate_oracle_harness_draft()` 现在写入 `compile_execution`。
+   - `c_oracle_compile_execution()` 支持：
+     - `skipped_by_flag`
+     - `missing_argv`
+     - `compiler_not_found`
+     - `compile_timeout`
+     - `compile_failed`
+     - `compile_succeeded_not_oracle`
+   - 非 skip 路径会在 evidence dir 下执行 `compile_command_draft.argv`，记录 `compiler_path`、
+     `returncode`、截断后的 `stdout/stderr` 和 diagnostics。
+   - `compile_succeeded_not_oracle` 只表示 draft 编译命令可跑通，仍不是 C oracle 语义通过。
+2. `validation/tools/validate_auto_translation_evidence.py`
+   - `validate_compile_execution()` 强制校验：
+     - `argv` 必须等于 `compile_command_draft.argv`
+     - `working_directory` 必须等于 `compile_command_draft.working_directory`
+     - `semantic_pass` 必须为 `false`
+     - `status` 必须映射到唯一允许的 `toolchain_status_after_attempt`
+     - `toolchain_status_after_attempt` 必须等于顶层 `toolchain_status`
+   - 状态映射为：
+     - `skipped_by_flag -> DRAFT_NOT_EXECUTED`
+     - `missing_argv/compiler_not_found -> COMPILE_NOT_EXECUTED`
+     - `compile_failed/compile_timeout -> COMPILE_FAILED`
+     - `compile_succeeded_not_oracle -> COMPILE_SUCCEEDED_NOT_ORACLE`
+   - 新增负向约束：`skipped_by_flag` 不能伪造 `C_ORACLE_GENERATED`。
+   - `validate_draft_oracle_fail_closed()` 的 accepted early return 现在必须同时满足
+     `status == C_ORACLE_GENERATED`、`toolchain_status == C_ORACLE_GENERATED` 和
+     `semantic_pass is true`。
+3. `validation/tools/test_auto_migrate.py`
+   - 覆盖 skip 模式下的 `compile_execution` 输出结构。
+4. `validation/tools/test_validate_auto_translation_evidence.py`
+   - 覆盖 `compile_execution.argv` 漂移。
+   - 覆盖 `skipped_by_flag` 伪造 generated toolchain 的拒绝路径。
+   - 覆盖顶层 `toolchain_status`/`semantic_pass` 伪造但 oracle `status` 仍非 generated 的拒绝路径。
+5. 并行审查结论
+   - 子智能体读到的主要风险是：`compile_execution` 不能成为 `C_ORACLE_GENERATED` 的旁路。
+   - 已按该风险加了 status/toolchain 硬映射和负向测试。
+
+当前 `real-fdb-calc-crc32` 已刷新：
+
+- `compile_execution.status` 为 `skipped_by_flag`。
+- `compile_execution.attempted` 为 `false`。
+- `compile_execution.toolchain_status_after_attempt` 为 `DRAFT_NOT_EXECUTED`。
+- 顶层状态仍是 fail-closed：`toolchain_status: DRAFT_NOT_EXECUTED`、`semantic_pass: false`。
+- 禁止状态扫描没有发现 `C_ORACLE_GENERATED`、`semantic_pass: true` 或
+  `accepted_evidence_bound`。
+
+本轮最终验证命令：
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 65 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 对 real-fdb 跑一次非 `--skip-c-oracle` 的 compile attempt，保留真实编译器/缺编译器诊断。
+2. 给 real-fdb 增加最小 fixture cases/expected outputs，解除当前 `missing_or_empty` 状态。
+3. 在 C oracle 编译诊断稳定后，再推进执行、Rust replay、diff/negative/unsafe/version gates；
+   只有这些证据齐全时才允许进入 `C_ORACLE_GENERATED` 路径。
+
+## 20. 2026-06-26 real-fdb compile diagnostics and minimal fixture binding
+
+本轮沿第 19 节的下一步继续推进两件事：
+
+1. 对 `real-fdb-calc-crc32` 跑了一次非 `--skip-c-oracle` 的 auto migrate。
+2. 给 `real-fdb-calc-crc32` 补了一个最小 fixture case，并刷新 evidence 绑定。
+
+### 非 skip compile attempt
+
+运行命令：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+当前 Windows 环境没有 `cc`：
+
+```powershell
+where.exe cc
+cc --version
+```
+
+两者都确认 `cc` 不在 PATH。FlashDB 源路径本身存在：
+
+- `C:\Users\Administrator\Documents\c-to-rust\sources\FlashDB\src\fdb_utils.c`
+- `C:\Users\Administrator\Documents\c-to-rust\sources\FlashDB\inc`
+
+刷新后的 `c-oracle-status.json` 记录为：
+
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.attempted: false`
+- `compile_execution.diagnostics: ["C compiler not found on PATH: cc"]`
+- `compile_execution.toolchain_status_after_attempt: COMPILE_NOT_EXECUTED`
+- 顶层 `status: DRAFT_GENERATED`
+- 顶层 `toolchain_status: COMPILE_NOT_EXECUTED`
+- 顶层 `semantic_pass: false`
+
+这仍然是 fail-closed 诊断证据，不是 C oracle 通过证据。
+
+### 最小 fixture case
+
+新增文件：
+
+- `validation/l2_slices/fixtures/real-fdb-calc-crc32.json`
+
+新增的 case：
+
+- `id: empty-crc-zero`
+- `crc: 0`
+- `buf: []`
+- `size: 0`
+- `return_code: 0`
+- `coverage_kind: empty_buffer_identity`
+
+选择这个 case 的原因：`size=0` 时 `fdb_calc_crc32()` 不解引用 `buf`，也不会读取 `crc32_table`；
+函数返回输入 `crc`，所以 `crc=0` 的 expected `return_code=0` 是一个最小可审计边界 case。
+
+`validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 现在在 `fixture_contract.cases[]`
+引用该 fixture：
+
+- `input_ref: cases[0]`
+- `expected_ref: validation/l2_slices/fixtures/real-fdb-calc-crc32.json`
+
+刷新后的绑定状态：
+
+- `fixture_binding.case_count: 1`
+- `fixture_binding.binding_status: declared_not_executed`
+- `fixture_binding.expected_output_status: declared_not_executed`
+- `fixture_binding.case_bindings[0].expected_outputs: {"return_code": 0}`
+- `fixture_binding.case_bindings[0].missing_observable_outputs: []`
+
+harness draft 也已刷新，包含：
+
+```c
+/* fixture cases: 1 */
+/* observable outputs: return_code */
+/* fixture case: empty-crc-zero input_ref=cases[0] expected_ref=validation/l2_slices/fixtures/real-fdb-calc-crc32.json expected_outputs={"return_code": 0} */
+```
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- compile diagnostics explorer 确认非 skip auto migrate 会重写整包 evidence；当前因 `cc` 不在 PATH，
+  只记录 `compiler_not_found`，不会进入 subprocess，也不会提升 `C_ORACLE_GENERATED`。
+- fixture binding explorer 确认：case payload 应放 fixture JSON，binding metadata 应放 slice spec；
+  validator 只从 `observable_outputs` 中抽取 expected output 字段，因此 `crc/buf/size/status`
+  不会被误当成 oracle output。
+
+### 本轮最终验证命令
+
+```powershell
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 65 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 先修一个小的 manifest fixture path 漂移点：顶层 summary 仍从 `fixture_contract.input`
+   取值，导致当前 summary 的 `fixture.path` 可能为 `null`；应改为优先 `fixture_contract.path`。
+2. 在有 `cc`/clang/gcc 的环境下复跑非 skip compile attempt，记录真实 `compile_failed`
+   或 `compile_succeeded_not_oracle`。
+3. 之后再推进真实 C harness fixture 加载、函数调用、输出比较、Rust replay 和 diff gates；
+   在这些门全部通过之前仍不能进入 `C_ORACLE_GENERATED`。
+
+## 21. 2026-06-26 fixture path fallback consistency
+
+本轮修复了第 20 节发现的 `fixture.path` 漂移：部分输出只读取
+`fixture_contract.input`，而 `real-fdb-calc-crc32` 使用的是 `fixture_contract.path`。
+
+### 根因
+
+`validation/tools/auto_migrate.py` 中旧逻辑有两处未统一使用 `fixture_path(spec)`：
+
+1. `emit_manifest()` 顶层 `payload["fixture"]["path"]` 直接读
+   `spec.get("fixture_contract", {}).get("input")`。
+2. `generate_rust_replay_test_draft()` 的 Rust draft 文本里直接读
+   `fixture.get("input", "")`，导致 path-only spec 生成 `let _fixture = '';`。
+
+`write_context_pack()`、L3 evidence manifest、C oracle harness draft 和 replay JSON payload 的多数位置
+已经能使用 `path or input`，但上述两处仍有漂移。
+
+### TDD 过程
+
+在 `validation/tools/test_auto_migrate.py` 的
+`test_route_baseline_and_validation_profile_evidence_are_emitted` 中把测试 spec 改为只含
+`fixture_contract.path`，不含 `input`，并新增两个断言：
+
+- `manifest["fixture"]["path"] == "unit-test-fixture.json"`
+- Rust replay draft 包含 `let _fixture = 'unit-test-fixture.json';`
+
+红测结果：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+```
+
+先失败于：
+
+- `manifest["fixture"]["path"]` 为 `None`
+- 修第一处后，又失败于 replay draft 仍为 `let _fixture = '';`
+
+### 实现
+
+`validation/tools/auto_migrate.py` 现在统一使用 `fixture_path(spec)`：
+
+- `emit_manifest().fixture.path`
+- `emit_manifest().fixture.hash` 同步改用 `fixture_hash(spec)`
+- `generate_rust_replay_test_draft()` 的 draft 文本 `let _fixture = ...`
+- `generate_rust_replay_test_draft()` 的 `source_test_inputs.fixtures[].path`
+- `generate_rust_replay_test_draft()` 的 `translation_mappings[].source`
+
+### real-fdb 刷新状态
+
+已重跑：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+当前 real-fdb evidence：
+
+- auto-translation manifest 顶层 `fixture.path` 为
+  `validation/l2_slices/fixtures/real-fdb-calc-crc32.json`。
+- Rust replay draft 为：
+
+```rust
+let _fixture = 'validation/l2_slices/fixtures/real-fdb-calc-crc32.json';
+```
+
+- `test-translation-generated.json` 中：
+  - `source_test_inputs.fixtures[0].path` 为实际 fixture 路径。
+  - `translation_mappings[0].source` 为实际 fixture 路径。
+- `compile_execution.status` 仍为 `compiler_not_found`。
+- 顶层 `toolchain_status` 仍为 `COMPILE_NOT_EXECUTED`。
+- `semantic_pass` 仍为 `false`。
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- manifest/replay explorer 找到剩余漂移点：Rust replay draft 的 `let _fixture = ''`。
+- validator/evidence explorer 确认当前 validator 不读取 summary 内容；本轮只需修生成端并刷新 evidence，
+  不需要立即新增 summary fixture validator 约束。
+
+### 本轮最终验证命令
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"path"\s*:\s*null|let _fixture = ''''|"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 目标红测已转绿。
+- 65 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 空 fixture path / 空 replay fixture / 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 在生成端补一个更明确的 summary provenance 字段，或确认 summary 继续保持极简状态；
+   如果新增 summary fixture 字段，先加 validator 约束。
+2. 继续推进真实 C harness：从只写 fixture 路径变为加载 `real-fdb-calc-crc32.json`、
+   调用 `fdb_calc_crc32()`，并比较 `return_code`。
+3. 在有 C 编译器环境下复跑 compile attempt，进入 `compile_failed` 或
+   `compile_succeeded_not_oracle` 诊断，再推进执行/diff gates。
+
+## 22. 2026-06-26 C oracle harness draft call/compare
+
+本轮继续第 21 节的下一步：真实 C harness 从只写 fixture 路径，推进到对当前最小
+`real-fdb-calc-crc32.json` case 生成受限的内联调用和 `return_code` 比较。
+
+### TDD 过程
+
+新增生成器红测：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_oracle_harness_draft_calls_bound_empty_buffer_fixture
+```
+
+红测先失败于 harness 仍只有 TODO，缺少：
+
+- `static const uint8_t empty_crc_zero_buf[] = { 0 };`
+- `fdb_calc_crc32((uint32_t)0u, empty_crc_zero_buf, (size_t)0u)`
+- `if (actual_empty_crc_zero_return_code != (uint32_t)0u)`
+
+### 实现
+
+`validation/tools/auto_migrate.py` 新增了受限 harness 片段生成逻辑：
+
+- 只支持当前已声明签名：
+  `uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size);`
+- 只在 `behavior_fields == ["return_code"]` 时生成调用和比较。
+- 从 fixture path / expected ref 解析 `cases[N]`，读取 `crc`、`buf`、`size` 和
+  `return_code`。
+- 对不支持的 case 或签名继续输出 TODO/diagnostic，不提升任何 evidence 状态。
+- 空 buffer 生成 `static const uint8_t empty_crc_zero_buf[] = { 0 };`，保证即使
+  `size=0` 也有稳定地址可传入。
+
+刷新后的 harness draft 现在包含：
+
+```c
+static const uint8_t empty_crc_zero_buf[] = { 0 };
+
+uint32_t actual_empty_crc_zero_return_code =
+  fdb_calc_crc32((uint32_t)0u, empty_crc_zero_buf, (size_t)0u);
+
+if (actual_empty_crc_zero_return_code != (uint32_t)0u) {
+  fprintf(stderr, "empty-crc-zero return_code mismatch: expected 0 got %llu\n",
+          (unsigned long long)actual_empty_crc_zero_return_code);
+  return 1;
+}
+```
+
+实际文件中调用保持单行输出，方便单测精确断言：
+
+- `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c`
+
+### 状态边界
+
+刷新命令：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+刷新后的状态仍然 fail-closed：
+
+- `oracle.status: DRAFT_GENERATED`
+- `oracle.toolchain_status: COMPILE_NOT_EXECUTED`
+- `oracle.semantic_pass: false`
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.toolchain_status_after_attempt: COMPILE_NOT_EXECUTED`
+- `fixture_binding.expected_output_status: declared_not_executed`
+
+本轮没有、也不应把任何证据提升为 `C_ORACLE_GENERATED` 或
+`accepted_evidence_bound`。
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- C harness boundary explorer 确认当前最小 C 代码应只内联简单 fixture 输入、调用真实
+  C 函数、比较返回值；不支持或缺失字段时必须保留 TODO/diagnostic。
+- validator/test coverage explorer 确认 validator 当前绑定 harness sha 和 draft ref，可挡住
+  文件漂移，但不证明 harness 已包含 call/compare；因此本轮红测应放在
+  `test_auto_migrate.py`，不在 validator 中硬编码 real-fdb 内容。
+
+### 本轮最终验证命令
+
+```powershell
+python -B -m unittest validation.tools.test_extract_source_slice validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+rg -n '"path"\s*:\s*null|let _fixture = ''''|"toolchain_status"\s*:\s*"C_ORACLE_GENERATED"|"semantic_pass"\s*:\s*true|"status"\s*:\s*"accepted_evidence_bound"' validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/l2_slices/fixtures/real-fdb-calc-crc32.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+openspec validate add-c2rust-baseline-migration-pipeline --strict
+openspec validate --all --strict
+git diff --check
+```
+
+验证结果：
+
+- 66 个 Python 单测通过。
+- real-fdb validator 通过，且 `semantic_pass=false`。
+- 空 fixture path / 空 replay fixture / 禁止状态扫描无匹配。
+- `openspec validate add-c2rust-baseline-migration-pipeline --strict` 通过。
+- `openspec validate --all --strict` 37/37 通过。
+- `git diff --check` 通过，仅有 Windows CRLF 提示。
+
+下一步建议：
+
+1. 在有 C 编译器的环境下复跑 compile attempt，确认进入 `compile_failed` 或
+   `compile_succeeded_not_oracle` 诊断。
+2. 将 C harness 从 draft 生成推进到真实执行记录：编译、运行、捕获 stdout/stderr/exit code，
+   并仍保持未通过 diff gates 前不提升语义状态。
+3. 扩展 fixture case 覆盖非空 buffer，再推动 Rust replay 和 schema-aware diff gates。
+
+## 23. 2026-06-26 compile-success harness execution record
+
+本轮继续第 22 节的下一步，但不依赖本机安装真实 C 编译器：先用 fake compiler
+覆盖 `compile_succeeded_not_oracle` 分支，补齐“编译成功后运行 harness 可执行文件并记录结果”的
+draft 证据结构。
+
+### TDD 过程
+
+新增生成器测试：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_compile_success_records_harness_execution_without_oracle_claim
+```
+
+红测过程分两步暴露问题：
+
+1. Windows 上 `shutil.which("cc")` 能找到临时 `cc.cmd`，但旧实现随后仍执行字面量
+   `cc`，`shell=False` 下 `CreateProcess` 找不到该命令。
+2. 修正为用解析后的 `compiler_path` 执行后，测试失败于缺少
+   `compile_execution.harness_execution`，这是目标红测失败点。
+
+### 实现
+
+`validation/tools/auto_migrate.py` 现在：
+
+- 仍在 JSON 中保留原始 `compile_command_draft.argv` 和 `compile_execution.argv`。
+- 实际 subprocess compile 调用使用 `[compiler_path, *argv[1:]]`，让 Windows `cc.cmd`
+  以及 POSIX `cc` 都能被执行。
+- 仅当 compile returncode 为 0 时解析 `-o <exe>`，运行生成的 harness 可执行文件。
+- 将运行结果写入 `compile_execution.harness_execution`，不复用编译器进程的
+  `returncode/stdout/stderr`。
+
+新增 nested 字段形态：
+
+```json
+"harness_execution": {
+  "status": "exited_zero_not_oracle",
+  "attempted": true,
+  "argv": [".../l3-compile-run-c-oracle-harness-draft.exe"],
+  "working_directory": ".../compile-run",
+  "executable_path": ".../l3-compile-run-c-oracle-harness-draft.exe",
+  "timeout_seconds": 30,
+  "semantic_pass": false,
+  "returncode": 0,
+  "stdout": "...",
+  "stderr": "...",
+  "diagnostics": [
+    "C oracle harness executed, but execution output has not passed oracle diff gates."
+  ]
+}
+```
+
+支持的运行状态只描述进程事实，不能表达 oracle 通过：
+
+- `exited_zero_not_oracle`
+- `exited_nonzero_not_oracle`
+- `execution_timeout_not_oracle`
+- `executable_missing_not_oracle`
+- `execution_error_not_oracle`
+
+顶层仍保持：
+
+- `compile_execution.status: compile_succeeded_not_oracle`
+- `toolchain_status_after_attempt: COMPILE_SUCCEEDED_NOT_ORACLE`
+- `semantic_pass: false`
+
+### Validator gate
+
+新增 validator 红测：
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_harness_execution_semantic_pass_spoofing
+```
+
+红测先证明 validator 会放过 `harness_execution.semantic_pass=true`。实现后
+`validate_auto_translation_evidence.py` 增加可选 nested 校验：
+
+- 只有 `compile_succeeded_not_oracle` 可以携带 `harness_execution`。
+- `harness_execution.semantic_pass` 必须是 `false`。
+- `working_directory` 必须与 compile execution 一致。
+- `timeout_seconds`、`stdout/stderr`、`diagnostics`、`argv/executable_path` 和
+  `returncode/attempted` 必须与 status 匹配。
+
+### real-fdb 当前状态
+
+已重跑：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+当前本机仍无 `cc`，所以 real-fdb evidence 没有进入 compile-success 分支：
+
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.attempted: false`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `semantic_pass: false`
+- 未写入 `compile_execution.harness_execution`
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- execution/status boundary explorer 建议把 harness 运行结果放在
+  `compile_execution.harness_execution`，且所有状态都必须带 `_not_oracle` 边界。
+- fake compiler test explorer 指出 Windows `cc.cmd` 能被 `shutil.which()` 找到，但原始
+  `argv[0]="cc"` 不能直接执行；本轮已修正为用 `compiler_path` 启动。
+
+下一步建议：
+
+1. 在真实 C 编译器环境中重跑 real-fdb compile attempt，验证真实 `compile_failed` 或
+   `compile_succeeded_not_oracle + harness_execution` 路径。
+2. 若真实 harness 执行成功，再新增 oracle output/diff gate；在 diff 通过前仍不得提升
+   `C_ORACLE_GENERATED`。
+3. 扩展非空 buffer fixture，避免只覆盖 empty-buffer identity case。
+
+## 24. 2026-06-26 non-empty CRC32 fixture case
+
+本轮继续第 23 节的下一步：扩展 `real-fdb-calc-crc32` 的 fixture 覆盖，避免只验证
+empty-buffer identity case。新增的第二个 case 使用标准 CRC32/IEEE check vector
+`"123456789" -> 0xCBF43926`，十进制为 `3421780262`。
+
+### TDD 过程
+
+新增实际 fixture 红测：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_crc32_fixture_includes_non_empty_check_vector
+```
+
+红测先失败于当前 fixture 只有 `empty-crc-zero`，缺少
+`ascii-123456789-crc-zero`。
+
+随后更新：
+
+- `validation/l2_slices/fixtures/real-fdb-calc-crc32.json`
+- `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+
+并把 `test_oracle_harness_draft_calls_bound_empty_buffer_fixture` 扩展为两 case harness
+断言，覆盖第二个静态 buffer、函数调用和 `return_code` 比较。
+
+### 新增 fixture case
+
+```json
+{
+  "id": "ascii-123456789-crc-zero",
+  "crc": 0,
+  "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+  "size": 9,
+  "return_code": 3421780262,
+  "coverage_kind": "standard_crc32_check_vector",
+  "status": "draft_expected_from_standard_crc32_check_vector"
+}
+```
+
+该值来自标准 CRC32 check vector：
+
+```powershell
+python -c "import zlib; print(hex(zlib.crc32(b'123456789') & 0xffffffff)); print(zlib.crc32(b'123456789') & 0xffffffff)"
+```
+
+输出：
+
+- `0xcbf43926`
+- `3421780262`
+
+FlashDB 源码中的 `fdb_calc_crc32()` 使用 reflected CRC32 table，并对输入 `crc`
+执行初始/结束异或；`crc=0`、`buf="123456789"`、`size=9` 与上述 check vector 一致。
+
+### real-fdb evidence 刷新
+
+已重跑：
+
+```powershell
+python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+刷新后：
+
+- `fixture_binding.case_count: 2`
+- 第二个 `case_bindings[].expected_outputs: {"return_code": 3421780262}`
+- `test-translation-generated.json.source_test_inputs.fixtures[0].operation_count: 2`
+- harness draft 包含：
+  - `/* fixture cases: 2 */`
+  - `static const uint8_t ascii_123456789_crc_zero_buf[] = { 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u };`
+  - `fdb_calc_crc32((uint32_t)0u, ascii_123456789_crc_zero_buf, (size_t)9u)`
+  - `if (actual_ascii_123456789_crc_zero_return_code != (uint32_t)3421780262u)`
+
+### 状态边界
+
+新增非空 case 会覆盖 `crc32_table` 路径，但仍只是 draft fixture/harness 扩展：
+
+- `compile_execution.status: compiler_not_found`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `semantic_pass: false`
+- 无 `compile_execution.harness_execution`
+- 未出现 `C_ORACLE_GENERATED`
+- 未出现 `accepted_evidence_bound`
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- CRC case explorer 确认 `123456789 -> 0xCBF43926` 与 FlashDB 源码算法一致，适合作为
+  最小非空 draft case。
+- Evidence/validator explorer 确认当前生成器和 validator 已支持多 case；需要保持 fixture、
+  slice spec、oracle status、harness、replay/manifest operation count 和 cache identity 一起刷新。
+
+下一步建议：
+
+1. 在真实 C 编译器环境下复跑 real-fdb compile attempt，让非空 case 进入真实 compile/run 诊断。
+2. 为 `harness_execution` 增加后续 oracle output/diff gate，而不是直接提升
+   `C_ORACLE_GENERATED`。
+3. 扩展 Rust replay draft，使它不仅记录 fixture path，也能显式枚举并断言两个 fixture case。
+
+## 25. 2026-06-26 Rust replay draft fixture case enumeration
+
+本轮继续第 24 节的下一步：Rust replay draft 不再只记录 fixture path，而是显式枚举
+`real-fdb-calc-crc32` 当前绑定的两个 fixture case。同时保持 draft 边界：该文件不调用
+Rust 实现，不 claim semantic pass，并用 draft-only panic 防止被误读为可通过 replay test。
+
+### TDD 过程
+
+新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_rust_replay_draft_enumerates_bound_fixture_cases_without_semantic_claim
+```
+
+第一轮红测失败于现有 draft 缺少 `struct FixtureCase`。实现最小枚举后，根据并行
+explorer 审查再收紧测试，要求：
+
+- Rust 字符串使用双引号，而不是 Python `repr()` 生成的单引号。
+- draft 包含 `const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;`。
+- 两个 case 都包含 `id`、`crc`、`buf`、`size`、`return_code`。
+- draft 包含 `panic!("draft only: ...")`，避免 fixture 自检变成绿色 replay。
+- draft 不包含 `fdb_calc_crc32(` 调用。
+- `test-translation-generated.json.status` 仍为 `recorded`。
+- `generated_draft_semantic_pass` 仍为 `false`。
+- `translation_mappings[0].status` 仍为 `gap`。
+
+### 生成器更新
+
+`validation/tools/auto_migrate.py` 新增/更新：
+
+- `generate_rust_replay_test_draft()` 复用 `oracle_fixture_binding()` 解析 fixture case。
+- `rust_replay_fixture_cases_source()` 仅在 `behavior_fields == ["return_code"]` 时生成
+  case 枚举；其它形状仍保留 TODO。
+- `rust_replay_fixture_case_literal()` 只接受 `crc: u32`、`buf: [u8]`、`size == len(buf)`
+  和 `return_code: u32` 的 case。
+- `rust_string_literal()` 用 JSON 字符串规则生成合法 Rust string literal。
+
+当前 real-fdb draft 关键内容：
+
+```rust
+let _fixture = "validation/l2_slices/fixtures/real-fdb-calc-crc32.json";
+let _api = "fdb_calc_crc32";
+const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;
+
+FixtureCase { id: "empty-crc-zero", crc: 0u32, buf: &[], size: 0usize, return_code: 0u32 },
+FixtureCase { id: "ascii-123456789-crc-zero", crc: 0u32, buf: &[49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8], size: 9usize, return_code: 3421780262u32 },
+
+panic!("draft only: generated Rust API assertions are not bound; Rust implementation is not called");
+```
+
+### real-fdb evidence 刷新
+
+已重跑：
+
+```powershell
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+刷新后：
+
+- `l3-real-fdb-calc-crc32-rust-replay-test-draft.rs` 显式枚举两个 fixture case。
+- `test-translation-generated.json.generated_draft_semantic_pass: false`
+- `test-translation-generated.json.source_test_inputs.fixtures[0].operation_count: 2`
+- `test-translation-generated.json.translation_mappings[0].status: gap`
+- `auto-translation-manifest.json.replay.generated_draft_semantic_pass: false`
+- `auto-translation-manifest.json.status: candidate_refused`
+- `auto-translation-manifest.json.claim_boundary.semantic_pass: false`
+
+C oracle 状态仍未提升：
+
+- `c-oracle-status.json.status: DRAFT_GENERATED`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.attempted: false`
+- `semantic_pass: false`
+- 无 `compile_execution.harness_execution`
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- Rust replay draft explorer 指出单引号不是合法 Rust string literal，并要求 draft
+  不能成为无条件通过的绿色测试；本轮已改为双引号和 draft-only panic。
+- Evidence/validator explorer 确认当前不需要改 validator；刷新证据时必须保持
+  `candidate_refused`、`semantic_pass=false`、`generated_draft_semantic_pass=false`、
+  replay mapping `gap` 和 C oracle `compiler_not_found` 边界。
+
+下一步建议：
+
+1. 在真实 C 编译器环境中复跑 real-fdb compile attempt，观察真实 `compile_failed` 或
+   `compile_succeeded_not_oracle + harness_execution`。
+2. 为成功执行的 harness 增加 oracle output/diff gate；在 diff 通过前仍不得提升
+   `C_ORACLE_GENERATED`。
+3. 后续 Rust replay 要先绑定真实 Rust API 调用和 accepted C oracle 输出，再移除
+   draft-only panic。
+
+## 26. 2026-06-26 harness output gate recorded as not-oracle
+
+本轮继续第 25 节的下一步：为成功执行的 C oracle harness 增加结构化 stdout marker
+检查，但仍不把它当作 C oracle 通过。该 gate 只记录在
+`compile_execution.harness_execution.output_gate` 下，所有状态都带 `_not_oracle`。
+
+### TDD 过程
+
+新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_matches_fixture_stdout_without_oracle_claim validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_harness_output_gate_semantic_pass_spoofing
+```
+
+第一轮红测结果：
+
+- `auto_migrate.py` 缺少 `c_oracle_harness_output_gate()`。
+- validator 会放过 `output_gate.semantic_pass=true`。
+
+实现后又根据并行 explorer 审查补了一个截断边界红测：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_uses_raw_stdout_before_report_truncation
+```
+
+该红测先失败于 output gate 使用已截断 stdout，导致 marker 在 4000 字符之后时被误判为
+`mismatch_not_oracle`。实现改为：用原始 stdout 计算 output gate，写入报告的
+`harness_execution.stdout` 仍可截断。
+
+### 生成器更新
+
+`validation/tools/auto_migrate.py` 新增/更新：
+
+- `c_oracle_harness_execution()` 接收 `spec` 和 `fixture_binding`。
+- 成功/失败/超时/缺少 executable 的 harness 执行结果均可携带 `output_gate`。
+- `c_oracle_harness_output_gate()` 生成结构化 gate：
+  - `gate: c_oracle_harness_output`
+  - `semantic_pass: false`
+  - `compared_fields`
+  - `fixture_expected_output_status`
+  - `expected_stdout_fragments`
+  - `matched_stdout_fragments`
+  - `missing_stdout_fragments`
+  - `boundary`
+- `c_oracle_expected_stdout_fragments()` 从 fixture binding 推导 marker，例如：
+  - `fixture case empty-crc-zero return_code matched`
+  - `fixture case ascii-123456789-crc-zero return_code matched`
+
+状态集合：
+
+- `matched_not_oracle`
+- `mismatch_not_oracle`
+- `unsupported_not_oracle`
+- `not_run_not_oracle`
+
+即使 stdout marker 全部匹配，也只是 `matched_not_oracle`，不能推进
+`C_ORACLE_GENERATED` 或 `semantic_pass=true`。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 现在在
+`validate_harness_execution()` 中校验可选 `output_gate`：
+
+- `semantic_pass` 必须为 `false`。
+- `gate` 必须是 `c_oracle_harness_output`。
+- `compared_fields`、`expected_stdout_fragments`、`matched_stdout_fragments`、
+  `missing_stdout_fragments` 必须是字符串数组。
+- `fixture_expected_output_status` 必须是字符串。
+- `matched_not_oracle` 要求 harness 已 `exited_zero_not_oracle`、`returncode == 0`、
+  `matched_stdout_fragments == expected_stdout_fragments` 且无 missing。
+- `mismatch_not_oracle` 要求有 missing，且 matched/missing 分区等于 expected。
+- `unsupported_not_oracle` 不允许携带 expected/matched/missing。
+- `not_run_not_oracle` 不能出现在 exited-zero harness 下。
+
+### real-fdb evidence 刷新
+
+已重跑：
+
+```powershell
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+当前本机仍无 `cc`：
+
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.attempted: false`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `semantic_pass: false`
+- 无 `compile_execution.harness_execution`
+- 因此 real-fdb 当前也没有 `harness_execution.output_gate`
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- harness/output explorer 确认 `output_gate` 放在 `harness_execution` 下是最小合适结构；
+  关键风险是 stdout marker 不是结构化 oracle diff，必须保持 `_not_oracle`。
+- validator/evidence explorer 确认 `matched_not_oracle` 不能被 semantic gate 使用；
+  real-fdb 当前仍必须保持 `candidate_refused`、`validation_profile.status=blocked`、
+  `diff.semantic_pass=false` 和 `negative_diff.mutation_detected=false`。
+
+下一步建议：
+
+1. 在真实 C 编译器环境复跑 real-fdb，使 harness 实际执行并产出
+   `output_gate.status=matched_not_oracle` 或 `mismatch_not_oracle`。
+2. 将 stdout marker gate 之后的真正 schema-aware C/Rust diff 设计为独立 accepted gate；
+   不要复用 `matched_not_oracle` 作为通过条件。
+3. 如果 fixture 数量继续增加，保留“raw stdout 先比较、报告 stdout 可截断”的顺序。
+
+## 27. 2026-06-26 require harness execution and output gate after compile success
+
+本轮继续收紧第 26 节的 fail-closed 边界：如果 C oracle draft 编译成功并进入
+`compile_succeeded_not_oracle`，validator 现在要求必须记录 `harness_execution`，且
+`harness_execution` 必须携带 `output_gate`。这样避免 evidence 只记录“编译成功”而跳过
+执行和 stdout gate。
+
+### TDD 过程
+
+新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_harness_execution_missing_output_gate
+```
+
+第一轮失败于 validator 放过了没有 `output_gate` 的 `harness_execution`。实现后该测试通过。
+
+并行 explorer 随后指出另一个旁路：`compile_succeeded_not_oracle` 仍可完全省略
+`harness_execution`。继续新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_compile_success_missing_harness_execution
+```
+
+第一轮失败于 validator 放过了缺失 `harness_execution` 的 compile-success 证据。实现后该测试通过。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 现在要求：
+
+- `compile_execution.status == compile_succeeded_not_oracle` 时，`harness_execution` 必须是对象。
+- `harness_execution` 必须包含 `output_gate`。
+- `output_gate` 仍按第 26 节校验：
+  - `semantic_pass: false`
+  - `gate: c_oracle_harness_output`
+  - 状态只能是 `_not_oracle`
+  - matched/missing fragment 分区必须自洽
+
+这不会改变 `compile_failed`、`compile_timeout`、`compiler_not_found` 和 `skipped_by_flag`
+路径；这些路径仍不能携带 accepted oracle 语义。
+
+### real-fdb 当前影响
+
+当前本机仍无 `cc`，real-fdb 仍停在：
+
+- `compile_execution.status: compiler_not_found`
+- `compile_execution.attempted: false`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `semantic_pass: false`
+- 无 `compile_execution.harness_execution`
+- 无 `harness_execution.output_gate`
+
+因此这次收紧不会误伤当前 real-fdb evidence。只有未来真实编译成功时，才会要求
+`harness_execution + output_gate` 同时存在。
+
+### 并行审查结论
+
+本轮两个 explorer 子智能体均为只读：
+
+- output-gate validator explorer 确认：生成器所有 harness execution 分支都会写
+  `output_gate`；现有最大旁路是 compile success 完全省略 `harness_execution`。
+- real-fdb evidence explorer 确认：当前 real-fdb 没有 `harness_execution/output_gate`，
+  因为仍是 `compiler_not_found`；普通 validator 仍通过，semantic-pass 仍按预期失败。
+
+下一步建议：
+
+1. 在真实 C 编译器环境运行 real-fdb，验证 compile-success 分支会同时产出
+   `harness_execution` 和 `output_gate`。
+2. 为 `exited_nonzero_not_oracle` 或 `executable_missing_not_oracle` 也增加专门负测，
+   确认这些 harness 状态同样必须携带 `output_gate`。
+3. 继续设计真正 schema-aware C/Rust diff accepted gate，不要把 stdout marker gate
+   当作 semantic pass。
+
+## 28. 2026-06-26 draft schema diff prerequisite gate
+
+本轮继续收紧 draft-only evidence 的 fail-closed 边界：`l3-*-diff.json` 和
+`l3-*-negative-diff.json` 不再只写自然语言 `reason`，而是写入机器可读的
+prerequisite gate，明确说明当前没有 semantic pass 是因为缺 accepted C oracle、
+accepted Rust replay report 和 passed schema diff。
+
+### TDD 过程
+
+先新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_schema_diff_missing_draft_blockers validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_negative_diff_missing_draft_requirements
+```
+
+第一条先失败于 `diff["diff_gate"]` 缺失；后两条先失败于 validator 放过了被删掉
+`blocked_by` 或 `required_inputs` 的 draft diff evidence。实现后这三条测试均通过。
+
+### 生成器更新
+
+`validation/tools/auto_migrate.py` 的 draft-only diff 现在写入：
+
+- `diff_gate: schema_aware_c_rust_diff`
+- `accepted_diff_required: true`
+- `blocked_by: ["c_oracle", "rust_replay"]`
+- `required_inputs.c_oracle_required_status: C_ORACLE_GENERATED`
+- `required_inputs.rust_report_required_status: passed`
+- `required_inputs.*_actual_status` 记录当前 draft 状态
+- `compared_fields` 来自 fixture contract behavior fields
+
+draft-only negative diff 现在写入：
+
+- `negative_diff_gate: schema_aware_negative_diff`
+- `accepted_negative_diff_required: true`
+- `blocked_by: ["schema_diff"]`
+- `root_blocked_by: ["c_oracle", "rust_replay"]`
+- `required_inputs.schema_diff_required_status: passed`
+- `required_inputs.schema_diff_actual_status: incomplete`
+
+这些字段仍然保持 `semantic_pass: false`、`status: incomplete`、
+`mutation_detected: false`，不能被解释成 accepted evidence。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 新增普通路径校验：
+`validate_schema_diff_contract()`。即使不传 `--require-semantic-pass`，validator 也会检查
+draft/incomplete schema diff 和 negative diff 的 gate 字段：
+
+- draft schema diff 必须是 `incomplete/draft/blocked`，且 `semantic_pass: false`。
+- draft schema diff 必须声明 `diff_gate`、`accepted_diff_required`、`blocked_by`、
+  `required_inputs` 和覆盖行为字段的 `compared_fields`。
+- draft schema diff 不允许携带 `accepted_diff` 或真实 `first_mismatch` evidence。
+- draft negative diff 必须声明 `negative_diff_gate`、`accepted_negative_diff_required`、
+  `blocked_by: ["schema_diff"]` 和 `required_inputs.schema_diff_required_status: passed`。
+- draft negative diff 不允许 `mutation_detected: true`、`accepted_negative_diff` 或真实
+  `first_mismatch` evidence。
+
+### real-fdb evidence 刷新
+
+已重跑：
+
+```powershell
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root validation/evidence
+```
+
+当前 real-fdb 仍是 L4 refused / draft-only：
+
+- `compile_execution.status: compiler_not_found`
+- `toolchain_status: COMPILE_NOT_EXECUTED`
+- `diff.status: incomplete`
+- `diff.blocked_by: ["c_oracle", "rust_replay"]`
+- `negative_diff.status: incomplete`
+- `negative_diff.blocked_by: ["schema_diff"]`
+- `semantic_pass: false`
+
+普通 validator 通过；`--require-semantic-pass` 仍应失败。
+
+### 并行审查结论
+
+本轮两个 explorer 均为只读：
+
+- 生成器 explorer 确认占位 diff 的真实写入点是 `write_l3_candidate_supporting_evidence()`，
+  应补 `diff_gate`、`blocked_by`、`required_inputs` 和 `compared_fields`。
+- validator explorer 确认当前 `validate_semantic_pass()` 只覆盖 semantic-pass 路径，
+  draft/incomplete diff 必须新增无条件 fail-closed 校验。
+
+下一步建议：
+
+1. 继续把 accepted/passed diff 的同名 gate 字段结构化，减少 draft 和 accepted 两条路径的形状差异。
+2. 为 semantic-pass 路径补 `compared_fields`、`accepted_diff`、`accepted_negative_diff` 的更深校验。
+3. 在有真实 C 编译器的环境重跑 real-fdb，推进到 harness execution 后的真正 schema-aware diff gate。
+
+## 29. 2026-06-26 accepted diff gate fields and semantic-pass accepted refs
+
+本轮承接第 28 节，把 `--accept-existing-evidence` 路径的 passed diff/negative-diff
+也补上结构化 gate 字段，并收紧 `--require-semantic-pass` 下对 accepted diff refs 的校验。
+
+### TDD 过程
+
+先新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_l4_refused_accept_existing_evidence_keeps_generated_draft_blocked
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_schema_diff_missing_accepted_ref validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_negative_diff_missing_accepted_ref
+```
+
+第一条先失败于 accepted-path `diff["diff_gate"]` 缺失；后两条先失败于 semantic-pass
+validator 放过缺失 `accepted_diff` / `accepted_negative_diff` 的 passed evidence。
+
+### 生成器更新
+
+`validation/tools/auto_migrate.py` 的 `write_accepted_supporting_evidence()` 现在为 accepted
+schema diff 写入：
+
+- `diff_gate: schema_aware_c_rust_diff`
+- `accepted_diff_required: true`
+- `blocked_by: []`
+- `required_inputs.c_oracle_required_status: C_ORACLE_GENERATED`
+- `required_inputs.rust_report_required_status: passed`
+- `required_inputs.c_oracle_actual_status` 来自本轮 promoted oracle wrapper
+- `required_inputs.rust_replay_actual_status` 来自本轮 replay wrapper
+- `required_inputs.schema_diff_actual_status` 来自 accepted source diff report
+
+accepted negative diff 现在写入：
+
+- `negative_diff_gate: schema_aware_negative_diff`
+- `accepted_negative_diff_required: true`
+- `blocked_by: []`
+- `root_blocked_by: []`
+- `required_inputs.schema_diff_required_status: passed`
+- `required_inputs.schema_diff_required_first_mismatch: null`
+- `required_inputs.negative_diff_actual_status` 来自 accepted negative source report
+
+L4/refused + `--accept-existing-evidence` 的整体状态仍保持 `candidate_refused`，
+generated draft 仍为 `blocked`，这些 gate 字段只说明外部 accepted diff refs 被绑定，
+不改变 route/refusal 结论。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 新增 semantic-pass 专用校验：
+
+- `validate_passed_schema_diff_report()` 要求：
+  - `semantic_pass: true`
+  - `first_mismatch: null`
+  - `compared_fields` 为非空字符串数组并覆盖 slice behavior fields
+  - `accepted_diff` 存在、path 存在、sha256 匹配、payload status 为 `passed`
+  - 若存在 `diff_gate` / `accepted_diff_required` / `blocked_by`，则必须是 accepted 形态
+- `validate_passed_negative_diff_report()` 要求：
+  - `status` 为 `passed`、`expected_failed` 或 `failed`
+  - `expected_failure: true`
+  - `mutation_detected/detected: true`
+  - `first_mismatch` 为真实对象，且字段落在 schema diff compared fields 内
+  - `accepted_negative_diff` 存在、path 存在、sha256 匹配
+  - 若存在 `negative_diff_gate` / `accepted_negative_diff_required` / `blocked_by` /
+    `root_blocked_by`，则必须是 accepted 形态
+
+这次没有把 manifest `load_ref()` 的 sha/status 全面加严；那会影响更多历史 fixture，
+适合下一轮单独用红测推进。
+
+### Evidence 修正
+
+新 accepted-ref 校验暴露了 `validation/evidence/demo/auto-translation/call-expression/`
+里两个 wrapper ref 的 sha256 已陈旧。本轮只刷新了：
+
+- `l3-call-expression-diff.json.accepted_diff.sha256`
+- `l3-call-expression-negative-diff.json.accepted_negative_diff.sha256`
+
+没有批量改写旧 passed fixture 的 gate 字段；旧 fixture 只要 accepted refs、compared fields
+和 negative mismatch 真实有效，仍保持兼容。
+
+### 并行审查结论
+
+本轮两个 explorer 均为只读：
+
+- accepted-path explorer 确认字段应在 `write_accepted_supporting_evidence()` 写入，数据来源已有：
+  `accepted["reports"]`、`accepted["paths"]`、promoted `oracle` 和 `replay`。
+- semantic-pass explorer 确认 passed diff 不能继续绕过 `accepted_diff`、
+  `accepted_negative_diff`、`compared_fields` 和 negative mismatch 校验；同时提示
+  negative accepted wrapper status 与 payload status 不一定相同，不能简单套用 `require_ref()`。
+
+下一步建议：
+
+1. 单独加红测收紧 semantic-pass `load_ref()` 的 manifest ref sha/status 校验。
+2. 为 passed diff/negative-diff 的 gate 字段缺失增加专门负例，然后决定是否批量回填旧 fixture。
+3. 在真实 C 编译器环境继续推进 real-fdb，从 `compiler_not_found` 进入 harness execution。
+
+## 30. 2026-06-26 semantic-pass manifest ref sha/status fail-closed
+
+本轮承接第 29 节，把 `--require-semantic-pass` 路径中的 manifest evidence refs
+也纳入 fail-closed 校验。此前 `load_ref()` 只按 `path` 读取文件，不校验 manifest
+里记录的 `sha256` 和 `status`，因此 stale 或 spoofed manifest ref 可能绕过 semantic-pass
+的后续内容校验。
+
+### TDD 过程
+
+先新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_manifest_schema_diff_sha_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_manifest_negative_diff_status_drift
+```
+
+两条先失败于 validator 返回 0：`load_ref()` 放过了 manifest 中错误的
+`schema_diff.sha256` 和与 payload 不一致的 `negative_diff.status`。
+
+并行 explorer 随后指出 payload 缺 `status` 也会被旧逻辑放过，因此补充一条窄单元红测：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_manifest_ref_payload_missing_status
+```
+
+该测试直接调用 `load_ref()`，确认 payload 没有 `status` 时必须失败。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 的 `load_ref()` 现在要求：
+
+- manifest ref 必须有非空 `path`。
+- manifest ref 必须有非空 `status`。
+- manifest ref 必须有非空 `sha256`。
+- `path` 必须存在，支持绝对路径和 repo-relative 路径。
+- manifest `sha256` 必须等于目标文件真实 sha256。
+- 目标 payload 必须有非空 `status`。
+- manifest `status` 必须等于 payload `status`。
+
+该校验只运行在 `--require-semantic-pass` 路径，不影响普通 schema-only validator。
+
+### 测试 helper 更新
+
+`_call_expression_semantic_pass_fixture()` 复制 legacy call-expression semantic fixture 到临时目录后，
+现在会用 `_bind_manifest_ref()` 刷新临时 manifest 的：
+
+- `schema_diff`
+- `negative_diff`
+
+这样 semantic-pass 负例可以按需修改临时 artifact 并同步 ref，避免先被无关 sha drift 拦住。
+`test_rejects_semantic_pass_missing_external_callee_context_binding` 已改为复用该 helper。
+
+### Evidence 修正
+
+新 manifest ref 校验暴露出仓库中 call-expression legacy fixture 两个 manifest ref 已陈旧。
+本轮刷新了：
+
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-evidence-manifest.json`
+  的 `evidence.schema_diff.sha256`
+- 同文件的 `evidence.negative_diff.sha256`
+
+没有补全该 legacy fixture 缺失的 `c2rust_baseline`、`route_decision`、`validation_profile`
+manifest refs；直接对仓库落盘的 call-expression 运行 validator 仍会先被 current schema required
+properties 拦住。测试路径通过 backfill helper 补齐这些 legacy refs。
+
+### 并行审查结论
+
+本轮两个 explorer 均为只读：
+
+- `load_ref` explorer 确认最小安全规则是 semantic-pass 下强制校验 manifest ref 的
+  `path/status/sha256`，并要求 payload 自身也有 `status`。
+- fixture explorer 确认 call-expression 仓库 fixture 的 `schema_diff` 与 `negative_diff`
+  manifest sha 已陈旧，应同步刷新；更大范围的 legacy fixture schema backfill 可留作后续。
+
+下一步建议：
+
+1. 为 passed diff/negative-diff gate 字段缺失增加专门 semantic-pass 负例。
+2. 决定是否把 legacy call-expression fixture 完整 backfill 成当前 schema 可直接 validator 通过的 fixture。
+3. 在真实 C 编译器环境继续推进 real-fdb harness execution。
+## 31. 2026-06-26 semantic-pass passed diff gate fields fail-closed
+
+本轮承接第 30 节下一步，把 `--require-semantic-pass` 路径下 passed
+schema diff 和 passed negative diff 的 gate 元数据从“存在才校验”收紧为“必须存在且为 accepted 形态”。
+这样旧 fixture 或伪造 evidence 不能只带 `accepted_diff` / `accepted_negative_diff` 就绕过前置 gate provenance。
+
+### TDD 过程
+
+先新增红测：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_schema_diff_missing_gate_fields validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_negative_diff_missing_gate_fields
+```
+
+两条测试起初失败于 validator 返回 0。随后将测试扩成 subTest，分别删除：
+
+- schema diff: `diff_gate`、`accepted_diff_required`、`blocked_by`、`required_inputs`
+- negative diff: `negative_diff_gate`、`accepted_negative_diff_required`、`blocked_by`、`root_blocked_by`、`required_inputs`
+
+每次删除后都会重新绑定临时 manifest sha/status，确保失败原因来自 gate 字段本身，而不是 sha drift。
+
+### Validator 更新
+
+`validation/tools/validate_auto_translation_evidence.py` 现在要求：
+
+- `validate_passed_schema_diff_report()`:
+  - `diff_gate == "schema_aware_c_rust_diff"`
+  - `accepted_diff_required is True`
+  - `blocked_by == []`
+  - `required_inputs` 必须是 dict
+  - `required_inputs.c_oracle_required_status == "C_ORACLE_GENERATED"`
+  - `required_inputs.rust_report_required_status == "passed"`
+  - `required_inputs.schema_diff_actual_status` 只能是 `passed` 或旧兼容的 `null`
+- `validate_passed_negative_diff_report()`:
+  - `negative_diff_gate == "schema_aware_negative_diff"`
+  - `accepted_negative_diff_required is True`
+  - `blocked_by == []`
+  - `root_blocked_by == []`
+  - `required_inputs` 必须是 dict
+  - `required_inputs.schema_diff_required_status == "passed"`
+  - `required_inputs.schema_diff_required_first_mismatch is null`
+  - `required_inputs.schema_diff_actual_status` 只能是 `passed` 或旧兼容的 `null`
+
+draft/incomplete 路径已经在第 28 节强制 gate 字段，本轮只收紧 passed semantic-pass 路径。
+
+### Evidence 和测试 helper 更新
+
+只读 explorer 指出只在测试 helper 回填会掩盖真实 fixture 缺字段。因此本轮持久补齐了：
+
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-diff.json`
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-negative-diff.json`
+- 同目录 `l3-call-expression-evidence-manifest.json` 的 `schema_diff.sha256` 和 `negative_diff.sha256`
+
+`_call_expression_semantic_pass_fixture()` 不再临时写入这些字段，而是调用
+`_assert_call_expression_passed_diff_gate_fields()` 断言源 fixture 已经具备字段。测试仍保留
+`_bind_manifest_ref()`，用于负例修改临时 payload 后重新绑定 manifest ref。
+
+直接运行仓库落盘 call-expression semantic validator 仍会先遇到旧 fixture 缺少
+`c2rust_baseline`、`route_decision`、`validation_profile` manifest refs。这是第 30 节已记录的遗留 schema
+backfill 问题，不属于本轮 gate 字段收紧；测试路径仍通过 legacy backfill helper 补齐这些 refs。
+
+### 并行审查结论
+
+本轮两个 explorer 均为只读：
+
+- Godel 确认 passed schema diff / negative diff 的 gate 字段原先都是可选校验，并建议把负例扩成全部字段覆盖。
+- Nash 确认真实 call-expression fixture 也应补齐 gate 字段，否则 helper 会掩盖坏 fixture；同时提醒 manifest
+  `schema_diff` / `negative_diff` sha 必须同步刷新，embedded accepted refs 不应改动。
+
+下一步建议：
+
+1. 决定是否把 legacy call-expression fixture 完整 backfill 到可直接通过当前 schema validator。
+2. 在真实 C 编译器环境继续推进 real-fdb harness execution，从 `compiler_not_found` 进入可执行 oracle/harness 输出校验。
+3. 如果继续收紧 semantic-pass，可为 passed diff `required_inputs` 的 actual status 字段补更完整的源证据一致性校验。
+## 32. 2026-06-26 call-expression legacy manifest route/profile backfill
+
+本轮承接第 31 节的第一条下一步：把 legacy call-expression fixture 补齐到可以直接通过当前
+`--require-semantic-pass` validator，而不再只依赖测试 helper 临时回填。
+
+### 红测
+
+先复现上一轮留下的直接失败：
+
+```powershell
+python -B -m unittest validation.tools.test_call_expression_l3_evidence.CallExpressionL3EvidenceTests.test_call_expression_auto_translation_semantic_gate_passes
+```
+
+失败点在 `validate_auto_translation_evidence.py` schema 阶段：`l3-call-expression-evidence-manifest.json`
+的 `evidence` 缺少 `c2rust_baseline` required property，因此还没有进入 semantic `load_ref()`。
+
+### 持久 evidence 三件套
+
+新增落盘 fixture：
+
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json`
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json`
+- `validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json`
+
+语义选择：
+
+- C2Rust baseline 是 `status: skipped`，`correctness_role: candidate_context_only`，不得作为语义等价证明。
+- route decision 是 `status: recorded`、`level: L0`、`verification_profile: L0-dev`。这是按当前正式
+  `auto_migrate.py` route 逻辑来的：call-expression pointer graph 没有 pointer surface，因此是 scalar-only L0。
+- validation profile 是 `status: passed`、`profile: L0-dev`、`route_level: L0`、`skipped_gates: []`。
+
+同步更新：
+
+- `l3-call-expression-auto-translation-manifest.json`
+- `l3-call-expression-evidence-manifest.json`
+- `l3-call-expression-final-verification.json`
+- `l3-call-expression-auto-cache-metadata.json`
+
+其中普通 refs 使用文件字节 sha；cache identity 使用 `json.dumps(payload, sort_keys=True)` 的 canonical JSON sha。
+这两类 sha 不能混用。
+
+### 关键绑定值
+
+- baseline ref: `status=skipped`,
+  `sha256=5a51b4cec6db030effe03906be26c3e75c3b25aca4cd3063c3bb337a148a5f57`
+- route ref: `status=recorded`, `level=L0`,
+  `sha256=fa4b7514f5bcefcd6fb4d7c256268e9df40a00a5085e86d22ce6e88470288a19`
+- profile ref: `status=passed`, `profile=L0-dev`,
+  `sha256=c3f9f760260836a5da8e28524cd7dc05287096a1c25a96d842d1b2e5728de5f0`
+
+cache identity:
+
+- `c2rust_baseline_identity.sha256=d3c06611a51b11cb55ce2dd25df16d8ac5deeea24d27c90397d4598bc54fce87`
+- `route_decision_identity.sha256=6b8de9bff3f7801b8656dc24a0ba41b459607b753491bb91e17a5d1b1b49bff5`
+- `validation_profile_identity.sha256=c7363c575867d3fc3cacf72c7e8bec9064f01e866720d1cce3613ae8fa605ace`
+
+### 验证
+
+直接 validator 现在通过：
+
+```powershell
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id call-expression --require-semantic-pass
+```
+
+输出 `semantic_pass: true`，并检查了 `c2rust_baseline`、`route_decision`、`validation_profile`、
+`c_oracle`、`rust_report`、`schema_diff`、`negative_diff`、`unsafe_scan`、`unsafe_ledger`、
+`final_verification`、`version_or_config_binding`。
+
+完整 call-expression 测试通过：
+
+```powershell
+python -B -m unittest validation.tools.test_call_expression_l3_evidence
+```
+
+### 并行审查结论
+
+本轮两个 explorer 均为只读：
+
+- Sartre 确认最初失败链先卡在 manifest schema 缺 `c2rust_baseline`，并列出后续会挡住的
+  route/baseline/profile 交叉绑定、semantic `load_ref()`、cache identity 和 diff gate 规则。
+- Turing 确认当前持久三件套绑定值正确，提醒新增三个 fixture 仍是 untracked，需要纳入工作树；
+  同时确认持久 fixture 不应照搬测试 helper 的 `unit_test_backfill_for_legacy_fixture` 占位值。
+
+下一步建议：
+
+1. 继续推进 real-fdb harness execution，从 `compiler_not_found` 进入真实可执行 oracle/harness 输出校验。
+2. 如需进一步去除测试 helper 遗留，可把 `_backfill_route_baseline_profile_evidence()` 改为刷新 copied fixture refs，
+   而不是生成 unit-test backfill payload；当前 direct call-expression 测试已覆盖落盘 fixture。
+## 33. 2026-06-26 real-fdb WSL C harness execution
+
+本轮承接第 32 节的 real-fdb harness execution，把 `real-fdb-calc-crc32`
+从 `compiler_not_found` 推进到真实 WSL 编译和 harness 执行，但仍保持 fail-closed：
+
+- `c_oracle_status.status` 仍为 `DRAFT_GENERATED`
+- `toolchain_status` 变为 `COMPILE_SUCCEEDED_NOT_ORACLE`
+- `compile_execution.status` 为 `compile_succeeded_not_oracle`
+- `harness_execution.status` 为 `exited_zero_not_oracle`
+- `output_gate.status` 为 `matched_not_oracle`
+- 顶层和所有子 gate 的 `semantic_pass` 仍为 `false`
+- 整体 auto-translation 状态仍为 `candidate_refused`
+
+### 工具链和 build profile
+
+`validation/tools/auto_migrate.py` 新增/收紧：
+- `cc` 缺失时按顺序探测 `gcc`、`clang`
+- Windows 本地没有 C 编译器时探测 `wsl.exe`，在 WSL 内执行 `cc/gcc/clang`
+- WSL 编译和 harness 执行使用 `wslpath` 转换绝对路径
+- `compile_execution` 记录 `requested_compiler`、`compiler_candidates`、`compiler_name`、
+  `compiler_path`、`toolchain_adapter`、`execution_argv`
+- WSL `wslpath` 非零或 timeout 会写结构化 `compile_failed` / `compile_timeout` evidence，
+  不再让 Python traceback 中断 evidence 生成
+- `build_profile.link_source_files` 可声明 link-only 源文件，不污染 `c_boundary.files`
+
+`validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 更新：
+- include path 从 `inc` 扩展为 `inc` + `tests`
+- 增加 `build_profile.link_source_files`:
+  `src/fdb_file.c`, sha256 `c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d`
+
+原因：`tests/fdb_cfg.h` 打开 `FDB_USING_FILE_POSIX_MODE`，从而通过 `fdb_def.h`
+启用 `FDB_USING_FILE_MODE`；`fdb_utils.c` 内的 `_fdb_flash_*` 包装函数会引用
+`_fdb_file_read/_fdb_file_write/_fdb_file_erase`，这些定义在 `src/fdb_file.c`。
+
+### Validator 收紧
+
+`validation/tools/validate_auto_translation_evidence.py` 同步：
+- 认可并校验 `build_profile.link_source_files` 生成的 compile command
+- 校验新的 link strategy:
+  `compile_harness_with_declared_c_boundary_and_build_profile_sources`
+- 当 evidence 声明 `toolchain_adapter` / `execution_argv` 时，要求 provenance 自洽
+- WSL compile execution 必须由 `wsl` / `wsl.exe` launcher 执行，且命令中包含记录的 compiler path
+- WSL harness execution 必须同样记录 WSL launcher 和可审计 execution argv
+
+这些校验只增强审计性，不把 compile/harness 成功提升为 oracle success。
+
+### 验证
+
+手工 WSL 最小命令先确认：
+- `-I FlashDB/inc`
+- `-I FlashDB/tests`
+- `src/fdb_utils.c`
+- `src/fdb_file.c`
+
+输出两个 fixture marker：
+- `fixture case empty-crc-zero return_code matched`
+- `fixture case ascii-123456789-crc-zero return_code matched`
+
+自动迁移命令：
+```powershell
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+生成的 `l3-real-fdb-calc-crc32-c-oracle-status.json` 记录：
+- adapter: `wsl`
+- compiler: `/usr/bin/cc`
+- harness return code: `0`
+- output gate matched fragment count: `2`
+
+schema/fail-closed validator 通过：
+```powershell
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+完整相关回归通过：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+```
+
+结果：`Ran 84 tests ... OK`
+
+### 并行审查结论
+
+本轮两个只读 explorer 均已关闭：
+- Ptolemy 确认 `_fdb_file_*` 位于 `src/fdb_file.c`，当前 profile 下不需要 `src/fdb.c`、
+  `src/fdb_kvdb.c`、`src/fdb_tsdb.c` 或 `-lpthread`
+- Boole 确认没有 fail-open semantic pass 路径，同时指出 WSL path failure、fallback 测试隔离、
+  WSL provenance validator 三个缺口；本轮均已补测试并修正
+
+下一步建议：
+1. 继续从 `COMPILE_SUCCEEDED_NOT_ORACLE` 推进到 accepted C oracle / Rust replay / schema diff 链路。
+2. 若要长期支持 WSL，可把 distro、`uname`、compiler version 纳入 cache input 和 evidence provenance。
+3. 再补 `cc/gcc` 缺失 fallback 到 `clang`、全部候选缺失、WSL harness nonzero/timeout 的负例覆盖。
+
+## 34. 2026-06-26 real-fdb Rust replay / diff evidence groundwork
+
+本轮承接第 33 节，但没有把 C harness 的 `*_NOT_ORACLE` 状态提升为语义通过。新增的是
+real-fdb `fdb_calc_crc32` 的 Rust replay 实现和可重复生成的 Rust-side evidence：
+
+- `validation/l2_slices/src/fdb_calc_crc32.rs`
+- `validation/l2_slices/tests/fdb_calc_crc32.rs`
+- `validation/l2_slices/fixtures/real-fdb-calc-crc32.json`
+- `validation/l2_slices/src/bin/emit_reports.rs`
+- `validation/tools/test_real_fdb_calc_crc32_l3_evidence.py`
+
+Rust 实现按 FlashDB CRC32 逻辑逐字节处理：
+- 初始 `crc ^ !0u32`
+- 每字节低位移位 8 次
+- 多项式 `0xEDB8_8320`
+- 返回 `crc ^ !0u32`
+
+fixture 当前覆盖两个 case：
+- empty buffer identity：`crc=0`，返回 `0`
+- 标准 `123456789` CRC32 check vector：返回 `3421780262`
+
+`cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports` 现在会额外生成：
+- `validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json`
+- `validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json`
+- `validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json`
+
+这三个文件只证明 Rust replay 对当前 fixture 的 `return_code` 一致，并且 negative diff 能抓到
+`return_code` mutation。它们不是 accepted C oracle，也不会让 auto-translation 的语义门禁通过。
+
+### 验证
+
+先红后绿：
+- 新增 Python 回归测试后，首次运行失败在缺少
+  `validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json`
+- 补 `emit_real_fdb_calc_crc32()` 后同一测试通过
+
+已通过命令：
+```powershell
+cargo test --manifest-path validation/l2_slices/Cargo.toml fdb_calc_crc32_matches_real_flashdb_c_oracle_fixture
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+### 并行审查结论
+
+本轮两个只读 explorer 均已关闭：
+- Hypatia 确认 C oracle promotion 必须走 accepted evidence，且 real-fdb 带 `crc32_table`
+  global dependency，不能复用普通 demo 的提升路径。
+- Einstein 确认当前语义通过仍卡在 C oracle acceptance、L4 route/profile、accepted Rust report、
+  schema diff、negative diff 和 manifest/final verification 链路。
+
+下一步建议：
+1. 产出真正 accepted C oracle report，且保留 `crc32_table` global linkage provenance。
+2. 把本轮生成的 Rust report/diff/negative diff 绑定进 `fixture_contract` accepted evidence。
+3. 解除 real-fdb 当前 L4 route，或明确新增 accepted-evidence route 策略；否则
+   `semantic_pass_for_run()` 仍会拒绝。
+
+## 35. 2026-06-26 L4 accepted-evidence authoritative policy hardening
+
+本轮从第 34 节的第三个阻塞点继续：L4/refused route 默认仍不能语义通过，但允许 slice spec
+显式声明 accepted evidence 作为权威证据链，从而表达“生成草稿未被验收，语义通过绑定到已有 accepted
+C oracle / Rust report / diff / negative diff / unsafe evidence”。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `claim_boundary.accepted_evidence_authoritative=true` 显式开关。
+  - 只有同时满足 `--accept-existing-evidence` 成功解析出 `accepted.status=accepted`，且 route 为
+    `L4/refused` 时，才会在 route policy 写入：
+    - `accepted_evidence_authoritative=true`
+    - `generated_draft_semantic_pass=false`
+    - `verification_profile=L4-accepted-evidence`
+  - `emit_validation_profile()` 对该显式路线不再把 `candidate_generation` 记为 skipped gate。
+  - `semantic_pass_for_run()` 仍默认拒绝 L4；只有 profile 同时声明
+    `accepted_evidence_authoritative=true` 和 `generated_draft_semantic_pass=false` 时才允许通过。
+  - auto manifest、L3 evidence manifest、final verification 都同步写入 authoritative / generated-draft
+    边界字段。
+  - `promote_accepted_oracle()` 对带 global dependency 的 slice 保留 draft oracle 中的
+    `fixture_binding`、`harness_contract`、`global_linkage_requirements`、`compile_command_draft`、
+    `compile_execution`，避免 real-fdb `crc32_table` 这类全局依赖在 accepted oracle promotion
+    时丢失审计字段。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - L4/refused 的 candidate artifact status 扫描保持默认 fail-closed。
+  - 只有 auto manifest、route policy、accepted evidence binding、claim boundary 一致声明
+    authoritative，且 slice spec 本身也声明
+    `claim_boundary.accepted_evidence_authoritative=true`，才跳过 L4/refused candidate status 扫描。
+  - semantic pass 对 L4/refused 同样回查 slice spec 授权，防止手工篡改 evidence artifacts 绕过
+    spec claim boundary。
+
+新增/加强测试：
+- 默认 L4/refused + `--accept-existing-evidence` 仍为 `candidate_refused`，且
+  `semantic_pass=false`、authoritative 字段全为 false。
+- 显式 authoritative 的 L4/refused accepted evidence 可生成 `accepted_evidence_bound`，并能被
+  `validate_auto_translation_evidence.py --require-semantic-pass` 接受。
+- 未授权 spec 即使手工伪造 route/profile/manifest/final authoritative artifacts，也会被 validator
+  拒绝。
+- `semantic_pass_for_run()` 覆盖 L4 默认拒绝和 L4 authoritative 放行分支。
+- accepted oracle promotion 对 global linkage audit 字段有单测覆盖。
+
+本轮使用三条只读/分析子任务：
+- Fermat：确认提交后工作树里的大量 evidence 改动主要是生成噪声，真实待提交范围是工具和测试文件。
+- Ampere：建议优先补 accepted-evidence authoritative route/profile policy，而不是继续扩 translator surface。
+- Kepler：指出 validator 还需回查 slice spec 授权；本轮已按该 review 补负例和修复。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_semantic_pass_requires_validation_profile_passed
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_l4_refused_accept_existing_evidence_keeps_generated_draft_blocked validation.tools.test_auto_migrate.AutoMigrateTests.test_l4_refused_accept_existing_evidence_can_be_authoritative_when_requested
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_l4_authoritative_artifacts_without_spec_authorization validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_l4_refused_status_scanner_rejects_draft_and_accepted_artifact_statuses
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+```
+
+完整相关 Python 回归结果：`Ran 89 tests ... OK`。
+
+下一步建议：
+1. 给 real-fdb `fdb_calc_crc32` 生成/绑定真正 accepted C oracle report，保留 `crc32_table`
+   global linkage provenance。
+2. 在 real-fdb slice spec 上显式选择是否使用
+   `claim_boundary.accepted_evidence_authoritative=true`，并绑定第 34 节的 Rust report/diff/negative diff。
+3. 继续扩 translator surface 时，再单独处理 `const uint8_t *p`、`const void *` cast、`size--`、
+   `*p++`、`crc32_table[...]` 和 bit operations。
+
+## 36. 2026-06-26 real-fdb accepted evidence semantic pass
+
+本轮把 `flashdb/real-fdb-calc-crc32` 从 fail-closed evidence 推进到 accepted evidence
+语义通过，但仍不声称 generated Rust draft 本身通过。translator route 仍是 `L4/refused`，
+语义通过绑定到显式 accepted C oracle / Rust report / diff / negative diff / unsafe evidence。
+
+核心改动：
+- 新增 accepted C oracle 输入：
+  `validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json`
+  - `status=passed`
+  - `toolchain_status=C_ORACLE_GENERATED`
+  - `semantic_pass=true`
+  - 绑定两个 fixture case 的 `return_code`
+- 更新 `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+  - `claim_boundary.accepted_evidence_authoritative=true`
+  - `fixture_contract.c_oracle` 绑定新 root C oracle
+  - `fixture_contract.rust_report/diff/negative_diff` 绑定第 34 节生成的 root evidence
+  - `fixture_contract.unsafe_scan/unsafe_ledger` 绑定 auto-translation 目录已有 passed evidence
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - auto manifest 现在是 `status=accepted_evidence_bound`
+  - L3 evidence manifest `semantic_pass=true`
+  - validation profile `profile=L4-accepted-evidence`, `status=passed`
+  - route 仍为 `L4/refused`
+  - promoted c-oracle status 为 `C_ORACLE_GENERATED`
+  - promoted c-oracle 保留 `crc32_table` 的 `global_linkage_requirements`、
+    `harness_contract.global_dependencies`、`compile_command_draft`、`compile_execution`
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 允许 promoted accepted oracle wrapper 的顶层 `toolchain_status=C_ORACLE_GENERATED`
+    与 embedded draft compile provenance `COMPILE_SUCCEEDED_NOT_ORACLE` 并存。
+  - embedded compile/harness execution 仍必须 `semantic_pass=false`。
+  - WSL provenance 校验支持 Windows 8.3 短路径和 repo-relative path 到 `/mnt/<drive>/...`
+    的等价映射，避免 `ADMINI~1` 这类路径导致误报。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 real-fdb 端到端测试：运行 `auto_migrate.py --accept-existing-evidence` 到临时 out-root，
+    断言 manifest/profile/oracle/global linkage，并继续调用 validator `--require-semantic-pass`。
+
+TDD 红绿过程：
+- 初始红灯：
+  `--accept-existing-evidence requires fixture_contract.c_oracle`
+- 绑定 accepted evidence 后，validator 红灯：
+  `oracle harness compile execution toolchain status drift`
+- 修 promoted wrapper 后，validator 红灯：
+  `oracle harness harness execution toolchain provenance drift`
+- 补 WSL 等价路径后，real-fdb 端到端测试通过。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_accept_existing_evidence_reaches_authoritative_semantic_pass validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_wsl_compile_execution_missing_execution_argv validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_wsl_compile_execution_launcher_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_compile_execution_skipped_spoofing_generated_toolchain
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+git diff --check -- validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json validation/slice-specs/flashdb-real-fdb-calc-crc32.json validation/tools/test_auto_migrate.py validation/tools/validate_auto_translation_evidence.py
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+并行审查结论：
+- Pasteur：确认 root `rust_report/diff/negative_diff` 可作为 accepted binding 输入；
+  auto `unsafe_scan/unsafe_ledger` 可复用；原 auto `final_verification` 不应手工绑定，应由 accepted
+  run 重新生成。
+- Lovelace：确认 accepted C oracle 原始 report 最小条件是 `status=passed/expected_failed`、
+  `toolchain_status=C_ORACLE_GENERATED`、`source_commit` 匹配；promoted wrapper 必须保留
+  real-fdb 的 `crc32_table` global linkage audit 字段。
+
+下一步建议：
+1. 如果要减少 evidence 体积，后续可把 accepted C oracle 的 provenance 从手工 root JSON
+   提升为可重复生成脚本，但不要改变当前 semantic boundary。
+2. 继续扩 translator surface 时，仍应独立处理 `const void*` cast、byte cursor post-increment、
+   `size--` 和 `crc32_table[...]`；当前 semantic pass 不代表 translator 已支持这些语法。
+3. 提交时只 stage real-fdb evidence/spec/tool/test/CONTEXT 这一组；旧 demo/l2/libuv evidence
+   仍有换行/生成噪声，继续不要带入提交。
+
+## 37. 2026-06-26 real-fdb accepted C oracle root report generation
+
+本轮承接第 36 节的第一条下一步，把 root accepted C oracle 从手工 JSON 推进为
+`emit_reports` 可重复生成的 report，同时不改变 semantic boundary：语义通过仍绑定到 accepted
+C oracle / Rust report / diff / negative diff / unsafe evidence；generated Rust draft 仍是候选，
+translator route 仍为 `L4/refused`。
+
+核心改动：
+- `validation/l2_slices/src/bin/emit_reports.rs`
+  - `emit_real_fdb_calc_crc32()` 现在会同时生成：
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json`
+    - `validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json`
+  - root C oracle 新增 `generator` 和 `command` provenance：
+    - `validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_calc_crc32`
+    - `cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports`
+  - root C oracle 仍保留 `toolchain_status=C_ORACLE_GENERATED`、`semantic_pass=true`、
+    `status=passed` 和两个 fixture case 的 `return_code`。
+- `validation/tools/test_real_fdb_calc_crc32_l3_evidence.py`
+  - 同一个 `emit_reports` 回归测试现在会读取 root C oracle，并断言 target/slice/status、
+    `semantic_pass`、`toolchain_status`、`generator`、`command` 和两个 return code。
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - accepted evidence binding 中 root C oracle 的 sha256 更新为
+    `70c3bcef167c436abcd0eb7512a65da5097628ab06ad28a3fe748936a7ff501a`。
+  - auto manifest 仍为 `status=accepted_evidence_bound`，validator 仍报告 `semantic_pass=true`。
+
+TDD 红绿过程：
+- 红灯：
+  `KeyError: 'generator'`
+- 绿灯：
+  `python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates`
+  通过。
+
+本轮并行只读审查结论：
+- Franklin：确认 root `c-oracle/rust-report/diff/negative-diff` 现在都由
+  `emit_real_fdb_calc_crc32()` 生成；建议后续如需继续增强，可把 `fixture_sha256`、
+  `source_file_hashes`、`source_span_sha256`、`crc32_table` global dependency、
+  harness/compile provenance 作为非循环 provenance 对象加入 root C oracle。
+- Epicurus：确认 translator 路线仍 blocked/refused，关键表面积是 `const uint8_t *p`、
+  `const void*` 到 byte buffer、`while (size--)`、`*p++`、`crc32_table[...]`
+  和全局表内容输入。该方向应作为独立 translator capability change 处理，不应混入本轮 evidence
+  生成化提交。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+下一步建议：
+1. 若继续增强 accepted C oracle provenance，按 Franklin 建议补非循环 provenance 字段，并继续用
+   `emit_reports` 单测先红后绿。
+2. 若转向 translator，要先做一个窄的 byte-cursor CRC loop capability change，不要泛化到完整 C
+   pointer side-effect 表达式。
+3. 提交时继续只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
+   `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 38. 2026-06-26 real-fdb root C oracle non-cyclic provenance
+
+本轮承接第 37 节第一条下一步，继续增强 root accepted C oracle 的 provenance，但仍保持非循环边界：
+root C oracle 不写入自身 sha256，也不写入包含自身 sha256 的 status/version/evidence manifest hash。
+这些 hash 仍由外层 auto evidence 绑定。
+
+核心改动：
+- `validation/l2_slices/src/bin/emit_reports.rs`
+  - `emit_real_fdb_calc_crc32()` 现在会读取：
+    - `validation/slice-specs/flashdb-real-fdb-calc-crc32.json`
+    - `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json`
+  - root C oracle 新增 `provenance` 对象：
+    - `fixture_sha256`
+    - `source_file_hashes`
+    - `source_span_sha256`
+    - `global_dependencies`，保留 `crc32_table` linkage/hash/span
+    - `harness_draft_ref`
+    - `compile_execution` 摘要：`status`、`semantic_pass`、`toolchain_adapter`、
+      `toolchain_status_after_attempt`
+    - `evidence_refs` 仅记录 path，不记录这些 ref 的 sha256
+    - `cycle_boundary` 明确说明 root self-hash 由外层 auto evidence 记录
+  - 新增 `required_json_value()` helper：必需 provenance 字段缺失时 fail closed。
+- `validation/tools/test_real_fdb_calc_crc32_l3_evidence.py`
+  - 先红后绿新增 root C oracle provenance 断言。
+  - 明确断言 `provenance` 不包含 `c_oracle_sha256`，避免把 root 文件自身 hash 写回自身。
+- 刷新 `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+  - accepted evidence binding 中 root C oracle sha256 更新为
+    `1ee9b240ea08cb1d32b2cb8f1c3108bdbc826e6994192a63034302eb1d063334`。
+  - validator 仍报告 `semantic_pass=true`。
+
+TDD 红绿过程：
+- 红灯：
+  `KeyError: 'provenance'`
+- 绿灯：
+  `python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates`
+  通过。
+
+本轮并行只读审查结论：
+- Pascal：确认当前 provenance 字段都是非循环来源；不要把 `c_oracle_sha256` 或
+  `c_oracle_status/version/evidence-manifest` 的 sha256 写回 root C oracle。
+- Erdos：确认 auto evidence 是按 root C oracle 实际 sha256 绑定，而不是复制 provenance 全量；
+  本轮只加可选 provenance 不需要改 schema/validator。若后续要让 validator 主动 rehash root
+  accepted oracle 文件，需要另起一轮加负例测试和 validator 检查。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence.RealFdbCalcCrc32L3EvidenceTests.test_emit_reports_records_real_fdb_calc_crc32_replay_and_diff_gates
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --accept-existing-evidence
+python -B -m unittest validation.tools.test_real_fdb_calc_crc32_l3_evidence validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+```
+
+完整相关 Python 回归结果：`Ran 90 tests ... OK`。
+
+下一步建议：
+1. 如果继续强化 accepted evidence，可以按 Erdos 的建议增加 validator 对
+   `accepted_evidence_binding.paths.c_oracle` / `c-oracle-status.accepted_oracle` 的实际文件 hash
+   rehash 检查，并补伪造 hash 负例。
+2. 如果转向 translator，仍单独做受限 byte-cursor CRC loop capability change。
+3. 提交时仍只 stage real-fdb auto evidence、root C oracle、`emit_reports.rs`、对应 Python 测试和
+   `CONTEXT.md`。
+
+## 39. 2026-06-26 accepted C oracle root hash fail-closed
+
+本轮承接第 38 节第一条下一步，把 `--require-semantic-pass` 路径下的 accepted C oracle
+绑定从“校验 c-oracle-status wrapper”收紧为“继续 rehash root accepted C oracle 文件”。这防止
+`c-oracle-status.accepted_oracle.sha256` 或
+`auto_manifest.accepted_evidence_binding.path_sha256.c_oracle` 指向的 root oracle 内容漂移后，
+semantic-pass 仍误报通过。
+
+核心改动：
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 在 `validate_semantic_pass()` 校验 promoted accepted oracle wrapper 后调用
+    `validate_accepted_c_oracle_file_binding()`。
+  - 新 helper 会读取 `l3-*-auto-translation-manifest.json`，要求：
+    - `c-oracle-status.accepted_oracle.path/sha256/status` 存在且 `status=passed`
+    - `accepted_evidence_binding.paths.c_oracle` 存在
+    - `accepted_evidence_binding.path_sha256.c_oracle` 存在
+    - 两个 path 解析后指向同一文件
+    - 实际 root C oracle 文件 sha256 同时匹配 `accepted_oracle.sha256` 和
+      `path_sha256.c_oracle`
+  - 普通 schema-only validator 不受影响；该检查只随 `--require-semantic-pass` 运行。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift`。
+  - 测试用 `auto_migrate.py --accept-existing-evidence --out-root <temp>` 生成临时 real-fdb
+    accepted evidence，再复制 root C oracle 到临时目录，记录旧 sha 后篡改
+    `cases[0].return_code`，断言 validator 拒绝并报告 `accepted c_oracle` / `sha256`。
+
+TDD 红绿过程：
+- 红灯：
+  `test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift` 初始失败，validator 返回 0。
+- 绿灯：
+  增加 root C oracle rehash 后，该负例通过；相邻 L4 authoritative 正例仍通过。
+
+本轮并行只读审查结论：
+- Mill：确认 hook 应放在 `validate_semantic_pass()` 的 c_oracle 校验后，不应塞入通用
+  `load_ref()`；root C oracle 是 semantic-pass 证据链的一环，只应在
+  `--require-semantic-pass` 下展开校验。
+- Anscombe：确认最小负例就是临时复制 root accepted C oracle，篡改 `cases[0].return_code`
+  且不刷新 stale hash；预期错误可宽断言 `accepted c_oracle` 和 `sha256`。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_semantic_pass_allows_l4_refused_route_when_accepted_evidence_binding_is_authoritative
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence validation.tools.test_auto_migrate validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo fmt --manifest-path validation/l2_slices/Cargo.toml -- --check
+cargo test --manifest-path validation/l2_slices/Cargo.toml
+```
+
+完整相关 Python 回归结果：`Ran 91 tests ... OK`。
+
+当前核心翻译功能状态：
+- 真实 FlashDB `fdb_calc_crc32` 切片已经有 accepted evidence 语义通过，验证器能 fail-closed
+  检查 root C oracle / Rust report / diff / negative diff / unsafe / final verification 证据链。
+- 这仍不代表 generated Rust draft 本身已通过；route 仍是 `L4/refused`，semantic pass 绑定到
+  显式 accepted evidence。
+- translator 本体下一步仍应单独做受限 byte-cursor CRC loop capability change，重点是
+  `const uint8_t *p`、`const void *` cast、`size--`、`*p++` 和 `crc32_table[...]`。
+
+下一步建议：
+1. 若继续 accepted evidence hardening，可补 cache identity 或 final verification 对 root accepted
+   oracle path 的更多交叉校验。
+2. 若转向核心 translator，先写 byte-cursor CRC loop capability 的红测和最小实现，不要直接泛化到完整
+   C pointer side-effect 表达式。
+
+## 40. 2026-06-26 real-fdb byte-cursor CRC translator candidate
+
+本轮承接第 39 节的核心 translator 下一步，做受限 FlashDB `fdb_calc_crc32` byte-cursor CRC loop
+能力，不泛化到完整 C pointer side-effect 表达式。目标是让 generated Rust draft 能作为候选生成并通过
+Rust compile check；不声称 generated draft 已语义通过。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - 在通用 unsupported 检测前加入严格 recognizer：
+    `uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)`、
+    `const uint8_t *p`、`p = (const uint8_t *)buf`、`while (size--)`、
+    `crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)`。
+  - 增加 C 类型映射：`uint8_t -> u8`、`size_t -> usize`、`const void* -> &[u8]`、
+    `const uint8_t* -> &[u8]`。
+  - 为该受限模式生成安全 Rust draft：
+    `pub fn fdb_calc_crc32(mut crc: u32, buf: &[u8], size: usize) -> u32`，
+    用 `usize` cursor 和 `crc32_update_byte()` bitwise helper 替代 `crc32_table` 与 `*p++`。
+  - pointer graph 记录 `buf` 为 `&[u8]` borrowed input，read effect 包含 `*p++`，
+    boundary decision 包含 `byte_cursor_post_increment_read`。
+- `validation/tools/auto_migrate.py`
+  - 将 `byte_cursor_post_increment_read` 归一化为 input buffer decision，并把 `buf` 的
+    length companion 推断为 `size`。
+  - 增加 rule mapping：`byte-cursor-post-increment-read`。
+  - 修正 `--accept-existing-evidence` 的优先级：即使 translator 现在能生成 L1 candidate，
+    显式 accepted evidence 运行仍强制走 `L4/refused` + `L4-accepted-evidence`，
+    保持旧 semantic boundary 不漂移。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules`。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 real-fdb candidate-only 端到端测试，断言：
+    `status=candidate_generated`、route `L1/recorded/tier1`、plan `draft_generated`、
+    pointer node 为 `buffer/input/size`、draft 不含 `*p++`/`crc32_table`、`rust_check=passed`。
+
+TDD 红绿过程：
+- 红灯：
+  - translator 单测最初失败在 `const uint8_t *p`、`size--`、`*p++` unsupported。
+  - auto_migrate 目标测试最初返回 `candidate_refused`。
+- 绿灯：
+  - 受限 recognizer + Rust emitter + pointer normalization 后，两条目标测试均通过。
+  - 回归中发现 `--accept-existing-evidence` 正例不再 authoritative；根因是 route 已变 L1，
+    原 override 只接受已有 L4/refused。修正为显式 accepted evidence 请求强制 authoritative route 后通过。
+
+本轮并行只读审查结论：
+- Godel：确认 translator 主入口、route 分级和 real-fdb 当前拒绝点；建议最小写集限制在
+  translator、auto_migrate 归一化和对应测试，不刷新 repo 内 real-fdb evidence。
+- Galileo：确认当前语义通过是 accepted evidence authoritative，而非 generated draft semantic pass；
+  若只生成候选，应保持 `semantic_pass=false`，route 用非 L4 candidate-only 状态。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_byte_cursor_translator_generates_candidate_route
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle
+```
+
+完整结果：
+- translator crate：`33 passed`。
+- Python 相关回归：`Ran 92 tests ... OK`。
+- 当前仓库 accepted evidence validator：`semantic_pass=true`。
+- 临时 candidate-only auto_migrate：`status=candidate_generated`、route `L1`、`rust_check=passed`、
+  `semantic_pass=false`。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 的 generated Rust draft 现在能生成候选并通过 Rust compile check。
+- candidate-only 路径不再是 `L4/refused`；它是 `L1/recorded`，但仍不是 semantic pass。
+- `--accept-existing-evidence` 路径仍保持 `L4/refused` + accepted evidence authoritative，
+  用于现有 `--require-semantic-pass` 语义通过声明。
+
+下一步建议：
+1. 若要把 generated draft 从 candidate 推进到 semantic pass，需要补真实 C oracle/Rust replay/diff/
+   negative diff/unsafe/final verification gates，并让 profile/manifest/final 同步引用 generated draft。
+2. 若继续扩 translator 表面积，先沿此模式小步扩展相近 byte cursor 形态，不要一次泛化所有
+   `++/--` value semantics。
+3. 提交时只 stage `crates/c2r-translator/*`、`validation/tools/auto_migrate.py`、
+   `validation/tools/test_auto_migrate.py` 和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 41. 2026-06-26 real-fdb generated Rust replay gate
+
+本轮承接第 40 节第一条下一步，但只推进 generated draft semantic pass 的第一块：
+让 real-fdb `fdb_calc_crc32` generated Rust draft 执行 fixture replay，并把 auto evidence 下的
+Rust report 从 draft/incomplete 推到 `passed` 或 `failed`。这仍不是 full semantic pass：
+`semantic_pass=false`、`generated_draft_semantic_pass=false` 继续保持，C oracle、schema diff、
+negative diff、unsafe、final verification gates 仍未完成。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `generate_rust_replay_test_draft()` 现在对 `return_code` fixture case 生成真实调用：
+    `let actual = fdb_calc_crc32(case.crc, case.buf, case.size);`
+    并断言 `actual == case.return_code`，删除旧的 TODO/panic draft-only 逻辑。
+  - 新增 `run_generated_rust_replay()`：
+    - 只在 `rust_check.status == "passed"` 且 plan 含 `crc32-byte-cursor-loop` 时执行。
+    - 在临时目录拼接 generated `rust-draft.rs` 与 replay test，用 `rustc --test` 编译并运行。
+    - 把结果写回 `l3-*-test-translation-generated.json`：
+      `status=passed/failed`、`generated_draft_replay_pass=true/false`、
+      `generated_draft_semantic_pass=false`、`replay_execution` 日志引用。
+  - 非 accepted 分支的 `write_l3_candidate_supporting_evidence()` 现在会消费 replay 结果：
+    - replay 通过时 `l3-*-rust-report.json.status=passed`
+    - replay 失败时 `status=failed`
+    - 两种情况都保持 `semantic_pass=false`
+    - `diff.status` 仍为 `incomplete`，但 `required_inputs.rust_report_actual_status`
+      会记录 `passed` 或 `failed`。
+  - 新增 `generated_rust_report_cases()`，让 generated Rust report 带上与 root rust-report
+    对齐的 fixture `cases[]`。
+- `validation/tools/test_auto_migrate.py`
+  - 更新 replay draft 单测：现在期望真实 API call，而不是 TODO/panic。
+  - 新增正例 `test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture`。
+  - 新增负例 `test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic`：
+    临时篡改第二个 fixture `return_code`，要求 replay/rust-report failed，且 manifest 仍不 claim semantic pass。
+
+TDD 红绿过程：
+- 红灯：
+  - replay draft 仍缺 `fdb_calc_crc32(case.crc, case.buf, case.size)` 调用。
+  - real-fdb generated replay 正例初始只有 TODO/panic，不能写 `status=passed`。
+  - 负例初始缺 `cases[]`，且 replay 失败仍写 `rust-report.status=incomplete`。
+- 绿灯：
+  - 删除旧 panic、加入 generated replay runner 和 Rust report 状态消费后，三条目标测试通过。
+
+本轮并行只读审查结论：
+- Avicenna：建议最小路径是临时 Rust runner 调用 generated draft，写 auto-translation 下的
+  rust-report，同时只声明 `generated_draft_replay_pass=true`，不要复用 accepted evidence 语义。
+- Carver：确认 full generated semantic pass 还需要非 L4 generated path、profile/manifest/final、
+  draft binding refs、schema diff/negative diff/unsafe/final gates 同步；本轮不应只改 boolean 直接 claim。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_rust_replay_draft_enumerates_bound_fixture_cases_without_semantic_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+```
+
+完整结果：
+- `validation.tools.test_auto_migrate`：`Ran 41 tests ... OK`。
+- 相关 Python 回归：`Ran 94 tests ... OK`。
+- 临时 candidate-only auto_migrate：`status=candidate_generated`、route `L1`、
+  `rust_check=passed`、`generated_draft_replay_pass=true`、`semantic_pass=false`。
+- 当前仓库 accepted evidence validator 仍为 `semantic_pass=true`。
+
+当前核心翻译功能状态：
+- generated Rust draft 已经不只是 compile pass；它还能跑 real-fdb fixture replay，并生成 passed Rust report。
+- full generated draft semantic pass 仍未完成，因为 C oracle、schema diff、negative diff、unsafe、
+  final verification 还没有绑定到 exact generated draft。
+- accepted evidence authoritative 路径未改变，仍是当前仓库 `--require-semantic-pass` 的语义通过来源。
+
+下一步建议：
+1. 给 generated candidate 增加 schema diff gate：当 C oracle 可用且 generated Rust report passed 时，
+   比较 C oracle 与 generated Rust report 的 `return_code` cases，但仍不要复用 root accepted diff。
+2. 然后补 negative diff 和 final verification，使 generated path 最终能独立进入
+   `generated_draft_semantic_pass=true`。
+3. 提交时只 stage `validation/tools/auto_migrate.py`、`validation/tools/test_auto_migrate.py`
+   和 `CONTEXT.md`；旧 demo/l2/libuv evidence 噪声仍不带入。
+
+## 42. 2026-06-26 typed IR crc32 emitter bridge
+
+本轮承接第 41 节之后的 translator 架构下一步，但按收窄版执行：只给 Rust translator
+增加 feature-gated typed IR emitter 地基，不接 libclang、不改 Python pipeline、不刷新仓库 evidence，
+也不改变 generated draft 的 semantic-pass 边界。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - 新增 `[features]`：`default = []`、`typed-ir = []`。
+  - 默认构建不启用 typed IR，保持现有字符串 recognizer 路径。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 typed IR 数据结构：`IrType`、`IrTypeKind`、`IrExpr`、`IrStmt`、`IrFunction`、
+    `IrParam`、`SourceSpan`。
+  - 表达式层保留显式节点：`Binary`、`Unary(BitNot)`、`Cast { implicit }`、`Index`、
+    `IncDec`、`Deref` 等，为后续 libclang lowering 承接 `Cast(implicit)`、`*p++`、
+    `size--`、`crc32_table[...]`。
+  - 新增 `emit_rust_from_ir()`，当前只 fail-closed 支持 `fdb_calc_crc32` byte-cursor CRC
+    expression tree；非匹配函数返回 `IrEmitError`，不猜测。
+  - 新增 `crc32_byte_cursor_function()` 作为当前字符串 recognizer 到 typed IR emitter 的
+    临时 bridge；后续 libclang 前端应直接 lower 出等价 `IrFunction`。
+- `crates/c2r-translator/src/lib.rs`
+  - `typed_ir` 模块只在 `--features typed-ir` 下导出。
+  - `emit_crc32_byte_cursor_rust()` 在 feature 开启时先构造 typed IR 并调用
+    `typed_ir::emit_rust_from_ir()`；bridge 必须成功，不再静默回落后继续记录 typed IR rule。
+  - `record_crc32_byte_cursor_rules()` 在 feature 开启时额外记录
+    `typed-ir-crc32-emitter`，用于证明 crc32 candidate 的 Rust draft 开始经过 typed IR
+    emitter bridge。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_flashdb_crc32_without_string_recognizer`，直接构造 typed expression tree，
+    断言 emitter 产出安全 Rust：`buf: &[u8]`、`let byte = buf[p]`、
+    `crc32_update_byte(crc, byte)`，且不泄漏 `*p++` 或 `crc32_table`。
+  - 新增 `typed_ir_rejects_crc32_loop_with_extra_top_level_term`，证明在合法 crc32 RHS 外层
+    额外 XOR 字面量时必须 fail-closed，不能被当成标准 crc32 模板接受。
+  - 现有 `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules` 在
+    `--features typed-ir` 下断言 rule ids 包含 `typed-ir-crc32-emitter`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml typed_ir_emits_flashdb_crc32_without_string_recognizer`
+  初始失败：`E0432 could not find typed_ir in c2r_translator`。
+- 绿灯 1：
+  增加 `typed_ir.rs` 和 `pub mod typed_ir` 后，direct typed IR emitter focused test 通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules`
+  初始失败：`E0425 cannot find function crc32_byte_cursor_function in module typed_ir`。
+- 绿灯 2：
+  增加 `crc32_byte_cursor_function()` bridge 后，`--features typed-ir` 的 crc32 focused tests 通过。
+- 红灯 3：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_crc32_loop_with_extra_top_level_term`
+  初始失败：偏宽 matcher 把额外 top-level XOR 项也接受并发出标准 crc32 Rust。
+- 绿灯 3：
+  将 typed IR crc32 matcher 收紧为顶层 `table_lookup ^ (crc >> 8)`，并让 table index 精确匹配
+  `(crc ^ *p++) & 0xFF`；负例通过，合法 crc32 focused tests 仍通过。
+
+本轮并行只读审查结论：
+- Feynman：建议第一刀加 `typed-ir` feature gate，默认不破坏旧 recognizer；typed IR emitter
+  与旧 `emit_crc32_byte_cursor_rust` 使用同一输出契约，证据 schema 暂不扩展。
+- Archimedes：建议本轮不改 Python。`write_translator_spec()` 目前只传 `c_source`/build profile；
+  真实 TU 的 `source_root/source_file/compile_commands` contract 应单独定义并测试，且 generated
+  path 必须继续保持 `semantic_pass=false`。
+- Parfit：代码审查指出两个 Important：`typed-ir-crc32-emitter` rule 不能和实际 bridge 成功脱节，
+  typed IR matcher 不能用宽松 contains 逻辑接受额外表达式项。本轮已按负例修正。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir crc32
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+```
+
+完整结果：
+- 默认 translator crate：`33 passed`。
+- `--features typed-ir` translator crate：`35 passed`。
+- Python generated replay 正负例：`Ran 2 tests ... OK`。
+- `cargo fmt --check` 通过。
+
+当前核心翻译功能状态：
+- 默认路径行为不变：现有 strict crc32 string recognizer 仍可生成 L1 candidate，semantic pass
+  仍不来自 generated draft。
+- `--features typed-ir` 路径下，crc32 candidate 的 Rust draft 已开始经过 typed IR emitter bridge；
+  这只是 emitter 地基，不是 libclang lowering，也不是 generated semantic pass。
+- Python evidence pipeline、accepted evidence authoritative 路径、`semantic_pass=false` 边界均未改变。
+
+下一步建议：
+1. 定义真实 TU/libclang 输入 contract：`source_root`、`source_file`、`compile_commands` 或完整
+   compiler args、source/global dependency hash；保持 `c_source` fallback。
+2. 为 translator spec 元数据透传写 Python 临时 out-root 测试，再扩 `SliceSpec` 可选字段。
+3. 新增 `clang-frontend` feature 和 libclang lowering skeleton，让真实 `fdb_calc_crc32` lower 出
+   与当前 bridge 等价的 `IrFunction`。
+4. generated semantic pass 仍按第 41 节继续：先 schema diff gate，再 negative diff/final verification，
+   不直接删除 accepted `validation/l2_slices/src/fdb_calc_crc32.rs`。
+
+## 43. 2026-06-26 real TU translator-input metadata contract
+
+本轮承接第 42 节第一条下一步：定义并透传真实 TU/libclang 后续所需的输入元数据，但仍不接
+libclang、不改变 translator 当前 `c_source` fallback、不刷新仓库 evidence，也不改变 generated draft
+的 semantic-pass 边界。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `write_translator_spec()` 保留原有 `function_name/c_source` fallback：
+    顶层 `c_source` → `c_boundary.signatures[0].c_source` → `c_boundary.c_source`。
+  - 新增真实源输入 metadata 透传：
+    - `source_root` 来自 `source.source_root`
+    - `source_files` 来自 `c_boundary.files[]`，保留 `path/role/sha256`
+    - `source_file` 取 `role=source` 的主文件，否则取第一个 `c_boundary.files[]`
+    - `source_file_hashes` 来自 `source.source_file_hashes`
+    - `function_source_span` 来自匹配函数签名的 `source_span`
+  - `source_file_hashes` 复用 cache identity 的合并逻辑：如果 `source.source_file_hashes` 缺失，
+    也会从 `c_boundary.files[].sha256` 或可解析的真实文件补齐，避免 translator input 与 cache
+    provenance 不一致。
+  - 只在 slice 明确提供 `build_profile.compile_commands` 或 `compile_commands_path` 时写
+    `compile_commands`；当前 real-fdb 的 `compiler_command_source=CMakeLists.txt` 只保留在
+    `build_profile.compiler_command_source`，不伪装成 compile database。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata`，用临时
+    `--out-root <temp>` 运行 real-fdb candidate，读取临时
+    `l3-real-fdb-calc-crc32-translator-input.json`，断言上面的 metadata 都被写出，并断言
+    `compile_commands` 不存在。
+  - 新增 `test_translator_input_source_file_hashes_fall_back_to_c_boundary_files`，证明只有
+    `c_boundary.files[].sha256` 时 translator input 仍会写出 `source_file_hashes`。
+- `crates/c2r-translator/src/lib.rs`
+  - `SliceSpec` 显式接收可选 metadata：
+    `source_root`、`source_file`、`source_files`、`source_file_hashes`、
+    `function_source_span`、`compile_commands`。
+  - 新增 `SourceFileRef` 和 `SourceSpanRef`。
+  - 这些字段目前只被反序列化和保留，`translate_slice()` 不消费它们，默认翻译行为不变。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `slice_spec_deserializes_real_tu_metadata_without_changing_translation`，证明带真实 TU
+    metadata 的 JSON 可反序列化到 `SliceSpec`，且同一个 `c_source` 仍按旧路径正常翻译。
+  - 现有 `SliceSpec` struct literal 统一补 `..SliceSpec::default()`，适配新增可选字段。
+
+TDD 红绿过程：
+- 红灯 1：
+  `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata`
+  初始失败：`KeyError: 'source_root'`，translator input 还没有真实源 metadata。
+- 绿灯 1：
+  增加 `c_boundary_source_files()`、`function_source_span()` 并在 `write_translator_spec()` 写入
+  metadata 后，该 Python 测试通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml slice_spec_deserializes_real_tu_metadata_without_changing_translation`
+  初始失败：`SliceSpec` 没有 `source_root/source_file/source_files/source_file_hashes/
+  function_source_span/compile_commands` 字段。
+- 绿灯 2：
+  给 `SliceSpec` 增加 serde-default 的可选 metadata 字段和对应结构后，该 Rust 测试通过。
+- 红灯 3：
+  `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_hashes_fall_back_to_c_boundary_files`
+  初始失败：`KeyError: 'source_file_hashes'`，translator input 未复用 cache identity 的 hash fallback。
+- 绿灯 3：
+  `write_translator_spec()` 改为调用既有 `source_file_hashes(spec)` 后，该测试通过。
+
+本轮并行只读审查结论：
+- Banach：确认 `write_translator_spec()` 当前只写 `c_source`/build profile；real-fdb slice 的真实源
+  信息来自 `source.source_root`、`source.source_file_hashes`、`c_boundary.files[]` 和签名
+  `source_span`；当前 `compiler_command_source` 是 CMakeLists provenance，不应伪装为
+  `compile_commands`。
+- Socrates：确认 `c2r_translate` 通过 serde 直接读取 `SliceSpec`，新增 Option/default 字段无需改
+  CLI；`translate_slice()` 当前只消费 `c_source/function_name/build_profile`，所以 metadata 保留不应
+  改变翻译行为。
+- Lagrange：代码审查指出 `translator-input.source_file_hashes` 应和 cache identity 的
+  `source_file_hashes(spec)` fallback 对齐；本轮已用负例修正。另指出新增 public `SliceSpec`
+  字段会影响外部 Rust struct literal 源码兼容；当前 crate 作为仓库内部 CLI/测试消费，仓库内构造点
+  已统一补 `..SliceSpec::default()`，JSON 兼容由 serde default 保证。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata
+cargo test --manifest-path crates/c2r-translator/Cargo.toml slice_spec_deserializes_real_tu_metadata_without_changing_translation
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_hashes_fall_back_to_c_boundary_files
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+git diff --check -- CONTEXT.md crates/c2r-translator/Cargo.toml crates/c2r-translator/src/lib.rs crates/c2r-translator/src/typed_ir.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py
+```
+
+完整结果：
+- 默认 translator crate：`34 passed`。
+- `--features typed-ir` translator crate：`36 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 43 tests ... OK`。
+- 相关 Python 回归：`Ran 96 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- translator input 已具备真实 TU/libclang 后续需要的 source metadata contract，但还没有
+  `clang-frontend` 或 libclang lowering。
+- Rust `SliceSpec` 已显式保留这些 metadata，后续 libclang 前端可直接消费。
+- 默认 generated candidate 行为不变：`semantic_pass=false`，accepted evidence authoritative 路径不变。
+
+下一步建议：
+1. 新增 `clang-frontend` feature 和可选 libclang 依赖 skeleton，先做环境探测和 fail-closed fallback，
+   不改变默认构建。
+2. 在 Rust 侧定义从真实 TU metadata 到 `ClangParseSpec` 的转换，但先只做 dry-run/diagnostic artifact。
+3. 再让真实 `fdb_calc_crc32` lower 出与当前 `crc32_byte_cursor_function()` bridge 等价的
+   `IrFunction`，通过 typed IR emitter 生成同一 Rust draft。
+
+## 44. 2026-06-26 clang-frontend dry-run parse spec skeleton
+
+本轮承接第 43 节第 1/2 条下一步，但继续保持收窄边界：只在 Rust translator crate
+增加 feature-gated 的 `clang-frontend` dry-run 输入面，不接真实 libclang、不改 Python pipeline、
+不刷新仓库 evidence，也不改变 generated draft 的 semantic-pass 边界。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - `[features]` 新增 `clang-frontend = []`，默认仍为 `default = []`。
+  - `typed-ir` 和 `clang-frontend` 相互独立；后续可以组合启用，但当前 dry-run 不依赖 typed IR。
+- `crates/c2r-translator/src/lib.rs`
+  - 仅在 `--features clang-frontend` 下导出 `pub mod clang_frontend;`。
+  - 默认构建路径不引入 clang frontend 模块或测试 import。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangParseSpec`，从 `SliceSpec` 消费真实 TU metadata：
+    `source_root`、`source_file`、`function_name`、`include_paths`、`defines`、
+    `compile_commands`、`source_file_hashes`、`function_source_span`。
+  - 新增 `ClangDryRun`，`dry_run()` 是纯函数，不访问文件系统、不调用 libclang，只返回：
+    `status=ready_without_libclang`、source/function 信息、clang 参数或 compile database 引用、
+    以及明确的 dry-run diagnostic。
+  - 无 `compile_commands` 时从 `source_root + include_paths` 合成 `-I...`，并从 defines 合成 `-D...`。
+    有 `compile_commands` 时不再合成手工参数，避免把 compile database 和 fallback args 混在一起。
+  - `ClangParseSpec::from_slice_spec()` 对 `source_root`、`source_file`、非空 `function_name`、
+    `source_file_hashes[source_file]`、`function_source_span`、`function_source_span.file == source_file`
+    以及非空 `function_source_span.sha256` fail closed；错误类型 `ClangFrontendError` 实现 `Display`
+    和 `Error`，便于后续 CLI/diagnostic artifact 直接复用。
+- `validation/tools/auto_migrate.py`
+  - `write_translator_spec()` 选择 `source_file` 时优先使用匹配函数的 `source_span.file`，只有找不到匹配文件时
+    才回落到旧的第一个 `role=source` 文件，避免多源 slice 把 clang TU 指到错误文件。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_translator_input_source_file_prefers_matching_function_span_file`，覆盖多源文件场景。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 feature-gated 测试：
+    - `clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang`
+    - `clang_parse_spec_dry_run_prefers_compile_commands_over_synthesized_args`
+    - `clang_parse_spec_rejects_missing_real_tu_metadata`
+    - `clang_parse_spec_rejects_missing_source_hash_and_function_span`
+    - `clang_parse_spec_rejects_function_span_for_a_different_source_file`
+  - 测试覆盖真实 TU metadata 保留、dry-run 参数生成、compile database 优先级、缺 metadata 的诊断失败、
+    source hash 覆盖和 function span 绑定。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang`
+  初始失败：`the package 'c2r-translator' does not contain this feature: clang-frontend`。
+- 绿灯 1：
+  增加 feature gate、模块导出和 `ClangParseSpec` dry-run skeleton 后，目标测试通过。
+- 红灯 2：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec`
+  初始失败：`ClangFrontendError` 没有实现 `Display`，不能用于 `to_string()` 断言。
+- 绿灯 2：
+  为 `ClangFrontendError` 增加 `Display`/`Error` 后，三条 `clang_parse_spec*` focused tests 全部通过。
+- 红灯 3：
+  Hooke review 后新增 `clang_parse_spec_rejects_missing_source_hash_and_function_span` 和
+  `clang_parse_spec_rejects_function_span_for_a_different_source_file`；初始失败，因为 dry-run 仍会对缺
+  hash/span 或 span 文件不一致的输入返回 `ClangParseSpec`。
+- 绿灯 3：
+  收紧 `from_slice_spec()` 的 source hash/span 校验后，两条负例通过。
+- 红灯 4：
+  新增 `test_translator_input_source_file_prefers_matching_function_span_file`；初始失败，translator input
+  把 `source_file` 写成多源文件列表里的第一个 `role=source` 文件。
+- 绿灯 4：
+  `write_translator_spec()` 改为优先匹配 `function_source_span.file` 后，该 Python 负例通过。
+
+本轮并行只读审查结论：
+- Zeno：确认最小 feature gate、`ClangParseSpec` 字段边界和 dry-run 纯函数语义；建议不要把
+  `clang-frontend` 绑定到 `typed-ir`，也不要在骨架里消费 snippet `c_source`。
+- Planck：确认本轮不应先改 Python pipeline；上一轮 translator input metadata 已足够构造 dry-run
+  `ClangParseSpec`，但真实 libclang lowering 还需要后续单独做。建议下一步先做 Rust CLI dry-run artifact，
+  再考虑 Python temp out-root opt-in，不要刷新 repo evidence。
+- Hooke：代码审查无 Critical；两个 Important 已处理：
+  - Rust dry-run 不再接受缺失/不一致的 `source_file_hashes` 和 `function_source_span`。
+  - Python translator input 不再在多源文件 slice 中盲取第一个 source 文件，而是优先使用函数 span 文件。
+  Minor 中的 compile database diagnostic 也已补充；public `SliceSpec` 字段兼容风险沿用第 43 节判断：
+  仓库内构造点已补 `..SliceSpec::default()`，JSON 兼容由 serde default 保证。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_parse_spec_rejects
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_translator_input_source_file_prefers_matching_function_span_file
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+git diff --check -- crates/c2r-translator/Cargo.toml crates/c2r-translator/src/lib.rs crates/c2r-translator/src/typed_ir.rs crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py CONTEXT.md
+```
+
+完整结果：
+- 默认 translator crate：`34 passed`。
+- `--features typed-ir` translator crate：`36 passed`。
+- `--features clang-frontend` translator crate：`39 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`41 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 44 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- 默认生成路径不变，`clang-frontend` 默认关闭。
+- Rust 侧已有真实 TU metadata 到 `ClangParseSpec` 的 fail-closed dry-run 输入面。
+- 仍未接真实 libclang，仍未把 dry-run artifact 写入 CLI/Python pipeline，generated draft semantic pass
+  边界仍保持不变。
+
+下一步建议：
+1. 若继续按 libclang 方向推进，先给 `c2r_translate` 增加 feature-gated dry-run diagnostic artifact，
+   默认构建不产物，`--features clang-frontend` 才输出可观测 JSON。
+2. 再用 Python temp `--out-root` 做显式 opt-in 接入测试，不写 `validation/evidence`。
+3. 之后才接真实 libclang lowering：先小 C fixture，再 real-fdb `fdb_calc_crc32`，目标是 lower 出与
+   `crc32_byte_cursor_function()` 等价的 `IrFunction`。
+
+## 45. 2026-06-26 clang dry-run artifact under feature gate
+
+本轮承接第 44 节第 1 条下一步，但仍保持边界：只让 Rust translator crate 在
+`--features clang-frontend` 下写出可观测 dry-run diagnostic artifact；默认构建不产物，不改
+Python pipeline，不刷新仓库 evidence，也不接真实 libclang。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在已有 8 个 artifact 后，且仅在 `#[cfg(feature = "clang-frontend")]`
+    下追加 `l3-{slice_id}-clang-dry-run.json` 到 manifest。
+  - artifact 内容来自 `ClangParseSpec::from_slice_spec(spec).dry_run()`：
+    - metadata 完整时：`status=ready_without_libclang`，包含 `dry_run`、`metadata.source_file_hashes`、
+      `metadata.function_source_span`，`errors=[]`。
+    - metadata 不完整时：`status=blocked`，记录 `errors[0].kind/message`，但不阻断普通翻译 artifact
+      和 Rust draft 产出。
+  - 默认构建使用不可变 `artifacts` vector，避免 `unused_mut` warning；feature 开启时才 shadow 成
+    mutable vector 并 push dry-run artifact。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `default_translation_artifacts_do_not_emit_clang_dry_run`，验证默认构建不写
+    `l3-*-clang-dry-run.json`，manifest 也不引用它。
+  - 新增 `clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata`，验证 feature 开启时
+    完整真实 TU metadata 会生成 ready dry-run JSON。
+  - 新增 `clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation`，验证缺
+    metadata 时 dry-run artifact fail closed，但普通翻译 manifest 仍保持 generated。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend`
+  初始失败在 `l3-*-clang-dry-run.json` 文件不存在。
+- 绿灯：
+  将 dry-run artifact 追加到 `write_translation_artifacts()` 后，两个 feature-gated artifact 测试通过。
+- 默认路径回归：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run`
+  首次通过但有 `unused_mut` warning；随后调整 vector 构造，默认全量测试无 warning 通过。
+
+本轮并行只读审查结论：
+- Chandrasekhar：建议 dry-run artifact 落在 `write_translation_artifacts()` 而不是 CLI；文件名使用
+  `l3-{slice_id}-clang-dry-run.json`；默认构建不编译 `clang_frontend`、不产物、manifest 保持现有文件集。
+  本轮实现与该建议一致。
+- Jason：建议本轮不改 Python；等 Rust artifact 可用后，再单独做默认关闭的 Python opt-in，例如
+  `--emit-clang-dry-run`，并用 mock 测命令构造，避免真实 cargo 或 repo `validation/evidence` 写入。
+  本轮遵守该边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+python -B -m unittest validation.tools.test_auto_migrate
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+git diff --check -- crates/c2r-translator/src/lib.rs crates/c2r-translator/tests/bounded_translation.rs CONTEXT.md
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features clang-frontend` translator crate：`41 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`43 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 44 tests ... OK`。
+- `cargo fmt --check` 和 `git diff --check` 均通过。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变，`clang-frontend` 默认关闭且不写 dry-run artifact。
+- Rust feature 路径已有可观测 clang dry-run diagnostic artifact，可用于下一步 Python opt-in。
+- 仍未接真实 libclang，也未把 Python pipeline 默认改为启用 clang dry-run；generated semantic pass
+  边界仍保持不变。
+
+下一步建议：
+1. 做 Python 显式 opt-in：新增默认关闭的 `--emit-clang-dry-run` 或等价配置，只在 temp `--out-root`
+   测试中通过 `cargo run --features clang-frontend` 产出 dry-run artifact。
+2. 再做真实 libclang lowering 的最小 fixture：先不碰 real-fdb，先用小 C 文件证明能 lower 出
+   一个 `IrFunction` skeleton。
+3. 最后把 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 46. 2026-06-26 Python opt-in for clang dry-run artifact
+
+本轮承接第 45 节第 1 条下一步：给 `auto_migrate.py` 增加默认关闭的显式 opt-in，
+允许在临时 `--out-root` 中通过 translator 的 `clang-frontend` feature 产出
+`l3-{slice_id}-clang-dry-run.json`。默认 pipeline、默认 cargo 命令、repo `validation/evidence`
+和 semantic-pass 边界都不改变。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 CLI 参数 `--emit-clang-dry-run`，默认 `False`。
+  - `main()` 将 `args.emit_clang_dry_run` 传给 `run_translator()`。
+  - `run_translator(..., emit_clang_dry_run=False)` 仅在 opt-in 时给 cargo 命令追加：
+    `--features clang-frontend`，位置在 Cargo 参数区，即 `--manifest-path <Cargo.toml>` 之后、
+    `--bin c2r_translate` 之前。
+  - `emit_cache_metadata()` / `cache_identity()` 增加同名参数；opt-in 时
+    `command_arguments` 记录 `--emit-clang-dry-run`，避免后续 cache/reuse 混淆默认路径和 clang
+    dry-run 路径。
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature`：
+    mock `subprocess.run`，只断言命令构造，确认 `--features clang-frontend` 在 `--bin` 之前，
+    且 `cwd/text/capture_output` 仍按原路径。
+  - 新增 `test_cache_identity_records_emit_clang_dry_run_opt_in`：
+    验证 cache identity 的 `command_arguments` 记录 opt-in。
+  - 新增 `test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact`：
+    用真实 CLI 但只写临时 `--out-root`，并带 `--skip-c-oracle --skip-rust-check`，验证 real-fdb
+    translator input 在 opt-in 下生成 `l3-real-fdb-calc-crc32-clang-dry-run.json`，状态为
+    `ready_without_libclang`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature` 初始失败：
+  `run_translator()` 没有 `emit_clang_dry_run` keyword。
+- 红灯 2：
+  `test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact` 初始失败：
+  argparse 不认识 `--emit-clang-dry-run`。
+- 绿灯 1/2：
+  增加 CLI flag 和 `run_translator()` opt-in cargo feature plumbing 后，两条测试通过。
+- 红灯 3：
+  `test_cache_identity_records_emit_clang_dry_run_opt_in` 初始失败：
+  `cache_identity()` 没有 `emit_clang_dry_run` keyword。
+- 绿灯 3：
+  将 opt-in 贯穿到 `emit_cache_metadata()` / `cache_identity()` 后，cache identity 测试通过。
+
+本轮并行只读审查结论：
+- Hume：确认最小实现应只在 opt-in 时追加 `--features clang-frontend`，且必须放在 Cargo 参数区；
+  默认 flag 为 false 时 cargo 命令完全不变。另建议 cache identity 记录该 opt-in，本轮已补。
+- Ramanujan：建议用 mock 测 `run_translator()` 命令构造，断言 `--features` 在 `--bin` 之前，
+  并避免 repo evidence 写入。本轮 mock 测试按该建议实现；另保留一个真实临时 `--out-root`
+  集成测试，用于验证端到端 artifact 产出，未写仓库 evidence。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_dry_run_opt_in
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py CONTEXT.md
+```
+
+完整结果：
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+- `git diff --check` 通过。
+
+当前核心翻译功能状态：
+- 默认 auto_migrate 路径仍不启用 clang frontend，不写 clang dry-run artifact。
+- 显式 `--emit-clang-dry-run` 可在临时 out-root 中用 Rust translator feature 产出 clang dry-run JSON。
+- 仍未接真实 libclang lowering；当前 dry-run artifact 只是后续 libclang 前端接入前的可观测诊断面。
+
+下一步建议：
+1. 先做最小 libclang 环境探测/feature plumbing：检测环境里是否可用 libclang，但默认仍 fail-closed。
+2. 用小 C fixture 做真实 TU parse/lowering skeleton，先 lower 一个简单函数到 `IrFunction`。
+3. 再将 real-fdb `fdb_calc_crc32` lower 到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 47. 2026-06-26 clang dry-run environment detection
+
+本轮承接第 46 节第 1 条下一步：给 Rust `clang-frontend` dry-run 增加最小
+libclang 环境探测字段。边界保持不变：不新增 `clang-sys`/`libloading`/`build.rs`，
+不动态加载 DLL，不执行真实 libclang parse/lowering，默认构建仍不产出 clang dry-run artifact。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangEnvironment`，序列化到 `ClangDryRun.environment`：
+    - `status=not_configured`：未发现非空 `LIBCLANG_PATH`。
+    - `status=configured`：发现非空 `LIBCLANG_PATH`，记录 `source=LIBCLANG_PATH`
+      和 `libclang_path`。
+    - 两种状态都写 diagnostic，明确 real libclang parsing 仍禁用。
+  - 新增 `ClangEnvironment::detect_from_env()` 纯函数，测试可注入环境 map，避免本机环境
+    造成 flake。
+  - `ClangParseSpec::dry_run()` 保持 `status=ready_without_libclang`，只把当前进程环境探测结果
+    附加到 dry-run JSON；新增 `dry_run_with_environment()` 用于稳定测试。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_dry_run_records_missing_libclang_environment_without_parsing`，验证空环境时
+    `environment.status=not_configured`，总 dry-run 状态仍是 `ready_without_libclang`。
+  - 新增 `clang_dry_run_records_configured_libclang_path_without_enabling_parse`，验证设置
+    `LIBCLANG_PATH` 时只记录配置状态，不开启真实 parse。
+
+本轮未改 Python：
+- `validation/tools/auto_migrate.py` 已通过 `--emit-clang-dry-run` 显式 opt-in 启用
+  `--features clang-frontend`，不会解析 dry-run JSON 内部字段。
+- 当前 cache identity 只区分 `--emit-clang-dry-run` opt-in，不绑定 `LIBCLANG_PATH`。只要 dry-run
+  仍是临时诊断产物，这个边界可接受；若后续把 dry-run artifact 纳入可复用证据或漂移检测，需要补
+  `clang_dry_run_environment_identity` 并加入 Python cache 测试。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_records`
+  初始失败在 `dry_run_with_environment` 方法不存在。
+- 绿灯：
+  增加 `ClangEnvironment`、`detect_from_env()`、`dry_run_with_environment()` 后，两条聚焦测试通过。
+
+本轮并行只读审查结论：
+- Hilbert：建议环境字段嵌在 `dry_run.environment`，只检查 `LIBCLANG_PATH`，不加载 DLL，不新增
+  clang 依赖，不使用 `available/loaded/version/ast` 等暗示真实解析已成功的字段。本轮实现一致。
+- Herschel：确认 Python 主流程不用改；新增 JSON 字段不会破坏现有 `--emit-clang-dry-run`
+  测试。另提醒 cache identity 当前未绑定 `LIBCLANG_PATH`，本节已记录为后续边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_records
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features clang-frontend` translator crate：`43 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`45 passed`。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径不变。
+- `clang-frontend` 仍是 opt-in dry-run diagnostic surface，现在可记录 libclang 环境配置状态。
+- 仍未接真实 libclang parse/lowering，也未把 real-fdb `fdb_calc_crc32` 改为由 libclang AST 驱动。
+
+下一步建议：
+1. 用小 C fixture 做真实 TU parse/lowering skeleton，先证明能从真实前端构造一个最小 `IrFunction`。
+2. 明确 real parse 的启用开关和 fail-closed 错误模型，避免 `LIBCLANG_PATH` 一存在就改变默认行为。
+3. 再把 real-fdb `fdb_calc_crc32` lowering 接到与 `crc32_byte_cursor_function()` 等价的 typed IR。
+
+## 48. 2026-06-26 real clang add-one AST smoke and typed IR lowering skeleton
+
+本轮承接第 47 节第 1 条下一步，并按用户要求先安装 clang：
+- 通过 `winget install --id LLVM.LLVM --exact --source winget --accept-package-agreements --accept-source-agreements`
+  安装 LLVM 22.1.8。
+- 本机路径：
+  - `C:\Program Files\LLVM\bin\clang.exe`
+  - `C:\Program Files\LLVM\bin\libclang.dll`
+- 验证：
+  `clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)`
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangFunctionSkeleton` / `ClangParamSkeleton` / `ClangTypeSkeleton` /
+    `ClangStmtSkeleton` / `ClangExprSkeleton` / `ClangBinaryOperator`。
+  - 新增 `lower_function_skeleton()`，在 `clang-frontend + typed-ir` 双 feature 下把前端函数模型
+    lower 成 `IrFunction`。
+  - 新增 `lower_function_from_clang_ast_dump()`，显式调用 `clang -Xclang -ast-dump=json -fsyntax-only`
+    解析真实小 C translation unit，再把目标 `FunctionDecl` 转成 skeleton 并 lower 到 typed IR。
+  - 当前 AST subset 只覆盖最小 add-one 形态：
+    `FunctionDecl -> ParmVarDecl + CompoundStmt -> ReturnStmt -> BinaryOperator(+) ->
+    DeclRefExpr/IntegerLiteral`，类型只覆盖 `int`。
+  - 未新增 Cargo 依赖，未引入 `clang-sys` 或 `libloading`；这一步是可执行 clang 的 AST dump smoke，
+    不是完整 libclang binding。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture`，验证手写 skeleton 能 lower 出
+    `IrFunction { name=add_one, return int, param value:int, Return(Binary(Add(value, 1))) }`。
+  - 新增 `clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled`，只有设置
+    `C2R_RUN_CLANG_AST_TESTS=1` 时才调用真实 `clang.exe` 解析临时 `add_one.c`；默认测试不依赖本机
+    LLVM 安装。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_skeleton`
+  初始失败在 `lower_function_skeleton` 和 skeleton 类型未定义。
+- 绿灯：
+  增加 skeleton 类型和 `lower_function_skeleton()` 后，聚焦测试通过。
+- 真实 clang smoke：
+  安装 LLVM 后，设置 `CLANG_PATH` / `LIBCLANG_PATH` / `C2R_RUN_CLANG_AST_TESTS=1`，用真实
+  `clang.exe` AST dump 解析临时 `add_one.c`，并成功 lower 到 typed IR。
+
+本轮并行只读审查结论：
+- Noether：建议真实 clang/libclang 路径不要污染默认回归；普通测试只验证 API 和 unavailable/report
+  路径，真实 TU parse 用 opt-in 测试。本轮用 `C2R_RUN_CLANG_AST_TESTS=1` 实现该边界。
+- Dewey：确认 add-one 的最小 `IrFunction` 形状应为 i32 return、一个 i32 param、单条
+  `Return(Binary(Add(Var(value), LitInt(1))))`；不要顺手扩 typed IR emitter 到非 CRC32。本轮只做
+  lowering，不改 `emit_rust_from_ir()`。
+
+已通过命令：
+```powershell
+winget install --id LLVM.LLVM --exact --source winget --accept-package-agreements --accept-source-agreements
+& 'C:\Program Files\LLVM\bin\clang.exe' --version
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_skeleton
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features clang-frontend` translator crate：`43 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`47 passed`，其中真实 clang AST smoke 已执行。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变。
+- `clang-frontend + typed-ir` 现在能从真实 clang AST dump 的最小 add-one TU lower 出 typed IR。
+- 仍未把该路径接入 `auto_migrate.py` 默认流程，也未把 real-fdb `fdb_calc_crc32` 改为真实 AST 驱动。
+- 真实测试目前是 opt-in，避免没有 LLVM 的机器默认失败。
+
+下一步建议：
+1. 把 `lower_function_from_clang_ast_dump()` 包装成报告型入口，输出 `lowered/unavailable/blocked/unsupported`
+   和 errors，便于 Python pipeline opt-in 消费。
+2. 扩展 AST subset：先支持 `return value + literal` 的更多整数类型/操作，再支持局部声明和赋值。
+3. 再用真实 FlashDB `fdb_calc_crc32` AST 做结构审计，决定要先 lower 哪个最小子集，而不是直接跳到全函数。
+
+## 49. 2026-06-26 clang lowering report API
+
+本轮承接第 48 节第 1 条下一步：给 clang AST lowering 增加报告型入口，先作为 Rust API
+可观察状态面，不改默认 translation pipeline，不写新的 artifact，不改 Python cache identity。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangFrontendError` 增加 `Serialize/Deserialize` derive，便于报告结构直接序列化。
+  - 新增 `ClangLoweringReport`：
+    - `status`: `lowered | unavailable | blocked | unsupported`
+    - `frontend`, `source_file`, `function_name`, `clang_path`, `arguments`
+    - `environment`, `diagnostics`, `errors`, `function_ir`
+  - 新增 `lower_function_from_clang_ast_dump_report()`：
+    - 缺 `CLANG_PATH` 时返回 `status=unavailable`，`function_ir=None`，错误
+      `missing_clang_path`。
+    - 配置 `CLANG_PATH` 时调用现有 `lower_function_from_clang_ast_dump()`，成功返回
+      `status=lowered`。
+  - 新增 `lower_function_skeleton_report()`，用于无需真实 clang 的 subset/unsupported 回归测试。
+  - 保留原有 `lower_function_from_clang_ast_dump()` 和 `lower_function_skeleton()` 的
+    `Result<IrFunction, ClangFrontendError>` API，不替换调用方。
+  - 错误映射：
+    - `missing_clang_path` / `clang_ast_dump_unavailable` -> `unavailable`
+    - `unsupported_*` -> `unsupported`
+    - 其他 `invalid_*`、`missing_*`、`clang_ast_dump_failed` 等 -> `blocked`
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_report_records_unavailable_without_clang_path`。
+  - 新增 `clang_lowering_report_maps_unsupported_skeleton_without_ir`。
+  - 扩展 `clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled`，在真实 clang smoke 中
+    同时验证 report `status=lowered` 且 `function_ir=Some(add_one)`。
+
+本轮未改 Python / artifact：
+- `validation/tools/auto_migrate.py` 仍只负责 `--emit-clang-dry-run` opt-in 和
+  `--features clang-frontend`；它不消费 report API。
+- 未新增 `l3-{slice_id}-clang-lowering-report.json`，也未把 report 纳入 manifest。
+- cache identity 暂不记录 `CLANG_PATH` / `LIBCLANG_PATH`。如果后续把 lowering report 作为
+  可复用 evidence 或影响 candidate/semantic status，必须新增独立 opt-in、环境 identity 和 cache
+  drift 测试。
+
+TDD 红绿过程：
+- 红灯：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_report -- --nocapture`
+  初始失败在 `lower_function_from_clang_ast_dump_report` 和 `lower_function_skeleton_report`
+  不存在。
+- 绿灯：
+  增加 `ClangLoweringReport`、两个 report 入口和状态映射后，`unavailable/unsupported` 两条
+  聚焦测试通过。
+- 真实 clang report：
+  `clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled` 在
+  `C2R_RUN_CLANG_AST_TESTS=1` 下继续调用真实 `clang.exe`，并验证 `status=lowered`。
+
+本轮并行只读审查结论：
+- Harvey：建议新增报告包装但保留现有 `Result<IrFunction, ClangFrontendError>` API；不要改
+  `write_translation_artifacts()` 默认 pipeline，不要把 clang lowering error 写入
+  `TranslationResult.errors` / `blocked-repairs` / `ArtifactManifest.status`。本轮实现遵守该边界。
+- Popper：确认 Python 暂时不用改；若 report 后续进入 artifact/cache，必须独立 opt-in，且不能复用
+  现在的 `--emit-clang-dry-run` 默认语义。本轮仅记录该后续边界。
+
+已通过命令：
+```powershell
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_lowering_report -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features clang-frontend` translator crate：`43 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`49 passed`，其中真实 clang AST smoke 已执行。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变。
+- Rust API 层已有真实 clang AST dump -> add-one typed IR 的 `lowered/unavailable/blocked/unsupported`
+  报告状态。
+- 仍未把 clang lowering report 作为 artifact 写出，也未让 Python pipeline/cache 消费。
+- real-fdb `fdb_calc_crc32` 仍未改为真实 AST 驱动。
+
+下一步建议：
+1. 增加一个默认关闭的 Rust artifact opt-in：`l3-{slice_id}-clang-lowering-report.json`，但不要影响
+   manifest status 或 semantic pass。
+2. 在 Python 中单独新增 opt-in，不复用 `--emit-clang-dry-run`，并把 `CLANG_PATH`/`LIBCLANG_PATH`
+   纳入 cache identity。
+3. 对 real-fdb `fdb_calc_crc32` 先做 AST 结构审计 report，而不是直接 lowering 全函数。
+
+## 50. 2026-06-26 Rust opt-in clang lowering report artifact
+
+本轮承接第 49 节第 1 条下一步：增加默认关闭的 Rust-only artifact opt-in，
+写出 `l3-{slice_id}-clang-lowering-report.json`，但不影响 `ArtifactManifest.status`、
+普通 translation errors、semantic pass 或 Python pipeline。
+
+核心改动：
+- `crates/c2r-translator/Cargo.toml`
+  - 新增 feature：`clang-lowering-report = ["clang-frontend", "typed-ir"]`。
+  - 默认仍为空；`clang-frontend` 单独开启时仍只写 dry-run artifact，不写 lowering report。
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在 `#[cfg(feature = "clang-lowering-report")]` 下追加
+    `write_clang_lowering_report_artifact()`。
+  - 新 artifact 文件名：`l3-{slice_id}-clang-lowering-report.json`。
+  - report source path 使用 `source_root.join(source_file)`，支持相对 `source_file`。
+  - `manifest.status` 仍只来自 `translate_slice(spec).errors`；lowering report 的
+    `unavailable/blocked/unsupported` 不回写普通翻译状态。
+  - artifact JSON 包含：
+    - `artifact_kind=clang-lowering-report`
+    - `frontend=clang`
+    - `status=lowered|unavailable|blocked|unsupported`
+    - `source_file`, `function_name`
+    - `claim_boundary.role=diagnostic_only`
+    - `claim_boundary.affects_manifest_status=false`
+    - `claim_boundary.affects_semantic_pass=false`
+    - `claim_boundary.authoritative_evidence=false`
+    - `diagnostics`, `errors`, `lowering_report`, `metadata`
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangLoweringReport.source_file` 统一将 Windows `\` 规范化为 `/`，避免 artifact 顶层和
+    report 内部路径风格不一致。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 扩展默认测试：默认 feature 不写 dry-run，也不写 lowering report。
+  - 新增 `clang_frontend_feature_does_not_emit_lowering_report_without_opt_in`。
+  - 新增 `clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status`。
+
+本轮未改 Python / cache：
+- `validation/tools/auto_migrate.py` 仍只有 `--emit-clang-dry-run`，不复用该 flag 产出 lowering
+  report。
+- cache identity 暂不记录 `CLANG_PATH` / `LIBCLANG_PATH`。后续如果 Python 要产出/消费 lowering
+  report，应新增独立 `--emit-clang-lowering-report`，并记录 feature set、clang 环境和版本身份。
+- 未刷新仓库 `validation/evidence/**`。
+
+TDD 红绿过程：
+- 红灯 1：
+  `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status`
+  初始失败：crate 没有 `clang-lowering-report` feature。
+- 红灯 2：
+  增加 feature 和 artifact writer 后，测试失败在 report 内部 `source_file` 仍含 Windows 反斜杠，
+  与 artifact 顶层规范化路径不一致。
+- 绿灯：
+  增加 `normalized_report_path()`，report 内部路径也规范化为 `/` 后，聚焦测试通过。
+
+本轮并行只读审查结论：
+- Lorentz：建议 feature 默认关闭、只追加 artifact、不改变 manifest status；JSON 应显式声明
+  diagnostic-only claim boundary。本轮实现与该建议一致。
+- Gauss：确认 Python 本轮不应改；后续应新增独立 `--emit-clang-lowering-report`，不能复用
+  `--emit-clang-dry-run`。本节已记录该边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_does_not_emit_lowering_report_without_opt_in
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH; $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'; $env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'; $env:C2R_RUN_CLANG_AST_TESTS = '1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+```
+
+完整结果：
+- 默认 translator crate：`35 passed`。
+- `--features clang-frontend` translator crate：`44 passed`。
+- `--features typed-ir` translator crate：`37 passed`。
+- `--features typed-ir,clang-frontend` translator crate：`50 passed`，真实 clang AST smoke 已执行。
+- `--features clang-lowering-report` translator crate：`50 passed`，report artifact 测试已执行。
+- `validation.tools.test_auto_migrate`：`Ran 47 tests ... OK`。
+- 相关 Python 回归：`Ran 100 tests ... OK`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不变。
+- Rust 侧已有可显式 opt-in 的 clang lowering report artifact。
+- artifact 是 diagnostic-only，不影响 manifest status、semantic pass 或 Python cache。
+- real-fdb `fdb_calc_crc32` 仍未改为真实 AST 驱动。
+
+下一步建议：
+1. 给 Python 增加独立 `--emit-clang-lowering-report`，只在显式 opt-in 时启用
+   `--features clang-lowering-report`。
+2. 为该 opt-in 增加 cache identity：至少记录 command arg、feature set、`CLANG_PATH` /
+   `LIBCLANG_PATH` 配置状态和 clang version。
+3. 再做 real-fdb `fdb_calc_crc32` 的 AST 结构审计 report，不直接承诺全函数 lowering。
+
+## 51. 2026-06-26 Python opt-in for clang lowering report artifact
+
+本轮承接第 50 节第 1/2 条下一步：给 Python `auto_migrate.py` 增加独立、默认关闭的
+`--emit-clang-lowering-report` opt-in。该 flag 只在显式传入时启用 Rust translator 的
+`clang-lowering-report` feature，并记录 lowering report 相关 cache identity；不复用
+`--emit-clang-dry-run`，不刷新仓库 `validation/evidence/**`，不改变默认 pipeline、
+manifest status 或 semantic pass 边界。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 CLI 参数 `--emit-clang-lowering-report`，默认 `False`。
+  - `main()` 将该参数传入 `run_translator()` 和 `emit_cache_metadata()`。
+  - `run_translator()` 新增 `emit_clang_lowering_report` 参数，并通过
+    `translator_feature_set()` 统一构造 cargo feature：
+    - 默认：不传 `--features`。
+    - `--emit-clang-dry-run`：只传 `clang-frontend`。
+    - `--emit-clang-lowering-report`：传 `clang-lowering-report`，位置仍在
+      cargo 参数区、`--bin` 之前。
+  - cache metadata 新增动态 `cache_input_fields()`：
+    - 默认 cache input fields 保持原基线，不强制旧/默认 evidence 带新 clang 字段。
+    - 只有 lowering report opt-in 时追加 `translator_feature_set` 和
+      `clang_lowering_identity`。
+  - `cache_identity()` 仅在 lowering report opt-in 时记录：
+    - `command_arguments` 追加 `--emit-clang-lowering-report`。
+    - `translator_feature_set`。
+    - `clang_lowering_identity`，包含 `CLANG_PATH` / `LIBCLANG_PATH` 配置状态、路径和
+      `clang_version`。`clang_version` 仅在 opt-in 且 `CLANG_PATH` 非空时通过
+      `command_version([CLANG_PATH, "--version"])` 探测；不加入全局 `tool_versions()`。
+  - `cache_drift_report()` 改为读取 previous/current payload 自带的 `cache_input_fields`
+    并与基线字段取并集，确保 opt-in 字段变化会使 cache drift，但旧 cache 不被新字段硬性破坏。
+- `validation/tools/test_auto_migrate.py`
+  - 新增默认路径不启用 clang feature 的 mock 命令测试。
+  - 新增 dry-run opt-in 不启用 lowering report feature 的测试。
+  - 新增 lowering report opt-in 命令构造测试。
+  - 新增默认 cache identity 不写 lowering 字段的测试。
+  - 新增 lowering report opt-in cache identity 测试，mock `command_version()` 验证
+    clang version 记录。
+  - 新增真实 CLI + 临时 `--out-root` 的 real-fdb lowering report artifact 测试，
+    并清空 `CLANG_PATH` / `LIBCLANG_PATH`，验证 fail-closed `status=unavailable`、
+    `missing_clang_path`、`claim_boundary=diagnostic_only` 和 opt-in cache fields。
+  - 新增 cache drift 测试，确认 `command_arguments`、`translator_feature_set`、
+    `clang_lowering_identity` 变化会进入 `drifted_keys`。
+
+TDD 红绿过程：
+- 红灯：
+  - 新增 focused tests 后，`run_translator()` 首先因为不接受
+    `emit_clang_lowering_report` keyword 失败。
+  - `cache_identity()` 因不接受 `emit_clang_lowering_report` / `environment` keyword 失败。
+  - CLI 真实临时 out-root 测试因 argparse 不认识 `--emit-clang-lowering-report` 失败。
+- 绿灯：
+  - 增加 CLI flag、参数透传、cargo feature 注入、动态 cache identity 和 drift 字段选择后，
+    focused tests 通过。
+  - 根据并行只读审查建议，把 `translator_feature_set` / `clang_lowering_identity`
+    从静态 `CACHE_INPUT_FIELDS` 移出，改成 lowering report opt-in 时动态加入，避免默认
+    cache identity 漂移。
+
+本轮并行只读审查结论：
+- Aristotle：建议复用现有 dry-run 三层测试模式：mock cargo 命令、直接测 cache identity、
+  真实 CLI + 临时 out-root；并补默认不变、dry-run 不启用 lowering、cache drift 覆盖。
+  本轮已采纳。
+- Wegener：确认最小实现应只改 `main()`、`run_translator()`、`emit_cache_metadata()`、
+  `cache_identity()`；提醒不要刷新 repo evidence，不要把 clang version 放入全局
+  `tool_versions()`，并建议 lowering identity 字段只在 opt-in cache input 中动态加入。
+  本轮已采纳。
+
+已通过命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_drift_invalidates_on_clang_lowering_report_identity_change validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact
+python -B -m unittest validation.tools.test_auto_migrate
+python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_real_fdb_calc_crc32_l3_evidence
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_does_not_emit_lowering_report_without_opt_in
+git diff --check -- validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py
+```
+
+完整结果：
+- focused Python opt-in tests：`Ran 7 tests ... OK`。
+- `validation.tools.test_auto_migrate`：`Ran 54 tests ... OK`。
+- 相关 Python 回归：`Ran 107 tests ... OK`。
+- 两条 Rust focused tests 均通过。
+- `git diff --check` 通过。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不启用 clang frontend/lowering report。
+- `--emit-clang-dry-run` 仍只启用 dry-run artifact，不会启用 lowering report。
+- `--emit-clang-lowering-report` 现在能通过 Python pipeline 在临时 out-root 中产出
+  `l3-{slice_id}-clang-lowering-report.json`，并把该 opt-in 的 feature/env/version 身份写入
+  cache metadata。
+- lowering report 仍是 diagnostic-only，不影响 route、manifest status 或 semantic pass。
+- real-fdb `fdb_calc_crc32` 仍未改为真实 AST 驱动生成；下一步应先做 AST 结构审计 report。
+
+下一步建议：
+1. 用 `--emit-clang-lowering-report` 和已安装 LLVM 环境对 real-fdb `fdb_calc_crc32` 做一次
+   临时 out-root report，审计 AST 中真实未支持节点，而不是刷新仓库 evidence。
+2. 基于 report 增加专门的 AST subset audit artifact 或测试，明确 `while(size--)`、
+   `*p++`、table lookup 等节点的 lowering 缺口。
+3. 再选择最小 AST lowering 子集，不要直接承诺全函数 lowering。
+
+## 52. 2026-06-26 real-fdb clang lowering report crosses type layer
+
+本轮承接第 51 节第 1 条下一步：用已安装 LLVM 和 `--emit-clang-lowering-report`
+对 real-fdb `fdb_calc_crc32` 做临时 out-root report，并把 report 的失败点从环境/头文件/原型/类型层推进到语句层。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `lower_function_from_clang_parse_spec_report()`，让 lowering report 复用
+    `ClangParseSpec::clang_arguments()`，因此真实 AST dump 会带上 slice spec 中的 `-I...`
+    和 `-D...` 参数。
+  - `lower_function_from_clang_ast_dump()` 现在复用内部
+    `lower_function_from_clang_ast_dump_with_arguments()`，避免裸 source-file 入口和
+    parse-spec 入口逻辑分叉。
+  - `find_function_decl()` 改为优先选择带 `CompoundStmt` body 的 `FunctionDecl`，
+    再 fallback 到任意同名声明，避免 include header 中的 prototype 抢在函数定义前被选中。
+  - `ClangTypeKind` 新增 `Void` 和 `Pointer`。
+  - `type_from_qual_type()` 现在覆盖：
+    - `uint32_t` / `unsigned int` -> unsigned 32-bit integer
+    - `uint8_t` / `unsigned char` -> unsigned 8-bit integer
+    - `size_t` -> canonical `size_t` 的 unsigned 64-bit integer
+    - `unsigned long` / `unsigned long long` -> 保留自身 canonical 的 unsigned 64-bit integer
+    - `void` / `const void`
+    - `T *` pointer skeleton
+  - `lower_type()` 现在能把 `Void` 和 `Pointer` lower 到 typed IR；`const void *`
+    会被表示为非 const pointer，pointee 为 const void。
+- `crates/c2r-translator/src/lib.rs`
+  - `write_clang_lowering_report_artifact()` 改为调用 parse-spec aware 的 report 入口，
+    使 artifact 路径不再丢失 include/define 参数。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增默认 skeleton 测试：
+    `clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params`。
+  - 新增 opt-in 真实 clang 测试：
+    `clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled`。
+  - 新增 opt-in 真实 clang 类型测试：
+    `clang_ast_dump_lowers_uint32_integer_type_when_enabled`。
+  - 新增 opt-in 真实 clang 参数测试：
+    `clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled`。
+
+真实 real-fdb 临时 report 推进链：
+- 修复前：`clang_ast_dump_failed`，`flashdb.h` not found。
+- 带入 parse-spec include args 后：选中 header prototype，报
+  `unsupported_function_body: FunctionDecl fdb_calc_crc32 does not contain a CompoundStmt body`。
+- 优先选择函数定义后：报 `unsupported_clang_type: uint32_t is outside the current type skeleton`。
+- 支持 `uint32_t` 后：报 `unsupported_clang_type: const void * is outside the current type skeleton`。
+- 支持 `const void *` / `size_t` 后：当前真实 blocker 已推进到
+  `unsupported_clang_stmt: DeclStmt is outside the current clang lowering skeleton`。
+
+本轮并行只读审查结论：
+- Meitner：确认 real-fdb 后续会依次遇到 `DeclStmt`、assignment、`WhileStmt`、
+  postfix `UnaryOperator`、`ArraySubscriptExpr` 和 table lookup 等缺口；建议继续把 report
+  作为 diagnostic-only surface，不要把字符串模式 translator 的 CRC32 成功误认为 clang AST lowering 成功。
+- Cicero：确认 Python 侧当前 opt-in/report/cache 已够用；本轮不需要新增 Python artifact。
+  如果后续加真实 clang Python 测试，应继续用临时 out-root 和 `C2R_RUN_CLANG_AST_TESTS=1`
+  gate，断言 blocked/unsupported 而不是 lowered。
+- Boyle：确认 IR 已经具备 `Void` / `Pointer` / `is_const` / `width_bits` 承载能力；
+  建议 `const void *` 表示为非 const pointer + const void pointee，并提醒不要把普通
+  `unsigned long` 误 canonical 成 `size_t`。本轮已采纳 canonical 修正。
+- Bernoulli：采样真实 `fdb_calc_crc32` AST，确认函数体顶层顺序为
+  `DeclStmt -> BinaryOperator("=") -> BinaryOperator("=") -> WhileStmt -> ReturnStmt`。
+  因此当前第一层 blocker 是 `DeclStmt`；如果后续支持局部声明，下一层有价值 blocker
+  会是 `p = (const uint8_t *)buf;` 对应的 assignment `BinaryOperator("=")`，再往后才是
+  `WhileStmt`、postfix `--/++`、deref、`ArraySubscriptExpr` 和 `^/&/>>`。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_uint32_integer_type_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+git diff --check -- crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/src/lib.rs crates/c2r-translator/tests/bounded_translation.rs
+```
+
+完整结果：
+- focused skeleton test：`1 passed`。
+- 三条 opt-in 真实 clang smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`54 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="DeclStmt is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- 默认 generated candidate 路径仍不启用 clang frontend/lowering report。
+- `--emit-clang-lowering-report` 能在真实 `fdb_calc_crc32` 上产出 diagnostic-only report，
+  并且已经进入目标函数定义和参数类型层。
+- real-fdb clang AST lowering 仍未完成；当前第一个真实语句层缺口是 `DeclStmt`。
+- 已有字符串/typed-IR emitter 路径能生成 CRC32 candidate，但这不是 clang AST lowering 成功。
+
+下一步建议：
+1. 对 `DeclStmt` 做最小 AST subset audit/fixture，优先记录变量声明、初始化和局部指针类型，
+   不要直接吞下整段 `while(size--)`。
+2. 在 report 中显式 inventory unsupported statement/expression kinds，尤其是 `WhileStmt`、
+   assignment `BinaryOperator("=")`、postfix `UnaryOperator("--"/"++")`、deref、`ArraySubscriptExpr`。
+3. 再按真实 blocker 顺序选择最小 lowering 子集。
+
+## 53. 2026-06-26 clang DeclStmt minimal lowering
+
+本轮承接第 52 节的真实 blocker：只为 clang AST lowering report 增加最小 `DeclStmt`
+支持，让 real-fdb `fdb_calc_crc32` 从局部声明层推进到下一层 assignment blocker。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `Decl { name, ty, init }`。
+  - `stmt_skeleton_from_ast()` 现在识别 `DeclStmt`，并调用 `decl_stmt_skeleton_from_ast()`。
+  - `decl_stmt_skeleton_from_ast()` 当前只接受单个、无 initializer 的 `VarDecl`：
+    - 读取 `VarDecl.name`。
+    - 读取 `VarDecl.type.qualType`。
+    - 如果 `VarDecl` 存在 `init` 字段或 `inner` 子节点，则返回
+      `Unsupported("VarDecl initializer is outside ...")`。
+  - `type_from_qual_type()` 增加 `const ` qualifier peeling，使 `const uint8_t *`
+    能 lower 成 pointer-to-const-uint8。
+  - `lower_stmt()` 能把 `ClangStmtSkeleton::Decl` lower 成 `IrStmt::Decl`。
+  - unsupported statement 诊断现在会带 opcode，例如
+    `BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_const_uint8_pointer_decl`，覆盖 deterministic
+    skeleton -> typed IR declaration。
+  - 新增 `clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled`，用真实 clang
+    验证 `const uint8_t *p; return crc;`。
+  - 新增 `clang_ast_dump_reports_assignment_opcode_statement_when_enabled`，确认 assignment
+    仍 unsupported，但 report 明确给出 `BinaryOperator opcode =`。
+  - 新增 `clang_ast_dump_rejects_initialized_decl_stmt_when_enabled`，确认
+    `uint32_t next = crc;` 这类 initialized declaration 仍不被本轮误收。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_const_uint8_pointer_decl` 先失败在
+  `ClangStmtSkeleton::Decl` variant 不存在。
+- 绿灯 1：新增 `Decl` skeleton、`DeclStmt -> VarDecl` parser、`const uint8_t *`
+  type lowering 和 `IrStmt::Decl` lowering 后，skeleton test 通过。
+- 红灯 2：真实 clang `clang_ast_dump_reports_assignment_opcode_statement_when_enabled`
+  先失败，错误信息只有 `BinaryOperator is outside ...`。
+- 绿灯 2：unsupported statement reason 加入 `opcode` 后，该测试通过。
+- 红灯 3：真实 clang `clang_ast_dump_rejects_initialized_decl_stmt_when_enabled`
+  先失败，因为 initialized declaration 被误 lower 为 `lowered`。
+- 绿灯 3：`decl_stmt_skeleton_from_ast()` 遇到 `init` 或 `inner` 时返回 unsupported，
+  避免本轮越界支持 cast/init 表达式。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 52 节末尾：`unsupported_clang_stmt: DeclStmt is outside the current clang lowering skeleton`。
+- 本轮后：`unsupported_clang_stmt: BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- 这对应 `fdb_utils.c` 中 `p = (const uint8_t *)buf;` 的 assignment 层。
+
+本轮并行只读审查结论：
+- Mendel：采样真实 AST，确认 `const uint8_t *p;` 的形状为
+  `DeclStmt -> VarDecl(name=p, type.qualType="const uint8_t *")`，无 initializer 时
+  `VarDecl` 没有 `init` 和 `inner`；带 cast init 时才出现 `init` 和
+  `inner[0]=CStyleCastExpr`。
+- Linnaeus：确认 `IrStmt::Decl` 的最小契约是 `name/ty/init/source_span`；
+  提醒 initialized declaration 会扩大支持面。本轮采纳该建议，显式拒绝 initializer。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_const_uint8_pointer_decl -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_reports_assignment_opcode_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_initialized_decl_stmt_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused DeclStmt skeleton test：`1 passed`。
+- 三条真实 clang smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`58 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="BinaryOperator opcode = is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部 `const uint8_t *p;` 声明。
+- 当前真实 blocker 是 assignment `BinaryOperator("=")`，其中 RHS 是
+  `CStyleCastExpr -> ImplicitCastExpr -> DeclRefExpr(buf)`。
+- initialized declaration、assignment、while、postfix inc/dec、deref、array subscript、
+  位运算仍未纳入 clang AST lowering subset。
+
+下一步建议：
+1. 先为 assignment `BinaryOperator("=")` 写最小 AST fixture，覆盖 `p = (const uint8_t *)buf;`。
+2. 同时补 `CStyleCastExpr(BitCast)` 和 `DeclRefExpr` RHS 的最小表达式 lowering。
+3. 继续保持 diagnostic-only report 边界，下一步目标只是把 real-fdb blocker 推进到
+   `crc = crc ^ ~0U;` 或 `WhileStmt`，不是一次性 lower 完整 CRC32。
+
+## 54. 2026-06-26 clang assignment and BitCast lowering
+
+本轮承接第 53 节的真实 blocker：只为 clang AST lowering report 增加最小 assignment
+和 `CStyleCastExpr(BitCast)` 支持，让 real-fdb `fdb_calc_crc32` 从
+`p = (const uint8_t *)buf;` 推进到 `crc = crc ^ ~0U;` 的表达式层。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `Assign { target, value }`。
+  - `ClangExprSkeleton` 新增 `Cast { target, expr, implicit }`。
+  - `stmt_skeleton_from_ast()` 现在仅把 statement-level `BinaryOperator opcode "="`
+    识别为 assignment；其他 statement-level binary op 仍走 unsupported。
+  - `assign_stmt_skeleton_from_ast()` 要求 assignment 有且仅有两个 operand。
+  - `expr_skeleton_from_ast()` 现在支持 `CStyleCastExpr`，但仅接受
+    `castKind == "BitCast"`；`IntegralCast` 等其他 castKind 仍 unsupported。
+  - `lower_stmt()` 能把 `Assign` lower 成 `IrStmt::Assign`。
+  - `lower_expr()` 能把显式 cast lower 成 `IrExpr::Cast { implicit=false }`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_pointer_cast_assignment`，验证 skeleton 层
+    `p = (const uint8_t *)buf` 会变成 `IrStmt::Assign` + 显式 `IrExpr::Cast`。
+  - 将真实 clang assignment smoke 从只检查 unsupported opcode 改为
+    `clang_ast_dump_lowers_assignment_statement_when_enabled`，验证 `crc = crc;` 能 lower。
+  - 新增 `clang_ast_dump_lowers_pointer_cast_assignment_when_enabled`，验证真实 clang
+    的 `p = (const uint8_t *)buf;` 形状能 lower。
+  - 新增 `clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled`，确认
+    `CStyleCastExpr castKind="IntegralCast"` 仍 fail-closed。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_pointer_cast_assignment` 先失败在
+  `ClangStmtSkeleton::Assign` 和 `ClangExprSkeleton::Cast` 不存在。
+- 绿灯 1：新增 `Assign`/`Cast` skeleton、assignment parser、`CStyleCastExpr` parser
+  和 lowering 后，skeleton 与真实 clang assignment/cast smoke 均通过。
+- 红灯 2：`clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled` 先失败，
+  因为当前实现会把 `IntegralCast` 错误 lower 为成功。
+- 绿灯 2：`CStyleCastExpr` 分支增加 `castKind == "BitCast"` 检查，非 BitCast
+  返回 unsupported。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 53 节末尾：
+  `unsupported_clang_stmt: BinaryOperator opcode = is outside the current clang lowering skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: BinaryOperator: opcode ^ is outside the current skeleton`。
+- 这对应 `fdb_utils.c` 中 `crc = crc ^ ~0U;` 的 RHS 表达式层。
+
+本轮并行只读审查结论：
+- Carson：采样真实 `p = (const uint8_t *)buf;` AST，确认形状为
+  `BinaryOperator("=") -> DeclRefExpr(p) + CStyleCastExpr(BitCast) -> ImplicitCastExpr -> DeclRefExpr(buf)`。
+  同时指出必须检查 `castKind == "BitCast"`，否则会误收 `IntegralCast`。本轮已采纳。
+- McClintock：确认当前 lower 出的 `IrStmt::Assign { target: Var(p), value: Cast(target=u8*, expr=Var(buf), implicit=false) }`
+  能匹配 `matches_pointer_cast_assignment()`；但完整 `is_crc32_byte_cursor_ir()` gate
+  仍要求 5 条固定语句、固定参数名和后续 while/table/bit-op 形状，不能把本轮理解为完整 clang CRC32 通路打通。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_pointer_cast_assignment -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_assignment_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_pointer_cast_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_non_bitcast_c_style_cast_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused assignment/cast tests：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`60 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode ^ is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明和 `p = (const uint8_t *)buf;` assignment。
+- 当前真实 blocker 是 `crc = crc ^ ~0U;` 的 RHS：`BinaryOperator opcode "^"`。
+- `~0U` 的 `UnaryOperator`、`^`/`&`/`>>`、`while(size--)`、`*p++`、`crc32_table[...]`
+  仍未纳入 clang AST lowering subset。
+- 完整 CRC32 Rust 生成仍主要来自字符串 recognizer 构造的 hard-coded typed IR，
+  不是完整 clang AST lowering 已能驱动 emitter。
+
+下一步建议：
+1. 为 `crc = crc ^ ~0U;` 做最小表达式 lowering：`BinaryOperator("^")` 和
+   `UnaryOperator("~")` + unsigned zero literal。
+2. 补对应 fail-closed 负例，避免一次性放开其他 cast/位运算/复杂表达式。
+3. 继续用 real-fdb 临时 out-root report 验证 blocker 推进，下一层预期是
+   `WhileStmt` 或 loop condition 的 postfix decrement。
+
+## 55. 2026-06-26 clang bitxor/bitnot expression lowering
+
+本轮承接第 54 节的真实 blocker：只为 clang AST lowering report 增加最小
+`crc = crc ^ ~0U;` 表达式支持，并补一个轻量 `ParenExpr` 公差层；不改通用 typed IR
+emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Unary { op, operand, ty }`。
+  - `ClangBinaryOperator` 新增 `BitXor`，映射 clang `BinaryOperator opcode "^"`。
+  - 新增 `ClangUnaryOperator::BitNot`，映射 clang `UnaryOperator opcode "~"`。
+  - `expr_skeleton_from_ast()` 现在把 `ParenExpr` 和 `ImplicitCastExpr` 一样透明下钻。
+  - `lower_expr()` 现在能 lower `Unary` 到 `IrExpr::Unary`。
+  - `lower_binary_operator()` / `lower_unary_operator()` 分别映射到
+    `IrBinOp::BitXor` / `IrUnOp::BitNot`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_bitxor_bitnot_assignment`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_bitxor_bitnot_assignment` 先失败在
+  `ClangUnaryOperator`、`ClangBinaryOperator::BitXor`、`ClangExprSkeleton::Unary`
+  不存在。
+- 绿灯 1：补最小 skeleton 和 lower 映射后，skeleton 与真实 clang `crc = crc ^ ~0U;`
+  smoke 均通过。
+- 红灯 2：`clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled`
+  先失败为 `unsupported_clang_expr: ParenExpr ... outside ...`。
+- 绿灯 2：`ParenExpr` 在 `expr_skeleton_from_ast()` 中透明下钻后，该测试通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 54 节末尾：
+  `unsupported_clang_expr: BinaryOperator: opcode ^ is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_stmt: WhileStmt is outside the current clang lowering skeleton`。
+- 这对应 `fdb_utils.c` 中已经跨过 `crc = crc ^ ~0U;`，下一层进入循环语句。
+
+本轮并行只读审查结论：
+- Russell：真实 clang AST 中 `crc ^ ~0U` 的 RHS 是
+  `BinaryOperator("^") -> ImplicitCastExpr(DeclRefExpr crc) + UnaryOperator("~") -> IntegerLiteral("0")`；
+  `0U` 后缀不作为 literal spelling 保留，只能从 `type.qualType="unsigned int"` 看出；
+  括号版本会多一层 `ParenExpr`。本轮已支持这些最小形状。
+- Nash：typed IR 已有 `IrExpr::Binary` / `IrExpr::Unary`、`IrBinOp::BitXor`、
+  `IrUnOp::BitNot`，因此本轮不需要动 emitter；当前 emitter 仍只是 CRC32 byte cursor
+  特例，不是通用 typed IR -> Rust emitter。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_bitxor_bitnot_assignment -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused bitxor/bitnot skeleton test：`1 passed`。
+- 两条真实 clang bitxor/bitnot smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`64 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_stmt`，
+  `errors[0].message="WhileStmt is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`。
+- 当前真实 blocker 是 `WhileStmt`，下一步要面对 `while (size--)` 的 condition、
+  postfix decrement、循环体中的 `*p++`、`& 0xff`、`>> 8`、table lookup 和后续 `^`。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动；通用 recursive emitter
+  仍可后置。
+
+下一步建议：
+1. 为 `WhileStmt` 写最小 skeleton/真实 clang smoke，但只支持一个 condition + compound body
+   的外壳，先把 report 推进到 condition 内的 `UnaryOperator("--")`。
+2. 继续把 `ParenExpr`/`ImplicitCastExpr` 当作透明包装处理，避免真实 clang AST 的无害包装
+   让 report 提前 fail。
+3. 暂不扩展通用 emitter，等 CRC32 typed IR 形状能从 clang lowering 串起来后再决定。
+
+## 56. 2026-06-26 clang WhileStmt outer-shell lowering
+
+本轮承接第 55 节的真实 blocker：只为 clang AST lowering report 增加最小 `WhileStmt`
+外壳支持，把 real-fdb `fdb_calc_crc32` 从 `WhileStmt` 推进到 condition 内的
+postfix decrement；不支持 `size--` 本身，也不扩展 emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `While { condition, body }`。
+  - `function_skeleton_from_ast()` 现在复用 `compound_body_skeleton_from_ast()` 展开
+    顶层 `CompoundStmt`。
+  - 新增 `compound_body_skeleton_from_ast()`，把 `CompoundStmt.inner` 递归映射为
+    `Vec<ClangStmtSkeleton>`。
+  - `stmt_skeleton_from_ast()` 现在识别 `WhileStmt`。
+  - 新增 `while_stmt_skeleton_from_ast()`，要求 `WhileStmt` 恰好有 condition/body 两个
+    child，且 body 必须是 `CompoundStmt`。
+  - `lower_stmt()` 现在能把 skeleton while lower 成 `IrStmt::While`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_simple_while_statement`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_simple_while_statement_when_enabled`。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_simple_while_statement` 先失败在
+  `ClangStmtSkeleton::While` 不存在。
+- 绿灯 1：补 `While` skeleton、`WhileStmt` parser、`CompoundStmt` body 展开和
+  `IrStmt::While` lowering 后，skeleton 与真实 clang simple while smoke 均通过。
+- `clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled` 确认
+  `while (size--)` 仍 fail-closed 到 `unsupported_clang_expr`，message 包含
+  `UnaryOperator: opcode --`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 55 节末尾：
+  `unsupported_clang_stmt: WhileStmt is outside the current clang lowering skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: UnaryOperator: opcode -- is outside the current skeleton`。
+- 这对应 `while (size--)` 的 condition 层。
+
+本轮并行只读审查结论：
+- Ohm：真实 `fdb_calc_crc32` 顶层顺序仍为
+  `DeclStmt -> BinaryOperator("=") -> BinaryOperator("=") -> WhileStmt -> ReturnStmt`；
+  `WhileStmt.inner[0]` 是 `UnaryOperator opcode="--" isPostfix=true`，`inner[1]`
+  是 `CompoundStmt`；循环体第一层是 assignment。
+- Arendt：typed IR 已有 `IrStmt::While { condition, body }`，不需要新增 compound IR；
+  当前 emitter 仍不是通用 while emitter；`while(size--)`、无大括号 body、`break`/`continue`
+  等仍应 fail-closed。本轮保留 body 必须是 `CompoundStmt` 的窄边界。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_simple_while_statement -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_simple_while_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_reports_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused while skeleton test：`1 passed`。
+- 两条真实 clang while smoke：均 `1 passed`。
+- `--features clang-lowering-report` translator crate：`67 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="UnaryOperator: opcode -- is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;` 和 `WhileStmt` 外壳。
+- 当前真实 blocker 是 `while (size--)` 的 postfix decrement condition。
+- 真实循环体后续仍有 `*p++`、`& 0xff`、`>> 8`、`crc32_table[...]`、table lookup 和
+  后续 `^` 等缺口。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `UnaryOperator("--") isPostfix=true` 写最小 lowering，映射到现有
+   `IrExpr::IncDec { op: Dec, prefix: false }`。
+2. 同时补负例：prefix decrement 或 unsupported unary opcode 不应被误收。
+3. 继续用 real-fdb 临时 report 验证 blocker 推进；预期下一层进入循环体里的
+   table/index/deref 表达式。
+
+## 57. 2026-06-26 clang postfix decrement lowering
+
+本轮承接第 56 节的真实 blocker：只为 clang AST lowering report 增加最小
+`UnaryOperator("--") isPostfix=true` 支持，让 `while (size--)` 的 condition lower
+成现有 typed IR `IrExpr::IncDec`；prefix `--size` 和 `++` 仍 fail-closed。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `IncDec { target, op, prefix, ty }`。
+  - 新增 `ClangIncDecOperator::Dec`。
+  - `expr_skeleton_from_ast()` 在 `UnaryOperator opcode "--"` 且 `isPostfix == true`
+    时生成 `ClangExprSkeleton::IncDec { prefix=false }`。
+  - `UnaryOperator opcode "--"` 但不是 postfix 时返回
+    `unsupported_clang_expr: prefix opcode -- ...`。
+  - `lower_expr()` 能把 clang inc/dec lower 成 `IrExpr::IncDec`。
+  - 新增 `lower_inc_dec_operator()`，当前只映射 `Dec -> IrIncDecOp::Dec`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_postfix_decrement_condition`。
+  - 将真实 clang smoke 改为
+    `clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled`。
+  - 新增真实 clang 负例：
+    `clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_postfix_decrement_condition` 先失败在
+  `ClangIncDecOperator` 和 `ClangExprSkeleton::IncDec` 不存在。
+- 绿灯 1：补专用 IncDec skeleton、postfix `--` parser 和 `IrExpr::IncDec` lowering 后，
+  skeleton 与真实 clang postfix decrement smoke 均通过。
+- 负例：`while (--size)` 继续返回 unsupported，message 包含 `prefix opcode --`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 56 节末尾：
+  `unsupported_clang_expr: UnaryOperator: opcode -- is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton`。
+- 这说明已经跨过 `while (size--)` condition，进入循环体中
+  `crc32_tab[(crc ^ *p++) & 0xff]` 的 table/index 表达式层。
+
+本轮并行只读审查结论：
+- Hegel：真实 clang AST 用 `UnaryOperator opcode="--"` 表示 prefix/postfix decrement，
+  必须看 `isPostfix`；`while(size--)` 是 `isPostfix=true`，
+  `while(--size)` 是 `isPostfix=false`。`*p++` 后续形状是
+  `UnaryOperator("*") -> UnaryOperator("++" isPostfix=true) -> DeclRefExpr(p)`。
+- Plato：`IrExpr::IncDec { target, op, prefix, ty }` 已能表达 `size--`；
+  应使用专用 clang IncDec skeleton，不应复用纯 `Unary(BitNot)`；
+  `++`、复杂 lvalue、`return value++`、`helper(value++)` 仍应 fail-closed。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_postfix_decrement_condition -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused postfix decrement skeleton test：`1 passed`。
+- 真实 clang postfix decrement smoke：`1 passed`。
+- 真实 clang prefix decrement 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：`69 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳和 `while(size--)` condition。
+- 当前真实 blocker 是循环体里的 `ArraySubscriptExpr`，来自
+  `crc32_tab[(crc ^ *p++) & 0xff]`。
+- 后续仍需分层处理 `ArraySubscriptExpr`、`BinaryOperator("&")`、`UnaryOperator("*")`、
+  postfix `++`、`BinaryOperator(">>")` 以及 table lookup。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 先采样/测试 `crc32_tab[(crc ^ *p++) & 0xff]` 的真实 AST，决定先补
+   `ArraySubscriptExpr` 外壳还是先补内部 `&`/`*p++`。
+2. 如果继续按 report blocker 顺序，下一步应先为 `ArraySubscriptExpr` 写最小 skeleton，
+   并让内部表达式继续 fail-closed 到 `BinaryOperator("&")` 或 `UnaryOperator("*")`。
+3. 不要同时打开 `++`、deref、index、`&`、`>>` 全套；继续每次只推进一个真实 blocker。
+
+## 58. 2026-06-26 clang ArraySubscriptExpr and array type lowering
+
+本轮承接第 57 节的真实 blocker：先为 clang AST lowering report 增加最小
+`ArraySubscriptExpr` 外壳支持，并在 real-fdb 验证后补上必要的 clang 数组类型
+`uint32_t[256]` / `const uint32_t[256]` 支持；不支持 `&`、`*p++`、postfix `++`
+或 `>>`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Index { base, index, ty }`。
+  - `expr_skeleton_from_ast()` 新增 `ArraySubscriptExpr` 分支，要求 child 恰好是
+    `[base, index]`，否则 `invalid_array_subscript_expr` fail-closed。
+  - `lower_expr()` 能把 clang index skeleton lower 成现有 `IrExpr::Index`。
+  - `ClangTypeKind` 新增 `Array { element, len }`。
+  - `type_from_qual_type()` 新增定长/不完整数组解析：
+    `uint32_t[256]`、`const uint32_t[256]`、`uint32_t[]`。
+  - `lower_type()` 能把 clang array type lower 成现有 `IrTypeKind::Array`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_array_subscript_expr`。
+  - 新增 `clang_lowering_skeleton_maps_const_array_type`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_array_subscript_expr_when_enabled`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_global_const_array_subscript_when_enabled`。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_rejects_bitand_array_index_expr_when_enabled`。
+
+TDD 红绿过程：
+- 红灯 1：`clang_lowering_skeleton_maps_array_subscript_expr` 先失败在
+  `ClangExprSkeleton::Index` 不存在。
+- 绿灯 1：补 Index skeleton、`ArraySubscriptExpr` parser 和 `IrExpr::Index` lowering 后，
+  skeleton 与真实 clang `table[idx]` smoke 均通过。
+- real-fdb 中间验证显示 blocker 从 `ArraySubscriptExpr` 推进到
+  `unsupported_clang_type: uint32_t[256] is outside the current type skeleton`。
+- 红灯 2：`clang_lowering_skeleton_maps_const_array_type` 先失败在
+  `ClangTypeKind::Array` 不存在。
+- 绿灯 2：补 clang array type skeleton、`T[N]` / `T[]` parser 和 `IrTypeKind::Array`
+  lowering 后，真实 clang 全局数组 smoke 通过。
+- 负例：`table[(crc ^ idx) & 0xff]` 继续返回 unsupported，message 包含
+  `BinaryOperator: opcode &`。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 57 节末尾：
+  `unsupported_clang_expr: ArraySubscriptExpr: ArraySubscriptExpr is outside the current clang lowering skeleton`。
+- 本轮实现 `ArraySubscriptExpr` 后的中间 blocker：
+  `unsupported_clang_type: uint32_t[256] is outside the current type skeleton`。
+- 本轮最终：
+  `unsupported_clang_expr: BinaryOperator: opcode & is outside the current skeleton`。
+- 这说明已经跨过 `crc32_tab[...]` 的下标表达式外壳和全局 `uint32_t[256]`
+  table 类型，当前真实 blocker 是 index 内部的 `& 0xff`。
+
+本轮并行只读审查结论：
+- Dirac：真实 clang AST 中 `ArraySubscriptExpr.inner` 顺序是 base 在前、index 在后；
+  `read_table` 的 index 是 `ImplicitCastExpr -> DeclRefExpr idx`，real-fdb 形态的 index
+  根节点是 `BinaryOperator opcode="&"`，不是 `*p++` 或 `>>`。
+- Heisenberg：`IrExpr::Index` 已存在，最小补法应只加 `ClangExprSkeleton::Index`、
+  `ArraySubscriptExpr` branch 和 `lower_expr()` 映射；child 数量异常必须 fail-closed。
+- Leibniz：real-fdb 的全局表会暴露 `uint32_t[256]` 类型，需把 clang array type
+  映射到已有 `IrTypeKind::Array`；`const uint32_t[256]` 应保留 outer const，
+  不要把数组悄悄当指针处理。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_array_subscript_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_array_subscript_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report type_from_qual_type_maps_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_global_const_array_subscript_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_bitand_array_index_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused array subscript skeleton test：`1 passed`。
+- 私有 clang array type parser tests：`3 passed`。
+- skeleton lowering filtered suite：`8 passed`。
+- 真实 clang array subscript smoke：`1 passed`。
+- 真实 clang global const array smoke：`1 passed`。
+- 真实 clang bitand array index 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `74 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode & is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳和全局 `uint32_t[256]` table 类型。
+- 当前真实 blocker 是循环体 table index 内部的 `BinaryOperator("&")`。
+- 后续仍需分层处理 `BinaryOperator("&")`、`UnaryOperator("*")`、postfix `++`、
+  `BinaryOperator(">>")` 以及最终把 clang lower 出的 typed IR 与 CRC32 emitter gate 对齐。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `BinaryOperator("&")` 写最小 skeleton/lowering，映射到现有 `IrBinOp::BitAnd`，
+   并补真实 clang `table[(crc ^ idx) & 0xff]` smoke 从 unsupported 变 lowered 的测试。
+2. 继续保持 fail-closed：`*p++`、postfix `++`、deref 和 `>>` 暂不顺手打开。
+3. 用 real-fdb 临时 report 验证 blocker 继续推进；预期下一层会落到 `UnaryOperator("*")`
+   或 postfix `++`，而不是直接完成完整 CRC32 lowering。
+
+## 59. 2026-06-26 clang BitAnd expression lowering
+
+本轮承接第 58 节的真实 blocker：只为 clang AST lowering report 增加最小
+`BinaryOperator("&")` 支持，映射到现有 `IrBinOp::BitAnd`；不支持 `*p++`、
+postfix `++`、deref、`>>`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `BitAnd`。
+  - `expr_skeleton_from_ast()` 的 `BinaryOperator` opcode match 新增
+    `Some("&") => ClangBinaryOperator::BitAnd`。
+  - `lower_binary_operator()` 新增 `BitAnd -> IrBinOp::BitAnd`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_bitand_array_index_expr`。
+  - 将真实 clang smoke 改为
+    `clang_ast_dump_lowers_bitand_array_index_expr_when_enabled`，验证
+    `table[(crc ^ idx) & 0xff]` 能 lower 出 `Index.index = BitAnd(BitXor(...), 255)`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_bitand_array_index_expr` 先失败在
+  `ClangBinaryOperator::BitAnd` 不存在。
+- 绿灯：补 `BitAnd` enum、clang opcode `"&"` parser 和 `IrBinOp::BitAnd` 映射后，
+  skeleton 与真实 clang `table[(crc ^ idx) & 0xff]` smoke 均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 58 节末尾：
+  `unsupported_clang_expr: BinaryOperator: opcode & is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: UnaryOperator: opcode * is outside the current skeleton`。
+- 这说明已经跨过 table index 内部的 `& 0xff`，当前真实 blocker 是
+  `crc ^ *p++` 中的 dereference `UnaryOperator("*")`。
+
+本轮并行只读审查结论：
+- Euler：当前递归顺序是 lhs 先于 rhs，`ArraySubscriptExpr` 是 base 先、index 后；
+  支持 `&` 后会进入 `&` 的 lhs `crc ^ *p++`，再先访问该 `^` 的 rhs `*p++`，
+  因而下一条 fail-closed 应是 `UnaryOperator("*")`。`ImplicitCastExpr IntegralCast`
+  会被透明剥壳，`>>` 在外层 `^` 的 rhs 上，访问顺序更晚。
+- Raman：本轮最小改动只应包含 `ClangBinaryOperator::BitAnd`、opcode `"&"` parser
+  和 `lower_binary_operator()` 映射；不应碰 `*p++`、postfix `++`、`>>`、emitter
+  或更多二元运算符。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_bitand_array_index_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_bitand_array_index_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused BitAnd skeleton test：`1 passed`。
+- 真实 clang BitAnd array index smoke：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `75 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="UnaryOperator: opcode * is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳、全局 `uint32_t[256]` table 类型和 `& 0xff`。
+- 当前真实 blocker 是 `*p++` 的外层 deref `UnaryOperator("*")`。
+- 后续仍需分层处理 `UnaryOperator("*")`、postfix `++`、`BinaryOperator(">>")`
+  以及最终把 clang lower 出的 typed IR 与 CRC32 emitter gate 对齐。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `UnaryOperator("*")` 写最小 skeleton/lowering，映射到现有 `IrExpr::Deref`，
+   并补真实 clang `*p` 或 `table[(crc ^ *p) & 0xff]` smoke。
+2. 继续保持 fail-closed：postfix `++` 暂不顺手打开；如果 `*p++` 的 operand 先卡到
+   `UnaryOperator("++")`，下轮再单独处理。
+3. 继续用 real-fdb 临时 report 验证 blocker 推进；预期下一层会落到 postfix `++`
+   或稍后的 `BinaryOperator(">>")`。
+
+## 60. 2026-06-26 clang pointer dereference lowering
+
+本轮承接第 59 节的真实 blocker：只为 clang AST lowering report 增加最小
+`UnaryOperator("*")` 支持，映射到现有 `IrExpr::Deref`；不支持 postfix `++`、
+`>>`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Deref { ptr, ty }`。
+  - `expr_skeleton_from_ast()` 在 `UnaryOperator opcode "*"` 时生成
+    `ClangExprSkeleton::Deref`，operand 继续递归 lower。
+  - `lower_expr()` 新增 `Deref -> IrExpr::Deref` 映射。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_pointer_deref_expr`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_pointer_deref_expr_when_enabled`，覆盖
+    `uint8_t read_byte(const uint8_t *p) { return *p; }`。
+  - 新增真实 clang 组合 smoke：
+    `clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled`，覆盖
+    `table[(crc ^ *p) & 0xff]`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_pointer_deref_expr` 先失败在
+  `ClangExprSkeleton::Deref` 不存在。
+- 绿灯：补 Deref skeleton、clang `UnaryOperator("*")` parser 和 `IrExpr::Deref`
+  lowering 后，skeleton、真实 clang `*p` smoke 和 `table[(crc ^ *p) & 0xff]`
+  组合 smoke 均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 59 节末尾：
+  `unsupported_clang_expr: UnaryOperator: opcode * is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: UnaryOperator: opcode ++ is outside the current skeleton`。
+- 这说明已经跨过 `*p++` 的外层 dereference，当前真实 blocker 是 operand
+  里的 postfix increment `p++`。
+
+本轮并行只读审查结论：
+- Beauvoir：`*p++` 的 clang AST 形状是
+  `UnaryOperator("*") -> UnaryOperator("++" isPostfix=true) -> DeclRefExpr(p)`；
+  支持 `*` 后，按当前递归顺序下一条 fail-closed 应是 `UnaryOperator: opcode ++`，
+  而不是 `>>`。
+- Descartes：typed IR 已有 `IrExpr::Deref`，本轮只需要新增 clang deref skeleton、
+  `UnaryOperator("*")` parser 和 `lower_expr()` 映射；不要碰 postfix `++`、`>>`、
+  emitter、真实 full loop 或 evidence 产物。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_pointer_deref_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_pointer_deref_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused deref skeleton test：`1 passed`。
+- 真实 clang pointer deref smoke：`1 passed`。
+- 真实 clang deref + bitand array index smoke：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `78 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="UnaryOperator: opcode ++ is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳、全局 `uint32_t[256]` table 类型、`& 0xff`
+  和 `*p++` 的 outer deref。
+- 当前真实 blocker 是 postfix `++`。
+- 后续仍需分层处理 postfix `++`、`BinaryOperator(">>")`，以及最终把 clang lower
+  出的 typed IR 与 CRC32 emitter gate 对齐。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动。
+
+下一步建议：
+1. 为 `UnaryOperator("++") isPostfix=true` 写最小 skeleton/lowering，映射到现有
+   `IrExpr::IncDec { op: Inc, prefix: false }`。
+2. 同时保留 fail-closed：prefix `++`、复杂 lvalue 和 `++` 出现在非当前表达式形态时不要顺手放开。
+3. 用 real-fdb 临时 report 验证 blocker 推进；预期下一层可能落到 `BinaryOperator(">>")`。
+
+## 61. 2026-06-26 clang postfix increment lowering
+
+本轮承接第 60 节的真实 blocker：只为 clang AST lowering report 增加最小
+`UnaryOperator("++") isPostfix=true` 支持，映射到现有
+`IrExpr::IncDec { op: Inc, prefix: false }`；不支持 prefix `++`，不实现
+`BinaryOperator(">>")`，也不扩展 typed IR emitter。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangIncDecOperator` 新增 `Inc`。
+  - `expr_skeleton_from_ast()` 将 `UnaryOperator("--")` 专用分支推广为
+    postfix `++` / `--` 共用分支；prefix `++` / `--` 继续返回
+    `Unsupported`。
+  - `lower_inc_dec_operator()` 新增 `Inc -> IrIncDecOp::Inc`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_postfix_increment_in_deref_expr`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled`。
+  - 新增真实 clang 组合 smoke：
+    `clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled`，
+    覆盖 `table[(crc ^ *p++) & 0xff]` 这条不含 `>>` 的子树。
+  - 新增真实 clang fail-closed smoke：
+    `clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_postfix_increment_in_deref_expr` 先失败在
+  `ClangIncDecOperator::Inc` 不存在。
+- 绿灯：补 clang `Inc` enum、postfix `++` parser 和 `IrIncDecOp::Inc`
+  映射后，skeleton、真实 `*p++` smoke、组合 `table[(crc ^ *p++) & 0xff]`
+  smoke 和 prefix `++` 负例均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 60 节末尾：
+  `unsupported_clang_expr: UnaryOperator: opcode ++ is outside the current skeleton`。
+- 本轮后：
+  `unsupported_clang_expr: BinaryOperator: opcode >> is outside the current skeleton`。
+- 这说明 clang AST lowering 已经跨过 `crc32_tab[(crc ^ *p++) & 0xff]`
+  的 table lookup、`&`、`^`、outer deref 和 postfix `p++`，当前真实 blocker
+  是外层 CRC 更新表达式右侧的 `crc >> 8`。
+
+本轮并行只读审查结论：
+- Maxwell：只补 postfix `++` 后，下一层 fail-closed 应落到
+  `BinaryOperator(">>")`；typed IR 不是立即 blocker，因为 `IrBinOp::Shr`
+  和 `IrIncDecOp::Inc` 已存在。
+- Halley：最小生产改动应只包含 `ClangIncDecOperator::Inc`、
+  `UnaryOperator` postfix `++` / `--` 分支和 `lower_inc_dec_operator()` 映射；
+  不要碰 `>>`、emitter 或 validation evidence。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_postfix_increment_in_deref_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- focused postfix increment skeleton test：`1 passed`。
+- 真实 clang postfix increment deref smoke：`1 passed`。
+- 真实 clang postfix increment deref + bitand array index smoke：`1 passed`。
+- 真实 clang prefix increment 负例：`1 passed`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `82 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root report：`status=unsupported`，
+  `errors[0].kind=unsupported_clang_expr`，
+  `errors[0].message="BinaryOperator: opcode >> is outside the current skeleton"`。
+
+当前核心翻译功能状态：
+- clang AST lowering 已能跨过 real-fdb 的局部声明、指针 cast assignment、
+  `crc = crc ^ ~0U;`、`WhileStmt` 外壳、`while(size--)` condition、
+  `crc32_tab[...]` 外壳、全局 `uint32_t[256]` table 类型、`& 0xff`、
+  `*p++` 的 outer deref 和 postfix `p++`。
+- 当前真实 blocker 是 `BinaryOperator(">>")`。
+- 完整 CRC32 Rust 生成仍不是由真实 clang AST lowering 直接驱动；下一轮应只为
+  `BinaryOperator(">>")` 写最小 skeleton/lowering，映射到现有 `IrBinOp::Shr`，
+  再用 real-fdb report 验证是否进入 emitter gate 对齐阶段。
+
+## 62. 2026-06-26 clang shift-right lowering
+
+本轮承接第 61 节的真实 blocker：只为 clang AST lowering report 增加最小
+`BinaryOperator(">>")` 支持，映射到现有 `IrBinOp::Shr`；不扩展其它二元运算，
+不调整 typed IR emitter / CRC32 matcher，也不触碰 validation evidence。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Shr`。
+  - `expr_skeleton_from_ast()` 的 `BinaryOperator` opcode match 新增
+    `Some(">>") => ClangBinaryOperator::Shr`。
+  - `lower_binary_operator()` 新增 `Shr -> IrBinOp::Shr`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_shift_right_expr`。
+  - 新增真实 clang smoke：
+    `clang_ast_dump_lowers_shift_right_expr_when_enabled`。
+  - 新增真实 clang 组合 smoke：
+    `clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled`，
+    覆盖 `table[(crc ^ *p++) & 0xff] ^ (crc >> 8)`。
+
+TDD 红绿过程：
+- 红灯：`clang_lowering_skeleton_maps_shift_right_expr` 先失败在
+  `ClangBinaryOperator::Shr` 不存在。
+- 绿灯：补 clang `Shr` enum、opcode `">>"` parser 和 `IrBinOp::Shr`
+  映射后，skeleton、真实 `crc >> 8` smoke 和真实 CRC update RHS smoke 均通过。
+
+真实 real-fdb 临时 report 推进结果：
+- 第 61 节末尾：
+  `unsupported_clang_expr: BinaryOperator: opcode >> is outside the current skeleton`。
+- 本轮后：
+  `status=lowered`，`errors=[]`。
+- 当前 report artifact 仍是 diagnostic/report 路径；临时 report 里
+  `function_ir` 字段为 `null`，所以这只能说明 clang AST lowering front-end
+  已跨过当前真实语法 blocker，不能声明真实 clang-lowered IR 已驱动 Rust 生成。
+
+本轮并行只读审查结论：
+- Laplace：`>>` 的最小改动面就是 `ClangBinaryOperator::Shr`、opcode `">>"`
+  mapping 和 `lower_binary_operator()` 三处；不要顺手实现 `<<`、`|`、`-` 等其它运算，
+  也不要碰 signed shift 语义建模或 evidence。
+- Volta：只补 `>>` 很可能让 real-fdb report 从 unsupported 变为 lowered，但这不等于
+  `emit_rust_from_ir` 已接受真实 clang-lowered IR；当前主翻译路径的 CRC32 成功仍来自
+  C 源字符串识别后构造的硬编码 typed IR，emitter gate 仍是刻意严格的
+  `is_crc32_byte_cursor_ir()`。
+
+已通过命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_shift_right_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_shift_right_expr_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled -- --nocapture
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+完整结果：
+- focused shift-right skeleton test：`1 passed`。
+- 真实 clang shift-right smoke：`1 passed`。
+- 真实 clang CRC update RHS smoke：`1 passed`。
+- real-fdb 临时 out-root clang lowering report：`status=lowered`，`errors=[]`。
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `85 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+
+当前核心翻译功能状态：
+- clang AST lowering report 已能跨过 real-fdb `fdb_calc_crc32` 目前已知的前端语法
+  blocker：局部声明、指针 cast assignment、`crc = crc ^ ~0U;`、`WhileStmt`、
+  `while(size--)`、`crc32_tab[...]`、全局 `uint32_t[256]` table、`& 0xff`、
+  `*p++`、postfix `p++` 和 `crc >> 8`。
+- 这还不是完整“真实 clang AST lowering -> typed IR -> 可编译 Rust”的闭环。
+- 下一步建议：新增一个整函数测试，直接把真实 clang-lowered `fdb_calc_crc32`
+  的 `IrFunction` 传给 `emit_rust_from_ir`，先观察 fail-closed 的真实形状差异；
+  然后只按实际 diff 调整 `is_crc32_byte_cursor_ir()` 或接线 report/translation 路径。
+
+## 63. 2026-06-26 clang-lowered typed IR rust draft path
+
+本轮承接第 62 节：`>>` 之后 real-fdb clang lowering report 已经是
+`status=lowered`、`errors=[]`，下一步不再继续扩前端语法点，而是验证
+"真实 clang-lowered IR -> typed IR emitter -> Rust draft" 这条端到端路径。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - `write_translation_artifacts()` 在启用 `clang-lowering-report` feature 时先走
+    `translate_slice_with_optional_clang_lowered_ir()`。
+  - 新路径依次执行 `ClangParseSpec::from_slice_spec()`、
+    `lower_function_from_clang_parse_spec_report()`、取 `function_ir`、
+    `typed_ir::emit_rust_from_ir()`。
+  - 成功时写入 `translation_rule_ids=["clang-lowered-typed-ir"]`。
+  - 任一步失败都会 fail-closed 回落到原 `translate_slice()`，不改变默认非 feature
+    行为。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 synthetic full `fdb_calc_crc32` 的真实 clang smoke：直接把
+    `lower_function_from_clang_ast_dump_report()` 产出的 `function_ir` 传给
+    `emit_rust_from_ir()`。
+  - 新增真实 validation slice spec smoke：从
+    `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 构造当前
+    `SliceSpec`，经 `ClangParseSpec` 和 lowering report 后再进入
+    `emit_rust_from_ir()`。
+  - 新增 artifact path smoke：临时真实 `src/fdb_utils.c` 是完整 CRC32，
+    但 `spec.c_source` 故意写成 `{ return crc; }`，证明 `rust-draft.rs`
+    中的 `crc32_update_byte()` 不是旧字符串识别路径生成的。
+
+边界声明：
+- 这只证明在 `clang-lowering-report` opt-in 下，真实 clang-lowered
+  `fdb_calc_crc32` 的 `function_ir` 已经能驱动当前 typed emitter 生成 CRC32 Rust
+  draft。
+- 这仍然不是 semantic pass，不声明行为等价，不把 diagnostic-only 的 lowering report
+  扩大成 accepted evidence。
+- `auto_migrate` 仍应按既有 evidence/rust-check/oracle 规则决定
+  `generated_draft_semantic_pass`，本轮没有把临时 report 提升为验收证据。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- `--features clang-lowering-report` translator crate：lib `3 passed`，
+  `bounded_translation` `88 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root：`report_status=lowered`、`report_errors=[]`、
+  `lowering_report_status=lowered`、`rust_has_crc32_update_byte=true`、
+  `rust_has_crc32_table=false`。
+
+当前核心翻译功能状态：
+- clang 前端已经跨过 real-fdb `fdb_calc_crc32` 已知语法 blocker，并能产出可被当前
+  CRC32 typed emitter 接收的 `IrFunction`。
+- `write_translation_artifacts()` 在 `clang-lowering-report` opt-in 下已经能用这份真实
+  clang-lowered IR 写出 CRC32 Rust draft。
+- 下一步建议不要再做前端 blocker 猜测；应补强 clang-lowered path 的
+  type-map/cfg/evidence 接线，或者运行真实 rust-check/oracle 路径来推进 semantic pass。
+
+## 64. 2026-06-26 clang-lowered typed IR evidence path
+
+本轮承接第 63 节：真实 clang-lowered `IrFunction` 已能生成 CRC32 Rust draft，但
+`try_translate_slice_with_clang_lowered_ir()` 成功时只填了 `rust_code` 和 plan rule，
+`type_map`、`cfg`、`pointer_graph` 仍是空结构。这会让 `clang-lowered-typed-ir`
+路径缺少同源 evidence，后续 Python normalize 还可能把空 type-map 记录为
+`recorded`、把真实 pointer slice 误判为 `not_applicable`。
+
+核心改动：
+- `crates/c2r-translator/src/lib.rs`
+  - 新增 `record_clang_lowered_ir_evidence()`，在 clang-lowered typed IR 成功生成
+    Rust draft 后，从同一个 `typed_ir::IrFunction` 派生最小
+    `TypeMapEvidence`、`CfgEvidence` 和 `PointerGraphEvidence`。
+  - type-map 覆盖 return、params 和局部 `Decl`，继续复用既有 `record_type_mapping()`
+    与 `map_c_type()`，避免发明第二套 Rust type mapping。
+  - cfg 覆盖顶层 typed IR 语句种类、return/fallthrough terminator 和
+    `entry->while-N` / `entry->return-N` 边。
+  - pointer graph 目前只保守覆盖 pointer 参数；只有在同一个 typed IR body 中确认
+    `p = (const uint8_t *)buf` cursor 来源和 `*p++` read 都存在时，才对 real-fdb 的
+    `buf` 记录 `borrowed_input`、`&[u8]`、`*p++` read effect 和
+    `byte_cursor_post_increment_read` boundary decision。
+  - 成功路径保留 fail-closed fallback：clang parse、lowering、typed emitter 或 evidence
+    之外的任一步失败时仍回落原 `translate_slice()`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 扩展
+    `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled`。
+  - 该测试继续使用真实临时 `src/fdb_utils.c`，同时把 `spec.c_source` 故意写成
+    `{ return crc; }`，并新增断言：
+    - `type-map` 中有 `buf -> &[u8]`。
+    - `cfg` statement kinds 包含 `while`。
+    - `pointer-graph` status 是 `recorded`。
+    - `buf` 节点包含 `borrowed_input`、`&[u8]` 和
+      `*p++` read effect、`byte_cursor_post_increment_read`。
+  - 新增私有单元负例：
+    `clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only`，
+    证明只有 `buf` 参数但没有 IR body byte cursor 读时，不会记录
+    `*p++` 或 `byte_cursor_post_increment_read`。
+
+TDD 红绿过程：
+- 红灯：
+```powershell
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+```
+失败点：`type_map["type_map"]["mappings"]` 里找不到 `buf -> &[u8]`。
+- review 后补充红灯：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only -- --nocapture
+```
+失败点：有 `buf` 参数但没有 `*p++` 的 IR 仍被硬编码记录了 `read_effects=["*p++"]`。
+- 绿灯：实现 body-derived byte cursor evidence 后，两条 focused 测试均 `1 passed`。
+
+已通过命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --skip-c-oracle --skip-rust-check --emit-clang-lowering-report
+```
+
+完整结果：
+- `--features clang-lowering-report` translator crate：lib `4 passed`，
+  `bounded_translation` `88 passed`。
+- default feature translator crate：`bounded_translation` `35 passed`。
+- focused Python opt-in tests：`Ran 3 tests ... OK`。
+- real-fdb 临时 out-root：
+  - `report_status=lowered`。
+  - plan rules 包含 `clang-lowered-typed-ir`、
+    `byte-cursor-post-increment-read`、`crc32-byte-cursor-loop`。
+  - type-map symbols 包含 `return -> u32`、`crc -> u32`、`buf -> &[u8]`、
+    `size -> usize`、`p -> &[u8]`。
+  - cfg statement kinds 包含 `primitive_declaration`、`assignment`、`while`、
+    `return`。
+  - pointer graph status 为 `recorded`，Rust 原始 `buf` 节点记录 `borrowed_input`、
+    `&[u8]`、`*p++` read effect 和 `byte_cursor_post_increment_read`；Python normalize
+    后的 pointer graph 仍负责派生 `length_companion=size`。
+
+本轮并行只读核对结论：
+- Bohr：下一步优先补强 clang-lowered path 的 type-map/cfg/pointer/evidence，
+  不要先推进 rust-check/oracle；Rust 侧成功路径空 evidence 是当前真实缺口。
+- Averroes：启用 clang-lowered typed IR 后，real-fdb Rust draft 和 rust-check 已经能过；
+  下一层 blocker 是 C oracle/diff 仍停在 draft：
+  `c-oracle-status.status=DRAFT_GENERATED`、
+  `toolchain_status=COMPILE_SUCCEEDED_NOT_ORACLE`、
+  `output_gate.status=matched_not_oracle`、validation profile `incomplete`。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 已完成从真实 clang AST lowering 到 typed IR、Rust draft、
+  type-map、cfg、pointer graph 的同源最小闭环。
+- 这仍不是 semantic pass；`generated_draft_semantic_pass=false` 仍然正确。
+- 下一步核心模块建议：把当前 `matched_not_oracle` 的 C harness 输出推进成可审计的
+  generated-candidate oracle/diff gate，生成 C oracle output JSON、Rust replay output、
+  schema-aware diff 和 negative diff，再让 validation profile 重新计算。
+
+## 65. 2026-06-26 generated-candidate diff diagnostic gate
+
+本轮承接第 64 节：real-fdb `fdb_calc_crc32` 已能经真实 clang-lowered typed IR 生成 Rust draft、type-map、cfg、pointer graph，并且 generated Rust replay 可通过 fixture；当前 blocker 是 C oracle 仍是 `DRAFT_GENERATED`、`output_gate.status=matched_not_oracle`，不能提升为 accepted semantic pass。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `c_oracle_output_gate_from_oracle()` / `c_oracle_output_gate_status()`。
+  - 新增 `generated_candidate_diff_from_diagnostics()`，只在以下条件全部满足时返回诊断性 candidate diff：
+    `oracle.status=DRAFT_GENERATED`、`toolchain_status=COMPILE_SUCCEEDED_NOT_ORACLE`、`compile_execution.status=compile_succeeded_not_oracle`、`harness_execution.status=exited_zero_not_oracle`、`output_gate.status=matched_not_oracle`、generated Rust replay `status=passed` 且 `generated_draft_semantic_pass` 不是 true。
+  - `write_l3_candidate_supporting_evidence()` 在上述条件满足时，仍保持 `l3-*-diff.json` 顶层 `status=incomplete`、`semantic_pass=false`、`accepted_diff_required=true`，但新增 `generated_candidate_diff_pass=true`、`blocked_by=["accepted_c_oracle"]`、`candidate_diff.status=matched_not_oracle`、`candidate_diff.semantic_pass=false`、`candidate_diff.matched_stdout_fragments` 和 `reason_code=candidate_matched_accepted_oracle_required`。
+- `validation/test-translation-template/test-translation.schema.json`
+  - 允许 generated replay 执行后的 `status=passed|failed`。
+  - 允许 `translation_mappings[].status=passed|failed`。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 普通 validator 增加 `validate_generated_candidate_diff_boundary()`。
+  - 允许非语义 candidate diff 使用 `blocked_by=["accepted_c_oracle"]`。
+  - candidate diff 必须和同目录真实 `l3-*-c-oracle-status.json` / `l3-*-rust-report.json` 交叉一致；不能只靠 diff 文件自证。
+  - 继续拒绝 `candidate_diff.semantic_pass=true`，`--require-semantic-pass` 路径未放宽。
+- `validation/tools/test_auto_migrate.py`
+  - 新增候选 diff 正例：C output gate matched + generated replay passed 时写入 `candidate_diff`，但不声明 semantic pass。
+  - 新增 fail-closed 负例：`mismatch_not_oracle` 不会生成 candidate diff。
+  - real-fdb generated replay 测试增加普通 validator 断言。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 validator helper 边界测试：candidate diff 不能声明 `semantic_pass=true`。
+  - 新增跨文件负例：真实 oracle output gate 漂移为 `mismatch_not_oracle` 时，普通 validator 拒绝仍标记 `generated_candidate_diff_pass=true` 的 diff。
+
+已验证命令：
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_matches_fixture_stdout_without_oracle_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_harness_output_gate_uses_raw_stdout_before_report_truncation validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_candidate_diff_records_matched_diagnostic_without_semantic_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_candidate_diff_requires_matched_oracle_output_gate validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_generated_candidate_diff_boundary_remains_non_semantic validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_schema_diff_contract_rejects_candidate_diff_when_oracle_output_gate_drifts
+python -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root <temp> --emit-clang-lowering-report
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root <temp>
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root <temp> --require-semantic-pass
+```
+
+验证结果：
+- focused auto-migrate 5 tests：`Ran 5 tests ... OK`。
+- real-fdb generated replay + normal validator：`Ran 1 test ... OK`。
+- validator helper/cross-file boundary：`Ran 2 tests ... OK`。
+- 临时 real-fdb 真实 C harness 路径：
+  - C harness 经 WSL `/usr/bin/cc` 编译成功，执行 stdout marker 全匹配。
+  - generated Rust replay `status=passed`。
+  - `l3-real-fdb-calc-crc32-diff.json` 顶层仍是 `status=incomplete`、`semantic_pass=false`。
+  - `candidate_diff.status=matched_not_oracle`、`generated_candidate_diff_pass=true`。
+  - 普通 validator：`schema_status=passed`、`semantic_pass=false`。
+  - `--require-semantic-pass` 仍失败，原因是 manifest/final/profile 没有 accepted semantic pass。
+
+当前核心翻译功能状态：
+- real-fdb `fdb_calc_crc32` 已具备“真实 clang-lowered typed IR -> 可编译 Rust draft -> generated replay fixture passed -> C harness output matched -> candidate diff diagnostic recorded”的非语义闭环。
+- `generated_draft_semantic_pass=false` 仍是正确状态。
+- 下一步不要直接把 candidate diff 改成 semantic pass；应继续做 accepted oracle/diff/negative-diff 的正式绑定，或把 validation profile 的 candidate gate 单独建模为 diagnostic gate。
+
+## 66. 2026-06-26 scalar typed IR recursive emitter
+
+本轮承接第 65 节和 phase1b emitter 方案讨论：先不动 CLI、Python validation、oracle/diff 证据和 CRC32 特例删除，只打通一个保守的“clang-lowered typed IR -> 标量递归 emitter -> 可编译 Rust”切片。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_rust_from_ir()` 仍优先命中严格的 `is_crc32_byte_cursor_ir()`，保持现有 CRC32 安全模板输出。
+  - 未命中 CRC32 时进入新的私有 `emit_scalar_rust_from_ir()`。
+  - 标量 emitter 当前只支持整数和 void return；pointer、array、record、function、unsupported type 全部 fail-closed。
+  - 支持 `Return`、`Decl`、`Assign`、`Expr` 的最小递归输出；`If`、`While` 仍 fail-closed。
+  - 支持 `Var`、整数 literal、`Add`、`BitAnd`、`BitXor`、`Shr`、`BitNot`、整数到整数 `Cast`。
+  - `Return`、`Assign`、`Decl init` 和二元表达式会做保守类型一致性校验；不确定时 fail-closed，而不是输出可能不可编译的 Rust。
+  - `BitNot` 也校验 operand/result 类型一致；非 void 函数必须以 `Return(Some(_))` 结束；无初始化 scalar `Decl` 先 fail-closed；Rust 关键字、单独 `_` 或非法标识符先 fail-closed。
+  - 表达式读取和赋值目标必须来自参数或已初始化 local decl；integer literal 会按目标整数类型做范围检查。
+  - `Deref`、`Index`、`IncDec`、`Call`、`AddrOf` 和未列入的 binop/unop 均 fail-closed。
+  - 会扫描赋值目标；如果参数被赋值，函数签名输出 `mut param`，避免生成不可编译 Rust。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_add_one_from_clang_lowered_ir`：从 `ClangFunctionSkeleton` lower 出 `add_one` 的 `IrFunction`，再经 public `emit_rust_from_ir()` 输出 `pub fn add_one(value: i32) -> i32` 和 `return (value + 1i32);`。
+  - 新增直接 typed IR 覆盖：参数赋值变 `mut`、声明初始化加整数 cast、指针参数必须 fail-closed、二元表达式操作数类型不匹配必须 fail-closed、return/assign/decl-init 类型不匹配必须 fail-closed、bitnot operand 类型不匹配必须 fail-closed、非 void 缺 return 必须 fail-closed、无初始化 decl 必须 fail-closed、Rust 关键字和 `_` 标识符必须 fail-closed、未声明变量读写必须 fail-closed、integer literal 越界必须 fail-closed。
+  - 对 add_one、CRC32 模板、参数赋值、声明/cast 正向输出增加 `rustc --crate-type lib` smoke，证明这些 snippets 至少可被 Rust 编译器接受。
+
+已验证命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_add_one_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_flashdb_crc32_without_string_recognizer -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_crc32_loop_with_extra_top_level_term -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_builds_typed_ir_for_add_one_fixture -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_assignment_to_mut_param -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_decl_init_and_integer_cast -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_pointer_param_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_mismatched_binary_operand_types_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_return_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_assign_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_decl_init_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_bitnot_operand_type_mismatch_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_non_void_function_without_return_value_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_uninitialized_decl_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_rust_keyword_identifier_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_underscore_identifier_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_undeclared_var_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_assign_to_undeclared_var_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_out_of_range_integer_literal_in_generic_emitter -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+验证结果：
+- focused add_one 红绿：最初失败于 `add_one is outside the current typed IR emitter subset`；实现后 `1 passed`。
+- CRC32 旧模板回归：`typed_ir_emits_flashdb_crc32_without_string_recognizer` 通过，仍包含 `crc32_update_byte`，不回退到 `crc32_table`。
+- CRC32 fail-closed 回归：`typed_ir_rejects_crc32_loop_with_extra_top_level_term` 通过。
+- 新增标量边界测试均通过；其中二元类型不匹配负例先红于 `return (x & 255i32);`，return 类型不匹配负例先红于 `return 1i32;`，收紧后通过。
+- `BitNot` operand/result 类型不匹配负例先红于 `return !x;`，非 void 缺 return 负例先红于 `pub fn missing_return() -> i32 { 1i32; }`，收紧后通过。
+- 未声明变量和 integer literal 越界负例分别先红于 `return x;` 和 `return 256u8;`，收紧后通过。
+- `bounded_translation`：`103 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `103 passed`，doc tests `0`。
+
+当前核心翻译功能状态：
+- 现在已经有一条非 CRC32 特例的最小通路：`clang skeleton lowering -> typed IR -> scalar recursive emitter -> Rust`。
+- real-fdb CRC32 路径仍由严格 matcher 和安全模板保护；本轮没有把 pointer/loop/call/index 语义交给通用 emitter。
+- 下一步可以继续把 phase1b emitter 扩到小型结构化 IR：先加真实红灯测试，再逐步引入 `If`/`While`、更完整的整数算术语义、以及与 clang-lowered report 的可审计接线；不要一次性放开 pointer/deref/index/call。
+
+## 67. 2026-06-26 scalar typed IR while emitter
+
+本轮承接第 66 节：继续 phase1b emitter，但仍不碰 CLI、Python validation、oracle/diff evidence，也不放开 pointer/deref/index/call。两个只读子智能体结论一致：`While` 比 `If` 更适合作为下一刀，因为 clang skeleton 和 real AST lowering 已经能产出 `IrStmt::While`，而 `If` 在 clang skeleton 层还不存在。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 在 scalar emitter 中新增 `IrStmt::While` 输出。
+  - 条件只支持当前 scalar integer truthiness，输出成 Rust bool：`while <expr> != 0suffix { ... }`。
+  - 条件表达式仍复用 `emit_expr()`，所以 `Call`、`Index`、`Deref`、`AddrOf`、`IncDec` 等继续 fail-closed。
+  - while body 递归复用现有 statement emitter；body symbol set 使用外层 clone，允许写外层参数/local，但不让 while body 内声明泄漏到外层。
+  - CRC32 special-case 仍在 `emit_rust_from_ir()` 最前面，未改分流顺序。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例：`countdown(mut count: i32)` 输出 `while count != 0i32 { count = (count + !0i32); }`，并用 `rustc --crate-type lib` smoke。
+  - 新增 fail-closed 负例：while condition 为 `Call` / `IncDec`、while body 非 `Var` assignment target、while body local decl 不泄漏。
+  - 新增 clang skeleton -> typed IR -> emitter 集成测试：`crc_while(mut crc: u32)` 经 `lower_function_skeleton()` 后输出 `while crc != 0u32 { crc = (crc ^ !0u32); }`，并用 rustc smoke。
+
+已验证命令：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_while_with_integer_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_unsupported_condition_expr -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_incdec_condition_expr -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_with_non_var_assignment_target -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_while_body_decl_scope_leak -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_while_from_clang_lowered_ir -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_simple_while_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation translates_while_loop_with_cfg_back_edge -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+验证结果：
+- direct typed IR while 红灯最初失败于 `stmt[0].while statement is unsupported`；实现后通过。
+- typed IR focused suite：`25 passed`。
+- `clang_lowering_skeleton_maps_simple_while_statement`：`1 passed`。
+- `translates_while_loop_with_cfg_back_edge`：`1 passed`。
+- `bounded_translation`：`109 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `109 passed`，doc tests `0`。
+
+当前核心翻译功能状态：
+- typed IR scalar emitter 已从单层语句推进到最小结构化 `while`，并能接已有 clang skeleton lowering。
+- 这仍不是一般循环语义：`IncDec` 条件、比较运算、pointer/deref/index/call 仍 fail-closed。
+- 下一刀建议：要么补 clang `IfStmt` skeleton/lowering 再做 `If` emitter，要么继续在 `while` 上加一个更真实的 clang AST opt-in smoke；不要直接把 CRC32 的 pointer/index/deref 普通化。
+
+## 68. 2026-06-26 scalar typed IR if emitter and clang IfStmt skeleton
+
+本轮承接第 67 节的下一刀建议：补 `If`，但仍维持 phase1b 的保守边界，不打开比较运算、pointer/deref/index/call，也不把 `IncDec` 条件普通化。并行只读意见有分歧：Nietzsche 建议 `If` 是合理小步；Dalton 建议优先加强真实 clang `while`。实际执行选择先收束 `If`，因为 `while (size--)` 需要有副作用条件语义，会冲掉上一轮刚钉住的 `IncDec` fail-closed 边界。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - scalar emitter 新增 `IrStmt::If` 输出。
+  - 条件复用 `emit_condition_expr()`，仍是整数 truthiness：`if <expr> != 0suffix { ... }`。
+  - then/else body 分别使用外层 `symbols.clone()` 递归 emit，允许写外层变量，但分支内 local `Decl` 不泄漏。
+  - `Call`、`Index`、`Deref`、`AddrOf`、`IncDec`、比较运算等仍通过 `emit_expr()` / `emit_binary_op()` fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `If { condition, then_body, else_body }`。
+  - `stmt_skeleton_from_ast()` 新增 `IfStmt` 分支。
+  - `if_stmt_skeleton_from_ast()` 只接受 CompoundStmt then/else；缺 else 允许为空；非 CompoundStmt body fail-closed。
+  - `lower_stmt()` 新增 `ClangStmtSkeleton::If -> IrStmt::If`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR 正例：`adjust(mut value, flag)` 输出 `if flag != 0i32 { ... } else { ... }`，并用 rustc smoke。
+  - direct typed IR 负例：if condition 为 `Call` fail-closed；分支内 local decl 不泄漏。
+  - clang skeleton 正例：`ClangStmtSkeleton::If` lower 成 `IrStmt::If`。
+  - clang skeleton no-else 正例：缺 else lower 成空 `else_body`。
+  - clang skeleton -> typed IR -> emitter 正例：`adjust_if` 输出可编译 Rust。
+  - real clang AST opt-in smoke：真实 `IfStmt` 经 clang AST dump lower 到 typed IR，再经 scalar emitter 输出可编译 Rust。
+
+TDD/验证要点：
+- direct typed IR `If` 正例红灯最初失败于 `stmt[0].if statement is unsupported`。
+- direct typed IR `If` condition 负例最初未包含 `stmt[0].if condition` 上下文，实现后通过。
+- clang skeleton 红灯最初编译失败于 `no variant named If found for enum ClangStmtSkeleton`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_if_else_with_integer_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_if_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_simple_if_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_lowering_skeleton_maps_if_without_else_to_empty_else_body -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_scalar_if_from_clang_lowered_ir -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_simple_if_statement_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- typed IR scalar emitter 已支持最小结构化 `If` 和 `While`。
+- clang skeleton/真实 AST lowering 已能产出最小 scalar `IfStmt` 并接到 emitter。
+- translator crate with `typed-ir,clang-frontend`：lib `3 passed`，`bounded_translation` `116 passed`，doc tests `0`。
+- real clang AST opt-in focused suite：`25 passed`。
+- 这仍不是一般 C 控制流翻译：比较运算、`IncDec` condition、副作用条件、pointer/deref/index/call 仍 fail-closed。
+- 下一步建议：补 `If` 的更多 fail-closed 边界测试（例如 `IncDec` condition、非 Var assignment target），再考虑比较运算的 typed IR 语义；不要直接做 `while (size--)` 泛化，除非先设计副作用条件 IR/emit 规则。
+
+## 69. 2026-06-26 condition-only comparison support
+
+本轮承接第 68 节：开始处理比较运算，但只允许它出现在 `If` / `While` condition 中。关键语义边界是：C 的比较表达式在 clang AST 中通常仍是 `int`，而 Rust 的 `< <= > >= == !=` 返回 `bool`。因此本轮没有把比较加入普通 `emit_expr()` / `emit_binary_op()`；`return value > 0;`、`x = value > 0;` 等位置仍必须 fail-closed。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_comparison_op()`，只映射 `Eq`、`Neq`、`Lt`、`Le`、`Gt`、`Ge`。
+  - `emit_condition_expr()` 对 comparison binary 做专用分支，输出 Rust bool：`(lhs > rhs)`，不再追加 `!= 0suffix`。
+  - 普通整数 truthiness 仍保持 `expr != 0suffix`。
+  - `emit_binary_op()` 仍只支持 `+`、`&`、`^`、`>>`；比较表达式离开 condition 继续 fail-closed。
+  - `validate_comparison_condition_types()` 要求 comparison result 是 C `int`，且 lhs/rhs 是相同 Rust scalar type；不同 signedness/width 不生成 Rust。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Eq`、`Neq`、`Lt`、`Le`、`Gt`、`Ge`。
+  - clang AST `BinaryOperator` opcode 新增 `==`、`!=`、`<`、`<=`、`>`、`>=` 映射。
+  - `ImplicitCastExpr` 不再全部透明剥离：`IntegralCast` / `IntegralPromotion` 会 lower 成 `Cast { implicit: true }`，用于保留 `uint32_t value > 0` 中 `0` 的 unsigned 目标类型；`LValueToRValue` 等仍透明。
+  - `lower_binary_operator()` 将这些 op lower 到对应 `IrBinOp`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR：`if value > 0`、casted unsigned comparison literal、六个 comparison op 表驱动、`while value > 0` 均输出 Rust bool condition，并用 rustc smoke。
+  - fail-closed：comparison 离开 condition 时仍拒绝；comparison lhs/rhs 类型不匹配、comparison result 非 C `int` 时拒绝。
+  - `If` 边界补测：`IncDec` condition 拒绝；else body 非 `Var` assignment target 拒绝。
+  - clang skeleton：comparison if condition lower 到 `IrBinOp::Gt` 后能 emit 可编译 Rust。
+  - real clang AST：`if (value > 0)` 和 `uint32_t value > 0` 能 lower+emit+rustc；`if (value++)` 和 `while (size--)` 能 lower，但 scalar emitter 必须拒绝，继续保护副作用条件边界。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - ungated JSON AST parser 测试覆盖 6 个 comparison opcode。
+  - ungated JSON AST parser 测试覆盖 `IntegralCast` 保留、`LValueToRValue` 透明剥离。
+  - ungated JSON AST parser 测试覆盖非 comparison 表达式继续透明剥离 `IntegralCast`，避免破坏 CRC bitwise 识别。
+
+TDD/验证要点：
+- direct typed IR comparison-if 红灯最初失败于 `stmt[0].if condition binary op Gt is unsupported`。
+- clang skeleton comparison-if 红灯最初编译失败于 `no variant or associated item named Gt found for enum ClangBinaryOperator`。
+- 历史红灯复现：当时 `uint32_t value > 0` 的 RHS 仍是 `int` literal，缺少 `IntegralCast`，会被 typed emitter 作为 `u32` vs `i32` 拒绝；后续 clang lowering 已保留 `IntegralCast`，第 97 节又放开了窄化整数 comparison cast operand。
+- comparison result 非 C `int` 红灯复现：手写错误 IR 曾能把 `u32` result comparison 作为 condition emit。
+- 并行跑两个 `cargo test` 曾在 Windows 链接阶段撞同一个 test exe，出现 `LNK1104`；串行重跑后通过，属于测试运行方式问题，不是代码失败。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::expr_skeleton_from_ast -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation comparison -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_if_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- condition-only comparison 支持已接到 direct typed IR、clang skeleton lowering 和 real clang AST opt-in smoke。
+- comparison focused suite 当前为 `11 passed`。
+- real clang AST focused suite 当前为 `29 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `6 passed`，`bounded_translation` `131 passed`，doc tests `0`。
+- 副作用条件仍 fail-closed：`IncDec` condition 不会被普通化成 Rust。
+- 下一步建议：可以考虑把 comparison condition 支持接入 clang-lowering-report 的 evidence 路径，或继续补无大括号 `IfStmt`/`WhileStmt` unsupported smoke。
+
+## 70. 2026-06-26 scalar initialized local declaration from clang AST
+
+本轮承接第 69 节后的核心翻译小步：打开真实 clang AST 中的 scalar initialized local declaration，例如 `uint32_t next = crc;`。选择这一步的原因是 typed IR emitter 早已支持 `IrStmt::Decl { init: Some(_) }` 并做类型校验，缺口集中在 clang frontend 之前把所有 `VarDecl` initializer 拒掉。这个改动能扩大真实 C 覆盖，但不碰 pointer/deref/index/call，也不处理副作用条件。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `decl_stmt_skeleton_from_ast()` 对单个 `VarDecl` 的单个 initializer child 调用 `expr_skeleton_from_ast()`。
+  - 生成 `ClangStmtSkeleton::Decl { init: Some(expr) }`，后续复用既有 `lower_stmt()` 到 typed IR。
+  - 无 initializer 且无 `init` marker 时仍生成 `init: None`；存在 `init` marker 但缺少 initializer child 时继续 `Unsupported`。
+  - 多个 initializer child 继续 `Unsupported`。
+  - initializer 如果是当前表达式子集外的节点，例如 `CallExpr`，会在 lower 阶段继续 fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - ungated JSON AST parser 测试覆盖 `uint32_t next = crc;`。
+  - ungated JSON AST parser 测试覆盖多个 initializer child 拒绝。
+  - ungated JSON AST parser 测试覆盖 `init` marker 无 initializer child 时拒绝，避免把有初始化但缺 AST child 的声明误降成无初始化。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - real clang AST 正例：`uint32_t crc_init(uint32_t crc) { uint32_t next = crc; return next; }` lower+emit+rustc。
+  - real clang AST 负例：`int value = helper();` 仍因 `CallExpr` fail-closed。
+  - real clang AST 负例：`int a = 1, b = 2;` 多 `VarDecl` 的 `DeclStmt` 仍 fail-closed。
+
+TDD/验证要点：
+- 内部 parser 红灯最初失败于 `VarDecl initializer is outside the current clang lowering skeleton`。
+- real clang AST 红灯最初报告 `unsupported_clang_stmt` / `VarDecl initializer is outside...`。
+- code review 后补红灯：`init` marker 但无 initializer child 曾被误降成 `init: None`，现改为 fail-closed。
+- 实现后，initialized decl 正例生成 `let mut next: u32 = crc;` 并通过 rustc smoke。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::decl_stmt_skeleton_from_ast -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation initialized_decl -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation "decl" -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前状态：
+- clang frontend 已能把 scalar initialized local decl 接到 typed IR emitter。
+- call initializer 仍 fail-closed；这一步没有打开通用 call expression、pointer/deref/index emitter。
+- real clang AST focused suite 当前为 `31 passed`。
+- translator crate with `typed-ir,clang-frontend`：lib `9 passed`，`bounded_translation` `133 passed`，doc tests `0`。
+- 下一步建议：继续补无大括号 `IfStmt`/`WhileStmt` unsupported/positive smoke，或把 initialized decl/comparison 这类真实 clang 能力接入 lowering-report evidence。
+
+## 71. 2026-06-26 clang no-brace IfStmt/WhileStmt bodies
+
+本轮承接第 70 节后的小缺口：真实 clang AST 对 `if (...) stmt; else stmt;` 和 `while (...) stmt;` 会把 then/else/body 直接放成单条语句，而不是 `CompoundStmt`。之前 `if_stmt_skeleton_from_ast()` / `while_stmt_skeleton_from_ast()` 对这种结构 fail-closed，导致 scalar 已支持的控制流无法端到端通过。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `stmt_body_skeleton_from_ast()`：如果 body 是 `CompoundStmt`，继续展开 compound body；否则把该 AST 节点按 `stmt_skeleton_from_ast()` lower 成单条 body statement。
+  - `if_stmt_skeleton_from_ast()` 的 then/else body 改为复用该 helper；缺失 else 仍 lower 成空 `else_body`。
+  - `while_stmt_skeleton_from_ast()` 的 body 改为复用该 helper。
+  - 这是 clang frontend 结构补丁，不改变 typed IR emitter，也不放开 `CallExpr`、`IncDec` condition、pointer/deref/index 等语义边界。
+- `crates/c2r-translator/src/clang_frontend.rs` 内部单测
+  - 新增 `if_stmt_skeleton_from_ast_maps_single_statement_bodies`。
+  - 新增 `while_stmt_skeleton_from_ast_maps_single_statement_body`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST opt-in smoke：`clang_ast_dump_emits_if_without_braces_when_enabled`。
+  - 新增真实 clang AST opt-in smoke：`clang_ast_dump_emits_while_without_braces_when_enabled`。
+
+TDD/验证要点：
+- 两个内部 parser 测试先红，分别失败于 `IfStmt without CompoundStmt then body` 和 `WhileStmt without CompoundStmt body`。
+- 实现 helper 后内部 parser 测试通过。
+- 真实 clang no-brace focused suite 当前为 `2 passed`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::if_stmt_skeleton_from_ast_maps_single_statement_bodies -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::while_stmt_skeleton_from_ast_maps_single_statement_body -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation without_braces -- --nocapture
+```
+
+当前核心翻译状态：
+- scalar typed IR 路径继续覆盖 `If` / `While` / comparison / initialized local decl 等非 pointer 子集。
+- no-brace control body 已接入真实 clang AST -> typed IR -> emitter -> rustc smoke。
+- FlashDB crc32 的核心泛化仍未完成：`is_crc32_byte_cursor_ir()`、旧 `is_crc32_byte_cursor_loop()` 和 crc32 canned Rust 路径仍在；pointer-to-slice、`*p++`、`crc32_table[index]` 仍是下一阶段主线。
+
+## 72. 2026-06-26 generic pointer slice and byte cursor emitter step
+
+本轮继续推进 phase1b 的 typed IR -> 可编译 Rust 通路，重点不是删除 crc32 canned path，而是先把 crc32 所需的关键子能力做成通用 emitter 能力，并用真实 clang AST smoke 证明路径可跑。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 增加 byte cursor source 记录：只有在函数体中能证明存在 `const uint8_t *p = (const uint8_t *)buf` 后续 byte post-increment read 时，才把 `const void *buf` 作为 `&[u8]` 参数暴露。
+  - `emit_param()` 支持只读整数指针参数映射为 slice：`const uint32_t *table -> table: &[u32]`，`const uint8_t *p -> p: &[u8]`；必须是 pointee const，mutable pointer 继续 fail-closed。
+  - `const void *` 只在 proven byte cursor 场景下映射为 `&[u8]`，避免宽松接受任意 void pointer。
+  - byte cursor local declaration `const uint8_t *p;` 在 proven source 场景下降成 `let mut p: usize = 0;`，对应 cast assignment 不再输出 Rust 语句。
+  - 新增 `emit_expr_with_prelude()`，递归处理 `Binary` / integer `Cast` / `Index` / `Deref(PostInc)` 的最小子集，使 `return crc ^ (uint32_t)*p++;` 能输出 byte temp prelude。
+  - 嵌套 `*p++` 支持两条通用路径：`const void *buf` 经 byte cursor 读 `buf[p]`，以及 direct `const uint8_t *p` 参数读 `p[p_index]`。
+  - 同一 return 表达式里多个 `*p++` 直接拒绝，错误为 `multiple post-increment byte reads are unsupported`，避免假设 C 子表达式求值顺序。
+  - `const uint32_t *p` 的 `*p++`、non-const pointer、comparison return 等仍 fail-closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 复用上一轮 no-brace body helper，使真实 clang 的 single-statement `if`/`while` body 可以端到端 lower。
+  - `CStyleCastExpr` 从只接受 `BitCast` 扩到接受 `IntegralCast` / `IntegralPromotion`，用于 `(uint32_t)*p++` 这类真实 clang AST。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增/补强 typed IR 覆盖：`const uint32_t *` index read、direct `const uint8_t *p` `return *p++`、`const void * -> const uint8_t *` cursor read、nested byte cursor read、byte temp 名称冲突、cursor temp 名称冲突、生成临时不污染源符号表、多 `*p++` fail-closed、mutable/non-const/const-u32 postinc 负例。
+  - 新增真实 clang AST opt-in smoke：`const uint32_t *table` index emit、`const void *` byte cursor emit、nested `const void *` byte cursor emit、nested direct `const uint8_t *p` byte cursor emit、integral C cast emit。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_comparison_expression_outside_condition -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_avoids_byte_temp_name_collision_for_nested_post_increment_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_nested_post_increment_reads_in_one_expr -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation nested_const_u8_byte_cursor_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation nested_const_void_byte_cursor_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前验证结果：
+- `bounded_translation`: `151 passed`
+- translator crate with `typed-ir,clang-frontend`: lib `11 passed`, bounded `151 passed`, doc tests `0`
+- real clang AST opt-in focused suite: `37 passed`
+
+当前核心翻译状态：
+- typed IR generic emitter 已经不再只是 scalar：只读整数 pointer-to-slice、slice index read、direct byte cursor `*p++`、`const void *` proven byte cursor、nested byte read prelude 都已能输出可编译 Rust。
+- 这仍不是“全程零 crc32 专用代码”：`is_crc32_byte_cursor_ir()`、旧 `is_crc32_byte_cursor_loop()`、`emit_crc32_byte_cursor_rust()` 和相关 crc32 rule 记录路径仍在。下一轮如果要回应“翻译能力不是 0”的质疑，必须继续把 crc32 主体从 generic emitter 跑出来，再删除 canned matcher。
+- 下一步建议：把 crc32 table/global const array 与 loop 内 `crc = crc32_table[(crc ^ *p++) & 0xff] ^ (crc >> 8)` 拆成 generic `Index + Deref(PostInc) + Assign` emitter 能力；在 full generic 路径通过前，不要提前删除旧 canned path。
+
+## 73. 2026-06-26 generic crc update assignment and postfix decrement while
+
+本轮继续推进核心翻译泛化，目标是把 FlashDB crc32 主体拆成更小的 generic emitter 能力，而不是继续依赖 canned crc32 路径。并行只读代理结论一致：真实 clang lowering 已能表达 `Index(table, (crc ^ *p++) & mask) ^ (crc >> 8)`，但 real FlashDB 的 `static const crc32_table[256]` 仍缺显式 global table IR/context，不能声称 full generic crc32 已完成。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `Assign` RHS 改为走 `emit_expr_with_prelude()`，因此 assignment 内部也能生成 nested byte-read prelude。
+  - `Assign` value 中多个 `*p++` 继续 fail-closed，错误文案包含 `assign value multiple post-increment byte reads are unsupported`。
+  - 新增窄 `while(size--)` 支持：只接受 postfix `Dec` 的 `size_t`/`usize` 变量，生成 Rust `loop`，先保存旧值，再 `wrapping_sub(1usize)`，再按旧值为 0 决定 break，保留 C postfix decrement 副作用。
+  - `collect_assigned_vars_from_body()` 只把 `while(size--)` 的 decrement target 纳入 `mut` 参数收集；没有把 byte cursor `*p++` 的 slice 参数错误标成 `mut`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_crc_update_assignment_with_nested_byte_read`，证明 `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U)` 能走 generic emitter，且不包含 `crc32_update_byte`。
+  - 新增 `typed_ir_rejects_multiple_post_increment_reads_in_assign_value`。
+  - 新增 `typed_ir_emits_postfix_decrement_while_condition_for_size_counter`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled`，使用参数表 `const uint32_t *table` 绕开 global table blocker，验证 clang AST -> typed IR -> generic emitter -> rustc smoke。
+  - 原 `clang_ast_dump_rejects_postfix_decrement_while_condition_in_scalar_emitter_when_enabled` 改为正例 `clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled`；prefix decrement 负例仍保留。
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - 新增架构图和核心代码地图。
+  - 明确当前通路：C source / compile_commands -> clang AST dump -> skeleton -> typed IR -> generic emitter / legacy crc32 route -> Rust -> rustc/tests/evidence。
+  - 明确核心文件：`clang_frontend.rs`、`typed_ir.rs`、`bounded_translation.rs`、`CONTEXT.md`。
+  - 明确 blocker：real FlashDB 的 global const `crc32_table[256]` 还没有 typed IR global data model。
+- `docs/c2rust-migration-agent/README.md`
+  - Document Map 增加 `core-translation-architecture.md`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_crc_update_assignment_with_nested_byte_read -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_post_increment_reads_in_assign_value -- --nocapture
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_postfix_decrement_while_condition_for_size_counter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+```
+
+当前验证结果：
+- `bounded_translation`: `155 passed`
+- translator crate with `typed-ir,clang-frontend`: lib `11 passed`, bounded `155 passed`, doc tests `0`
+- real clang AST opt-in focused suite: `38 passed`
+
+当前核心翻译状态：
+- `crc = table[(crc ^ (uint32_t)*p++) & 0xffU] ^ (crc >> 8U)` 已能在 table 作为 readonly pointer parameter 时走 generic typed IR emitter。
+- `while(size--)` 已有窄 generic lowering，保留 postfix decrement 语义；`while(--size)`、`if(value++)`、signed int decrement condition 仍 fail-closed。
+- real FlashDB crc32 仍没有完全泛化：`crc32_table` global const array 还只是表达式里的 array-typed Var，没有全局常量数据模型或 Rust table emitter。下一刀应设计 typed IR global readonly array/context，再替换并删除 legacy crc32 matcher。
+
+## 74. 2026-06-26 bilingual docs convention for architecture docs
+
+用户明确要求文档都要中英文版本。本轮先把刚新增和同步触及的 c2rust migration docs 按目录既有约定落成中文主文档 `.md` + 英文镜像 `.en.md`：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - 改为中文主版本，保留架构图、核心代码地图、当前 generic emitter 能力和 crc32 blocker。
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 新增英文镜像版本。
+- `docs/c2rust-migration-agent/README.md`
+  - 改为中文主版本。
+  - 新增“双语文档约定”：新增用户/Agent 文档默认中文 `.md` + 英文 `.en.md`，OpenSpec parser anchors 保持英文。
+  - Document Map 同步列出 `README.md` / `README.en.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`。
+- `docs/c2rust-migration-agent/README.en.md`
+  - 新增英文镜像版本。
+
+注意：目录内部分早期文档仍是“中文说明 + English summary”的混合格式，还不是完整双文件版本。后续触及时应按本轮约定拆成完整双语版本；若用户要求一次性补齐历史文档，应批量处理这些文件的 `.en.md` 镜像和中文主文档。
+
+## 75. 2026-06-27 CandidateRoute P0 skeleton
+
+历史状态说明：本节已被第 77、81 节和后续条目取代。不要按本节恢复任何 `DeprecatedLegacyCrc32`、crc32 canned emitter 或 fallback route。
+
+本轮承接 Candidate Route P0 设计，把 typed IR Rust emission 的候选生成路由从隐式 `String` 返回值升级为显式结构化元数据。
+
+核心改动：
+- `crates/c2r-translator/src/translation_route.rs`
+  - 新增 `CandidateRoute`、`CandidateGenerator`、`CandidateRouteDecision`、`CandidateRouteReason` 和 `EmittedRust`。
+  - 当前真实执行路线只有三类：`GenericTypedIr`、`DeprecatedLegacyCrc32`、`Unsupported`。
+  - `DeprecatedLegacyCrc32` 记录 `LEGACY_CRC32_DELETE_WHEN`，避免 crc32 canned path 被误认为长期能力。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_rust_from_ir()` 现在返回 `Result<EmittedRust, IrEmitError>`。
+  - generic typed IR 成功时返回 `GenericTypedIr` route。
+  - 当前 crc32 canned path 保留，但显式返回 `DeprecatedLegacyCrc32` route。
+  - fail-closed 错误保留原 reason，同时在 `IrEmitError.route` 中返回 `Unsupported`。
+  - `Unsupported.fallback = None`：它表示当前 generic typed IR emitter 已失败，后续 L2/L3 应由更高层 router 另起路线。
+- `crates/c2r-translator/src/lib.rs`
+  - 两个生产调用点已更新为取 `emitted.rust`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 legacy crc32 route metadata contract。
+  - 新增 generic typed IR route metadata contract。
+  - 在两个多 `*p++` fail-closed 样例中断言 `Unsupported` route。
+  - 在真实 clang pointer-table generic 路径中断言 `GenericTypedIr`。
+  - 在真实 clang/real-fdb crc32 lowering 路径中断言 `DeprecatedLegacyCrc32`。
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 架构图和代码地图同步加入 `translation_route.rs`。
+  - 明确 candidate route 只选择候选生成实现，不决定 `semantic_pass`，也不替代 `validation/tools/auto_migrate.py` 的 evidence `route_decision`。
+
+已验证命令：
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_reports_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_ -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_multiple_post_increment_reads_in_assign_value -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+$env:PATH = 'C:\Program Files\LLVM\bin;' + $env:PATH
+$env:CLANG_PATH = 'C:\Program Files\LLVM\bin\clang.exe'
+$env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin\libclang.dll'
+$env:C2R_RUN_CLANG_AST_TESTS = '1'
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_ -- --nocapture
+git diff --check -- docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md CONTEXT.md docs/superpowers/plans/2026-06-27-candidate-route-p0.md
+```
+
+当前结果：
+- route metadata focused tests：`2 passed`
+- typed IR focused suite：`56 passed`
+- unsupported route focused test：`1 passed`
+- `bounded_translation`：`157 passed`
+- translator crate with `typed-ir,clang-frontend`：lib `11 passed`，bounded `157 passed`，doc tests `0`
+- real clang AST opt-in focused suite：`38 passed`
+- doc diff check：exit code `0`，只有 CRLF warning
+
+当前边界：
+- 这一步没有删除 crc32 特例，而是把它显式标为 deprecated candidate route。
+- real FlashDB crc32 仍未全程 generic：`static const uint32_t crc32_table[256]` 的 typed IR global-data model 仍是下一刀。
+- candidate route 不是最终验收结论；语义接受仍由 evidence route decision、validation profile 和 differential gates 决定。
+
+## 76. 2026-06-27 readonly global table support and real FlashDB GenericTypedIr route
+
+历史状态说明：本节已被第 77、81 节和后续条目取代。图中的 `DeprecatedLegacyCrc32 fallback` 是已删除的历史过渡状态，不是当前可实施路线。
+
+本轮承接第 75 节 CandidateRoute P0 之后的核心翻译主线：不再让真实 FlashDB crc32 依赖 canned crc32 helper，而是把 `static const uint32_t crc32_table[] = {...}` 作为受限 readonly global facts 接到 generic typed IR emitter。
+
+当前核心链路：
+
+```mermaid
+flowchart TD
+    C["real C source"] --> Clang["clang_frontend.rs<br/>AST dump"]
+    Clang --> FunctionIR["IrFunction"]
+    Clang --> Globals["Vec<IrGlobal><br/>static const integer arrays"]
+    FunctionIR --> Emit["typed_ir.rs<br/>emit_rust_from_ir_with_globals"]
+    Globals --> Emit
+    Emit --> Route["translation_route.rs<br/>CandidateRouteDecision"]
+    Route --> Generic["GenericTypedIr"]
+    Route --> Legacy["DeprecatedLegacyCrc32 fallback"]
+    Route --> Unsupported["Unsupported fail-closed"]
+    Generic --> Rust["Rust draft with const CRC32_TABLE"]
+    Rust --> Smoke["rustc smoke tests"]
+    Smoke --> Validation["validation profile / evidence gates"]
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrGlobal` 和 `IrGlobalInit`。
+  - 新增 `emit_rust_from_ir_with_globals(function, globals)`。
+  - `EmitContext` 现在携带 readonly globals，`IrExpr::Var` 和 `IrExpr::Index` 可以解析 global const array。
+  - generic emitter 能输出 Rust top-level `const CRC32_TABLE: [u32; 256] = [...]`，并生成 `CRC32_TABLE[index as usize]`。
+  - `IrGlobalInit::IntegerArray` 长度必须与数组长度完全匹配；不匹配会 `Unsupported` fail-closed。
+  - `IrGlobalInit::Zeroed` 只用于显式 typed IR 输入，不由 clang 无 initializer 自动合成。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangLoweringReport` 新增 `globals: Vec<IrGlobal>`。
+  - clang AST report 现在同时返回 `function_ir` 和 readonly global facts。
+  - 只收集顶层 `static const` 固定长度整数数组 initializer。
+  - 支持真实 FlashDB 表里的 `ImplicitCastExpr(IntegralCast -> IntegerLiteral)` initializer 元素。
+  - 无 initializer、非 static、非 const、非整数数组、长度不匹配或未知形状不会被合成 global。
+  - 二元表达式 operands 现在保留 `IntegralCast` / `IntegralPromotion`，因此 `0xFF` 这类 C `int` literal 可以按 clang AST 转为 Rust cast，而不是误判为类型不匹配。
+
+- `crates/c2r-translator/src/lib.rs`
+  - `try_translate_slice_with_clang_lowered_ir()` 已把 `report.globals` 传给 `typed_ir::emit_rust_from_ir_with_globals()`。
+  - `clang-lowering-report` feature 下写出的 Rust draft 可以走 global-aware generic emitter。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR global table positive test，断言 route 为 `GenericTypedIr` 且不含 `crc32_update_byte`。
+  - 新增真实 clang AST global capture/emit tests，包括 `static const uint32_t table[4] = {...}` 和 `static const uint32_t table[] = {...}`。
+  - 新增 fail-closed tests：无 initializer 不合成 global；global initializer 长度不匹配拒绝。
+  - `clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled` 已改为 initialized table + `emit_rust_from_ir_with_globals()` + `GenericTypedIr`。
+  - `clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled` 已对真实 FlashDB `src/fdb_utils.c` 断言 `crc32_table` global length 256，并走 `GenericTypedIr`。
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 已断言 artifact Rust draft 使用 `CRC32_TABLE[...]`，不再使用 `crc32_update_byte`。
+
+文档同步：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+
+这些文档已经同步到 `clang_frontend -> typed IR + globals -> translation_route -> validation` 的当前结构，并明确 candidate route 不等于 semantic pass。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_records_static_const_integer_array_global_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_static_const_integer_array_global_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_operands -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_frontend::tests::readonly_globals_from_ast_maps_static_const_integer_array_initializer -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --test bounded_translation clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation typed_ir_rejects_readonly_global_array_initializer_length_mismatch -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend --test bounded_translation clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_enabled -- --nocapture
+```
+
+当前边界：
+
+- 真实 FlashDB crc32 的 clang lowering + typed IR + globals + Rust draft 路径已经能走 `GenericTypedIr`，并通过 rustc smoke。
+- 这还不是 semantic acceptance；C/Rust oracle、negative diff、unsafe ledger、validation profile 和 final verification 仍要跑完整证据链。
+- `DeprecatedLegacyCrc32` fallback 仍存在，下一步应缩小并删除 `is_crc32_byte_cursor_ir()` / `emit_crc32_byte_cursor_rust()`，但删除前要确保现有 legacy coverage 不再承担唯一回退。
+
+## 77. 2026-06-27 typed IR crc32 legacy fallback removal
+
+历史状态说明：本节关于 typed IR fallback 删除仍有效；本节中如果提到旧 string translator 仍保留 legacy parser compatibility path，已被第 81 节取代。当前旧 string crc32 canned/template 生成路径也已删除。
+
+本轮承接第 76 节：真实 FlashDB crc32 已经能通过 clang lowering + readonly globals + generic typed IR emitter 生成可编译 Rust，因此删除 typed IR 层的 crc32 canned fallback，不再让 no-globals crc32 IR 偷偷走 `crc32_update_byte()` 模板。
+
+当前核心链路：
+
+```mermaid
+flowchart TD
+    C["real C source"] --> Clang["clang_frontend.rs<br/>AST dump"]
+    Clang --> FunctionIR["IrFunction"]
+    Clang --> Globals["Vec<IrGlobal><br/>readonly static const arrays"]
+    FunctionIR --> Emit["typed_ir.rs<br/>emit_rust_from_ir_with_globals"]
+    Globals --> Emit
+    Emit --> Route["translation_route.rs<br/>CandidateRouteDecision"]
+    Route --> Generic["GenericTypedIr"]
+    Route --> Unsupported["Unsupported fail-closed"]
+    Generic --> Rust["Rust draft with const CRC32_TABLE"]
+    Rust --> Smoke["rustc smoke / cargo tests"]
+    Smoke --> Validation["validation profile / evidence gates"]
+```
+
+代码改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 删除 `is_crc32_byte_cursor_ir()` 和相关 crc32 shape matcher helpers。
+  - 删除 typed IR 内的 canned `emit_crc32_byte_cursor_rust()`。
+  - 删除 `crc32_byte_cursor_function()` hard-coded fixture helper。
+  - `emit_rust_from_ir()` 与 `emit_rust_from_ir_with_globals()` 现在只走 generic emitter；不满足当前 subset 时返回 `Unsupported`。
+  - 无 globals 的 FlashDB crc32 typed IR 现在 fail closed，错误会指向 `crc32_table` 未声明，而不是生成 bitwise helper。
+
+- `crates/c2r-translator/src/translation_route.rs`
+  - 删除 `CandidateRoute::DeprecatedLegacyCrc32`、`CandidateGenerator::LegacyCrc32Emitter`、`LEGACY_CRC32_DELETE_WHEN` 和 `deprecated_legacy_crc32_route()`。
+  - typed IR candidate route 当前只保留 `GenericTypedIr` 与 `Unsupported`。
+
+- `crates/c2r-translator/src/lib.rs`
+  - 旧字符串 translator 的 crc32 byte-cursor 模板仍保留为 legacy parser compatibility path。
+  - 该旧路径不再桥接 `typed_ir::crc32_byte_cursor_function()` 或 `typed_ir::emit_rust_from_ir()`。
+  - 该旧路径不再记录 `typed-ir-crc32-emitter` provenance。
+  - clang-lowered typed IR 规则记录也不再写入 `typed-ir-crc32-emitter`，只保留 `clang-lowered-typed-ir` 和结构化规则。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_rejects_flashdb_crc32_without_readonly_global_table` 断言 no-globals crc32 typed IR 必须 `Unsupported`。
+  - `typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32` 断言不再存在 deprecated route 行为。
+  - `typed_ir_emits_flashdb_crc32_with_readonly_global_table_as_generic_route` 继续证明 with-globals 路径是 `GenericTypedIr` 且不含 `crc32_update_byte`。
+  - `flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules` 继续覆盖旧字符串路径，但断言它不再声称 `typed-ir-crc32-emitter`。
+
+文档同步：
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+
+这些文档已经改为：typed IR route 只有 `GenericTypedIr` 和 `Unsupported`；typed IR crc32 fallback 已删除；旧字符串 translator 的 crc32 模板仍是单独的 legacy parser 路径。
+
+本轮已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_flashdb_crc32_without_readonly_global_table
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_does_not_use_deprecated_crc32_route_for_no_globals_crc32
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir flashdb_crc32_byte_cursor_loop_generates_safe_slice_boundary_and_rules
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+```
+
+最新验证结果：
+
+- `--features typed-ir,clang-frontend`：12 个 lib tests passed，163 个 bounded tests passed，doc tests 0。
+- `--features clang-lowering-report`：13 个 lib tests passed，164 个 bounded tests passed，doc tests 0。
+
+当前边界：
+
+- typed IR 核心翻译链路已经不再包含 crc32 canned fallback。
+- 旧字符串 translator 仍有 `is_crc32_byte_cursor_loop()` 和本地 `emit_crc32_byte_cursor_rust()`；它是 legacy parser 路径，后续应单独清理或明确标为 compatibility。
+- 真实 FlashDB crc32 仍只是 candidate generation + rustc smoke 通过；完整 semantic acceptance 还需要 validation profile、C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 78. 2026-06-27 typed IR candidate evidence binding
+
+本轮承接第 77 节：typed IR 的 crc32 legacy fallback 已删除，下一步把 `GenericTypedIr` candidate route 和 `ClangLoweringReport.globals` 绑定进 validation evidence，而不是只停留在 Rust draft 可编译。
+
+代码改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - `clang-lowering-report` artifact 新增 `typed_ir_candidate`。
+  - 成功时记录 `candidate_route`，即 `CandidateRouteDecision` 的完整序列化结果。
+  - 记录 `readonly_globals` 摘要：`name`、`spelled_type`、`canonical_type`、`array_len`、`init_kind`、`value_count`。
+  - 失败或 unavailable 时也会写出稳定结构，并保持 `semantic_pass=false`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status` 断言 report artifact 总是包含 `typed_ir_candidate`，且不影响 manifest status / semantic pass。
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 在真实 clang smoke 路径下断言 candidate route 为 `GenericTypedIr`，并断言 readonly global `crc32_table` 长度和值数量为 256。
+
+- `validation/tools/auto_migrate.py`
+  - `route_decision.candidate_generation.typed_ir` 现在从 `l3-<slice>-clang-lowering-report.json` 绑定 typed IR candidate route、readonly globals、readonly globals identity 和 Rust draft provenance。
+  - `route_decision.source_artifacts.clang_lowering_report` 在 report 存在时记录 evidence ref。
+  - `validation_profile.candidate_generation` 复述同一绑定，但继续保持 `generated_draft_semantic_pass=false`。
+  - `readonly_globals_identity` 包含 `count`、`names` 和 `sha256`，用于后续 cache/profile 漂移检查。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 新增 `validate_typed_ir_candidate_binding()`。
+  - 当 route/profile 声明 `typed_ir.status=generated` 时，validator 会校验 clang-lowering-report ref、sha、candidate route、readonly globals、globals identity 和 `semantic_pass=false`。
+  - route/profile 的 `candidate_generation` 必须一致。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence`。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_validates_typed_ir_candidate_binding_against_clang_lowering_report`，覆盖正向绑定、route 漂移拒绝和 candidate semantic pass 拒绝。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 已同步当前结构：typed IR route/globals 已绑定为 validation provenance，但不代表 semantic acceptance。
+
+本轮已跑过的验证：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_validates_typed_ir_candidate_binding_against_clang_lowering_report
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_route_source_artifact_ref_sha_drift
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+```
+
+最新边界：
+
+- typed IR candidate route 和 readonly globals 已作为 provenance 进入 route/profile evidence。
+- 这仍不是 semantic acceptance；`typed_ir_candidate.semantic_pass`、`validation_profile.generated_draft_semantic_pass` 和 manifest/final 的 generated-draft semantic flag 都必须保持 false。
+- 下一步应对真实 FlashDB crc32 跑完整 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 79. 2026-06-27 typed IR candidate evidence hardening
+
+本轮承接第 78 节：在把 `GenericTypedIr` candidate route 和 readonly globals 绑定进 route/profile evidence 后，补强 validator 边界，避免非 semantic evidence 被静默篡改。
+
+代码改动：
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - `validate_typed_ir_candidate_binding()` 现在会拒绝 profile 单边出现 `candidate_generation` 而 route 缺失的情况。
+  - `typed_ir.status=generated` 或 clang report ref 明确不是 `missing` 时，必须校验 `source_artifact` / `source_artifacts.clang_lowering_report` 的 path 和 `sha256`。
+  - `status=missing` 的旧证据兼容路径仍允许缺少 clang-lowering-report artifact，不会误伤 legacy/accepted evidence 回填测试。
+  - `require_ref()` 新增 `require_sha` 参数，只在 typed IR clang report 边界强制 sha，不扩大影响其它旧 ref。
+  - `semantic_pass` 仍必须为 `false`；本轮没有把 candidate generation 提升为 semantic acceptance。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_rejects_typed_ir_candidate_reference_boundary_gaps`。
+  - 红测先确认当前 validator 会漏过缺失 `sha256`、profile 单边 `candidate_generation`、以及非 generated clang report ref 漂移。
+  - 修复后该测试通过，并保持旧的 accepted/legacy evidence 流程通过。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled` 现在用测试发现的 `clang_path` 临时设置 `CLANG_PATH`。
+  - 这样 artifact writer 能读取同一个 clang 路径，避免真实 clang smoke 在 shell 未设置 `CLANG_PATH` 时误报 `typed_ir_candidate.status=not_available`。
+  - 该环境变量 guard 只用于 gated smoke；最终按 `--test-threads=1` 单线程验证，避免进程级 env 并发风险。
+
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+  - 补充双语入口，指向 `core-translation-architecture.md` / `.en.md`，说明 `GenericTypedIr` candidate generation 已绑定 evidence，但 semantic acceptance 仍由 validation gates 决定。
+
+本轮补充验证：
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_typed_ir_candidate_reference_boundary_gaps
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --test bounded_translation clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled -- --exact --nocapture --test-threads=1
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+已确认结果：
+
+- Python evidence/validator suite：113 tests passed。
+- `clang-lowering-report` Rust matrix：13 lib tests + 164 bounded tests passed。
+- `typed-ir,clang-frontend` Rust matrix：12 lib tests + 163 bounded tests passed。
+- 单线程真实 clang smoke：1 bounded test passed。
+- FlashDB `real-fdb-calc-crc32` evidence validator：status `passed`，semantic 仍为 `false/not_required`。
+
+下一步建议：
+
+- 把 `typed_ir_candidate` 从 provenance 进一步接入 route signal：`generated` 进入 L1 typed IR route，`unsupported` 保留失败原因并进入后续 L2/L3 队列。
+- 保留当前原则：candidate route 只描述生成路径，不替代 C/Rust oracle、negative diff、unsafe ledger 和 final verification。
+
+## 80. 2026-06-27 typed IR route signal and bounded direct calls
+
+本轮承接第 79 节：`typed_ir_candidate` 不再只是 route/profile provenance，它现在也参与 route decision；同时 generic typed IR emitter 扩展了一个非项目专用的 bounded direct-call 子集。
+
+代码改动：
+
+- `validation/tools/auto_migrate.py`
+  - `emit_route_decision()` 先读取 `candidate_generation_evidence()`，再把它交给 `route_level()`。
+  - `route_level()` 在 hard-refuse 条件之后、旧 scalar/pointer heuristic 之前检查 typed IR signal。
+  - `typed_ir.status=generated`、route 为 `GenericTypedIr` 且 `rust_draft_generated=true` 时，route level 为 `L1`，rationale 写入 `typed_ir_candidate_generated`。
+  - `typed_ir.status=unsupported` 时，route level 为 `L2`，rationale 写入 `typed_ir_candidate_unsupported`，并保留 `unsupported_reason` 或 `reason`。
+  - `semantic_pass` 和 `generated_draft_semantic_pass` 仍保持 false；candidate route 不替代 validation gates。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_generated_typed_ir_candidate_is_l1_route_signal`。
+  - 新增 `test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2`。
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 对存在 `typed_ir_candidate` 的 clang-lowering-report，不再只校验 `generated` 状态；`unsupported_reason` / `reason` 也会参与 route/profile 与 report 的漂移比较。
+
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增 `test_rejects_unsupported_typed_ir_candidate_reason_drift`。
+  - 新增 `test_rejects_unsupported_typed_ir_candidate_missing_from_report`，拒绝 route/profile 声称 unsupported typed IR candidate、但 clang-lowering-report 不含 `typed_ir_candidate` 的伪绑定。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - clang `CallExpr` 可以 lowering 为 `ClangExprSkeleton::Call` 和 `IrExpr::Call`，前提是 callee 是带 `referencedDecl.kind=FunctionDecl` 的直接函数名。
+  - 函数指针或非直接 callee、缺少 `FunctionDecl` 证明的 callee、嵌套 call 参数、inc/dec 参数、deref/address-of 参数继续 fail closed。
+  - 审查后新增 `expr_skeleton_from_ast_rejects_call_expr_without_referenced_decl_kind`，避免仅凭 `qualType` 启发式放行。
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - generic emitter 支持 bounded direct identifier call。
+  - 覆盖 call statement、declaration initializer、assignment RHS 和 return value。
+  - calls in `if` / `while` condition 仍 unsupported，且现在递归检查 comparison lhs/rhs 等 condition 子树。
+  - 审查后新增 `typed_ir_rejects_if_with_call_in_comparison_condition`，避免 `if helper(x) == 0` 被误放行。
+
+- `validation/auto-translation-template/route-decision.schema.json`
+- `validation/auto-translation-template/validation-profile.schema.json`
+  - `candidate_generation` 对旧 evidence 保持可选。
+  - 一旦出现 `candidate_generation.typed_ir`，schema 限制 route 为 `GenericTypedIr` / `Unsupported`，并要求 `semantic_pass=false`。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - 已同步当前两路线 typed IR 模型、route signal、schema 兼容边界和 direct-call 覆盖。
+
+本轮已跑过的聚焦验证：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_unsupported_typed_ir_candidate_reason_drift
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_validates_typed_ir_candidate_binding_against_clang_lowering_report validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_unsupported_typed_ir_candidate_reason_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_typed_ir_candidate_reference_boundary_gaps
+python -m json.tool validation/auto-translation-template/route-decision.schema.json
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+```
+
+待本轮最终提交前仍需跑：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+openspec validate --all --strict
+git diff --check -- <本轮目标文件>
+```
+
+下一步建议：
+
+- 在 route signal 已接入后，继续把真实 FlashDB crc32 的 oracle/diff/negative/unsafe/final verification 跑完整。
+- 继续扩展 generic typed IR 的常见 C 子集，例如更系统的 direct-call callee signature evidence、简单 struct field reads/writes、局部数组/指针边界，而不是恢复项目专用 fallback。
+
+## 81. 2026-06-27 remove legacy string crc32 canned path
+
+本轮承接第 80 节：route signal 已经接入后，继续处理“全程零 crc32 专用代码不能放水”的核心问题。结论要精确：仓库里仍有 FlashDB crc32 测试样本和回归 fixture，但旧 string translator 的 crc32 canned/template 真实生成路径已经删除；当前正向生成路径是 clang-lowered typed IR + readonly globals + generic emitter。
+
+核心改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - 删除旧 `translate_slice()` 里的 `is_crc32_byte_cursor_loop()` 早返回分支。
+  - 删除 `is_crc32_byte_cursor_loop()`、`record_crc32_byte_cursor_rules()`、本地 `emit_crc32_byte_cursor_rust()` 和只为旧 matcher 服务的 `normalize_expression()`。
+  - 删除 `emit_pointer_graph()` 中基于旧 crc32 matcher 的 `buf -> &[u8]`、`*p++` 和 `byte_cursor_post_increment_read` 注入。
+  - clang-lowered typed IR 证据 rule 从 `crc32-byte-cursor-loop` 改为更通用的 `byte-cursor-loop`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 旧 string translator crc32 byte-cursor 正向用例改为 fail-closed 回归：
+    `flashdb_crc32_byte_cursor_loop_blocks_without_legacy_canned_template`。
+  - 该测试断言 raw string 输入不再生成 Rust、不含 `crc32_update_byte`、不记录 `crc32-byte-cursor-loop`，并报告 inc/dec unsupported。
+  - clang-lowered FlashDB crc32 smoke 继续断言正向 plan 含 `byte-cursor-loop`，且不含 `crc32-byte-cursor-loop`。
+
+- `validation/tools/auto_migrate.py`
+  - `generated_rust_replay_supported()` 不再依赖 `crc32-byte-cursor-loop`，改为识别 `clang-lowered-typed-ir`。
+
+- `validation/tools/test_auto_migrate.py`
+  - 真实 FlashDB crc32 candidate/replay 测试改为显式开启 `--emit-clang-lowering-report`。
+  - 测试环境在未设置 `CLANG_PATH` 时会使用 `C:/Program Files/LLVM/bin/clang.exe`，不存在则 skip。
+  - 断言 draft 包含 `CRC32_TABLE`，不含 `crc32_update_byte` 和 `*p++`。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+- `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - 双语同步当前态：旧 string translator crc32 recognizer/template 已删除；typed IR route 仍只有 `GenericTypedIr` / `Unsupported`；FlashDB crc32 正向生成只走 clang-lowered typed IR + readonly globals + generic emitter。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml flashdb_crc32_byte_cursor_loop_blocks_without_legacy_canned_template -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_clang_typed_ir_translator_generates_candidate_route validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic
+```
+
+待最终提交前仍需跑：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+openspec validate --all --strict
+git diff --check -- <本轮目标文件>
+```
+
+当前边界：
+
+- 可以说：旧 string translator 的 crc32 canned/template 生成路径已经删除。
+- 不应说：仓库全程没有任何 crc32 专用代码。测试 fixture、FlashDB slice spec 和回归样本仍然保留 crc32，这是用例和验证输入，不是生成器 fallback。
+- 真实 FlashDB crc32 的 semantic acceptance 仍由 validation gates 决定，不能由 `GenericTypedIr` candidate route 直接宣称通过。
+
+## 82. 2026-06-27 typed IR local fixed array index read
+
+本轮继续按多线程审查下一步切口。三个只读线程结论：
+
+- direct-call signature evidence 是重要 soundness 切口，但需要重新设计 callee signature 进入 `ClangExprSkeleton::Call` / `IrExpr::Call` / evidence 的 contract。
+- simple struct field reads/writes 价值高，但会牵出 `MemberExpr`、record layout、Rust struct 定义、`&Point` / `&mut Point` 边界和 assignment target 泛化，切口偏大。
+- router risk floor 能防止 `GenericTypedIr` 把 alias-blocked pointer slice 误降到 L1，但它是路由正确性，不直接扩大 typed IR 可翻译 C 子集。
+
+本轮主线选了更小的核心翻译切口：typed IR 层的局部固定长度整数数组字面量 + 只读下标读取。它复用现有 `IrTypeKind::Array` 和 `IrExpr::Index`，先不接真实 clang `InitListExpr`。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrExpr::ArrayLiteral { elements, ty, source_span }`。
+  - `IrStmt::Decl` 现在允许固定长度整数数组声明使用数组字面量初始化，生成 Rust `let table: [u32; 3] = [1u32, 2u32, 3u32];`。
+  - `emit_index_expr()` / `emit_index_expr_with_emitted_index()` 现在除了 readonly global array 和 readonly pointer slice，也接受已声明的 local fixed integer array 作为 index base。
+  - 数组字面量保持窄化：只支持声明 initializer 位置；长度未知、元素数量不匹配、非整数元素或在 call/普通表达式位置使用都会 fail closed。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_read`。
+  - 红测阶段先失败于 `IrExpr::ArrayLiteral` variant 不存在；实现后通过，并用 `rustc` smoke 验证生成片段可编译。
+  - 顺手把 `without_implicit_cast()` / `repeated_c_u32_initializer()` 的 cfg 收窄到 clang frontend 相关 feature，避免 `typed-ir` 单独测试产生 dead_code warning。
+
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - 双语同步 generic typed IR coverage：local fixed integer arrays。
+
+本轮已跑过的验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_local_fixed_array_index_read -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+$env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+```
+
+当前边界：
+
+- 这只是 typed IR -> Rust emitter 能力；真实 C `InitListExpr` / local array lowering 还没接到 clang frontend。
+- local array 当前只支持固定长度整数数组、声明时初始化、只读 index。数组元素写入、指针衰减、变长数组、struct array 仍应 fail closed。
+- 下一步可以在两个方向继续：接 clang `InitListExpr` 到 `ArrayLiteral`，或按并行线程建议补 direct-call callee signature evidence / router risk floor。
+
+## 83. 2026-06-27 clang local array InitListExpr and typed IR route risk floor
+
+本轮按多智能体并行继续。三个只读线程结论：
+
+- `InitListExpr -> ArrayLiteral` 是上一节 typed IR local array 能力的最小前端接线，应立即做，并补真实 clang AST smoke。
+- router risk floor 有实际问题：`GenericTypedIr` generated 当前会先返回 L1，绕过 pointer graph 中的 alias blocked / requires-noalias 风险。
+- direct-call callee signature evidence 是下一步 soundness hardening，建议排在 InitListExpr 之后，不要拖到 broad direct-call 推广之后。
+
+本轮主线完成两件事。
+
+1. clang frontend 现在支持局部固定长度整数数组 initializer。
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `ArrayLiteral { elements, ty }`。
+  - `expr_skeleton_from_ast_with_options()` 新增 `InitListExpr` 分支。
+  - 新增 `init_list_expr_skeleton_from_ast()`，只接受一维 fixed-size integer array，且 initializer element count 必须等于数组长度。
+  - initializer 元素只允许纯 `IntegerLiteral` 或整型 cast 包裹的 `IntegerLiteral`；变量、call、binary、inc/dec、deref 等非 literal 或副作用表达式 fail closed。
+  - initializer 元素保留 `IntegralCast` / `IntegralPromotion`，避免真实 clang 把 `{1}` 初始化 `uint32_t[]` 时丢掉 cast。
+  - `ArrayLiteral` 作为 call argument 继续 fail closed。
+  - `lower_expr()` 把 `ClangExprSkeleton::ArrayLiteral` lowering 成 `IrExpr::ArrayLiteral`。
+
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir`，覆盖 `ClangFunctionSkeleton -> IrFunction -> Rust`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_local_fixed_array_initializer_when_enabled`，验证真实 C：
+    `uint32_t table[3] = {1U, 2U, 3U}; return table[i];`
+    能从 clang AST lowering 到 `IrExpr::ArrayLiteral`，并生成可 rustc 编译的 Rust。
+  - code review 后补 `decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_call_element` 和 gated real clang smoke `clang_ast_dump_rejects_local_array_initializer_call_when_enabled`，避免 array initializer 里带 direct call 时按 Rust 数组 literal 发射。
+
+2. route decision 现在有最小 alias risk floor。
+
+- `validation/tools/auto_migrate.py`
+  - `route_level()` 不再让 typed IR generated signal 提前覆盖 pointer graph risk。
+  - 新增 `alias_route_floor()`。
+  - `alias_contract.decision == "blocked"` 时保持 L3。
+  - `requires_noalias_contract` 或 `unknown_alias` risk 时保持 L2。
+  - pointer ownership role 为 `unknown` 时保持 L2。
+  - `GenericTypedIr` provenance 仍写入 rationale，但不能把上述风险降到 L1。
+
+- `validation/tools/test_auto_migrate.py`
+  - 新增 `test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1`。
+  - 新增 `test_generated_typed_ir_candidate_does_not_override_blocked_alias_route`。
+
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend decl_stmt_skeleton_from_ast_maps_fixed_array_initializer_list -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_local_fixed_array_index_read_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend decl_stmt_skeleton_from_ast_rejects_fixed_array_initializer_count_mismatch -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_local_fixed_array_initializer_when_enabled -- --nocapture
+ $env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_rejects_local_array_initializer_call_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_is_l1_route_signal validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2
+```
+
+本轮最终验证已跑：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+openspec validate --all --strict
+git diff --check -- CONTEXT.md crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs validation/tools/auto_migrate.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
+```
+
+当前边界：
+
+- 可以说：真实 clang AST 中的局部固定长度整数数组 initializer 已能进入 typed IR，并生成可编译 Rust。
+- 不应说：已支持 C 数组完整语义。当前只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素；partial initializer zero-fill、nested array、struct array、非 literal 或有副作用 initializer、VLA/incomplete array、local array write、array-to-pointer decay 仍 fail closed。
+- 可以说：`GenericTypedIr` 不再覆盖 alias blocked / requires-noalias 风险 floor。
+- 不应说：完整 L0-L4 router 已完成；当前只是 typed IR route signal 上方的最小 alias/ownership floor。
+
+English mirror summary:
+
+- Local fixed-size integer-array `InitListExpr` now lowers to `IrExpr::ArrayLiteral` and reaches compilable Rust through the generic typed IR emitter.
+- The route decision now keeps `GenericTypedIr` provenance but does not let it override alias-blocked, requires-noalias, unknown-alias, or unknown pointer-ownership floors.
+- Next soundness cut: direct-call callee signature evidence binding across plan/context/validator.
+
+## 84. 2026-06-27 clang-lowered direct-call evidence
+
+本轮按多智能体并行继续 direct-call soundness 切口。三个只读线程结论：
+
+- Rust translator 侧已经能从真实 clang `CallExpr` 走到 `ClangExprSkeleton::Call -> IrExpr::Call -> emit_call_expr()`，但 clang-lowered typed IR 路径此前没有把 `IrExpr::Call` 写入 `TranslationPlan.call_expressions`。
+- validation 侧已有 `external_direct_callees` / `signature_ref` / `callee_signature_id` / context-pack binding 机制；它只消费 plan 里的 `call_expressions`，不需要新增字段。
+- 文档需要同步核心架构、README、candidate route P0 设计和本 `CONTEXT.md`，并继续避免触碰预存 dirty `validation/evidence/**`。
+
+核心改动：
+
+- `crates/c2r-translator/src/lib.rs`
+  - `record_clang_lowered_ir_evidence()` 现在会调用新的 IR call evidence collector。
+  - 新增递归扫描 `IrStmt` / `IrExpr` 的 helper，把 clang-lowered typed IR 中的 `IrExpr::Call` 转成现有 `CallExpressionEvidence { callee, arguments, source_expression, statement_context }` 形状。
+  - 支持 decl initializer、assignment RHS、return value、expr statement，以及 if/while body 内的递归遍历；condition 中的 call 仍属于当前 typed IR emitter 的 fail-closed 边界，不作为成功路径 evidence 宣称。
+  - 只要记录到 direct call evidence，就同步写入 `bounded-call-expression` rule id，保持与旧 bounded string 路径的 evidence 语义一致。
+  - 新增 crate 内部 TDD 单测 `clang_lowered_ir_records_direct_call_expression_evidence`。红测先失败于 `call_expressions.len() == 0`，实现后通过；随后补 rule id 断言，先失败再通过。
+  - code review 后补 `clang_lowered_ir_preserves_repeated_direct_call_sites_in_same_context` 和 `clang_lowered_ir_does_not_record_condition_call_as_success_evidence`，确保重复 call site 不被文本去重吞掉，同时 condition call 不被当成成功路径 evidence。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+本轮已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_ir_records_direct_call_expression_evidence -- --nocapture
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report direct_identifier_call -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report translates_direct_call_expressions_and_records_callee_evidence -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_call_expression_evidence_flows_through_auto_migrate validation.tools.test_auto_migrate.AutoMigrateTests.test_declared_external_callee_context_allows_helper_rust_check
+```
+
+当前边界：
+
+- 可以说：clang-lowered typed IR direct calls 现在会进入现有 plan `call_expressions`，后续 `auto_migrate.py` 可继续生成 `translation_summary.call_expressions`、context-pack `direct_call_edges`、外部 callee signature binding。
+- 不应说：完整 direct-call signature system 已完成。当前只是把 typed IR call provenance 接入既有 evidence 通路；semantic acceptance 仍由 validation gates 决定。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Clang-lowered typed IR direct calls now populate the existing `TranslationPlan.call_expressions` evidence shape.
+- The existing validation tooling can map those calls into `translation_summary.call_expressions`, context-pack `direct_call_edges`, and external-callee signature bindings when the slice spec declares them.
+- This is provenance only; `semantic_pass` remains owned by the validation pipeline.
+
+## 85. 2026-06-27 local fixed array index assignment
+
+本轮继续按多智能体并行推进核心翻译能力。五个只读线程给出的排序里，direct-call signature binding 是下一步 soundness 切口，标量减法是更小的 C 子集扩展；本轮主线选择了文档中明确仍 fail-closed 的局部数组元素写入，因为它直接补齐已有 `InitListExpr -> ArrayLiteral -> Index read` 通路的下一步。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 现在保存 `assigned_vars`，供参数和局部声明统一判断 `mut`。
+  - `IrStmt::Assign` 的 target 发射拆为 `emit_assignment_target()`；`Var` 保持原逻辑，`Index` 只允许“已声明的 local fixed integer array + integer index”。
+  - 新增 `emit_local_array_index_assignment_target()`，显式拒绝 readonly global array 写入、const pointer slice 写入、非数组 base、非整数 index 和元素类型不匹配。
+  - `collect_assigned_vars_from_body()` 现在会把 `Assign target = Index(base Var, ...)` 的 base 计入 assigned vars，因此 `uint32_t table[3]...; table[i] = value;` 会发射 `let mut table: [u32; 3] = ...;`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `typed_ir_emits_local_fixed_array_index_assignment`。红测先失败于 `stmt[1].assign target must be Var`，实现后通过并用 rustc smoke 验证。
+  - 新增 `typed_ir_emits_local_fixed_array_index_assignment_from_clang_lowered_ir`，证明 `ClangFunctionSkeleton -> IrFunction -> Rust` 不需要前端新增节点即可走通。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled`，验证真实 C：
+    `uint32_t replace_local_table_slot(size_t i, uint32_t value) { uint32_t table[3] = {1U, 2U, 3U}; table[i] = value; return table[i]; }`
+  - 新增 fail-closed 负例 `typed_ir_rejects_readonly_global_array_index_assignment` 和 `typed_ir_rejects_const_pointer_index_assignment`，避免误放开 readonly global 或 const pointer slice 写入。
+  - 更新旧的复杂左值负例断言，继续保证 while/if 中非 `Var` / local fixed array `Index` target 仍 fail closed。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+本轮已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_local_fixed_array_index_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_local_fixed_array_index_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir index_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir non_var_assignment_target -- --nocapture
+```
+
+当前边界：
+
+- 可以说：真实 clang AST 中的局部固定长度整数数组 initializer、下标读取和元素写入现在能进入 typed IR，并通过 generic typed IR emitter 生成可编译 Rust。
+- 不应说：已支持 C 数组完整语义。当前写入目标只允许已声明的局部固定长度整数数组；readonly global array 写入、const pointer slice 写入、array-to-pointer decay、VLA/incomplete array、nested/struct array 和副作用 initializer 仍 fail closed。
+- 不应说：`GenericTypedIr` candidate 表示 semantic acceptance；它仍只是候选生成 provenance，接受结论由 validation gates 决定。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Local fixed-size integer-array initializer, index reads, and element writes now flow from real clang AST through typed IR into compilable Rust.
+- Writes are deliberately narrow: only declared local fixed-size integer arrays are accepted. Readonly global writes, const pointer-slice writes, array-to-pointer decay, VLAs/incomplete arrays, nested/struct arrays, and side-effecting initializers still fail closed.
+- This remains candidate generation only; semantic acceptance belongs to the validation gates.
+- Recommended next cut remains external direct-callee signature/call-site binding hardening across plan, context pack, and validator, or the small scalar subtraction `-` expansion if prioritizing C subset breadth.
+
+## 86. 2026-06-27 external direct-callee binding validator hardening
+
+本轮按用户要求继续多智能体并行推进。四个只读线程结论：
+
+- validator 原先只做 callee name 级别检查，缺少逐 call-site、source binding 和 call-edge enrichment 校验。
+- `auto_migrate.py` 产物里 plan 使用 `callee_signature_id`，context binding 使用 `signature_ref`，这是当前显式兼容契约。
+- 文档必须写清：这是 evidence integrity / provenance hardening，不是 external callee semantic acceptance。
+- 预存 `validation/evidence/**` 仍是脏文件，本轮不 stage、不 revert。
+
+核心改动：
+
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 默认 validator 路径现在也会在 slice spec 声明 `external_direct_callees` 时调用 external direct-callee context 校验；不再只挂在 `--require-semantic-pass`。
+  - external direct-callee 校验现在把 spec `signature_ref` / `source_files` 与 plan `translation_summary.call_expressions`、context-pack `direct_call_edges`、`callee_sources`、`signature_bindings`、`call_edge_to_callee_binding` 做一致性校验。
+  - 新增 source binding 校验：source path/sha、source_ref、definition_status 漂移会 fail closed。
+  - 新增 call-site metadata 校验：plan/context direct call edge 必须保持 `callee_scope=external_direct_callee`、`stub_status=compile_only`、`callee_source_ref`、`definition_status` 和 expected signature 一致。
+  - signature binding 现在要求每个 declared callee 恰好一个 binding，避免重复 binding 被静默覆盖。
+  - code review 后补 recorded/blocked 分流：unsupported external callee 的 blocked evidence 不再被默认 validator 误杀；blocked callee 现在校验 `external_direct_callee_blocks`、blocked call edge metadata 和 `stub_kind=none` / `semantics_verified=false`。
+- `validation/tools/test_validate_auto_translation_evidence.py`
+  - 新增红绿测试：默认 validator 路径缺 external callee binding 必须失败。
+  - 新增红绿测试：`callee_sources` sha 漂移必须失败。
+  - 新增红绿测试：call-site enrichment 字段漂移必须失败。
+  - code review 后补红绿测试：blocked external callee 必须允许通过 fail-closed evidence；plan/context direct call edge 单边漂移必须失败。
+  - helper 里的 plan/context call edge 改为深拷贝，避免测试 mutation 共享对象掩盖 drift。
+  - 保留并扩展上一轮红绿测试：缺 call-site binding、signature shape 漂移、signature binding 漂移都必须失败。
+- `validation/tools/test_auto_migrate.py`
+  - 正向断言 external direct callee descriptor、call expressions、context direct edges 和 call-edge bindings 的字段契约。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+TDD 红灯已确认：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift
+```
+
+实现后已跑验证：
+
+```powershell
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_context_direct_call_edge_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_allows_blocked_external_callee validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_requires_every_call_site_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_shape_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_signature_binding_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_callee_source_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_external_direct_callee_context_rejects_call_site_enrichment_drift validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_default_validation_missing_external_callee_context_binding validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_semantic_pass_missing_external_callee_context_binding
+python -B -m unittest validation.tools.test_validate_auto_translation_evidence validation.tools.test_auto_migrate
+openspec validate --all --strict
+git diff --check -- CONTEXT.md validation/tools/validate_auto_translation_evidence.py validation/tools/test_validate_auto_translation_evidence.py validation/tools/test_auto_migrate.py docs/c2rust-migration-agent/README.md docs/c2rust-migration-agent/README.en.md docs/c2rust-migration-agent/core-translation-architecture.md docs/c2rust-migration-agent/core-translation-architecture.en.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md
+```
+
+补充验证说明：
+
+- `python -B -m unittest discover -s validation/tools -p "test_*.py"` 已尝试，但失败在既有 `validation/evidence/**` 生成证据 fixture：6 个 semantic gate 测试的 evidence manifest 缺少 schema 要求的 `c2rust_baseline` ref。失败发生在 JSON schema 校验阶段，早于本轮 external direct-callee validator 新逻辑；本轮仍不触碰这些预存脏 evidence 文件。
+
+当前边界：
+
+- 可以说：external direct-callee 的 source/signature/call-site binding 现在进入默认 validator 和 semantic-pass validator 的强一致性校验。
+- 可以说：unsupported/blocked external direct-callee 会按 fail-closed evidence 校验，不要求 compile_only binding。
+- 不应说：external callee 语义已经验证通过。stub 仍是 `compile_only`，`semantics_verified=false`，semantic acceptance 仍由 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 决定。
+- 不应说：完整 direct-call 系统已完成。函数指针、嵌套 call、condition call、副作用参数、未声明 external callee 的 blocked contract 更强校验仍可继续补。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- External direct-callee source/signature/call-site binding is now checked by the default validator path as well as the semantic-pass validator path.
+- The validator now fails closed on missing call-site bindings, source hash drift, signature-shape drift, `callee_signature_id` drift, call-edge metadata drift, and stub/semantics-boundary drift.
+- Unsupported blocked external callees are validated as fail-closed blocked evidence instead of being forced through compile-only binding.
+- This is evidence-integrity and provenance hardening only. Recorded external callees remain `compile_only`, blocked external callees remain `stub_kind=none`, and `semantics_verified=false`; semantic acceptance still belongs to the validation gates.
+
+## 87. 2026-06-27 scalar subtraction through typed IR and clang lowering
+
+本轮继续按多智能体并行推进。只读线程结论一致：标量二元减法 `-` 是当前最小、高收益的 generic typed IR 扩展；FlashDB crc32 不应再新增或恢复任何专用 canned route，后续语义接受要走完整 validation gates。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_binary_op()` 新增 `IrBinOp::Sub -> "-"`。
+  - `validate_binary_operand_types()` 把 `-` 纳入与 `+` 相同的标量整数类型规则：lhs、rhs、result 必须发射为同一 Rust 标量类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Sub`。
+  - clang AST `BinaryOperator opcode "-"` 现在 lowering 到 `ClangBinaryOperator::Sub`，再 lowering 到 `IrBinOp::Sub`。
+  - `preserves_integral_operand_casts()` 纳入 `Sub`，避免 `unsigned int value - 1` 这类 usual arithmetic conversion 被剥掉后在 typed IR emitter 类型校验阶段误拒。
+  - 新增内部单测覆盖 subtraction operand 的 `IntegralCast` 保留。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 红绿测试 `typed_ir_emits_scalar_subtraction`。
+  - 新增 clang skeleton 红绿测试 `typed_ir_emits_scalar_subtraction_from_clang_lowered_ir`，并断言 lhs/rhs 方向：`value - 1`，不能错成 `1 - value`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_scalar_subtraction_when_enabled`，验证真实 C `int sub_one(int value) { return value - 1; }` 从 clang AST 到 typed IR，再到可编译 Rust。
+- 文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `docs/superpowers/plans/2026-06-27-candidate-route-p0.md`
+  - `CONTEXT.md`
+
+文档边界修订：
+
+- 旧 `docs/superpowers/plans/2026-06-27-candidate-route-p0.md` 已改为 superseded tombstone，不再是可执行计划；它明确禁止恢复 `DeprecatedLegacyCrc32`、typed IR crc32 matcher、string translator crc32 byte-cursor recognizer 或 `crc32_update_byte()` canned template。
+- `CONTEXT.md` 第 75、76、77 节已加历史状态警告，避免后续 agent 搜索到旧“当前”措辞后恢复 legacy crc32 fallback。
+- candidate route P0 设计里的 “legacy route/profile evidence” 已改成“未带 candidate_generation 的历史 evidence artifacts”，避免把 legacy route 误读成当前允许路线。
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_subtraction -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_subtraction_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+
+- direct typed IR 失败于 `binary op Sub is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Sub found for enum ClangBinaryOperator`。
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_subtraction -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_subtraction_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_scalar_subtraction_when_enabled -- --nocapture
+```
+
+当前边界：
+
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST 中的标量整数减法 `value - 1` 已经能进入 `GenericTypedIr` 并生成可编译 Rust。
+- 可以说：`Sub` 保留 clang integral casts，覆盖 unsigned subtraction 的核心类型风险。
+- 不应说：已支持所有 C 减号。`-value` 是 unary minus，`p - q` / `p - n` 是指针减法/指针算术，`-=` 是复合赋值；这些仍不在本轮能力范围内。
+- 不应说：FlashDB semantic acceptance 已完成。FlashDB 只是用例；真实 generated draft 接受仍需要 C oracle、Rust replay、schema diff、negative diff、unsafe ledger、final verification。
+- 仍不要 stage/revert/格式化 `validation/evidence/**` 中的预存脏文件。
+
+English mirror summary:
+
+- Scalar integer subtraction now flows through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust.
+- `ClangBinaryOperator::Sub`, AST opcode `"-"`, cast-preserving operand lowering, and `IrBinOp::Sub` emission are all wired.
+- The old Candidate Route P0 plan is now a superseded tombstone and must not be used to restore any crc32 canned or fallback route.
+- This does not mean all C minus forms are supported: unary minus, pointer subtraction/arithmetic, and compound `-=` remain outside the current subset.
+- This is still candidate generation only. Real FlashDB generated-draft semantic acceptance remains gated by C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
+
+## 88. 2026-06-27 legacy auto-translation evidence backfill
+
+本轮继续按多智能体并行推进。只读线程分别检查了 validator 强制检查点、文档同步点、下一核心翻译切口和提交边界。结论：
+
+- 既有 6 个 demo semantic gate failure 的根因不是新翻译逻辑，而是 legacy accepted auto-translation fixture 缺少当前 schema/validator 要求的落盘证据绑定。
+- 需要补的不只是 `evidence_manifest` 三个字段，还包括 auto manifest、final verification、cache metadata、translation plan、schema-aware diff、negative diff 和 Windows 工作树哈希绑定。
+- `candidate_generation` 对历史 route/profile payload 仍可选；但这不等于 semantic-pass fixture 可以缺 `c2rust_baseline`、`route_decision`、`validation_profile` refs。
+
+核心改动：
+
+- 对 8 个 legacy accepted auto-translation fixtures 持久化三件套：
+  - `l3-<slice>-c2rust-baseline-manifest.json`
+  - `l3-<slice>-route-decision.json`
+  - `l3-<slice>-validation-profile.json`
+- 覆盖目录：
+  - `validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith`
+  - `validation/evidence/demo/auto-translation/copy-i32-ptr-arith`
+  - `validation/evidence/demo/auto-translation/external-direct-callee`
+  - `validation/evidence/demo/auto-translation/store-add-one`
+  - `validation/evidence/demo/auto-translation/sum-i32-buffer`
+  - `validation/evidence/demo/auto-translation/sum-i32-ptr-arith`
+  - `validation/evidence/libuv/auto-translation/ip4-addr`
+  - `validation/evidence/zlib-ng/auto-translation/adler32-step`
+- 路由结果按当前 router 记录，而不是全部硬写 L0：
+  - L2: `add-i32-pair-ptr-arith`、`copy-i32-ptr-arith`、`sum-i32-buffer`、`sum-i32-ptr-arith`
+  - L1: `store-add-one`、`libuv/ip4-addr`
+  - L0: `external-direct-callee`、`zlib-ng/adler32-step`
+- 每个 fixture 同步更新：
+  - auto manifest 顶层 baseline/route/profile refs 和 cache dependent artifacts
+  - L3 evidence manifest refs
+  - final verification refs、`validation_profile_status=passed`、`skipped_gates=[]`
+  - cache metadata 的 canonical JSON identities
+  - schema-aware diff 的 `diff_gate`、accepted diff refs、required inputs
+  - negative diff 的 `negative_diff_gate`、accepted negative diff refs、required inputs、mutation evidence
+- `libuv` 和 `zlib-ng` 的 fixture/oracle 文件在 Windows 工作树为 CRLF，validator 按工作树字节计算 sha；本轮只刷新 auto-translation wrapper 中的工作树 sha refs，不提交顶层 fixture/oracle 文件。
+
+已跑过的聚焦验证：
+
+```powershell
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id add-i32-pair-ptr-arith --slice-spec validation/slice-specs/demo-add-i32-pair-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id copy-i32-ptr-arith --slice-spec validation/slice-specs/demo-copy-i32-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id external-direct-callee --slice-spec validation/slice-specs/demo-external-direct-callee.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id store-add-one --slice-spec validation/slice-specs/demo-store-add-one.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id sum-i32-buffer --slice-spec validation/slice-specs/demo-sum-i32-buffer.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id sum-i32-ptr-arith --slice-spec validation/slice-specs/demo-sum-i32-ptr-arith.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id libuv --slice-id ip4-addr --slice-spec validation/slice-specs/libuv-ip4-addr.json --require-semantic-pass
+python -B validation/tools/validate_auto_translation_evidence.py --target-id zlib-ng --slice-id adler32-step --slice-spec validation/slice-specs/zlib-adler32-step.json --require-semantic-pass
+```
+
+结果：8/8 semantic validators passed。
+
+完整验证：
+
+```powershell
+python -B -m unittest discover -s validation/tools -p "test_*.py"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `validation/tools`: 200 tests passed。
+- `c2r-translator`: 20 lib tests + 180 bounded translation tests passed。
+- `openspec`: 37 items passed。
+- `git diff --check`: exit 0；Windows 工作树打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+文档同步：
+
+- `validation/auto-translation-template/README.md`
+- `validation/auto-translation-template/checklist.md`
+- `validation/l3-template/README.md`
+- `validation/l3-template/checklist.md`
+- `validation/README.md`
+- `validation/gates.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `CONTEXT.md`
+
+当前边界：
+
+- 可以说：legacy accepted auto-translation fixtures 现在按当前 validator 持久化 baseline/route/profile refs、schema-aware diff metadata 和 negative-diff mutation evidence。
+- 可以说：这修复的是验证证据地基，能让 semantic gate tests 直接消费落盘 evidence，而不是靠 helper-only backfill。
+- 不应说：这是新的翻译能力。下一步核心翻译切口建议继续做 generic typed IR 的 `*`、`/`、`%` 标量表达式。
+- 不应说：C2Rust baseline 证明正确。baseline 仍是 `candidate_context_only`。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交时必须使用 auto-translation 目录和文档白名单。
+
+English mirror summary:
+
+- Legacy accepted auto-translation fixtures now persist baseline/route/profile refs, schema-aware diff metadata, and negative-diff mutation evidence required by the current semantic-pass validator.
+- This is validation evidence hardening, not a new translator capability.
+- The route levels are recorded by the current router instead of forcing every legacy fixture to L0.
+- C2Rust baseline remains `candidate_context_only`; semantic acceptance still belongs to validation profile gates.
+- The next core translation cut should keep extending generic typed IR scalar expressions, with `*`, `/`, and `%` as the next narrow target.
+
+## 89. 2026-06-27 scalar multiplication/division/modulo through typed IR and clang lowering
+
+本轮继续按多智能体并行推进。只读线程分别复核了代码切口、文档边界和提交白名单；主线程按 TDD 把标量整数 `*`、`/`、`%` 从 clang skeleton/真实 clang AST 接到 `GenericTypedIr` emitter。结论是：这是一条 generic typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_binary_op()` 新增 `IrBinOp::Mul -> "*"`、`IrBinOp::Div -> "/"`、`IrBinOp::Mod -> "%"`.
+  - `validate_binary_operand_types()` 把 `*`、`/`、`%` 纳入与 `+`、`-`、`&`、`^` 相同的窄标量规则：lhs、rhs、result 必须发射为同一个 Rust 标量类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `Mul`、`Div`、`Mod`.
+  - clang AST `BinaryOperator` opcode `"*"`, `"/"`, `"%"` 现在 lowering 到对应 skeleton operator，再 lowering 到 `IrBinOp`.
+  - `preserves_integral_operand_casts()` 纳入 `Mul`、`Div`、`Mod`，避免 unsigned/integral cast operand 被过早剥掉后导致 typed IR 类型校验误拒。
+  - 新增内部单测覆盖 multiplicative operands 的 `IntegralCast` 保留与 lowering。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_mul_div_mod`.
+  - 新增 clang skeleton 正向测试 `typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir`.
+  - 新增负例 `typed_ir_rejects_mismatched_mul_div_mod_operand_types_in_generic_emitter`，分别覆盖 `Mul`、`Div`、`Mod` 类型不一致必须 fail closed。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled`，覆盖真实 C `int mul_div_mod(int value) { return ((value * 3) / 2) % 5; }` 从 clang AST 到 typed IR 再到可编译 Rust candidate。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_mul_div_mod -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr binary op Mod is unsupported`.
+- clang skeleton 失败于 `no variant or associated item named Mul/Div/Mod found for enum ClangBinaryOperator`.
+
+已跑过的聚焦验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_scalar_mul_div_mod -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mismatched_mul_div_mod_operand_types_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_scalar_mul_div_mod_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend expr_skeleton_from_ast_preserves_multiplicative_integral_cast_operands -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled -- --nocapture
+```
+
+提交前需要保留的完整验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend
+cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings
+openspec validate --all --strict
+git diff --ignore-cr-at-eol --check
+```
+
+最终验证结果：
+- `cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check`: PASS。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend`: PASS，21 lib tests + 184 bounded translation tests passed，真实 clang AST `mul_div_mod` smoke 实际运行通过。
+- `cargo clippy --manifest-path crates/c2r-translator/Cargo.toml --all-targets --features typed-ir,clang-frontend -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --ignore-cr-at-eol --check`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的标量整数乘法、除法、取模表达式，现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`Mul`、`Div`、`Mod` 保留 clang integral casts，避免 covered unsigned/integral operand 被错误剥离。
+- 不应说：已经支持除零、完整 C 算术、浮点算术、完整 usual arithmetic conversions、overflow/UB parity、指针算术、pointer difference、array-to-pointer decay、复合赋值或 inc/dec。
+- 除法/取模只有在 divisor 非零由 literal、fixture 输入域或 slice contract 明确约束时，才能继续进入后续 semantic gate；否则不得提升 semantic acceptance，必要时 fail closed。
+- FlashDB 仍只是用例；这轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须用白名单。
+
+English mirror summary:
+
+- Scalar integer multiplication, division, and modulo now flow through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `ClangBinaryOperator::{Mul, Div, Mod}`, AST opcodes `"*"`, `"/"`, `"%"`, cast-preserving operand lowering, and `IrBinOp::{Mul, Div, Mod}` emission are wired.
+- This is candidate generation only. It does not support division by zero, all C arithmetic, floating-point arithmetic, full usual arithmetic conversions, overflow/UB parity, pointer arithmetic, pointer difference, array-to-pointer decay, compound assignment, or inc/dec.
+- Division and modulo may only move toward semantic acceptance when a non-zero divisor is established by a literal, fixture input domain, or slice contract; otherwise the path must stay fail-closed.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 90. 2026-06-27 signed unary minus through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了测试组合、文档同步点和验证矩阵；主线按 TDD 把 signed unary minus `-value` 从 clang AST/skeleton lowering 接到 `GenericTypedIr` emitter。结论：这是 generic typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrUnOp::Neg` 现在由 generic typed IR emitter 发射为 `(-operand)`。
+  - 新增 signed-only 校验：operand/result 必须是同一个 signed integer scalar type；unsigned result、unsigned operand、非 scalar 或 signed width mismatch 必须 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangUnaryOperator` 新增 `Neg`。
+  - clang AST `UnaryOperator` opcode `"-"` 现在 lowering 到 `ClangUnaryOperator::Neg`，再 lowering 到 `IrUnOp::Neg`。
+  - 新增默认单测覆盖 `UnaryOperator("-") -> IrUnOp::Neg`，不依赖真实 clang 环境。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_signed_unary_minus`。
+  - 新增 clang skeleton 正向测试 `typed_ir_emits_signed_unary_minus_from_clang_lowered_ir`。
+  - 新增负例 `typed_ir_rejects_unsigned_unary_minus_in_generic_emitter` 和 `typed_ir_rejects_mismatched_signed_unary_minus_type_in_generic_emitter`。
+  - 新增 `typed_ir_rejects_logical_not_in_generic_emitter`，明确 `IrUnOp::Not` 仍不被 generic emitter 支持，避免误发射成 Rust `!`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_real_signed_unary_minus_when_enabled`，覆盖真实 C `int neg_value(int value) { return -value; }`。
+- `crates/c2r-translator/src/lib.rs`
+  - 为通过当前 clippy gate，等价合并了 `emit_ir_pointer_graph()` 中 `rust_boundary` 的重复 `&[u8]` 分支：`param.name == "buf" || is_const_input`。这不改变 pointer graph 语义。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_signed_unary_minus -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_signed_unary_minus_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr unary op Neg is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Neg found for enum ClangUnaryOperator`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_signed_unary_minus -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_unsigned_unary_minus_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_logical_not_in_generic_emitter -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend typed_ir_emits_signed_unary_minus_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir,clang-frontend clang_ast_dump_emits_real_signed_unary_minus_when_enabled -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，26 lib tests + 191 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_real_signed_unary_minus_when_enabled -- --nocapture`: PASS，1 test passed，真实 clang AST smoke 实际运行。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 signed scalar unary minus 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：typed IR emitter 会拒绝 unsigned unary minus 和 signed operand/result width mismatch。
+- 可以说：`IrUnOp::Not` 仍有 fail-closed 回归覆盖，本轮没有把 logical not 接成 Rust `!`。
+- 不应说：已经支持完整 C unary minus。unsigned/wrapping 取负、浮点取负、指针算术、复合 `-=`, literal/min-value 边界如 `-2147483648`、以及完整 usual arithmetic conversions 仍未建模，必须继续 fail closed。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+English mirror summary:
+
+- Signed scalar unary minus now flows through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `ClangUnaryOperator::Neg`, AST opcode `"-"`, and `IrUnOp::Neg` emission are wired.
+- The emitter is signed-only and requires operand/result to be the same signed integer scalar type; unsigned unary minus and signed width mismatch fail closed.
+- `IrUnOp::Not` remains fail-closed and is covered by a regression test; this slice does not emit Rust `!`.
+- This is candidate generation only. It does not support unsigned/wrapping negation, floating-point negation, pointer arithmetic, compound `-=`, literal/min-value edge cases such as `-2147483648`, full usual arithmetic conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 91. 2026-06-27 condition-only logical not through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR condition emitter、clang AST `UnaryOperator` lowering 和中英文文档同步点；主线程按 TDD 把仅条件位置的 C logical not `!expr` 接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_condition_expr()` 现在在 `if` / `while` 条件位置识别 `IrUnOp::Not`。
+  - `if (!value)` / `while (!value)` 生成整数零比较，例如 `value == 0i32`，避免误用 Rust 整数位取反 `!value`。
+  - `!(value > 0)` 生成反转后的 comparison condition，例如 `value <= 0i32`，不把 comparison 当作 value expression 或 integer truthiness 包装。
+  - logical-not 表达式结果类型必须是 C `int`；operand 含 call、inc/dec、未建模 side effect、pointer/float/unsupported type 继续 fail closed。
+  - `emit_expr()` 没有放开 `IrUnOp::Not`，所以 value-position `return !value` 仍 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangUnaryOperator` 新增 `Not`。
+  - clang AST `UnaryOperator` opcode `"!"` 现在 lowering 到 `ClangUnaryOperator::Not`，再 lowering 到 `IrUnOp::Not`。
+  - 新增内部 JSON 单测覆盖 `UnaryOperator("!") -> IrUnOp::Not`，不依赖真实 clang 环境。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_if_with_logical_not_integer_condition`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_while_with_logical_not_integer_condition`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_if_with_logical_not_comparison_condition`。
+  - 新增 fail-closed 测试 `typed_ir_rejects_logical_not_condition_with_incdec_operand` 和 `typed_ir_rejects_logical_not_condition_with_non_int_result_type`。
+  - 既有 `typed_ir_rejects_logical_not_in_generic_emitter` 保持 value-position `IrUnOp::Not` fail-closed。
+  - 新增 clang skeleton 测试 `clang_lowering_skeleton_maps_logical_not_if_condition`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_logical_not_if_condition_when_enabled`，覆盖真实 C `int is_zero(int value) { if (!value) { return 1; } return 0; }`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_if_with_logical_not_integer_condition -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_logical_not_if_condition -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].if condition unary op Not is unsupported`。
+- clang skeleton 失败于 `no variant or associated item named Not found for enum ClangUnaryOperator`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report logical_not -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not_if_condition_when_enabled -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 198 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not_if_condition_when_enabled -- --nocapture`: PASS，真实 clang AST smoke 实际运行。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 condition-only logical not 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`if (!value)` / `while (!value)` 使用整数零比较；`!(value > 0)` 使用反转 comparison condition。
+- 可以说：value-position `IrUnOp::Not` 仍有 fail-closed 回归覆盖；本轮没有把 `return !value`、assignment RHS 或 declaration initializer 的 C `int` 结果语义接入 generic emitter。
+- 不应说：已经支持完整 C unary `!`、短路逻辑、pointer null test、float truthiness、call/deref/inc/dec side-effect operand、或者 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+English mirror summary:
+
+- Condition-only logical not now flows through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `ClangUnaryOperator::Not`, AST opcode `"!"`, and `IrUnOp::Not` condition emission are wired.
+- `if (!value)` / `while (!value)` emit integer zero comparisons; `!(value > 0)` emits a negated comparison condition.
+- Value-position `IrUnOp::Not` remains fail-closed, so C `int` result semantics such as `return !value`, assignment RHS, and declaration initializer are not supported yet.
+- This is candidate generation only. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 92. 2026-06-27 value-position logical not through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR value-position 发射点、clang AST `UnaryOperator("!")` 已有 lowering、边界测试缺口、文档同步点和最终 diff；主线程按 TDD 把 C logical not `!expr` 的窄 value-position C `int` 0/1 结果语义接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_expr()` 现在支持 `IrUnOp::Not` 的 value-position。
+  - 新增 value materialization helper：先复用 logical-not condition lowering，再生成 `(if condition { 1i32 } else { 0i32 })`；它不是 Rust `!value`。
+  - logical-not result type 继续要求 C `int`，也就是 signed 32-bit integer；operand 的零值按 operand type 生成，例如 `unsigned char value` 发 `value == 0u8`，外层结果仍发 `1i32` / `0i32`。
+  - comparison operand 继续走反转 comparison，例如 `!(value > 0)` value-position 发 `(if (value <= 0i32) { 1i32 } else { 0i32 })`，不发 `(value > 0) == 0`。
+  - operand 内含 call 时递归 fail closed；inc/dec、deref、pointer、unsupported type 等继续由 typed IR emitter fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_return_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_u8_operand_as_c_int_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_assignment_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_decl_initializer`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_comparison_return_value`。
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_logical_not_as_comparison_condition_operand`，覆盖 `!value` 作为 condition comparison operand 的上下文。
+  - 新增 fail-closed 测试 `typed_ir_rejects_value_comparison_with_logical_not_operand`，明确 `return (!value) == 1` 这类 value-position comparison 仍属于下一切口。
+  - 新增 fail-closed 测试 `typed_ir_rejects_logical_not_value_with_call_operand`、`typed_ir_rejects_logical_not_value_with_incdec_operand`、`typed_ir_rejects_logical_not_value_with_deref_operand`、`typed_ir_rejects_logical_not_value_with_pointer_operand`、`typed_ir_rejects_logical_not_value_with_unsupported_operand_type` 和 `typed_ir_rejects_logical_not_value_with_non_int_result_type`。
+  - 新增 clang skeleton 测试 `clang_lowering_skeleton_maps_logical_not_return_value`。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_logical_not_return_value_when_enabled`、`clang_ast_dump_emits_logical_not_decl_initializer_when_enabled` 和 `clang_ast_dump_emits_logical_not_assignment_value_when_enabled`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_logical_not_return_value -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report clang_lowering_skeleton_maps_logical_not_return_value -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].return expr unary op Not is unsupported`。
+- clang skeleton 已能 lowering 到 `IrUnOp::Not`，但 Rust 发射仍失败于 `stmt[0].return expr unary op Not is unsupported`。
+
+已跑过的聚焦验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report logical_not -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not -- --nocapture
+```
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 lib tests + 214 bounded translation tests passed。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_logical_not -- --nocapture`: PASS，4 real clang AST smoke tests actually ran。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 value-position logical not 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`return !value`、assignment RHS、declaration initializer 和 `!(value > 0)` value materialization 会生成 C `int` 0/1 结果，而不是 Rust integer bitwise `!`。
+- 可以说：operand 零值按 operand type 生成，result 固定为 C `int`，所以 `unsigned char value` 会发 `value == 0u8` 和 `1i32` / `0i32`。
+- 不应说：已经支持完整 C unary `!`、短路逻辑、pointer null test、float truthiness、call/deref/inc/dec side-effect operand、完整 usual scalar conversions、或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 仍不要 stage/revert/格式化顶层 `validation/evidence/**` 预存脏文件；提交必须使用白名单。
+
+下一步建议：
+- 下一小步核心翻译切口建议是 value-position comparison expression 的 C `int` 0/1 结果语义，例如 `return x > 0`、`out = x == y`、`int ok = x != 0`。
+- 该切口和本轮 logical not 共用 `bool condition -> C int materialization` 问题，但仍要保持 pointer comparison、float comparison、mixed-width/unsigned conversion、side-effect operands、short-circuit `&&` / `||` 和 semantic acceptance fail closed。
+
+English mirror summary:
+
+- Narrow value-position logical not now flows through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `emit_expr()` supports `IrUnOp::Not` by materializing C `int` 0/1 as `(if condition { 1i32 } else { 0i32 })`, not Rust `!value`.
+- `return !value`, assignment RHS, declaration initializer, and value-position `!(value > 0)` are covered.
+- Operand zero literals use the operand type, while the outer result remains C `int`; for example an `unsigned char` operand emits `value == 0u8` with `1i32` / `0i32` results.
+- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C unary `!`, short-circuit logic, pointer null tests, floating-point truthiness, call/deref/inc/dec side-effect operands, full usual scalar conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 93. 2026-06-27 value-position comparison through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 typed IR comparison emitter、clang lowering 现状、文档同步点和验证风险；主线程按 TDD 把窄 value-position comparison expression 的 C `int` 0/1 结果语义接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_expr()` 和 `emit_expr_with_prelude()` 现在识别 comparison `IrExpr::Binary` 的 value-position。
+  - 新增 `emit_comparison_condition_from_parts()`，让 condition-position 和 value-position comparison 共用同一套 scalar comparison 校验与 Rust bool condition 生成。
+  - 新增 `emit_comparison_value_expr()`，把 `return x > 0`、assignment RHS、declaration initializer 里的 comparison materialize 为 `(if condition { 1i32 } else { 0i32 })`，保持 C `int` 0/1 语义。
+  - `if` / `while` 条件里的 comparison 仍发射 Rust bool condition，不额外 materialize 成整数。
+  - comparison result type 必须是 C `int`；pointer comparison、float/unsupported comparison、mixed-width/unsigned conversions、call/inc/dec/deref side-effect operands、short-circuit `&&` / `||` 继续 fail closed。历史说明：本节写作时 comparison cast operand 仍 fail closed；第 97 节已窄化放开 source/target 都是可发射整数类型且 cast 后两侧类型完全一致的 integral cast operand。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - comparison lowering 本身没有 production 改动；既有 clang AST lowering 已经能把真实 TU 中的 `>`, `==`, `!=` comparison lowering 成 result type 为 `int` 的 typed IR binary expression。
+  - 额外修复 `clang-frontend` feature 单独编译时的 dry-run 路径：`normalized_path(path: &Path)` 需要无条件导入 `std::path::Path`，否则 `--emit-clang-dry-run` 会在该 feature 组合下编译失败。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试：return value、assignment RHS、declaration initializer、`u8` operand comparison result、logical-not operand 嵌套 materialization。
+  - 新增 fail-closed 测试：call operand、inc/dec operand、deref operand、pointer operand、float/unsupported operand、mismatched operand types、mismatched operand widths、non-C-int result type、short-circuit logical ops、`*p++ == 0` 这类需要 prelude 的 byte-read operand，以及 condition-position 的 pointer/unsupported/deref/short-circuit 边界。历史说明：comparison cast operand 的窄化整数 cast 情况已由第 97 节改成正向发射测试。
+  - 新增 clang skeleton 测试：comparison return value、declaration initializer、assignment RHS。
+  - 新增 gated real clang smoke：真实 C `return x > 0`、decl initializer、assignment value 的 comparison AST lowering。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report comparison -- --nocapture
+```
+
+红灯表现：
+- value-position comparison 正向用例失败于 `binary op ... is unsupported`。
+- 新增 fail-closed 用例在实现前只能得到旧的 generic unsupported 错误，无法给出具体边界原因。
+
+已跑过的聚焦绿灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report comparison -- --nocapture
+```
+
+聚焦结果：PASS，`comparison` filter 下 1 个 lib test + 40 个 bounded translation tests 通过。
+
+提交前最终验证结果：
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，27 个 lib tests + 238 个 bounded translation tests + doc-tests 通过。
+- `$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_comparison -- --nocapture`: PASS，4 个真实 clang comparison AST smoke tests 实际运行并通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend clang_dry_run -- --nocapture`: PASS，2 个 clang dry-run tests 通过。
+- `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact -v`: PASS。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-frontend -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮意图提交文件白名单>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: extra full-regression smoke run `20260627T001827Z` reached step 31/35 and failed on pre-existing `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json` hash drift: declared c_oracle sha256 `2b7f57daca9a5bd905235c52f9fad96bd6e7abf67fda1bf4b94eaf261717e5ea`, actual `6003d05f935938f737445396fa5ae104cfccd08fd14a1a692dfb3a82f5e792f3`. This is outside the current commit whitelist and `validation/evidence/**` remains unstaged.
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄 value-position comparison expression 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`return x > 0`、`out = x == y`、declaration initializer 和 `u8` scalar operand 的 comparison result 会生成 C `int` 0/1，而不是 Rust bool value。
+- 可以说：`if` / `while` 中的 comparison 仍生成 Rust bool condition。
+- 不应说：已经支持完整 C comparison expression、pointer comparison、float comparison、未由显式整数 cast 对齐的 mixed-width/unsigned conversions、short-circuit `&&` / `||`、call/deref/inc/dec side-effect operands、usual arithmetic conversions 或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 本轮额外修了 `clang-frontend` dry-run feature 编译缺口；它只保证 `--emit-clang-dry-run` feature 组合能编译并写出 dry-run artifact，不改变 comparison lowering 语义。
+- 本节已经 supersede 第 92 节末尾“下一小步建议 value-position comparison”的历史建议；后续继续按最新编号章节读取。
+
+下一步建议：
+- 下一小步核心翻译切口建议继续沿 scalar expression 覆盖面推进，但不要把 short-circuit、usual arithmetic conversions 或 pointer/null comparison 混进同一刀；这些需要单独设计 fail-closed 边界和 oracle。
+- 如果要提高真实项目覆盖率，优先补 typed IR 的 casts/usual conversions 观测与 fail-closed 分类，再决定哪些转换可以安全 deterministic emit。
+
+English mirror summary:
+
+- Narrow value-position comparison expressions now flow through direct typed IR, clang skeleton lowering, and real clang AST smoke tests into `GenericTypedIr` and compilable Rust candidates.
+- `emit_expr()` and `emit_expr_with_prelude()` support comparison `IrExpr::Binary` values by materializing C `int` 0/1 as `(if condition { 1i32 } else { 0i32 })`, not as Rust bool values.
+- `if` / `while` comparison conditions still emit Rust bool conditions.
+- This slice did not need comparison-lowering production changes in `clang_frontend.rs`; existing lowering already maps real `>`, `==`, and `!=` AST nodes to typed IR binary expressions with C `int` result type. It also fixes a separate `clang-frontend` dry-run feature compile gap by importing `std::path::Path` unconditionally.
+- This is candidate generation only and keeps `semantic_pass=false`. It does not support full C comparison semantics, pointer comparison, floating-point comparison, mixed-width/unsigned conversions not aligned by explicit integer casts, short-circuit `&&` / `||`, call/deref/inc/dec side-effect operands, usual arithmetic conversions, or semantic acceptance.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 94. 2026-06-27 FlashDB L3 evidence hash drift and Windows fake compiler timeout fix
+
+本轮只处理验证链稳定性问题，没有新增翻译能力，也没有改变 FlashDB L3 行为边界。前一轮 full-regression 在 step 31/35 暴露 `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json` 中已声明的 evidence `sha256` 与实际文件内容漂移；本轮将 4 个过期 hash 刷新到当前已提交的 evidence 文件内容，并修复 Windows fake compiler 在单测中复制 `cmd.exe` 后执行可能卡住 30s 的随机 timeout 问题。
+
+核心改动：
+- `validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.json`
+  - 刷新 `c_oracle.sha256`。
+  - 刷新 `c_oracle_producer_evidence.sha256`。
+  - 刷新 `mutated_value_or_entries_oracle.sha256`。
+  - 刷新 `summary_md.sha256`。
+- `validation/tools/test_auto_migrate.py`
+  - Windows fake compiler 不再把 `%COMSPEC%` / `cmd.exe` 复制为输出可执行文件。
+  - 改为复制 `SystemRoot` / `WINDIR` 下的 `System32/hostname.exe`，作为稳定零退出可执行文件，避免 harness 执行阶段随机卡到 30s timeout。
+  - fake `cc` 和 fake `gcc` helper 均同步修正。
+
+已验证：
+- `python -B validation/tools/validate_flashdb_l3_evidence.py --evidence-root validation/evidence --report target/tmp/flashdb-l3-evidence-after-kvdb-hash.json`: PASS，FlashDB L3 strict package `kvdb-compact-overwrite` 可被 validator 消费。
+- 额外全量扫描 FlashDB passed summary 的 summary-declared evidence hash：`checked_refs 19`，`mismatch_count 0`。
+- `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_compile_success_records_harness_execution_without_oracle_claim validation.tools.test_auto_migrate.AutoMigrateTests.test_cc_compile_command_falls_back_to_gcc_when_cc_is_missing -v`: PASS，2 tests passed。
+- `python -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence -v`: PASS，127 tests passed in 139.828s。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1`: PASS，run id `20260627T003504Z`，35/35 steps passed，包含 `flashdb-release-stress-all` 10000 loops、`openspec validate --all` 和 `git diff --check`。
+
+当前边界：
+- 可以说：这轮修复的是已接受 FlashDB L3 evidence package 的 metadata/hash drift，以及 Windows 单测 fake compiler 的 harness 稳定性。
+- 不应说：这轮新增了任何 C-to-Rust 翻译语义、扩大了 FlashDB L3 行为覆盖，或重新生成了完整 FlashDB L3 evidence package。
+- 子线程额外发现 `legacy_incomplete` 的 `kvdb-lifecycle` 和 `tsdb-append-query-status` summary 仍有 stale hash；它们当前不参与 strict passed-summary validator gate，本轮不顺手改。
+- 子线程还发现 `kvdb-compact-overwrite` 的部分 manifest-like input bindings 与当前工作区源码 hash 不一致；这说明旧 evidence 可以自洽通过当前 strict gate，但若要证明“基于最新 workspace 重新生成”，后续应重跑该 L3 evidence package，而不是只改声明 hash。
+- 工作树里仍有大量 `validation/evidence/demo`、`validation/evidence/l2-slices`、`validation/evidence/libuv` 的既有 EOL/dirty 噪声；提交时必须继续使用白名单，不能 stage/revert 无关 evidence 文件。
+
+English mirror summary:
+
+- This slice fixes validation-chain stability only. It does not add translation capability or expand the FlashDB L3 behavioral boundary.
+- `l3-kvdb-compact-overwrite-summary.json` now binds four stale evidence `sha256` fields to the current evidence files: `c_oracle`, `c_oracle_producer_evidence`, `mutated_value_or_entries_oracle`, and `summary_md`.
+- Windows fake compiler tests no longer copy interactive `cmd.exe` as the produced harness executable. They copy `System32/hostname.exe` instead, giving a stable zero-exit executable for harness execution checks.
+- Focused FlashDB L3 validation passed, the full auto-migrate unittest pair passed with 127 tests, and full regression run `20260627T003504Z` passed all 35 steps including release stress, OpenSpec validation, and `git diff --check`.
+- Legacy-incomplete FlashDB summaries still have stale hashes and are intentionally not changed in this slice because they are outside the current strict passed-summary gate.
+- The accepted `kvdb-compact-overwrite` evidence is self-consistent under the current validator, but some manifest-like input bindings do not match the latest workspace source hashes. Regenerate the L3 evidence package later if the claim needs to be “freshly generated from current workspace” rather than “current accepted package remains validator-consumable.”
+
+## 95. 2026-06-27 scalar bitwise OR and left shift through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读子线程分别复核了 typed IR / clang lowering 改动风险、双语文档同步点和提交前验证边界；主线程按 TDD 把窄化标量整数 bitwise OR `|` 与 left shift `<<` 接入 `GenericTypedIr` candidate generation。结论：这是通用 typed IR scalar expression 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrBinOp::BitOr` 现在发射 Rust `|`。
+  - `IrBinOp::Shl` 现在发射 Rust `<<`。
+  - `|` 沿用同类型标量整数规则，要求 lhs/rhs/result 三者类型一致。
+  - `<<` 沿用 shift 规则，要求 lhs/result 类型一致；本轮没有建模 rhs shift count 合法性或完整 C shift UB。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangBinaryOperator::BitOr` 和 `ClangBinaryOperator::Shl`。
+  - AST opcode `"|"` / `"<<"` 会进入 skeleton。
+  - cast-preservation 和 lowering 都映射到 `IrBinOp::BitOr` / `IrBinOp::Shl`。
+  - 新增 opcode mapping 单元测试，并补 `|` operand 的 `int -> uint32_t` implicit integral cast preservation 回归测试。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正向测试 `typed_ir_emits_scalar_bit_or_and_left_shift`。
+  - 新增 clang skeleton lowering 测试 `typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir`。
+  - 新增 clang skeleton 回归测试 `typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir`，覆盖真实 clang 常见的 `uint32_t value << 4` 中 rhs shift count 为 `int` literal 的形态。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_bit_or_and_left_shift_when_enabled`。
+- 双语文档已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_bit_or_and_left_shift -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir -- --nocapture
+```
+
+红灯表现：
+
+- direct typed IR 失败于 `stmt[0].return expr binary op BitOr is unsupported`。
+- clang skeleton 测试在实现前编译失败，提示 `ClangBinaryOperator` 没有 `Shl` / `BitOr` variant。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_scalar_bit_or_and_left_shift -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_scalar_bit_or_and_left_shift_from_clang_lowered_ir -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report typed_ir_emits_left_shift_with_int_shift_count_from_clang_lowered_ir -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report --test bounded_translation clang_ast_dump_emits_bit_or_and_left_shift_when_enabled -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report expr_skeleton_from_ast_maps_bitwise_or_and_left_shift_opcodes -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report expr_skeleton_from_ast_preserves_integer_implicit_casts_for_bitwise_or_operands -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report bit_or_and_left_shift -- --nocapture
+```
+
+聚焦结果：
+
+- direct typed IR 正向测试通过，并生成可 rustc 编译的 `return ((value << 4u32) | 3u32);`。
+- clang skeleton lowering 测试通过。
+- real clang AST smoke 在 `C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe` 时实际运行并通过。
+- opcode mapping 单元测试通过。
+- `uint32_t << int` shift-count skeleton 回归测试通过，锁住真实 clang AST 常见 rhs 类型。
+- `|` operand implicit integral cast preservation 单元测试通过。
+- `bit_or_and_left_shift` filter 下的 3 个聚焦测试通过；其中 gated real clang smoke 在未设置环境变量的 grouped run 中会按设计跳过，实际执行结果以上面的单独 env smoke 为准。
+
+提交前最终验证结果：
+
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir`: PASS，141 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend`: PASS，44 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir,clang-frontend`: PASS，25 个 lib tests + 241 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，29 个 lib tests + 242 个 bounded translation tests 通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- 没有在主工作树跑 `scripts/run-full-regression.ps1`，因为当前已有大量既有 `validation/evidence/**` dirty/EOL 噪声，且该脚本包含会刷新 evidence 的步骤；本轮以 translator feature suite、real clang smoke、clippy、OpenSpec 和白名单 diff check 作为提交前验证。
+
+当前边界：
+
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的窄化标量整数 `|` / `<<` 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：这是候选生成能力，`semantic_pass` 仍必须保持 `false`，最终接受仍属于 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification。
+- 不应说：已经支持完整 C bitwise/shift semantics、usual arithmetic conversions、无效 shift count、signed shift/overflow UB parity、指针算术或 semantic acceptance。
+- 历史说明：本节写作时尚未实现 L0 0-token deterministic route；第 96 节已把 scalar-only `GenericTypedIr` candidate 的 `candidate_route.token_cost=0` 接入 L0 route signal，后续以第 96 节为准。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+- 本节更新当前能力状态；早期章节中“不要顺手实现 `<<`、`|`”的限制只针对当时 shift-right 切口，已经被本节的 TDD 切片 supersede。
+
+下一步建议：
+
+- 完成本轮最终验证、白名单提交并推送。
+- 后续核心切口优先做 cast/usual-conversion 分类；L0 `token_cost=0` 路由规则已由第 96 节实现。不要把 short-circuit、pointer/null comparison 或完整 C shift 语义混入 bitwise/shift 切片。
+
+English mirror summary:
+
+- Narrow scalar integer bitwise OR `|` and left shift `<<` now flow through direct typed IR, clang skeleton lowering, and a real clang AST smoke test into `GenericTypedIr` and compilable Rust candidates.
+- `IrBinOp::BitOr` emits `|`; `IrBinOp::Shl` emits `<<`.
+- `ClangBinaryOperator::{BitOr, Shl}` map AST opcodes `"|"` and `"<<"` into typed IR.
+- This is candidate generation only and must keep `semantic_pass=false`.
+- It does not support full C bitwise/shift semantics, usual arithmetic conversions, invalid shift counts, signed shift/overflow UB parity, pointer arithmetic, or semantic acceptance.
+- Historical note: when this section was written, the L0 `token_cost=0` deterministic route was still a future router slice. Section 96 has since wired scalar-only `GenericTypedIr` candidates with `candidate_route.token_cost=0` into the L0 route signal.
+- FlashDB remains only a use case. This slice does not restore any crc32-specific route, typed IR crc32 matcher, or canned template.
+
+## 96. 2026-06-27 L0 zero-token deterministic typed IR route signal
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 L0/L1 router 现状、cast/usual-conversion 后续切口，以及文档/验证影响；主线程按 TDD 把 scalar-only `GenericTypedIr` + `token_cost=0` candidate 接入 L0 deterministic route signal。结论：这是 route/cost/provenance 分类，不是 semantic acceptance；第 95 节里“L0 `token_cost=0` 仍是 future”的说法被本节 supersede。
+
+核心改动：
+
+- `validation/tools/auto_migrate.py`
+  - `route_level()` 现在先读取 `pointer_nodes`，并把 `scalar_only=not pointer_nodes` 传给 `typed_ir_candidate_route_signal()`。
+  - `typed_ir_candidate_route_signal()` 只在 `status=generated`、`route=GenericTypedIr`、`rust_draft_generated=true`、`scalar_only=true` 且 `candidate_route.token_cost == 0` 时返回 L0。
+  - `token_cost` 缺失或非 0 的 `GenericTypedIr` 仍走 L1。
+  - 有 pointer surface 的 `GenericTypedIr` 仍至少是 L1。
+  - `alias_blocked`、`requires_noalias_contract`、`unknown_alias` 和 unknown pointer ownership floor 仍优先，分别保持 L3/L2，不会被 L0 route signal 覆盖。
+- `validation/tools/test_auto_migrate.py`
+  - 把原 `test_generated_typed_ir_candidate_is_l1_route_signal` 改为 `test_generated_zero_token_scalar_typed_ir_candidate_routes_l0`，先确认红灯：旧逻辑返回 L1。
+  - 新增 `test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1` 和 `test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1`，锁住缺失或非 0 token cost 不走 L0。
+  - 在 `test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence` 中确认 FlashDB 这类 pointer-bearing `GenericTypedIr + token_cost=0` 仍是 L1。
+  - 保留 alias risk / blocked alias / unsupported typed IR 测试，并新增 unknown pointer ownership 测试，分别证明 L2/L3/L2/L2 边界未被破坏。
+- 双语文档与 OpenSpec 已同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `validation/README.md`
+  - `validation/gates.md`
+  - `validation/auto-translation-template/README.md`
+  - `openspec/specs/bounded-auto-translation-pipeline/spec.md`
+
+已确认红灯：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 -v
+```
+
+红灯表现：旧逻辑返回 `L1`，测试期望 `L0`，失败于 `AssertionError: 'L1' != 'L0'`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 -v
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_zero_token_scalar_typed_ir_candidate_routes_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_unknown_pointer_role_routes_l2_not_l0 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1 validation.tools.test_auto_migrate.AutoMigrateTests.test_generated_typed_ir_candidate_does_not_override_blocked_alias_route validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_typed_ir_candidate_preserves_reason_and_routes_l2 -v
+```
+
+聚焦结果：新增后 8 个 route boundary tests 均通过。
+
+当前边界：
+
+- 可以说：scalar-only、`GenericTypedIr`、`candidate_route.token_cost=0`、`rust_draft_generated=true` 的 deterministic candidate 现在能记录为 `route_decision.level=L0`。
+- 可以说：这是 candidate route / context budget / provenance classification，只影响候选路径和验证 profile 分层。
+- 不应说：L0 route 证明 semantic equivalence，或 rustc pass + token_cost=0 就 accepted。
+- 不应说：zero-token deterministic route 可以绕过 C oracle、Rust replay、schema-aware diff、negative diff、unsafe evidence、cache/version binding 或 final verification。
+- `semantic_pass=false` 和 `generated_draft_semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+- catalog validation 的 L0 和 auto-translation `route_decision.level=L0` 是不同概念，不能互相替代。
+
+下一步建议：
+
+- 完成本轮最终验证、白名单提交并推送。
+- 历史说明：本节写作时 comparison operand integral cast 仍是下一步；第 97 节已窄化放开 clang/type-map 已证明的 integer cast operand，覆盖真实 `uint32_t value; if (value > 0)` 形态，但仍不是完整 usual arithmetic conversions。
+
+English mirror summary:
+
+- Scalar-only `GenericTypedIr` candidates with `candidate_route.token_cost=0` and a generated Rust draft now route as `route_decision.level=L0`.
+- This is deterministic candidate routing / context-budget provenance only. Generated Rust remains candidate evidence.
+- `semantic_pass=false` and `generated_draft_semantic_pass=false` remain until independent validation gates accept the exact draft.
+- Pointer-bearing `GenericTypedIr` candidates remain at least L1; alias blocked, requires-noalias, unknown alias, and unknown pointer ownership floors still override to L3/L2.
+- Catalog L0 and auto-translation `route_decision.level=L0` are different evidence concepts.
+- The next high-value core slice is narrow integral-cast support for comparison operands, not full usual arithmetic conversions.
+
+## 97. 2026-06-27 narrow integral cast comparison operands
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 typed IR comparison emitter、clang lowering/真实 clang smoke，以及中英文文档 stale 边界；主线程按 TDD 把 comparison operand 上的窄化整数 cast 从 fail-closed 改成 deterministic candidate generation。结论：这只覆盖 clang/type-map 已证明的 integer cast operand，不是完整 usual arithmetic/scalar conversions，也不是 semantic acceptance。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `validate_comparison_condition_types()` 不再无条件拒绝顶层 `IrExpr::Cast`。
+  - 新增 `validate_comparison_cast_operand()`：只有 cast source 和 target 都是当前 emitter 可发射的整数 scalar type 时才允许继续。
+  - cast 后两侧 operand 仍必须通过既有 `expr_type()` / `emit_scalar_type()` 完全同型检查，例如 `u32 > (0i32 as u32)` 可发射。
+  - 非整数 cast、unsupported type、pointer/float comparison、call/inc/dec/deref side-effect operand、short-circuit `&&` / `||`、非 C `int` result type 和未建模 mixed-width conversion 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将旧的 fail-closed 测试改为正向测试：
+    - `typed_ir_emits_comparison_condition_with_integral_cast_operand`
+    - `typed_ir_emits_value_comparison_with_integral_cast_operand_as_c_int`
+  - 两个测试都确认生成 `(0i32 as u32)`，并通过 `rustc` smoke。
+  - 新增 `typed_ir_rejects_comparison_with_non_integer_cast_operand`，锁住非整数 cast source 仍 fail closed。
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir integral_cast_operand -- --nocapture
+```
+
+红灯表现：旧 production 仍报 `comparison rhs cast operand is unsupported until usual conversions are modeled`，两个新增正向测试均失败。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir integral_cast_operand -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir non_integer_cast -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir comparison -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir --test bounded_translation clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled -- --nocapture
+```
+
+聚焦结果：
+
+- `integral_cast_operand` filter 下 2 个测试通过。
+- `non_integer_cast` filter 下 1 个 fail-closed 测试通过。
+- `comparison` filter 下 32 个 typed IR comparison tests 通过。
+- 真实 clang gated smoke `clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled` 通过。
+
+提交前最终验证结果：
+
+- `cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check`: PASS。
+- `openspec validate --all --strict`: PASS，37 items passed。
+- `git diff --check -- <本轮白名单文件>`: PASS；Windows 工作树仍打印 LF/CRLF replacement warnings，但没有 whitespace error。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir`: PASS，142 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir`: PASS，25 个 lib tests + 242 个 bounded translation tests 通过。
+- `cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-lowering-report`: PASS，29 个 lib tests + 243 个 bounded translation tests 通过。
+- `cargo clippy --manifest-path .\crates\c2r-translator\Cargo.toml --all-targets --features clang-lowering-report -- -D warnings`: PASS。
+
+当前边界：
+
+- 可以说：comparison condition 和 value-position C `int` 0/1 materialization 现在可处理 source/target 都是可发射整数类型、且 cast 后两侧类型完全一致的 integral cast operand。
+- 可以说：真实 clang 已保留 `uint32_t value; if (value > 0)` 的 RHS `IntegralCast`，typed IR emitter 现在能生成 `if (value > (0i32 as u32)) {`。
+- 不应说：已经支持完整 C usual arithmetic conversions、完整 mixed-width/unsigned conversions、pointer comparison、float comparison、side-effect operand、short-circuit logic 或 semantic acceptance。
+- FlashDB 仍只是用例；本轮没有恢复任何 crc32 专用 route、typed IR crc32 matcher 或 canned template。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+
+下一步建议：
+
+- 跑真实 clang gated smoke：`clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled`。
+- 完成本轮最终验证、白名单提交并推送。
+- 后续核心切口可以继续做 explicit usual-conversion 分类，但不要把 pointer/null comparison、short-circuit 或完整 C arithmetic semantics 混入这刀。
+
+English mirror summary:
+
+- Narrow integral-cast comparison operands now emit through generic typed IR when cast source and target are supported integer scalar types and the post-cast operand types match exactly.
+- This unlocks real clang `uint32_t value; if (value > 0)` lowering into `if (value > (0i32 as u32)) {`.
+- This remains candidate generation only and keeps `semantic_pass=false`.
+- It is not full usual arithmetic/scalar conversion support. Pointer/floating-point comparisons, unmodeled mixed-width conversions, side-effect operands, short-circuit logic, and semantic acceptance still fail closed.
+
+## 98. 2026-06-27 readonly pointer NULL presence candidate
+
+本轮继续按多智能体并行推进。只读子线程分别复核了 binary cast operand、pointer/null comparison、logical `&&`/`||`、赋值/复合赋值、pointer/index lowering 和文档边界；主线程按 TDD 选择了最小可落地的 readonly pointer NULL presence 切片。结论：FlashDB 仍只是用例，本切片不是 crc32 专用代码，也不是完整 pointer comparison；它只把真实 clang 中常见的 `const int *values; return values != NULL;` 这类 presence check 从 fail-closed 推进到 `GenericTypedIr` candidate。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrExpr::NullPtr`，作为 typed IR 的 null pointer literal。
+  - `EmitContext` 新增 `nullable_pointer_params`，只在参数是 readonly integer pointer 且只出现在直接 `== NULL` / `!= NULL` comparison 时启用。
+  - nullable 参数发射为 `Option<&[T]>`；`ptr == NULL` 发射 `.is_none()`，`ptr != NULL` 发射 `.is_some()`。
+  - 如果同一个 nullable pointer 参数在 null check 后继续出现在 index/deref/普通表达式中，直接 fail closed，避免生成 `Option<&[T]>` 后又写出 `values[0]` 这种错误 Rust。
+  - pointer-pointer comparison、非 readonly integer pointer、pointer truthiness、任意 pointer relational comparison、null check 后流敏 unwrap、deref/index 使用、call/inc/dec side-effect operand 继续 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `NullPtr`。
+  - `ImplicitCastExpr` / `CStyleCastExpr` 的 `castKind=NullToPointer` 且 operand 为整数 0 时，lower 成 typed IR null pointer literal。
+  - 真实 clang 对 `NULL` 宏会产生 `CStyleCastExpr NullToPointer`，本轮 real clang smoke 覆盖了这条路径。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_value_comparison_with_null_pointer_operand`
+    - `typed_ir_emits_comparison_condition_with_null_pointer_operand`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_nullable_pointer_use_after_null_check`
+  - 新增真实 clang gated smoke：
+    - `clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled`
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --features typed-ir null_pointer
+```
+
+红灯表现：测试期望 `IrExpr::NullPtr`，旧代码编译失败于 `no variant named NullPtr found for enum IrExpr`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --features typed-ir null_pointer
+cargo test --features typed-ir nullable_pointer
+cargo test --features "typed-ir clang-frontend" null_to_pointer
+cargo test --features "typed-ir clang-frontend" null_pointer
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled -- --nocapture
+```
+
+聚焦结果：
+- `null_pointer` direct/gated 编译路径通过。
+- `nullable_pointer` fail-closed 负测通过。
+- clang skeleton `NullToPointer` lowering 单测通过。
+- 真实 clang AST smoke 实际运行通过；真实 `NULL` 宏路径是 `CStyleCastExpr NullToPointer`。
+
+当前边界：
+- 可以说：readonly integer pointer 参数的直接 `== NULL` / `!= NULL` presence check 现在可以进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：该参数会变成 `Option<&[T]>`，presence check 会变成 `.is_none()` / `.is_some()`。
+- 不应说：已经支持完整 pointer comparison、pointer truthiness、null check 后流敏 unwrap、nullable slice indexing、mutable pointer、pointer arithmetic、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+- 工作树里仍有大量既有 `validation/evidence/**` dirty/EOL 噪声；提交必须继续使用白名单，不可 stage/revert 无关 evidence 文件。
+
+下一步建议：
+- 继续最终验证、白名单提交并推送本切片。
+- 后续核心切片优先级可按子线程结论排：readonly pointer deref read `*p -> p[0]`、简单标量 compound assignment `+=` lowering、`&&`/`||` 短路逻辑窄化支持、binary cast operand 默认覆盖测试/real clang smoke。
+- 对 `codex/translator-strengthening-analysis.md` 的方案评价：它的“验证体系强、翻译器能力追不上”判断仍有道理，但其中“先装 clang / typed IR 指针类型基础不足”的部分已被本分支后续进展部分 supersede；后续应把方案里的 P0 改成继续扩 typed IR emitter 的泛化子集，而不是回到 raw string recipe。
+
+English mirror summary:
+
+- Added a narrow readonly pointer NULL-presence typed IR candidate path.
+- `NullToPointer` casts from clang now lower into `IrExpr::NullPtr`.
+- `const int *values; return values != NULL;` emits as `pub fn has_values(values: Option<&[i32]>) -> i32` plus `values.is_some()`.
+- Nullable pointer parameters are allowed only in direct `== NULL` / `!= NULL` comparisons; use after the null check still fails closed.
+- This remains candidate generation only and keeps `semantic_pass=false`.
+- It is not arbitrary pointer comparison, pointer truthiness, flow-sensitive unwrap, nullable indexing, pointer arithmetic, alias semantics, or semantic acceptance.
+
+## 99. 2026-06-27 readonly pointer direct deref read candidate
+
+本轮继续按多智能体并行推进。只读子线程分别调查了 readonly pointer deref、typed IR compound assignment、`&&`/`||` 短路逻辑和路线文档一致性；主线程按 TDD 选择最小核心翻译切片：readonly integer pointer direct dereference read。结论：`*p` 现在可作为无副作用标量读进入 `GenericTypedIr` candidate，但这不是 `*(p+i)`、mutable pointer、pointer write、alias semantics 或 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_readonly_pointer_deref_expr()`。
+  - `IrExpr::Deref { ptr: Var(p), ty }` 在 `p` 是已声明 readonly integer pointer 时发射为 `p[0usize]`。
+  - `emit_expr_with_prelude()` 保留 `*p++` byte cursor 特例；只有非 `IncDec` deref 才走 direct readonly deref helper，避免削弱既有 post-increment fail-closed 诊断。
+  - nullable pointer param 仍不能 deref；`NULL` presence check 后继续 deref/index 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 helper `ir_deref()`。
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index`
+    - `typed_ir_emits_value_comparison_with_readonly_pointer_deref_operand_as_c_int`
+    - `typed_ir_emits_comparison_condition_with_readonly_pointer_deref_operand`
+    - `typed_ir_emits_logical_not_value_with_readonly_pointer_deref_operand`
+  - 新增真实 clang gated smoke：
+    - `clang_ast_dump_emits_pointer_deref_return_value_when_enabled`
+  - 旧 deref 负测仍保留 fail-closed，但现在锁定的是未声明/未建模 deref 仍拒绝，而不是所有 deref 都拒绝。
+- 文档同步：
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+- 验证流水线修复：
+  - 修复 `validation/evidence/demo/auto-translation/sum-i32-ptr-arith/**` 和 `validation/evidence/demo/auto-translation/call-expression/**` 中 stale accepted c_oracle sha256；这些字段指向的 accepted oracle 文件真实 hash 分别是 `b48e57...` 和 `cc00fb...`，旧值会让 `validate_auto_translation_evidence.py --require-semantic-pass` 在 schema/negative-diff gate 之前先失败。
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index -- --nocapture
+```
+
+红灯表现：旧 production 报 `stmt[0].return expr deref expression is unsupported`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_deref_read_as_slice_zero_index -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_deref -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir deref -- --nocapture
+```
+
+聚焦结果：
+- direct readonly `*p` red/green 测试通过。
+- `pointer_deref` filter 下 4 条测试通过：clang skeleton lowering、真实 clang lowering、direct typed IR emit、真实 clang emit。
+- `deref` filter 下 7 条测试通过：direct read、comparison value-position、comparison condition、logical-not value-position 和三个 fail-closed 负测。
+
+当前边界：
+- 可以说：readonly integer pointer direct `*p` 现在发射为 Rust slice 0 下标，并可作为普通标量读参与 comparison/logical-not candidate generation。
+- 不应说：已经支持 `*(p+i)`、pointer arithmetic、nullable pointer deref、mutable pointer、pointer write、pointer truthiness、任意 pointer comparison、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、白名单提交并推送本切片。
+- 后续核心切片优先级：`*(p+i)` bounded pointer arithmetic read、typed IR first-class scalar compound assignment、condition-position `&&` / `||`、usual conversion 分类。
+
+English mirror summary:
+
+- Added narrow readonly pointer direct dereference read candidate generation.
+- `const uint8_t *p; return *p;` now emits as `pub fn read_byte(p: &[u8]) -> u8 { return p[0usize]; }`.
+- Direct readonly deref reads can also act as ordinary scalar operands in comparison/logical-not candidate generation, for example `*p == 0` and `!*p`.
+- `*p++` byte cursor behavior remains on its prelude path; nullable pointer deref, `*(p+i)`, mutable pointer, pointer writes, pointer truthiness, arbitrary pointer comparison, alias semantics, and semantic acceptance still fail closed.
+
+## 100. 2026-06-27 readonly bounded pointer offset-deref read candidate
+
+本轮继续按多智能体并行推进。只读子线程分别复核了真实 clang AST 里的 `*(p+i)` 形态、typed IR emitter 边界、测试缺口和文档同步范围；主线程按 TDD 选择最小核心翻译切片：readonly integer pointer 的 bounded offset-deref read。结论：`*(p+i)` / `*(i+p)` 现在可作为无副作用标量读进入 `GenericTypedIr` candidate，并发射为 Rust slice index；这不是任意 pointer arithmetic、pointer write、alias semantics 或 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_readonly_pointer_deref_expr()` 先识别 `Deref(Binary(Add, base, index))`。
+  - 新增 `emit_readonly_pointer_add_deref_expr()` 和 `readonly_pointer_add_operands()`，只接受 readonly integer pointer base + integer index，并支持 `p+i` / `i+p`。
+  - 新增 `validate_readonly_pointer_add_index_expr()`，index 只允许整数变量、整数字面量和整数 cast；call、inc/dec、deref、compound expression、unary、index、address-of、null pointer、array literal 和 unsupported expression 都 fail closed。
+  - nullable pointer param、mutable pointer、base 未声明、pointer add result type 与 base type 不一致、deref result type 与 pointee element type 不一致继续 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_readonly_pointer_add_index_deref_read`
+    - `typed_ir_emits_readonly_index_add_pointer_deref_read`
+    - `typed_ir_emits_readonly_pointer_add_literal_deref_read`
+    - `typed_ir_emits_value_comparison_with_readonly_pointer_add_index_deref_operand_as_c_int`
+    - `typed_ir_emits_comparison_condition_with_readonly_pointer_add_index_deref_operand`
+    - `typed_ir_emits_logical_not_value_with_readonly_pointer_add_index_deref_operand`
+    - `typed_ir_emits_logical_not_condition_with_readonly_pointer_add_index_deref_operand`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_mutable_pointer_add_index_deref_read`
+    - `typed_ir_rejects_readonly_pointer_add_call_index_deref_read`
+    - `typed_ir_rejects_readonly_pointer_add_compound_index_deref_read`
+    - `typed_ir_rejects_logical_not_condition_with_readonly_pointer_add_compound_index_deref_operand`
+  - 新增 clang skeleton / real clang smoke：
+    - `clang_lowering_skeleton_maps_pointer_add_deref_expr`
+    - `clang_ast_dump_emits_pointer_add_deref_return_values_when_enabled`
+    - `clang_ast_dump_emits_pointer_add_deref_logical_not_if_condition_when_enabled`
+- 文档同步：
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_emits_readonly_pointer_add_index_deref_read -- --nocapture
+```
+
+红灯表现：旧 production 报 `stmt[0].return expr deref pointer must be Var`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir pointer_add -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_add_deref -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" pointer_add_deref -- --nocapture
+```
+
+聚焦结果：
+- `pointer_add` filter 下 10 条测试通过：return、literal offset、`i+p` commuted、comparison value-position、comparison condition、logical-not value-position、logical-not condition，以及 mutable/call/compound index fail-closed。
+- `pointer_add_deref` filter 下 3 条 clang 测试通过；真实 clang AST gate 打开后同 3 条实际运行通过，覆盖 `read_pi`、`read_ip`、`read_p1` 和 `if (!*(p+i))`。
+
+当前边界：
+- 可以说：readonly integer pointer 的 bounded `*(p+i)` / `*(i+p)` read 现在发射为 Rust slice index，并可作为普通标量读参与 comparison/logical-not candidate generation。
+- 不应说：已经支持任意 pointer arithmetic、pointer subtraction、array-to-pointer decay、nullable pointer deref/index、mutable pointer、pointer write、pointer truthiness、任意 pointer comparison、alias semantics 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、白名单提交并推送本切片。
+- 后续核心切片优先级：typed IR first-class scalar compound assignment、condition-position `&&` / `||`、usual conversion 分类。
+
+English mirror summary:
+
+- Added narrow readonly bounded pointer offset-deref read candidate generation.
+- `const uint8_t *p; return *(p+i);` now emits as `pub fn read_pi(p: &[u8], i: usize) -> u8 { return p[i as usize]; }`.
+- The same support covers `*(i+p)`, literal offsets, comparison operands such as `*(p+i) == 0`, and logical-not operands such as `!*(p+i)`.
+- Index expressions are deliberately narrow: only integer vars, integer literals, and integer casts are accepted; call, inc/dec, compound index expressions, mutable pointers, nullable pointer deref/index, pointer writes, arbitrary pointer arithmetic, alias semantics, and semantic acceptance still fail closed.
+
+## 101. 2026-06-27 reviewer follow-up and evidence binding repair
+
+中文摘要：
+
+- 只读 code-review 子智能体复核后未发现实现层 Critical 问题，但建议把 fail-closed 边界测得更细。
+- 已补充直接负测：
+  - `typed_ir_rejects_nullable_readonly_pointer_add_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_incdec_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_deref_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_unsupported_index_deref_read`
+  - `typed_ir_rejects_readonly_pointer_add_result_type_mismatch`
+  - `typed_ir_rejects_readonly_pointer_add_deref_result_type_mismatch`
+- 注意：nullable pointer 的 offset deref 在 nullable-use validator 阶段更早被拒绝，错误是 `nullable pointer param p is only supported in null comparisons`，这是比 emitter 分支更保守的 fail-closed。
+- 修复了 `sum-i32-ptr-arith` 与 `call-expression` 两个 demo auto-translation evidence 中 accepted artifact SHA 绑定漂移；没有采用 `auto_migrate --accept-existing-evidence` 对 `sum-i32-ptr-arith` 的重生成结果，因为当前 L2/noalias profile 会把它确定性降级为 `candidate_generated / semantic_pass=false`。
+
+English mirror:
+
+- A read-only reviewer subagent found no critical implementation defect, but asked for tighter fail-closed regression tests.
+- Added direct negative tests for nullable base, inc/dec index, deref index, unsupported index, pointer-add result type mismatch, and deref result type mismatch.
+- Nullable offset deref is rejected earlier by the nullable-use validator, before the pointer-offset-deref emitter runs.
+- Repaired accepted artifact SHA bindings for the demo `sum-i32-ptr-arith` and `call-expression` evidence packages while preserving `semantic_pass=true`.
+
+## 102. 2026-06-27 condition-position short-circuit through typed IR and clang lowering
+
+本轮继续按多智能体并行推进核心翻译切口。只读线程分别复核了 `&&` / `||`、compound assignment 和 implicit integral cast 的当前缺口；主线程按 TDD 选择最小安全切片：只支持 `if` / `while` 条件位置的 C short-circuit `&&` / `||`。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance；value-position `return a && b`、assignment RHS 和 declaration initializer 仍 fail closed。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_condition_expr()` 在 comparison fallback 前识别 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - 新增 `emit_short_circuit_condition_expr()`，要求 logical operator 结果类型是 C `int`。
+  - 左右操作数递归复用 `emit_condition_expr()`，因此只继承当前已建模的整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref 条件子集。
+  - `emit_expr()` / `emit_binary_op()` 没有放开 `LogAnd` / `LogOr`，所以 value-position 仍拒绝。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangBinaryOperator` 新增 `LogAnd` / `LogOr`。
+  - clang `BinaryOperator` opcode `"&&"` / `"||"` 现在 lowering 到 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - logical op operands 保留 clang 已给出的 integral cast；不自行实现完整 usual conversions。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_short_circuit_if_conditions`
+    - `typed_ir_emits_short_circuit_while_condition_with_comparison_operands`
+  - 新增 fail-closed 负测：
+    - `typed_ir_rejects_short_circuit_condition_with_non_int_result_type`
+  - 既有 value-position 负测 `typed_ir_rejects_value_comparison_short_circuit_ops` 保持通过。
+  - 新增 clang skeleton / real clang smoke：
+    - `clang_lowering_skeleton_maps_short_circuit_if_condition`
+    - `clang_ast_dump_emits_short_circuit_if_condition_when_enabled`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir short_circuit -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+```
+
+红灯表现：
+- direct typed IR 失败于 `stmt[0].if condition binary op LogAnd is unsupported` / `stmt[0].while condition binary op LogOr is unsupported`。
+- non-C-int result 负测先失败为普通 unsupported，而不是专门的 `short-circuit result type must be C int`。
+- clang skeleton 测试编译失败于 `ClangBinaryOperator::LogAnd` 不存在。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir short_circuit -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" short_circuit -- --nocapture
+```
+
+聚焦结果：
+- `typed-ir` 下 `short_circuit` filter 4 条通过。
+- `typed-ir clang-frontend` 下 `short_circuit` filter 6 条通过。
+- 真实 clang AST gate 打开后同 6 条实际运行通过，覆盖 `if (left && right)`。
+
+当前边界：
+- 可以说：direct typed IR、clang skeleton 和真实 clang AST smoke 覆盖的 condition-position `&&` / `||` 现在能进入 `GenericTypedIr` 并生成可编译 Rust candidate。
+- 可以说：`if (left && right)` 生成 `if (left != 0i32 && right != 0i32)`；`while ((left < 3) || (right != 0))` 生成 Rust bool condition。
+- 不应说：已经支持 value-position short-circuit、完整 usual scalar conversions、pointer truthiness、float truthiness、call/inc/dec/side-effect operand、函数指针、volatile/hardware register 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续核心切片优先级：simple scalar compound assignment lowering、assignment RHS implicit integral cast preservation、usual conversion 分类。
+
+English mirror summary:
+
+- Added condition-position short-circuit `&&` / `||` candidate generation through generic typed IR.
+- `if (left && right)` now emits a Rust bool condition such as `if (left != 0i32 && right != 0i32)`.
+- `while ((left < 3) || (right != 0))` emits a Rust bool condition while reusing comparison condition emission.
+- Support is intentionally limited to `if` / `while` conditions with C `int` logical result type. Value-position short-circuit, full usual scalar conversions, pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, function pointers, volatile/hardware register semantics, and semantic acceptance still fail closed.
+
+## 103. 2026-06-27 clang-lowered simple scalar compound assignment family
+
+注意：本节是初始 compound-assignment family 切片记录。第 108 节已经在此基础上放开 clang-proven integer promotion/truncation 的窄化路径；恢复时以第 108 节为当前边界。
+
+本轮继续按多智能体并行推进“不要太窄”的核心语法面扩展。只读线程分别复核了 compound assignment、ForStmt 和 ConditionalOperator / `?:`。主线程按 TDD 选择最适合这一轮的宽切片：standalone simple scalar compound assignment family。结论：`+=`、`-=`、`*=`、`/=`、`%=`、`&=`、`|=`、`^=`、`<<=`、`>>=` 现在可以从真实 clang AST 的 `CompoundAssignOperator` 进入 typed IR，并 desugar 成现有 `IrStmt::Assign { value: Binary(...) }`。这不是完整 C compound assignment，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton` 新增 `CompoundAssign`；第 108 节已继续补充 result/compute type 字段。
+  - `stmt_skeleton_from_ast()` 新增 `CompoundAssignOperator` 分支。
+  - 新增 `compound_assignment_operator_from_opcode()`，把 `+=` / `-=` / `*=` / `/=` / `%=` / `&=` / `|=` / `^=` / `<<=` / `>>=` 映射到已有 `ClangBinaryOperator`。
+  - 新增 `compound_assignment_type_field()` 和 `compound_assignment_types_match()`。
+  - 初始 `compound_assign_stmt_skeleton_from_ast()` 要求：
+    - 恰好两个 child；
+    - LHS 是 simple `DeclRefExpr`；
+    - result/compute 类型边界见第 108 节当前规则。
+  - `lower_compound_assign_stmt()` 只把 simple variable target 降成 `x = x op rhs` 的 typed IR；非简单 target fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `clang_lowering_skeleton_maps_scalar_compound_assignment_family`，覆盖 10 种 opcode。
+  - 新增 `clang_lowering_skeleton_rejects_compound_assignment_non_var_target`，拒绝 `*p += 1` 这类非简单变量 target。
+  - 新增 gated real clang smoke `clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled`，实际跑 `value += 1; ... value >>= 1;`。
+- `crates/c2r-translator/src/clang_frontend.rs` unit tests
+  - 初始切片新增 compute-type 边界测试；第 108 节已把 `unsigned char` / `uint8_t` 的 clang-proven promotion/truncation 改为正测，并保留 unsupported compute 组合负测。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch -- --nocapture
+```
+
+红灯表现：
+- 新 skeleton 测试先编译失败于 `ClangStmtSkeleton::CompoundAssign` 不存在。
+- compute type safety test 先失败为错误放行 `unsigned char += int`，生成了 `CompoundAssign`，而不是 `Unsupported`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_compound_assignment_compute_type_mismatch -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" compound_assignment -- --nocapture
+```
+
+聚焦结果：
+- compute type mismatch 单测通过。
+- `compound_assignment` filter 6 条通过。
+- 真实 clang AST gate 打开后同 6 条实际运行通过，覆盖真实 `CompoundAssignOperator`。
+
+当前边界：
+- 可以说：standalone simple scalar variable target 的 10 种 compound assignment 现在可由 clang AST lowering 进入 `GenericTypedIr` candidate。
+- 可以说：真实 clang AST 中这些语法是 `CompoundAssignOperator`，不是 `BinaryOperator "+="`。
+- 不应说：支持 value-position `(x += y)`、`if (x += y)`、call argument compound assignment、`*p += y`、`a[i] += y`、`s.f += y`、`p->f += y`、未被第 108 节 guard 证明的 promotion/truncation、pointer arithmetic、float、volatile、复杂 RHS side effect、完整 usual conversions 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续“更宽语法面”优先级：
+  1. assignment RHS implicit integral cast preservation；
+  2. pure scalar `ConditionalOperator` / `?:`，但必须新增 `IrExpr::Conditional` 并保护 lazy arm 求值；
+  3. `ForStmt`，但最好先引入 block/scope 或明确更窄的作用域 fail-closed 规则，避免 `continue` / init scope 语义偏差。
+
+English mirror summary:
+
+- Added clang-lowered simple scalar compound assignment family support for `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, and `>>=`.
+- Real clang emits these as `CompoundAssignOperator` nodes. The translator now maps them to typed IR assignments of the form `x = x op rhs`.
+- This section recorded the initial same-type slice; section 108 supersedes it with a narrow clang-proven integer promotion/truncation path.
+- Non-variable targets, value-position compound assignment, unsupported promotion/truncation, pointer arithmetic, floating-point, volatile, side-effect-heavy RHS, full usual conversions, and semantic acceptance still fail closed.
+
+## 104. 2026-06-27 clang-preserved value-position integer implicit casts
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。只读子智能体分别复核了 value-position implicit cast、ConditionalOperator / `?:` 和 scoped `ForStmt`。结论：`?:` 需要一等 `IrExpr::Conditional` 保护 lazy arms，`ForStmt` 需要 block/scope 模型避免 init scope 和 `continue` 语义偏差；本轮最适合落地的是 clang 已经给出类型证明的 value-position integer implicit casts。
+
+核心结论：declaration initializer、assignment RHS 和 return value 中的 clang `IntegralCast` / `IntegralPromotion` 现在会被保留进 typed IR，随后由现有整数 `IrExpr::Cast` emitter 发射 Rust `as`。这不是 full usual scalar conversions，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `value_expr_skeleton_from_ast()`，内部调用 `expr_skeleton_from_ast_with_options(expr, true)`。
+  - `DeclStmt` initializer、assignment RHS 和 `ReturnStmt` value 改为走 `value_expr_skeleton_from_ast()`。
+  - target expression、condition expression、普通 expression statement 仍不因此放开新语义。
+  - 未新增 typed IR 结构；复用已有 `ClangExprSkeleton::Cast` / `IrExpr::Cast`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang smoke：
+    - `clang_ast_dump_emits_unsigned_assignment_rhs_integral_cast_when_enabled`
+    - `clang_ast_dump_emits_unsigned_decl_and_return_integral_casts_when_enabled`
+- `crates/c2r-translator/src/clang_frontend.rs` unit tests
+  - 新增：
+    - `stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast`
+    - `stmt_skeleton_from_ast_preserves_decl_initializer_integral_cast`
+    - `stmt_skeleton_from_ast_preserves_return_value_integral_cast`
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+
+已确认红灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" preserves_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" unsigned_ -- --nocapture
+```
+
+红灯表现：
+- assignment RHS / decl initializer / return value 的 `IntegralCast` 被剥掉，IR 里只剩 `LitInt { ty: int }`。
+- 真实 clang 用例 `uint32_t value = 1; value = 2; return 3;` 不能生成期望的 `(1i32 as u32)` / `(2i32 as u32)` / `(3i32 as u32)`。
+
+已跑过的聚焦绿灯：
+
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" preserves_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features "typed-ir clang-frontend" unsigned_ -- --nocapture
+```
+
+聚焦结果：
+- `preserves_` filter 8 条通过。
+- 真实 clang gate 打开后 `unsigned_` filter 4 条通过，其中新增 2 条实际运行并通过。
+
+当前边界：
+- 可以说：clang AST 中 declaration initializer、assignment RHS、return value 的 `IntegralCast` / `IntegralPromotion` 现在能进入 `GenericTypedIr` candidate，并由 Rust `as` 发射。
+- 可以说：例如 `uint32_t set_unsigned_one(uint32_t value) { value = 1; return value; }` 现在能发射 `value = (1i32 as u32);`。
+- 不应说：支持完整 usual scalar conversions、函数指针 decay、pointer cast、float cast、隐藏副作用转换、所有 mixed-width 算术、语义等价接受或 validation semantic pass。
+- typed IR emitter 仍会要求 source/target 是受支持整数类型，且 statement boundary 类型最终匹配。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续更大语法切片优先级：
+  1. pure scalar `ConditionalOperator` / `?:`，但必须新增 `IrExpr::Conditional` 并保护 lazy arms；
+  2. scoped `ForStmt`，但应先引入 block/scope 或明确更窄的 fail-closed 规则，避免 init scope / `continue` 语义偏差；
+  3. 更系统的 usual conversion 分类，而不是把所有 `ImplicitCastExpr` 直接放行。
+
+English mirror summary:
+
+- Added clang-preserved value-position integer implicit cast preservation for declaration initializers, assignment RHS, and return values.
+- The implementation reuses existing `ClangExprSkeleton::Cast` / `IrExpr::Cast`; no new IR structure was added.
+- Real clang cases such as `uint32_t value = 1; value = 2; return 3;` now emit Rust integer casts such as `(1i32 as u32)`.
+- This is candidate generation only. Full usual scalar conversions, function-pointer decay, pointer casts, floating-point casts, hidden side-effect conversions, semantic acceptance, and validation `semantic_pass` still fail closed.
+
+## 105. 2026-06-27 pure integer value-position ConditionalOperator / ?:
+
+本轮继续按多智能体并行推进核心语法面扩展。只读子智能体分别复核了 typed IR `Conditional` 递归点、clang AST `ConditionalOperator` / `BinaryConditionalOperator` 形态，以及 fail-closed 文档边界；主线程按 TDD 落地最小安全切片：只支持纯整数 value-position `?:`，覆盖 return value、assignment RHS 和 declaration initializer。结论：普通 clang `ConditionalOperator` 现在可以 lowering 到一等 lazy `IrExpr::Conditional`，并由 generic typed IR emitter 发射 Rust `if cond { then } else { else }` 表达式；这不是完整 C `?:`，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrExpr` 新增 `Conditional { condition, then_expr, else_expr, ty }`。
+  - `emit_expr()` / `emit_expr_with_prelude()` 新增 conditional value-position 发射，condition 复用 `emit_condition_expr()`，then/else 直接用 `emit_expr()`，不把分支 prelude 提前到 `if` 外。
+  - 新增 fail-closed guard：then/else 分支含 call、inc/dec、post-increment byte read、assignment/comma 或类型不匹配时拒绝。
+  - `emit_condition_expr()` 显式拒绝 condition-position conditional；`validate_bounded_call_arg()` 和 `validate_readonly_pointer_add_index_expr()` 也继续拒绝 conditional。
+  - 所有需要递归扫描 `IrExpr` 的 call evidence、post-increment、nullable pointer 和类型 helper 已覆盖 `condition/then_expr/else_expr`。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangExprSkeleton` 新增 `Conditional`。
+  - `expr_skeleton_from_ast_with_options()` 支持普通 `ConditionalOperator`，then/else 分支强制保留 value-position integer casts。
+  - `BinaryConditionalOperator` / GNU `a ?: b` 显式转成 unsupported，避免破坏 lhs 单求值语义。
+  - `lower_expr()` 把 skeleton lowering 成 `IrExpr::Conditional`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang lowering report 的 call evidence、source text、label 和 post-increment scan 已支持 `Conditional`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：return value、assignment RHS、declaration initializer。
+  - 新增 direct typed IR 负测：arm 类型不匹配、arm call、arm post-increment byte read、arm assignment、condition-position conditional。
+  - 新增 clang skeleton 正测和真实 clang AST smoke：return value、assignment RHS、declaration initializer、unsigned branch integral cast。
+  - 新增真实 clang AST fail-closed：GNU `value ?: fallback` / `BinaryConditionalOperator`。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+已跑过的聚焦绿灯：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir conditional_ -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir conditional_ -- --nocapture
+```
+
+聚焦结果：
+- `conditional_` filter 在 `clang-frontend,typed-ir` 下 14 条通过。
+- 打开真实 clang AST gate 后同 14 条实际运行并通过，覆盖普通 `ConditionalOperator` 与 GNU `BinaryConditionalOperator` 拒绝。
+
+当前边界：
+- 可以说：纯整数 value-position `?:` 现在能从真实 clang AST 进入 `GenericTypedIr`，生成可编译 Rust candidate。
+- 可以说：`uint32_t choose(uint32_t flag, uint32_t value) { return flag ? value : 2; }` 会保留 else arm 的 clang integral cast 并发射 `(2i32 as u32)`。
+- 不应说：已支持 condition-position `?:`、expression-statement `?:`、GNU `a ?: b`、pointer/float/aggregate result、arm 内 call/inc/dec/post-increment/assignment/comma 副作用、完整 usual scalar conversions 或 semantic acceptance。
+- `semantic_pass=false` 仍保持到独立 validation gates 接受 exact draft。
+
+下一步建议：
+- 跑完整门禁、提交并推送本切片。
+- 后续核心语法优先级：scoped `ForStmt`、value-position short-circuit materialization、usual conversion 分类、struct/field/memory model 设计。
+
+English mirror summary:
+
+- Added pure integer value-position `ConditionalOperator` / `?:` candidate generation.
+- Ordinary clang `ConditionalOperator` lowers to first-class lazy `IrExpr::Conditional` and emits Rust `if cond { then } else { else }` expressions.
+- Return values, assignment RHS, declaration initializers, and clang-preserved integer casts in branches are covered by direct, skeleton, and real clang smoke tests.
+- GNU omitted-middle `a ?: b`, condition-position `?:`, expression-statement `?:`, side-effecting branches, pointer/float/aggregate results, full usual conversions, and semantic acceptance still fail closed.
+
+## 106. 2026-06-27 value-position short-circuit through typed IR
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。只读子智能体分别复核了 value-position `&&` / `||` 的 lazy materialization 方案、scoped `ForStmt` 风险，以及 usual conversion 边界；主线程按 TDD 落地最小安全切片：支持 C short-circuit `&&` / `||` 在 value-position 中生成 C `int` 0/1 candidate，覆盖 return value、assignment RHS 和 declaration initializer。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_short_circuit_value_expr()`，复用现有 `emit_short_circuit_condition_expr()` / `emit_condition_expr()` 生成 Rust bool condition。
+  - value-position 发射为 `(if <condition> { 1i32 } else { 0i32 })`，其中 `<condition>` 仍使用 Rust `&&` / `||`，保留 RHS lazy 求值。
+  - `emit_expr()` 和 `emit_expr_with_prelude()` 都在普通 binary op fallback 之前识别 `IrBinOp::LogAnd` / `IrBinOp::LogOr`。
+  - 结果类型仍必须是 C `int`；operand 子集继续继承当前 condition emitter：整数 truthiness、comparison、logical-not、readonly deref 和 bounded offset-deref read。call/inc/dec/side-effect operand、pointer truthiness、float truthiness、unsupported type 和未建模 usual conversions 继续 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 删除旧的“value-position short-circuit 必须拒绝”负测，改为 direct typed IR 正测：
+    - `typed_ir_emits_short_circuit_return_value_as_c_int`
+    - `typed_ir_emits_short_circuit_assignment_value_as_c_int`
+    - `typed_ir_emits_short_circuit_decl_initializer_as_c_int`
+  - 新增 fail-closed：
+    - `typed_ir_rejects_short_circuit_value_with_non_int_result_type`
+    - `typed_ir_rejects_short_circuit_value_with_call_operand`
+  - 新增 clang skeleton 正测 `clang_lowering_skeleton_maps_short_circuit_value_positions`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_short_circuit_value_positions_when_enabled`，覆盖 `int out = left || right; left = left && (right > 0); return left || out;`。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+红灯已确认：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir short_circuit -- --nocapture
+```
+
+红灯表现：
+- 新增 value-position 正测失败于 `binary op LogAnd is unsupported` / `binary op LogOr is unsupported`。
+- non-C-int result 和 call operand 负测也先失败为普通 unsupported，而不是专门的 short-circuit 边界错误。
+
+已跑过的绿灯：
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir short_circuit -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+聚焦与完整结果：
+- `short_circuit` filter 在真实 clang gate 打开后 12 条通过。
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` 回归通过：lib 37 条、`bounded_translation` 301 条、doc-tests 0 条。
+
+当前边界：
+- 可以说：condition-position 和窄 value-position `&&` / `||` 现在能从 direct typed IR、clang skeleton 和真实 clang AST 进入 `GenericTypedIr`，并生成可编译 Rust candidate。
+- 可以说：`return left && right`、`out = left || right`、`int out = left && (right > 0)` 现在会发射 C `int` 0/1 materialization，并保留 Rust short-circuit lazy 求值。
+- 不应说：已支持 pointer truthiness、float truthiness、call/inc/dec/side-effect operand、完整 usual scalar conversions、函数指针、volatile/hardware register、跨线程/中断语义或 semantic acceptance。
+- 旧第 102 节“只支持 condition-position short-circuit”和第 105 节“下一步 value-position short-circuit materialization”的说法已被本节 supersede；后续按本节读取最新状态。
+
+下一步建议：
+- 下一个核心语法切片优先 scoped `ForStmt`，但必须引入一等 `IrStmt::For` 或 scoped block，不能裸降成同级 `Decl + While`，否则会破坏 init scope 和 `continue` 语义。
+- usual conversions 继续只做 clang/type-map 已证明的整数 cast/promotion 子集，不要一次性放开完整 C conversion。
+
+English mirror summary:
+
+- Added narrow value-position short-circuit `&&` / `||` candidate generation through generic typed IR.
+- `return left && right`, assignment RHS, and declaration initializers now materialize C `int` 0/1 as Rust `if condition { 1i32 } else { 0i32 }`.
+- The condition still uses Rust `&&` / `||`, preserving lazy RHS evaluation.
+- Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path.
+- Pointer truthiness, floating-point truthiness, calls/inc/dec/side-effect operands, full usual scalar conversions, function pointers, volatile/hardware register semantics, cross-thread/interrupt semantics, and semantic acceptance still fail closed.
+
+## 107. 2026-06-27 scoped typed IR ForStmt lowering
+
+本轮继续按多智能体并行推进“尽量拓展语法翻译能力，不要太窄”。两个只读子智能体分别复核了 typed IR `ForStmt` scope 模型和 clang `ForStmt` AST 槽位/文档同步；主线程按 TDD 落地 scoped `ForStmt` MVP。结论：这是通用 typed IR candidate generation 能力，不是 FlashDB 专用代码，也不是 semantic acceptance。第 106 节“下一刀优先 scoped `ForStmt`”已被本节 supersede；后续优先 usual conversions 分类，或在已有 scoped MVP 上继续设计 `break` / `continue` / `do-while` / `switch` / `goto`。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增一等 `IrStmt::For { init, condition, step, body }`。
+  - 新增 scoped emitter：发射为外层 Rust block + `while`，例如 `for (int i = 0; i < limit; i++)` 生成 `{ let mut i: i32 = 0i32; while i < limit { ...; i = i + 1i32; } }`。
+  - loop-init 声明只写入 loop block scope，不回写父级；body 局部声明不会泄漏到 step。
+  - `validate_for_init_stmt()` 只接受 `Decl` / `Assign`；`validate_for_step_stmt()` 只接受 `Assign`。
+  - nullable pointer、byte cursor、post-increment scan、assigned-var scan 等递归 helper 已覆盖 `For`。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::For` 和 `for_stmt_skeleton_from_ast()`。
+  - clang `ForStmt.inner` 按 5 槽位解析：init、condition variable slot、condition、step、body。
+  - condition variable slot、空 condition、空 step 均 fail closed。
+  - init 只接受简单 `DeclStmt` 或 assignment；step 只接受 assignment、compound assignment 和 postfix inc/dec；postfix `i++` / `i--` lowering 成 `i = i + 1` / `i = i - 1`。
+  - `continue` / `break` / `goto` / `switch` 等未建模 body statement 继续通过 unsupported skeleton fail closed。
+- `crates/c2r-translator/src/lib.rs`
+  - 修复 `clang-lowering-report` feature 下的 report/evidence 遍历：type mapping、direct call evidence、statement kind、CFG edge、byte cursor pointer scan 都已识别或递归 `IrStmt::For`。
+  - 新增单元测试覆盖 `For` statement kind、`entry->for-*` CFG edge、loop init/body type map 和 body/step direct call evidence。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：scoped loop emit + rustc smoke。
+  - 新增 direct typed IR 负测：init decl 不泄漏到父级、body decl 不泄漏到 step、decl step 拒绝、非 C `int` condition result 拒绝。
+  - 新增 clang skeleton 正测和真实 clang AST smoke：`int sum_to_limit(int limit) { int total = 0; for (int i = 0; i < limit; i++) { total = total + i; } return total; }`。
+  - 新增真实 clang fail-closed：`continue` in for body、缺 condition、缺 step、prefix `++i` step。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-typed-ir-scoped-forstmt.md`
+
+红灯已确认：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir typed_ir_for -- --nocapture
+```
+
+红灯表现：
+- 新增 direct typed IR 测试在 `IrStmt::For` 不存在时编译失败。
+- 新增 clang skeleton/real clang 测试在 `ClangStmtSkeleton::For` 不存在时编译失败。
+
+调试中额外发现并修复：
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` feature 组合最初失败于 `src/lib.rs` 的多个 `match IrStmt` 未覆盖 `For`。
+- 根因是 `clang-lowering-report` 的 evidence/report helper 在前一轮未随新 statement variant 同步递归。
+- 修复后新增 `clang_lowered_ir_evidence_tests::clang_lowered_ir_records_for_statement_evidence_recursively` 锁住该路径。
+
+已跑过的绿灯：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir typed_ir_for -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+聚焦与完整结果：
+- `typed_ir_for` filter 在真实 clang gate 打开后 12 条通过。
+- 完整 `clang-frontend,typed-ir,clang-lowering-report` 回归通过：lib 38 条、`bounded_translation` 312 条、doc-tests 0 条。
+
+当前边界：
+- 可以说：窄化 scoped `ForStmt` 现在能从 direct typed IR、clang skeleton 和真实 clang AST 进入 `GenericTypedIr`，并生成可编译 Rust candidate。
+- 可以说：simple scalar init/condition/assignment step、compound assignment step、postfix inc/dec step 和现有 statement body 子集已有测试覆盖。
+- 不应说：已支持 `continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、prefix inc/dec step、复杂 init/step、完整 C for-loop control-flow semantics、完整 usual scalar conversions 或 semantic acceptance。
+
+下一步建议：
+- 优先 usual conversions 分类：把 clang 已证明的 integral cast/promotion 继续系统化，而不是一次性放开完整 C conversion。
+- 或继续控制流：在已有 scoped `ForStmt` MVP 上，单独设计 `break` / `continue` 的 step 语义、CFG evidence 和 validation gate。
+
+English mirror summary:
+
+- Added narrow scoped `ForStmt` candidate generation through generic typed IR.
+- `IrStmt::For` emits a Rust block plus `while`, keeping loop-init declarations scoped to the loop block and preventing body-local declarations from leaking into the step.
+- Clang `ForStmt` lowering accepts simple scalar init, required condition, required assignment/compound-assignment/postfix-inc-dec step, and the existing body subset.
+- Direct typed IR, clang skeleton, and real clang AST smoke tests cover the new path, including fail-closed real-clang tests for `continue`, missing condition, missing step, and prefix increment step.
+- The `clang-lowering-report` feature now traverses `For` for type mapping, call evidence, statement kinds, CFG edges, and byte-cursor pointer scans.
+- `continue`, `break`, `goto`, `switch`, condition variable slots, empty condition/step, prefix inc/dec steps, complex init/step, full C for-loop control-flow semantics, full usual scalar conversions, and semantic acceptance still fail closed.
+
+## 108. 2026-06-27 clang-proven compound assignment integer promotion
+
+本轮继续拓展 `c2r-translator` 核心 typed IR 翻译能力，不写 FlashDB 专用分支。切片目标是把 clang 已证明的 `CompoundAssignOperator` 整数提升/回写截断打通，例如：
+
+```c
+#include <stdint.h>
+uint8_t compound_assignment_integer_promotion(uint8_t value) {
+    value += 1;
+    return value;
+}
+```
+
+现在能 lower 成 typed IR：
+
+```rust
+value = (((value as i32) + 1i32) as u8);
+```
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::CompoundAssign` 新增 `result_ty`、`compute_lhs_ty`、`compute_result_ty`。
+  - `compound_assign_stmt_skeleton_from_ast()` 不再要求 compute type 必须等于 target type；改为要求 target/result 一致、compute lhs/result 一致、且 target/compute 都是受支持整数。
+  - `lower_compound_assign_stmt()` 对 lhs/rhs 显式 cast 到 compute type，再把 binary 结果 cast 回 target type。
+  - `ir_types_match_for_clang()` / `cast_ir_expr_to_type_if_needed()` 避免 clang spelling 差异导致误拒或多余判断。
+  - simple `ForStmt` compound-assignment step 通过现有 step parser 继承同一个 guard。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 测试：`typed_ir_emits_scalar_assignment_with_integer_promotion_and_truncation`。
+  - 新增 clang skeleton 测试：`clang_lowering_skeleton_maps_compound_assignment_integer_promotion`。
+  - 新增真实 clang smoke：`clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled`。
+  - 原 `compound_assignment` family、non-var target、ForStmt step、bounded translator 记录规则回归仍通过。
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.md`
+  - `docs/superpowers/specs/2026-06-27-candidate-route-p0-design.en.md`
+  - `docs/superpowers/plans/2026-06-27-compound-assignment-integer-promotion.md`
+  - `docs/superpowers/plans/2026-06-27-typed-ir-scoped-forstmt.md`
+  - `openspec/changes/expand-translator-compound-statement-support/*`
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir integer_promotion -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir compound_assignment -- --nocapture
+```
+
+边界：
+- 可以说：standalone statement 和 simple `ForStmt` step 中的 simple scalar compound assignment，现在支持 clang-proven integer promotion/truncation。
+- 可以说：`uint8_t value; value += 1;` 会用 compute `int` 做加法，再显式 cast 回 `u8`。
+- 不应说：已支持完整 usual scalar conversions、非简单 lvalue target、value-position `(x += y)`、pointer arithmetic、float、volatile、复杂 RHS side effect、semantic acceptance。
+
+下一步建议：
+- 继续做 usual conversions 分类，但仍按 clang/type-map 已证明的小切片推进；不要一次性打开完整 C conversion。
+- 可以选的后续切片：comparison/binary operand 的更系统 mixed-width guard，或者在 scoped `ForStmt` 上设计 `break` / `continue` 的 step 语义和 evidence。
+
+English mirror summary:
+
+- Added narrow clang-proven compound-assignment integer promotion/truncation candidate generation.
+- `ClangStmtSkeleton::CompoundAssign` now carries result and compute types.
+- Lowering accepts target/result match plus compute-lhs/compute-result match when all involved types are supported integers, even if compute type differs from target type.
+- `uint8_t value; value += 1;` now emits `value = (((value as i32) + 1i32) as u8);`.
+- Direct typed IR, clang skeleton, real clang AST smoke, and compound-assignment regression filters pass.
+- Full usual scalar conversions, non-simple targets, value-position compound assignment, pointer arithmetic, floating-point, volatile, complex RHS side effects, and semantic acceptance still fail closed.
+
+## 109. 2026-06-27 fixed-width integer type coverage
+
+本轮继续拓展 `c2r-translator` 核心 clang-lowered typed IR 翻译能力，不写 FlashDB 专用分支。切片目标是把真实 clang AST 中的固定宽度整数 typedef aliases 接到现有 typed IR 整数类型和 generic emitter 上。结论：当前 fixed-width alias 全集 `int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t` 能进入 typed IR 并生成可编译 Rust；本轮新增的是 signed aliases 和 `uint16_t` / `uint64_t`。这不是完整 usual scalar conversions，也不是 raw C integer spelling 或 target ABI 类型推断，更不是 semantic acceptance。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `type_from_qual_type()` 新增固定宽度整数标量映射：
+    - `int8_t` -> signed 8-bit canonical `int8_t`。
+    - `int16_t` -> signed 16-bit canonical `int16_t`。
+    - `int32_t` -> signed 32-bit canonical `int32_t`，plain `int` 映射保持不变。
+    - `int64_t` -> signed 64-bit canonical `int64_t`。
+    - `uint16_t` -> unsigned 16-bit canonical `uint16_t`。
+    - `uint64_t` -> unsigned 64-bit canonical `uint64_t`。
+  - raw `signed char`、`short`、`unsigned short`、`long long`、`unsigned long long` 保持 unsupported；plain `char` 和 plain `long` 仍未放开；既有 `unsigned char` / `unsigned int` / `unsigned long` 行为保持原样，避免把本轮变成 target ABI integer model 重构。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang smoke：`clang_ast_dump_emits_fixed_width_integer_types_when_enabled`。
+  - smoke source 使用 `<stdint.h>` identity 函数覆盖 `int8_t` / `int16_t` / `int32_t` / `uint16_t` / `int64_t` / `uint64_t`，并逐个经过 clang AST lowering、`emit_rust_from_ir()` 和 rustc snippet 编译。
+  - 新增负测：`type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported`，证明 raw target-dependent spelling 没有被这轮放开。
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-fixed-width-integer-type-coverage.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir fixed_width_integer -- --nocapture
+```
+
+旧代码在 `type_from_qual_type_maps_fixed_width_integer_scalars` 中失败，因为 `int8_t` / `int16_t` / `uint16_t` / `int64_t` / `uint64_t` 等 fixed-width aliases 仍不能全部映射到目标 typed IR 整数类型。审查后新增的 raw spelling 负测先失败于当前实现错误放行 `signed char` / `short` / `long long` 等 target-dependent spelling。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir fixed_width_integer -- --nocapture
+```
+
+边界：
+- 可以说：固定宽度整数 typedef aliases 现在可进入 typed IR，并发射 Rust `i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` / `u64`。
+- 不应说：已支持 raw `signed char` / `short` / `long long` 这类 target-dependent spelling、plain `char`、plain `long`、target-dependent ABI 宽度推断、完整 integer promotion/usual scalar conversions、跨目标 C integer model 或 semantic acceptance。
+
+下一步建议：
+- 优先做多 `VarDecl` declaration statement expansion，例如 `int a = 1, b = 2;`，这是 clang skeleton 常见形态，和 fixed-width 类型覆盖互补且写入面清晰。
+- 另一个方向是继续 usual conversions 分类，但仍按 clang/type-map 已证明的小切片推进。
+
+English mirror summary:
+
+- Added fixed-width integer typedef alias coverage in the clang frontend type skeleton.
+- The current fixed-width alias set `int8_t`, `int16_t`, `int32_t`, `int64_t`, `uint8_t`, `uint16_t`, `uint32_t`, and `uint64_t` lowers through typed IR and emits Rust `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, and `u64`; this slice newly adds the signed aliases plus `uint16_t` / `uint64_t`.
+- Raw target-dependent spellings such as `signed char`, `short`, `long long`, `unsigned short`, and `unsigned long long` are not normalized to fixed-width canonical types in this slice.
+- Plain `char`, plain `long`, target-ABI width inference, complete usual scalar conversions, and semantic acceptance still fail closed.
+- Direct type unit coverage and real clang AST smoke coverage pass for this slice.
+
+## 110. 2026-06-27 compound-body multi VarDecl expansion
+
+本轮继续拓展 `c2r-translator` 的 clang-lowered typed IR candidate generation，不写 FlashDB 专用分支。切片目标是支持普通 compound body 中一个 `DeclStmt` 含多个简单 `VarDecl` 的真实 clang AST 形态，例如：
+
+```c
+int multi_decl(void) {
+    int a = 1, b = 2;
+    return a + b;
+}
+```
+
+现在会 lower 成连续 typed IR 声明，并由 generic emitter 生成可编译 Rust：
+
+```rust
+let mut a: i32 = 1i32;
+let mut b: i32 = 2i32;
+return (a + b);
+```
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `compound_body_skeleton_from_ast()` 改为一对多展开 body statement。
+  - 新增 `body_stmt_skeletons_from_ast()`，仅对普通 compound body 中的 `DeclStmt` 展开多个 `VarDecl`。
+  - 新增 `var_decl_skeleton_from_ast()`，复用原单 `VarDecl` 的 name/type/init 逻辑。
+  - `decl_stmt_skeleton_from_ast()` 仍是 singular API；`for_init_stmt_skeleton_from_ast()` 继续调用它，所以 `for (int i = 0, j = 0; ...)` 保持 fail-closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `clang_ast_dump_emits_multi_var_decl_stmt_when_enabled`
+  - `clang_ast_dump_rejects_typed_ir_for_multi_var_decl_init_when_enabled`
+- `crates/c2r-translator/src/clang_frontend.rs` tests
+  - `compound_body_skeleton_from_ast_expands_multi_var_decl_stmt`
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-multi-var-decl-expansion.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl -- --nocapture
+```
+
+旧实现返回 `Unsupported { reason: "DeclStmt with 2 VarDecl children..." }`，不能把一个 clang `DeclStmt` 展开为连续声明。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl -- --nocapture
+```
+
+边界：
+- 可以说：普通 compound body 中多个简单 `VarDecl` 现在按源码顺序展开为连续 typed IR `Decl`，并可由 generic emitter 生成可编译 Rust candidate。
+- 不应说：已支持 `ForStmt` init 多声明、所有 declaration statement、无初始化普通声明、unsupported type/initializer、VLA/incomplete array、重复符号恢复、完整 C scope/semantic acceptance。
+
+下一步建议：
+- 继续扩普通声明/表达式覆盖时，可选切片是 `for` init 多声明的 scoped model，或者 `break` / `continue` 语义；不要混进 pointer/alias 语义。
+
+English mirror summary:
+
+- Added clang-frontend expansion for ordinary compound-body `DeclStmt` nodes that contain multiple simple `VarDecl` children.
+- `int a = 1, b = 2; return a + b;` now lowers to consecutive typed IR declarations and emits compilable Rust through the generic emitter.
+- The expansion is intentionally limited to ordinary compound bodies. Multi `VarDecl` in `ForStmt` init still uses the singular init parser and remains fail-closed.
+- Unsupported VarDecl types, unsupported initializers, VLA or incomplete arrays, missing initializer children, multiple initializer children, uninitialized ordinary declarations, duplicate symbols, and full semantic acceptance are still out of scope.
+- Unit skeleton coverage and real clang AST smoke coverage pass for this slice.
+
+## 111. 2026-06-27 assigned-before-read uninitialized scalar locals
+
+本轮继续拓展 `c2r-translator` 的 generic typed IR emitter，不写 FlashDB 专用分支。切片目标是支持普通标量局部变量先声明、后赋值、再读取的真实 C 形态，例如：
+
+```c
+int assign_after_decl(void) {
+    int tmp;
+    tmp = 7;
+    return tmp;
+}
+```
+
+现在会由 clang AST lower 成：
+
+```text
+Decl(tmp, init=None)
+Assign(tmp = 7)
+Return(tmp)
+```
+
+并由 typed IR generic emitter 发射成可编译 Rust：
+
+```rust
+let mut tmp: i32;
+tmp = 7i32;
+return tmp;
+```
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `DefiniteAssignmentState`，在 Rust 发射前运行保守 definite-assignment guard。
+  - 参数和 readonly globals 视为已声明且已初始化。
+  - `Decl(init=None)` 只声明、不初始化；`Assign` 先验证 RHS 中没有读取未初始化标量，再把 target 标为 initialized。
+  - guard 只跟踪当前 generic emitter 能发射的标量类型，避免抢走 pointer/array/unsupported type 原本更精确的 fail-closed reason。
+  - 普通 scalar `Decl(init=None)` 现在发射 `let mut name: Ty;`；array/pointer/record/function 等仍由既有类型门禁拒绝。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_emits_uninitialized_local_decl_assigned_before_read`
+  - `typed_ir_rejects_uninitialized_local_decl_read_before_assignment`
+  - `clang_ast_dump_emits_uninitialized_local_decl_assigned_before_read_when_enabled`
+- 双语/设计文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-uninitialized-local-decl.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir uninitialized_local_decl -- --nocapture
+```
+
+旧实现中两个正测失败在 `stmt[0].decl tmp without initializer is unsupported`，说明 clang frontend 已能 lower，但 generic emitter 全局拒绝无 initializer 声明。
+
+调试记录：
+- 首版 guard 曾抢先拒绝 pointer/unsupported-type 负测，改变旧的精确错误原因。
+- 修正后 guard 仅跟踪可发射标量类型；pointer/array/unsupported expression 继续交给原有 emitter 子集判断。
+- 嵌套 body 的错误路径也对齐原 emitter 的 `while body[0]` / `if else[0]` 格式。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir uninitialized_local_decl -- --nocapture
+```
+
+完整验证已通过：
+
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`src/lib.rs` 42 passed，`bounded_translation.rs` 319 passed。
+
+边界：
+- 可以说：普通标量局部 `int tmp; tmp = 7; return tmp;` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：`int tmp; return tmp;` 继续 fail closed，reason 中会指出 `tmp` 读取前未赋值。
+- 不应说：已支持完整 C definite assignment、默认零初始化、address-taken initialization、间接写入、alias write、loop-only initialization、所有 branch-sensitive initialization、数组无 initializer、pointer/record/function 无 initializer、完整 semantic acceptance。
+
+下一步建议：
+- 继续扩大普通 C 语法面时，优先候选是 `for` init 多声明的 scoped model，或更系统的 usual conversion 分类；`break` / `continue` 需要先设计 `for` step 语义，不能直接发 Rust `continue;`。
+
+English mirror summary:
+
+- Added conservative assignment-before-read support for uninitialized scalar local declarations in the generic typed IR emitter.
+- `int tmp; tmp = 7; return tmp;` now lowers through real clang AST to `Decl(init=None)`, `Assign`, `Return`, and emits compilable Rust with `let mut tmp: i32;`.
+- The pre-emission guard tracks only scalar types that the generic emitter can emit, so pointer/array/unsupported-type cases keep their existing fail-closed reasons.
+- Reads before assignment still fail closed; this is not default zero initialization and not full C definite-assignment analysis.
+- Focused real-clang smoke coverage and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
+
+## 112. 2026-06-27 scoped ForStmt init multi VarDecl expansion
+
+本轮继续按多智能体并行推进 `c2r-translator` 的真实 C 语法面，不写 FlashDB 专用路径。切片目标是把真实 clang AST 中常见的 `ForStmt` init 多声明从 fail-closed 推进到 generic typed IR candidate generation，例如：
+
+```c
+int sum_pair_for(int limit) {
+    int total = 0;
+    for (int i = 0, j = 0; i < limit; i++) {
+        total = total + i + j;
+    }
+    return total;
+}
+```
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrStmt::For.init` 从 `Option<Box<IrStmt>>` 改成 `Vec<IrStmt>`。
+  - `emit_for_stmt()` 在现有 Rust block + `while` 形态里按源码顺序发射每条 init statement。
+  - definite-assignment、byte-cursor source、post-increment byte read、nullable pointer、assigned-var 等递归 helper 现在遍历 `init: &[IrStmt]`。
+  - `step` 仍保持单语句 `Option<Box<IrStmt>>`，避免把这刀扩大成完整 C for-loop 语义。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::For.init` 从 singular optional stmt 改成 `Vec<ClangStmtSkeleton>`。
+  - 新 `for_init_stmt_skeletons_from_ast()` 对 `DeclStmt` 复用普通 compound body 的 multi-`VarDecl` 展开 helper；assignment init 仍包成一元素 vec；其他 init kind 继续 fail closed。
+  - `lower_stmt()` 把 skeleton init vec 逐条 lowering 成 typed IR init vec，任何 unsupported declarator 都会让整个 For lowering fail closed。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report 的 type mapping、call expression evidence、pointer cursor source、post-increment deref evidence 递归遍历 For init vec。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将真实 clang multi-`VarDecl` For init smoke 从 reject 改为 positive：
+    `clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled`。
+  - 新增 direct typed IR 正测：
+    `typed_ir_for_emits_scoped_loop_with_multi_decl_init`。
+  - 既有 direct/skeleton/real-clang For 测试改为 `init: vec![...]` / `init.as_slice()` 断言。
+  - 真实 clang positive 现在断言 top-level body 为 `[Decl(total), For { init: [Decl(i), Decl(j)], step: Assign, body: [Assign] }, Return]`，并验证生成 Rust 可编译。
+- 双语文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+  - `docs/superpowers/plans/2026-06-27-for-init-multi-var-decl.md`
+
+红灯已观察：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+```
+
+旧实现中 positive smoke 失败为 `report.status == "unsupported"`，reason 为 `DeclStmt with 2 VarDecl children is outside the current clang lowering skeleton`。
+
+聚焦验证已通过：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features typed-ir typed_ir_for_emits_scoped_loop_with_multi_decl_init -- --nocapture
+```
+
+完整验证已通过：
+
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir multi_var_decl_init -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：聚焦真实 clang smoke 1 passed；完整 feature gate 中 `src/lib.rs` 42 passed，`bounded_translation.rs` 320 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：普通 compound body 和 scoped `ForStmt` init 中多个简单 `VarDecl` 现在都能按源码顺序展开为连续 typed IR `Decl`，并可由 generic emitter 生成可编译 Rust candidate。
+- 可以说：`ForStmt` init 多声明的 scope 由一等 `IrStmt::For { init: Vec<IrStmt>, ... }` 保住，init 声明不泄漏到 loop block 外，body-local 声明不泄漏到 step。
+- 不应说：已支持复杂 init/step、`continue` / `break` / `goto` / `switch`、condition variable slot、空 condition/step、prefix inc/dec step、任意 declaration statement、unsupported type/initializer、VLA/incomplete array、重复符号恢复、完整 C for-loop control-flow semantics 或 semantic acceptance。
+
+下一步建议：
+- 继续扩大普通 C 语法面时，优先候选是更系统的 usual scalar conversion 分类，或在已有 scoped `ForStmt` 上单独设计 `break` / `continue` 的 step 语义、CFG evidence 和 validation gate。
+- 第 110/111 节里“for init 多声明 scoped model”作为下一步建议已被本节 supersede。
+
+English mirror summary:
+
+- Added scoped `ForStmt` init multi-`VarDecl` expansion through generic typed IR.
+- `IrStmt::For.init` and `ClangStmtSkeleton::For.init` are now ordered vectors; `step` remains singular.
+- `for (int i = 0, j = 0; i < limit; i++)` lowers from real clang AST to `For { init: [Decl(i), Decl(j)], ... }` and emits compilable Rust in source order inside the loop block.
+- Unsupported declarator types/initializers, VLA/incomplete arrays, duplicate symbols, complex init/step, missing condition/step, condition variable slots, `continue` / `break`, full C for-loop control-flow semantics, and semantic acceptance remain out of scope.
+- Focused red/green coverage, direct typed IR coverage, real clang AST smoke coverage, and the full `clang-frontend,typed-ir,clang-lowering-report` gate pass for this slice.
+
+## 113. 2026-06-27 loop-body break and signed-char promotion slice
+
+本轮继续按多智能体推进 `c2r-translator` 的核心语法面，不写 FlashDB 专用路径。两个只读子智能体分别复核了 usual scalar conversion 的真实边界和测试/doc 缺口；主线程落地两个小切片：
+
+1. loop body `break`：真实 clang `BreakStmt` 现在能 lowering 成 `IrStmt::Break`，generic typed IR emitter 只在 `while` / scoped `ForStmt` body 内发射 Rust `break;`。顶层或非 loop 上下文的 `break` 继续 fail closed。
+2. 精确 `signed char` promotion：`type_from_qual_type()` 现在识别精确 `signed char` spelling 为 signed 8-bit integer。普通二元整数运算 operand 上，如果 clang 已保留 `IntegralCast` / `IntegralPromotion`，typed emitter 继续要求 cast 后 lhs/rhs/result 类型严格对齐后再发射，例如 `signed char value + 1` 发射 `((value as i32) + 1i32)`。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::Break`。
+  - `emit_stmt()` 增加 loop 上下文参数；`while` / `For` body 传入 `in_loop=true`，top-level、for init 和 for step 仍传入 `false`。
+  - definite-assignment、post-increment byte read、nullable pointer use 等只读遍历补上 `Break` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangStmtSkeleton::Break`、`BreakStmt` skeleton lowering、`lower_stmt()` 到 `IrStmt::Break`。
+  - `type_from_qual_type("signed char")` 精确映射为 signed 8-bit integer；`short` / `long long` 等其他 target-dependent spelling 仍 unsupported。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `Break`：call evidence 跳过，statement label/kind 记录为 `break`，post-increment evidence 跳过。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - direct typed IR：`typed_ir_emits_break_in_scalar_while_body`、`typed_ir_rejects_break_outside_loop`、`typed_ir_emits_binary_arithmetic_with_integral_operand_cast`。
+  - real clang smoke：`clang_ast_dump_emits_typed_ir_while_break_when_enabled`、`clang_ast_dump_emits_signed_char_binary_promotion_when_enabled`。
+- 文档同步：
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `codex/translator-strengthening-analysis.md`
+  - `codex/translator-strengthening-analysis.en.md`
+
+验证已通过：
+```powershell
+cargo fmt --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`src/lib.rs` 43 passed，`bounded_translation.rs` 325 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：`while` / scoped `ForStmt` body 中的 `break` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：精确 `signed char` 可作为 signed 8-bit integer 进入 typed IR，并能通过 clang-preserved integral promotion cast 支持普通二元整数运算小切片。
+- 不应说：已支持 `continue`、`goto`、`switch`、`do-while`、完整 C for-loop control-flow semantics、plain `char`、plain `long`、`short` / `long long` target ABI 宽度推断、完整 usual scalar conversions、side-effect-heavy operand 或 semantic acceptance。
+
+下一步建议：
+- 继续 usual scalar conversion 分类，但仍只接受 clang 已显式证明的 integral cast / promotion 小切片，不要自行推断完整 C conversion。
+- 或继续控制流：优先设计 `continue` 的 for-step 语义，不能直接发 Rust `continue;`，因为当前 `ForStmt` lowering 把 step 放在 while body 尾部。
+
+English mirror summary:
+
+- Added loop-body `break` support through clang skeleton, typed IR, and the generic emitter.
+- `BreakStmt` lowers to `IrStmt::Break`; the emitter only emits Rust `break;` in loop contexts, and rejects top-level/non-loop `break`.
+- Added exact `signed char` type support as signed 8-bit integer, enabling clang-proven ordinary binary promotion such as `signed_char_add_one(signed char value) { return value + 1; }`.
+- This remains candidate generation only. `continue`, `goto`, `switch`, `do-while`, full C for-loop control-flow semantics, plain `char`, plain `long`, `short` / `long long` ABI width inference, complete usual scalar conversions, side-effect-heavy operands, and semantic acceptance still fail closed.
+- The full `clang-frontend,typed-ir,clang-lowering-report` gate passes: 43 lib tests, 325 bounded translation tests, and 0 doc-tests.
+
+## 114. 2026-06-27 loop-body continue and competition environment profile
+
+本轮继续按多智能体推进 `c2r-translator` 核心语法面，并补入比赛环境硬约束。两个只读子智能体先复核 `continue` 的实现风险和文档缺口；后续只读子智能体复核比赛环境 profile 应接入的验证位置。第 113 节中“`continue` 仍 fail closed / 下一步设计 continue for-step 语义”的表述已被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::Continue`。
+  - `emit_stmt()` 的 loop 参数从 `bool` 升级为 `LoopContext`：`None`、`While`、`For { step }`。
+  - `while` body 中的 `continue` 直接发射 Rust `continue;`。
+  - scoped `ForStmt` body 中的 `continue` 会先发射当前简单 step，再发射 Rust `continue;`，避免当前 `ForStmt -> block + while + body + step` lowering 跳过 C for-step。
+  - 嵌套循环会覆盖 loop context，所以内层 `while` 的 `continue` 不会执行外层 `ForStmt` step。
+  - 顶层或非 loop 上下文的 `continue` 继续 fail closed。
+  - definite-assignment、post-increment byte read、nullable pointer use 等只读遍历补上 `Continue` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::Continue`。
+  - `ContinueStmt` skeleton lowering 到 `ClangStmtSkeleton::Continue`，再 lowering 到 `IrStmt::Continue`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `Continue`：call evidence 跳过，statement label/kind 记录为 `continue`，post-increment evidence 跳过。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正/负测：`typed_ir_emits_continue_in_scalar_while_body`、`typed_ir_for_emits_continue_after_step_in_body`、`typed_ir_for_nested_while_continue_does_not_emit_outer_step`、`typed_ir_rejects_continue_outside_loop`。
+  - 新增/转换真实 clang smoke：`clang_ast_dump_emits_typed_ir_for_continue_when_enabled`、`clang_ast_dump_emits_typed_ir_while_continue_when_enabled`。
+
+比赛环境配置：
+- 新增 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 作为单一环境 profile。
+- `environment.json` 记录 Ubuntu 24.04.4 LTS、kernel `5.10.0-182.0.0.95.r194_123.hce2.x86_64`、华为 APT/PyPI/npm/Cargo mirror、Python 3.12.3、pip 24.0、Node v24.13.0、npm 11.6.2、OpenJDK 21.0.10 Bisheng、Maven 3.9.11、`MAVEN_HOME=/usr/local/maven3`、Rust/Cargo 1.96.0、gcc/g++ 13.3.0、GNU Make 4.3，并显式记录 Go 未安装、CMake 未找到。
+- 附带 `apt/sources.list`、`pip/pip.conf`、`npm/.npmrc`、`cargo/config.toml`、`rust/rust-toolchain.toml`、`env.sh` 和 `toolchain-check.sh`。
+- `validation/gates.md` 要求 L1/L3 在比赛/evaluation host 上记录 environment profile path/hash。
+- `validation/l3-template/config-profile.schema.json` 新增可选 `environment_profile` 绑定；example 加入 placeholder。
+- `scripts/run-full-regression.ps1` 新增 `-EnvironmentProfile` 参数，默认指向该 profile；`events.jsonl` 和 `summary.json` 会写出 `profile_id/path/sha256`。脚本内部 PowerShell 子调用改为复用当前 PowerShell 可执行文件路径，避免 Ubuntu 上硬编码 `powershell`。
+- `validation/README.md`、`docs/c2rust-migration-agent/README*.md`、`build-and-c2rust-baseline.md`、`full-regression-runner.md` 已同步说明比赛环境边界：默认 gate 不依赖 Go/CMake，优先 Cargo/Python/gcc/g++/GNU Make。
+
+验证已通过：
+```powershell
+cargo fmt --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' -- --check
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path 'F:\agent\crustpaper\0625ctr\crates\c2r-translator\Cargo.toml' --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+python -m json.tool validation/l3-template/config-profile.schema.json
+python -m json.tool validation/l3-template/config-profile.example.json
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regression.ps1 -Rounds 1 -StartRound 2 -SkipLongStress -SkipClippy -EvidenceRoot target/full-regression-syntax -RunId env-profile-smoke
+```
+
+结果：`src/lib.rs` 43 passed，`bounded_translation.rs` 330 passed，doc-tests 0 passed。`git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。`run-full-regression.ps1` 零步 smoke 成功写出 environment profile `profile_id/path/sha256`。
+
+边界：
+- 可以说：`while` / scoped `ForStmt` body 中的窄化 `continue` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：同一层 `ForStmt` body 的 `continue` 会先执行 step；嵌套循环的 `continue` 不会误执行外层 step。
+- 可以说：比赛环境 profile 已有单一配置目录和可追溯 profile hash 绑定入口。
+- 不应说：已支持 `goto`、`switch`、`do-while`、condition variable slot、空 condition/step、复杂 init/step、prefix inc-dec step、完整 C for-loop control-flow semantics、完整 semantic acceptance，或默认比赛环境支持 Go/CMake。
+
+English mirror summary:
+
+- Added narrow loop-body `continue` support through clang skeleton, typed IR, and the generic emitter.
+- `ContinueStmt` lowers to `IrStmt::Continue`; `while` emits Rust `continue;`; scoped `ForStmt` emits the current step before Rust `continue;`; nested-loop `continue` targets only the inner loop.
+- Added direct typed IR and real clang smoke coverage for while continue, for continue step ordering, nested-loop targeting, and non-loop fail-closed behavior.
+- Added `validation/environment-profiles/huawei-competition-ubuntu-24.04/` as the single competition environment profile, including mirrors, tool versions, Go/CMake absence, and shell self-checks.
+- Full translator gate passes with real clang enabled: 43 lib tests, 330 bounded translation tests, and 0 doc-tests.
+
+## 115. 2026-06-27 narrow DoStmt / do-while typed IR support
+
+本轮继续按多智能体推进 `c2r-translator` 的通用语法面。三个只读子智能体分别复核 typed IR emitter、clang frontend lowering 和文档/验证路线；结论一致：当前下一刀最合适的是 `DoStmt` / `do-while`，因为它复用现有 condition emitter、loop-body `break` / `continue` 语义和 clang AST 入口，同时比 `switch` / `goto` 的 CFG/relooper 问题更可控。第 114 节中“`do-while` 仍未支持”的边界被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrStmt::DoWhile { body, condition, source_span }`。
+  - `LoopContext` 新增 `DoWhile { condition }`，用于 body 内 `continue` 的正确 lowering。
+  - `DoWhile` 发射为 Rust `loop { ... if !(condition) { break; } }`，保留 C `do-while` body 至少执行一次的形态。
+  - `DoWhile` body 中的 `continue` 会先发射同一个 condition break check，再发射 Rust `continue;`，避免 Rust `continue` 直接跳回 loop 顶部而跳过 C 的尾部 condition。
+  - definite-assignment、byte cursor source、post-increment byte read、nullable pointer collect/validate、assigned var 推断等只读遍历补上 `DoWhile` 分支。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `ClangStmtSkeleton::DoWhile`。
+  - `stmt_skeleton_from_ast()` 支持 `DoStmt`。
+  - 新增 `do_stmt_skeleton_from_ast()`，按 clang JSON 的 `[body, condition]` 子节点顺序 lowering。
+  - `lower_stmt()` 将 skeleton `DoWhile` lowering 成 typed IR `IrStmt::DoWhile`。
+- `crates/c2r-translator/src/lib.rs`
+  - clang-lowering report/evidence 的只读 IR 遍历补上 `DoWhile`：decl type mapping、call expression evidence、statement label/kind、CFG edge、pointer cursor source 和 post-increment deref evidence。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 测试：
+    - `typed_ir_emits_scalar_do_while_with_condition_check_after_body`
+    - `typed_ir_do_while_continue_checks_condition_before_continuing`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_typed_ir_do_while_when_enabled`
+
+红灯已观察：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir do_while -- --nocapture
+```
+
+旧实现失败于：
+- `no variant named DoWhile found for enum IrStmt`
+- `DoStmt` 不在 clang skeleton lowering 中
+
+focused 验证已通过：
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir do_while -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report do_while -- --nocapture
+```
+
+focused 结果：3 个 do-while 测试通过；`clang-lowering-report` feature 下也通过，说明 evidence/report 的枚举穷尽分支已补齐。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+
+边界：
+- 可以说：窄化 clang `DoStmt` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：`do-while` body 至少执行一次；尾部 condition 复用当前 `emit_condition_expr()` 支持的整数 truthiness、comparison、logical-not、readonly deref 等子集。
+- 可以说：`do-while` body 中的 `continue` 会先检查 condition，再继续下一轮。
+- 不应说：已支持完整 C loop control-flow semantics、`switch`、`goto`、condition 中 call/inc/dec/side effect、复杂 label/fallthrough/relooper、semantic acceptance 或任意 do-while condition。
+- 后续建议：下一刀可按只读子智能体建议选 mutable pointer write 到 `&mut [T]` 的受限 lowering、nested pure direct call、step-position prefix inc/dec，或继续设计 `switch` / `goto`。
+
+English mirror summary:
+
+- Added narrow `DoStmt` / `do-while` support through clang skeleton, typed IR, and the generic emitter.
+- `DoStmt` lowers to `IrStmt::DoWhile`; the emitter produces Rust `loop { ... if !(condition) { break; } }`.
+- A `continue` inside a `DoWhile` body emits the same condition break check before Rust `continue;`, preserving C `do-while` condition semantics.
+- Added direct typed IR coverage and a real clang AST smoke test for the do-while path.
+- This is still candidate generation only. `switch`, `goto`, full loop control-flow semantics, side-effecting conditions, and semantic acceptance remain fail-closed.
+
+## 116. 2026-06-27 ForStmt step-position prefix inc/dec and competition self-check tightening
+
+本轮继续按多智能体推进 `c2r-translator` 的通用语法面，不写 FlashDB 专用代码。只读子智能体复核后确认：`for (...; ...; ++i)` / `--i` 的 step 表达式值被丢弃，对简单整数变量来说 prefix/postfix 的可观察差异只剩同一个 side effect，因此可以作为窄化 statement-position 切片放开。第 107、112、114、115 节中“prefix inc/dec step 仍不支持 / 是下一刀”的旧边界被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `inc_dec_expr_skeleton_from_ast(expr, allow_prefix, preserve_integral_casts)`，让通用表达式入口继续 `allow_prefix=false`，而 `ForStmt` step 专用入口可传 `allow_prefix=true`。
+  - `inc_dec_for_step_skeleton_from_ast()` 不再要求 postfix，只接受直接 `UnaryOperator` 的简单整数 `DeclRef` target，并 lowering 成 `ClangStmtSkeleton::Assign { value: Binary(Add/Sub, target, 1) }`。
+  - `isPostfix` 必须是显式 bool；缺失或非 bool 会 fail closed，避免 AST 元数据不完整时把 step 当成 prefix 默认接受。
+  - step helper 透传底层 unsupported reason，保留 fail-closed 诊断。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 原真实 clang prefix-step 负例改为正例：`clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled`。
+  - 新增真实 clang prefix decrement step 正例：`clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled`。
+  - 新增真实 clang 负例，证明 value-position/call-argument prefix inc 仍拒绝：
+    - `clang_ast_dump_rejects_prefix_increment_return_value_when_enabled`
+    - `clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled`
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh`
+  - 比赛环境静态配置已覆盖用户补充的版本和镜像源。
+  - 自检脚本补充完整 `VERSION=24.04.4 LTS (Noble Numbat)` 检查。
+  - `java -version` 现在除 `21.0.10` 外，还大小写不敏感检查 `openjdk` 和 `bisheng`。
+
+红灯已观察：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir for_step_stmt_skeleton_from_ast_rejects_inc_dec_without_explicit_postfix_flag -- --nocapture
+```
+
+旧实现会把缺失 `isPostfix` 的 `++i` step 当成 assignment 接受；红测失败信息为 expected unsupported but got `Assign { ... }`。
+
+focused 验证：
+```powershell
+cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir for_step_stmt_skeleton_from_ast -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir prefix_ -- --nocapture
+```
+
+focused 结果：
+- `for_step_stmt_skeleton_from_ast*`：4 passed。
+- `prefix_`：`src/lib.rs` 4 passed，`bounded_translation.rs` 6 passed。
+
+完整验证：
+```powershell
+cargo fmt --manifest-path .\crates\c2r-translator\Cargo.toml -- --check
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json
+git diff --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --manifest-path .\crates\c2r-translator\Cargo.toml --features clang-frontend,typed-ir,clang-lowering-report -- --nocapture
+```
+
+结果：`cargo fmt --check`、shell syntax、environment JSON、`git diff --check` 均 exit 0；`git diff --check` 仅报告 Windows LF/CRLF 提示。完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 336 passed，doc-tests 0 passed。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+
+边界：
+- 可以说：`ForStmt` step-position 的简单整数变量 prefix `++i` / `--i` 现在可经真实 clang AST + typed IR generic emitter 生成可编译 Rust candidate。
+- 可以说：该支持只利用 step expression 值被丢弃的事实，按 statement side effect 发射为 `i = i +/- 1`。
+- 可以说：通用 expression path、return value、call argument、while/if/for condition、deref target、pointer target、缺失/非 bool `isPostfix` 元数据仍 fail closed。
+- 不应说：已支持 value-position `++i` / `--i`、condition 中 inc/dec、副作用复杂 step、parenthesized/comma step、非简单整数变量 target、指针/数组/字段 inc-dec、完整 C for-loop control-flow semantics 或 semantic acceptance。
+- 后续建议：下一刀优先考虑 mutable pointer write 到 `&mut [T]` 的受限 lowering、nested pure direct calls、generic inc/dec value semantics，或继续设计 `switch` / `goto`。
+
+English mirror summary:
+
+- Added narrow `ForStmt` step-position prefix `++i` / `--i` support for simple integer variable targets.
+- The normal expression path still rejects prefix inc/dec; real clang tests cover return value, call argument, while condition, and deref fail-closed boundaries.
+- Inc/dec clang JSON must carry an explicit boolean `isPostfix` field; missing or non-bool metadata fails closed.
+- Tightened the Huawei competition environment self-check for full Ubuntu `24.04.4 LTS (Noble Numbat)` and Bisheng/OpenJDK Java provenance.
+- Full translator gate passes with real clang enabled: 48 lib tests, 336 bounded translation tests, and 0 doc-tests.
+
+## 117. 2026-06-27 typed IR mutable pointer output writes and standalone competition config
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，并按用户补充把比赛环境配置独立放到 `config/competition-env/`。三个只读子智能体分别评估了 mutable pointer write、nested direct calls、generic inc/dec value semantics；结论是 pointer output write 最贴近当前 P0 memory-model 缺口，nested call 可作为后续快刀，generic value-position inc/dec 暂不做泛化。第 116 节中“下一刀优先 mutable pointer write”的建议已被本节 supersede。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `mutable_pointer_slice_element_type()` 和 `emit_assigned_param_type()`：只有函数参数作为写目标出现时，`T *out` 才发射为 `mut out: &mut [T]`；未使用或只读的 non-const pointer 仍 fail closed。
+  - `emit_assignment_target()` 现在支持 mutable pointer 写目标：
+    - `*out = value; -> out[0usize] = value;`
+    - `out[i] = value; -> out[i as usize] = value;`
+    - `*(out+i) = value;` / `*(i+out) = value; -> out[i as usize] = value;`
+  - pointer-add 写 offset 复用 readonly offset read 的无副作用整数 index 边界：只接受 integer literal、var、cast；call、inc/dec、deref、binary compound index 等继续 fail closed。
+  - definite-assignment 和 assigned-var 收集补上 `Deref` 写目标，因此 `*out` / `*(out+i)` 能把 `out` 识别为需要 `&mut [T]` 的参数。
+  - 未声明 deref pointer 的旧负例仍 fail closed，但诊断从泛化的“assign target must be Var...”变成更具体的 `deref assignment pointer ptr is not declared`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_mutable_pointer_deref_assignment_as_mut_slice_zero_index`
+    - `typed_ir_emits_mutable_pointer_index_assignment`
+    - `typed_ir_emits_mutable_pointer_add_index_deref_assignment`
+  - 新增 clang-lowered skeleton 正测：
+    - `typed_ir_emits_mutable_pointer_index_assignment_from_clang_lowered_ir`
+    - `typed_ir_emits_mutable_pointer_add_index_deref_assignment_from_clang_lowered_ir`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_mutable_pointer_index_assignment_when_enabled`
+    - `clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled`
+  - 新增/保留负测：`const T *` 写入、mutable pointer read、复杂 offset、未使用 mutable pointer param、readonly pointer offset call index 等继续 fail closed。
+
+比赛环境配置改动：
+- 新增 `config/competition-env/` 作为默认独立配置入口：
+  - `environment.json`
+  - `README.md` / `README.en.md`
+  - `env.sh`
+  - `toolchain-check.sh`
+  - `apt/sources.list`
+  - `pip/pip.conf`
+  - `npm/.npmrc`
+  - `cargo/config.toml`
+  - `rust/rust-toolchain.toml`
+- `scripts/run-full-regression.ps1` 默认 `-EnvironmentProfile` 改为 `config/competition-env/environment.json`。
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 保留为历史 compatibility entrypoint，并在 `environment.json` 中声明 canonical path；README 中英文均已说明新默认路径。
+- `validation/l3-template/config-profile.example.json` 示例 profile path 改为 `config/competition-env/environment.json`，示例 rust/cargo 版本改为 `1.96.0`。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `docs/c2rust-migration-agent/full-regression-runner.md`
+- `docs/c2rust-migration-agent/build-and-c2rust-baseline.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+- `validation/README.md`
+- `validation/gates.md`
+
+红灯已观察：
+```powershell
+cargo test --features typed-ir typed_ir_emits_mutable_pointer --test bounded_translation
+```
+
+旧实现失败于：
+- `stmt[0].assign target must be Var or local fixed array Index`
+- `param out has pointer type int * is unsupported`
+
+focused 验证：
+```powershell
+cargo test --features typed-ir typed_ir_emits_mutable_pointer --test bounded_translation
+cargo test --features "typed-ir clang-frontend" mutable_pointer --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "typed-ir clang-frontend" mutable_pointer --test bounded_translation -- --nocapture
+```
+
+focused 结果：mutable pointer filter 下 10 条测试通过，包含 direct typed IR、clang-lowered skeleton、真实 clang AST smoke 和 fail-closed 边界。
+
+完整验证：
+```powershell
+python -m json.tool config\competition-env\environment.json > $null
+python -m json.tool validation\environment-profiles\huawei-competition-ubuntu-24.04\environment.json > $null
+python -m json.tool validation\l3-template\config-profile.example.json > $null
+bash -n config/competition-env/env.sh; bash -n config/competition-env/toolchain-check.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+cargo fmt -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:/Program Files/LLVM/bin/clang.exe'; cargo test --features "clang-frontend typed-ir clang-lowering-report" -- --nocapture
+git diff --check
+```
+
+完整验证结果：
+- config/profile JSON 校验通过。
+- shell syntax 校验通过。
+- `scripts/run-full-regression.ps1` PowerShell parser 静态检查通过。
+- `cargo fmt --check` 通过。
+- 完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 345 passed，doc-tests 0 passed。
+- `git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：函数参数 `T *out` 在作为写目标出现时，可经 direct typed IR、clang-lowered skeleton 和真实 clang AST 进入 `GenericTypedIr`，生成可编译 Rust `&mut [T]` slice assignment candidate。
+- 可以说：支持的写形态是 `*out`、`out[i]`、`*(out+i)` / `*(i+out)`，元素类型必须是当前支持的整数标量，offset 必须是无副作用整数 literal/var/cast。
+- 不应说：已支持 mutable pointer read、任意 pointer arithmetic、complex offset、compound/update write、nullable pointer write、pointer escape、多 mutable pointer alias/noalias 证明、volatile/hardware register、宏副作用或 semantic acceptance。
+- 后续建议：下一刀优先 nested pure direct calls 或 standalone typed clang inc/dec statement；并行推进 struct/alias memory model 设计，避免把 `&mut [T]` 输出写误认为完整 C pointer ownership 模型。
+
+English mirror summary:
+
+- Added narrow mutable integer pointer output writes through the generic typed IR emitter.
+- Function parameter `T *out` emits as `&mut [T]` only when it is used as a write target.
+- Supported write forms are `*out`, `out[i]`, and `*(out+i)` / `*(i+out)`, emitted as Rust slice assignments.
+- Direct typed IR, clang-lowered skeleton, real clang AST smoke, and fail-closed boundary tests cover the new path.
+- Added standalone competition environment config under `config/competition-env/` and moved default validation/profile references to that path while keeping the old validation profile as a compatibility entrypoint.
+- Full translator gate passes with real clang enabled: 48 lib tests, 345 bounded translation tests, and 0 doc-tests.
+
+## 118. 2026-06-27 typed IR one-level nested direct calls and profile mirror checks
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 117 节建议的 nested pure direct call 快刀，并把用户补充的比赛环境约束核对到独立配置目录。四个只读子智能体分别给出结论：
+- nested direct call：建议只放开“一层、一个、整个实参就是 direct call”，保留 deeper / multiple sibling / condition call / side-effect argument fail-closed。
+- standalone typed clang inc/dec statement：当前真实 clang AST 还不支持普通 `value++; ++value;` statement；下一刀应复用 `ForStmt` step 的 inc/dec-to-Assign helper，只放开 statement value-discarded 场景。
+- alias/memory model：mutable pointer output write 仍缺 noalias/ownership/length/effect graph 证明；下一阶段应先补 struct/alias memory model OpenSpec 和 pointer/slice evidence schema。本条关于 effect graph 生成的缺口已被第 122 节 supersede；完整 pointer ownership model 仍未完成。
+- 比赛环境配置：`config/competition-env/` 已完整匹配用户给出的 Ubuntu 24.04.4、kernel、Huawei mirrors、Python/Node/Java/Maven/Rust/GCC/Make 和 Go/CMake 缺失事实；validation 侧目录只是 compatibility entrypoint。
+
+核心翻译改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_call_expr()` 现在先对整组实参运行 `validate_bounded_call_args()`，再发射 Rust。
+  - 新增一层 nested direct call 实参支持：`outer(inner(value))` 可发射为同形 Rust，只要 outer/inner callee 都是合法 identifier，inner 返回当前支持的 scalar integer，inner args 仍属于无 call 的 bounded arg subset。
+  - `outer(inner(third(value)))` 继续 fail closed。
+  - `outer(left(value), right(value))` 继续 fail closed，避免在未建模 C sibling argument evaluation order 时错误改写语义。
+  - `outer(inner(value) + 1)`、`outer(arr[inner(value)])`、call arg 中 inc/dec、deref、addr-of、null、conditional、array literal、unsupported expr 仍 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `call_expr_skeleton_from_ast()` 先构建全部 arg skeleton，再用 `bounded_call_args_rejection_reason()` 做整组参数门禁。
+  - direct callee 证明仍要求 clang `referencedDecl.kind=FunctionDecl`；function pointer / complex callee 不因 nested call 支持而放开。
+  - nested direct call result 只接受 clang type skeleton 中的 supported integer scalar；void/pointer/array/unsupported result 仍 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 把旧的 `typed_ir_rejects_nested_direct_call_arguments` 改成正例 `typed_ir_emits_nested_direct_call_argument`。
+  - 新增 `typed_ir_rejects_deeper_nested_direct_call_arguments`。
+  - 新增 `typed_ir_rejects_multiple_nested_direct_call_arguments`。
+  - 新增真实 clang AST opt-in smoke `clang_ast_dump_lowers_nested_direct_call_expr_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke `clang_ast_dump_rejects_multiple_nested_direct_call_args_when_enabled`。
+
+比赛环境配置改动：
+- `config/competition-env/toolchain-check.sh`
+- `validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh`
+  - 新增 profile 文件镜像源检查：APT、pip、npm、Cargo registry 必须包含用户指定的 Huawei mirror。
+  - 两个入口继续保持相同逻辑；区别仅在 `env.sh` 的 profile path 和 README 入口说明。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+  - nested direct call 从“下一刀/完全不支持”更新为“一层单个 direct call argument 已支持”。
+  - 文档明确保留 deeper nesting、多个 sibling nested call、binary/index/cast 内 nested call、condition tree call、function pointer callee、inc/dec/deref 参数的 fail-closed 边界。
+
+红灯已观察：
+```powershell
+cargo test --features "typed-ir clang-frontend" typed_ir_emits_nested_direct_call_argument --test bounded_translation
+```
+
+旧实现失败于：
+- `stmt[0].return expr call arg[0] nested call expressions are outside the bounded call subset`
+
+focused 验证：
+```powershell
+cargo test --features "typed-ir clang-frontend" nested --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" nested_direct_call --test bounded_translation -- --nocapture
+```
+
+focused 结果：
+- `nested` filter：13 passed。
+- real clang `nested_direct_call` filter：5 passed，0 skipped，包括 typed IR 正负例和真实 clang AST 正负例。
+
+完整验证：
+```powershell
+python -m json.tool config\competition-env\environment.json > $null
+python -m json.tool validation\environment-profiles\huawei-competition-ubuntu-24.04\environment.json > $null
+python -m json.tool validation\l3-template\config-profile.example.json > $null
+bash -n config/competition-env/env.sh; bash -n config/competition-env/toolchain-check.sh
+bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/env.sh; bash -n validation/environment-profiles/huawei-competition-ubuntu-24.04/toolchain-check.sh
+cargo fmt -- --check
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "clang-frontend typed-ir clang-lowering-report" -- --nocapture
+git diff --check
+```
+
+完整验证结果：
+- config/profile JSON 校验通过。
+- shell syntax 校验通过。
+- `cargo fmt --check` 通过。
+- 完整 translator gate 通过：`src/lib.rs` 48 passed，`bounded_translation.rs` 349 passed，doc-tests 0 passed。
+- `git diff --check` exit 0，仅报告 Windows LF/CRLF 提示。
+
+边界：
+- 可以说：generic typed IR 现在支持一层单个 nested direct call argument，例如 `return outer(inner(value));`，并且 direct typed IR、真实 clang AST 和 rustc snippet smoke 均已覆盖。
+- 可以说：这个支持仍是 candidate generation，不是外部 callee semantic acceptance；external callee 仍需要现有 call evidence/signature/source binding 以及完整 validation gates。
+- 不应说：已支持 function pointer call、任意 nested call、多个 sibling nested call、condition 中 call、复杂 call side effect、call argument 中 inc/dec/deref、full C argument evaluation semantics 或 semantic acceptance。
+- 后续建议：下一刀优先 standalone typed clang inc/dec statement；并行推进 struct/alias memory model OpenSpec + pointer/slice evidence schema，避免 mutable pointer output write 误扩张成完整 C pointer ownership 模型。该 schema/effect graph 对齐已由第 120 和第 122 节推进完成，完整 pointer ownership model 仍未完成。
+
+English mirror summary:
+
+- Added one-level single nested direct call argument support to the generic typed IR emitter.
+- `outer(inner(value))` now lowers through direct typed IR and real clang AST when both callees are direct identifiers and the nested result is a supported integer scalar.
+- Deeper nesting, multiple sibling nested calls, nested calls hidden in binary/index/cast operands, function-pointer callees, calls in conditions, and side-effect arguments still fail closed.
+- Strengthened competition profile self-check scripts to verify the checked-in APT, pip, npm, and Cargo Huawei mirror configuration files.
+- Full translator gate passes with real clang enabled: 48 lib tests, 349 bounded translation tests, and 0 doc-tests.
+
+## 119. 2026-06-27 standalone typed clang inc/dec statements
+
+本轮继续按多智能体推进 `c2r-translator` 通用语法面，完成第 118 节建议的 standalone typed clang inc/dec statement 快刀。三个只读子智能体分别给出结论：
+- inc/dec 代码路径：当前普通函数体 `UnaryOperator` statement 会在 `stmt_skeleton_from_ast()` 落到 `Unsupported`；已有 `ForStmt` step helper 可把 inc/dec 降成 `Assign`，应抽成 statement 通用 helper。
+- 文档同步：需要更新 `core-translation-architecture` 中英文、README 中英文、translator-strengthening-analysis 中英文，并在 CONTEXT 新章节说明第 118 节的下一刀建议已完成。
+- alias/memory model：应单独做 `add-struct-alias-memory-model-evidence` OpenSpec，不应和 inc/dec 语法切片混在一起；当前 pointer graph / slice spec / manifest schema 与 validator 的 alias gate 字段仍不一致。
+
+核心翻译改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `stmt_skeleton_from_ast()` 新增普通 `UnaryOperator` statement 分支。
+  - 原 `inc_dec_for_step_skeleton_from_ast()` 改为 wrapper，复用新的 `inc_dec_stmt_skeleton_from_ast(stmt, context)`。
+  - standalone `value++` / `++value` / `value--` / `--value` 在表达式值被丢弃的 statement 位置会 lowering 成 `ClangStmtSkeleton::Assign`，再进入现有 typed IR `IrStmt::Assign`。
+  - 生成形式保持与 `ForStmt` step 一致：`value = value + 1` 或 `value = value - 1`，由 typed IR emitter 发射为 Rust assignment。
+  - 仍只支持简单整数变量 target，且 target type 与 inc/dec expression type 必须匹配。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST opt-in smoke `clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled`。
+  - 测试 C 源：`int standalone_inc_dec(int value) { value++; ++value; value--; --value; return value; }`。
+  - 断言真实 AST lowering 后是 4 条 `IrStmt::Assign` + `Return`，Rust draft 含 2 条 `value = (value + 1i32);` 和 2 条 `value = (value - 1i32);`，并通过 rustc snippet smoke。
+- `crates/c2r-translator/src/clang_frontend.rs` 单元测试
+  - 新增 `stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment`，覆盖 postfix increment、prefix increment、postfix decrement、prefix decrement 四种 standalone statement。
+
+保留的 fail-closed 边界：
+- `return ++value;`、`helper(++value)`、`*++p` 仍在真实 clang AST 层 fail closed。
+- `if (value++)` 仍会 lower 成 IR 但在 scalar emitter 条件位置 fail closed。
+- `++*p`、`++p`、array/field target、pointer target、缺 `isPostfix` 元数据、非整数 target、target/type mismatch 继续 fail closed。
+- 这不是通用 `IrExpr::IncDec` emitter，也不表示 value-position inc/dec、condition/call argument/return 中 inc/dec、完整 C 自增表达式值语义或 semantic acceptance 已支持。
+
+文档同步：
+- `docs/c2rust-migration-agent/core-translation-architecture.md`
+- `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+- `docs/c2rust-migration-agent/README.md`
+- `docs/c2rust-migration-agent/README.en.md`
+- `codex/translator-strengthening-analysis.md`
+- `codex/translator-strengthening-analysis.en.md`
+  - standalone inc/dec statement 从“后续切口/不支持”更新为“value-discarded statement 已支持”。
+  - 文档明确保留 value-position、condition/call argument/return、复杂 target、pointer/array/field target 和完整语义的 fail-closed 边界。
+
+红灯已观察：
+```powershell
+cargo test --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled --test bounded_translation -- --nocapture
+```
+
+旧实现失败于：
+- 单元层：`postfix increment: expected assignment statement, got Unsupported { reason: "UnaryOperator opcode ++ is outside the current clang lowering skeleton" }`
+- 真实 clang AST 层：`unsupported_clang_stmt: UnaryOperator opcode ++ is outside the current clang lowering skeleton`
+
+focused 验证：
+```powershell
+cargo test --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_inc_dec_statement_as_assignment -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" "prefix_increment" --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --features "typed-ir clang-frontend" "postfix_increment_if" --test bounded_translation -- --nocapture
+```
+
+focused 结果：
+- 单元 inc/dec statement：1 passed。
+- 真实 clang standalone inc/dec statement：1 passed。
+- `prefix_increment` regression filter：4 passed，覆盖 for-step 正例和 return/call/deref 负例。
+- `postfix_increment_if` regression filter：1 passed，condition 位置仍 fail closed。
+
+后续建议：
+- 下一刀优先做 `add-struct-alias-memory-model-evidence`，把 pointer graph、slice spec、auto translation plan、evidence manifest、validator 和测试中的 `alias_contract` / `alias_risks` / `safe_boundary_preconditions` / ownership / effect graph 字段对齐。
+- 其次才考虑更宽 `switch` / `goto` 或 struct/field access；不要在 alias gate 未固化前扩大 pointer/struct emitter。
+
+English mirror summary:
+
+- Added standalone value-discarded clang inc/dec statement lowering.
+- `value++`, `++value`, `value--`, and `--value` now lower to assignment candidates when used as ordinary statements.
+- The implementation reuses the existing `ForStmt` step inc/dec-to-Assign path through a shared helper.
+- Value-position inc/dec, inc/dec in conditions/call arguments/returns, complex targets, pointer/array/field targets, and full C increment-expression semantics still fail closed.
+- Focused tests pass for the new unit path, real clang AST smoke, and existing negative regressions.
+
+## 120. 2026-06-27 struct alias memory-model evidence templates
+
+本轮继续按多智能体推进 `add-struct-alias-memory-model-evidence`。三个只读子智能体分别审计了 pointer graph 模板、slice/plan/manifest 模板、validator 与测试；共同结论是：真实 `auto_migrate.py` 和 validator 已经在使用 `alias_contract`、`alias_risks`、`safe_boundary_preconditions`、`translation_summary.alias_gate`、`claim_boundary.alias_gate`，但通用 schema/example/docs 没有完整表达这些字段。
+
+核心改动：
+
+- 新增 `validation/tools/test_template_schema_contracts.py`，用 schema/example 自检固定 pointer graph、slice spec、auto-translation plan、L3 manifest 的 alias/memory-model 字段契约。
+- `validation/pointer-graph-template/pointer-graph.schema.json` 新增 `alias_contract`、`alias_risks`、`safe_boundary_preconditions`、`effect_graph`、`pointer_decisions`，并给 `pointer_nodes[]` 增加 `read_effects` / `write_effects` / length/boundary 字段。
+- `validation/pointer-graph-template/pointer-graph.example.json` 补 alias gate、effect graph 和 per-node read/write effect 示例。
+- `validation/slice-spec-template/slice-spec.schema.json` 新增 `c_boundary.pointer_contract` 和 `memory_model`，覆盖 input buffers、output pointers、inout pointers、length companions、read/write effects、aliasing proof、read-read alias allowance 和 noalias-required pairs。
+- `validation/slice-spec-template/slice-spec.example.json` 补 pointer contract 与 memory model 示例。
+- `validation/auto-translation-template/auto-translation-plan.schema.json` 和 example 新增 `translation_summary.alias_gate`。
+- `validation/l3-template/evidence-manifest.schema.json` 和 example 新增 `claim_boundary.alias_gate`，并修复 example 缺失的 `c2rust_baseline`、`route_decision`、`validation_profile` required refs。
+- pointer graph、slice spec、auto translation、L3 template 的 README/checklist 已补中英文说明，强调 FlashDB 只是用例，alias gate 是通用 pointer/struct/external-state 风险门禁，不是 whole-program alias proof。
+- 新增 OpenSpec change：`openspec/changes/add-struct-alias-memory-model-evidence/`。
+
+兼容策略：
+
+- 本次 schema 先保持 additive，不强制迁移所有历史 evidence。
+- 新模板能表达 alias/memory/effect 字段；运行时 validator 继续对新生成的 alias-sensitive evidence fail-closed。
+- `effect_graph` 已进入模板和 example，但本节暂不要求所有现有 generated evidence 必填；第 122 节已让 `auto_migrate.py` 生成 v2 `effect_graph`，并对 alias-sensitive v2 evidence 收紧条件 required。
+
+验证：
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_alias_sensitive_read_write_pointer_gate_flows_through_auto_migrate validation.tools.test_auto_migrate.AutoMigrateTests.test_output_only_pointer_write_does_not_trigger_input_output_alias_risk validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_tracks_alias_gate_inputs
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_read_write_pointer_graph_missing_alias_gate_fields validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_missing_alias_gate_in_manifest_and_final_verification validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_empty_alias_risk_and_noalias_precondition_for_unknown_alias
+python -m json.tool validation/pointer-graph-template/pointer-graph.schema.json > $null
+python -m json.tool validation/pointer-graph-template/pointer-graph.example.json > $null
+python -m json.tool validation/slice-spec-template/slice-spec.schema.json > $null
+python -m json.tool validation/slice-spec-template/slice-spec.example.json > $null
+python -m json.tool validation/auto-translation-template/auto-translation-plan.schema.json > $null
+python -m json.tool validation/auto-translation-template/auto-translation-plan.example.json > $null
+python -m json.tool validation/l3-template/evidence-manifest.schema.json > $null
+python -m json.tool validation/l3-template/evidence-manifest.example.json > $null
+openspec validate add-struct-alias-memory-model-evidence --strict
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `test_template_schema_contracts`: 3 passed。
+- alias auto-migrate focused tests: 3 passed。
+- alias validator focused tests: 3 passed。
+- 8 个修改 JSON 文件均可 parse。
+- OpenSpec change valid。
+- OpenSpec 全量 strict 校验 38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
+
+下一步建议：
+
+- 第 122 节已让 `auto_migrate.py` 生成真实 `effect_graph`，并把 alias-sensitive pointer graph v2 从“能表达字段”收紧到“条件 required”。
+- 后续再扩 struct/field access emitter；不要把当前 effect graph / alias gate 误读成完整 C pointer ownership 模型。
+
+English mirror summary:
+
+- Added the reusable alias/memory-model evidence contract for pointer-bearing and struct-ready bounded translation slices.
+- Pointer graph templates now expose alias contract, alias risks, safe boundary preconditions, effect graph, pointer decisions, and per-node read/write effects.
+- Slice spec templates now expose `c_boundary.pointer_contract` and `memory_model`.
+- Auto-translation plan and L3 manifest templates now expose alias-gate summaries.
+- Docs/checklists are bilingual and clarify that FlashDB is only a use case; the gate is generic evidence, not a whole-program alias proof.
+- Focused schema, auto-migrate, validator, JSON, OpenSpec, and whitespace checks pass.
+
+## 121. 2026-06-27 competition environment binding for auto translation
+
+本轮按用户补充的比赛环境配置做适配收口。仓库已有独立入口 `config/competition-env/`，但自动翻译 evidence 还没有把该 profile 作为一等 cache/provenance 输入；机器可读 `environment.json` 里 C++ 编译器字段也写成了 `gpp`，与真实命令和文档的 `g++` 不一致。
+
+核心改动：
+
+- 新增 `validation/tools/test_competition_environment_profile.py`，锁定比赛环境基线：
+  - Ubuntu 24.04.4 LTS / Noble、kernel `5.10.0-182.0.0.95.r194_123.hce2.x86_64`。
+  - Huawei APT/PyPI/npm/Cargo mirror。
+  - Python 3.12.3、pip 24.0、Node v24.13.0、npm 11.6.2、OpenJDK 21.0.10 (`bisheng_jdk_enterprise`)、Maven 3.9.11、`MAVEN_HOME=/usr/local/maven3`、Rust/Cargo 1.96.0、gcc/g++ 13.3.0、GNU Make 4.3。
+  - Go 未安装、CMake 未找到。
+  - `config/competition-env/` 与兼容目录 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 的关键配置文件保持 SHA256 同步。
+- `config/competition-env/environment.json` 和兼容拷贝把 `toolchain.gpp` 修为 `toolchain["g++"]`。
+- `auto_migrate.py` 新增 `competition_environment_identity()`，默认读取 `config/competition-env/environment.json`，把 `profile_id`、相对路径和文件 SHA256 写入：
+  - `l3-<slice>-validation-profile.json` 的 `competition_environment`。
+  - `l3-<slice>-auto-cache-metadata.json` 的 `competition_environment_identity`。
+  - `cache_input_fields`，使比赛 profile 变化自动触发候选/CFG/pointer graph/Rust draft/oracle/diff/unsafe/final/summary 等 artifact 失效。
+- `validation/auto-translation-template/validation-profile.schema.json` 显式增加 `competition_environment` schema。
+- `validate_auto_translation_evidence.py` 增加条件校验：如果 validation profile 绑定了 `competition_environment`，cache metadata 必须带一致的 `competition_environment_identity`，且该 key 必须在 `cache_input_fields` 中。
+- 中英文文档同步：
+  - `validation/README.md`
+  - `validation/auto-translation-template/README.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.en.md`
+
+红灯已观察：
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted
+python -m unittest validation.tools.test_competition_environment_profile
+python -m unittest validation.tools.test_template_schema_contracts.TemplateSchemaContractTests.test_validation_profile_template_exposes_competition_environment_contract
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_competition_environment_identity_when_profile_binds_it
+```
+
+旧实现分别失败于：
+
+- `KeyError: 'competition_environment'`
+- `KeyError: 'g++'`
+- validation profile schema 缺 `competition_environment`
+- validator 放过缺失 `competition_environment_identity` 的 cache metadata。
+
+已验证：
+
+```powershell
+python -m unittest validation.tools.test_competition_environment_profile validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_drift_invalidates_reusable_translation_artifacts validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_tracks_alias_gate_inputs validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_competition_environment_identity_when_profile_binds_it validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_missing_route_baseline_profile_identities validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_cache_route_baseline_profile_identity_sha_drift
+python -m json.tool config/competition-env/environment.json > $null
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json > $null
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json > $null
+python -m unittest validation.tools.test_auto_migrate
+python -m unittest validation.tools.test_validate_auto_translation_evidence
+```
+
+结果：
+
+- competition environment + template schema tests: 6 passed。
+- focused cache/profile/validator tests: 6 passed。
+- 3 个 JSON 文件 parse 通过。
+- `test_auto_migrate`: 64 passed。
+- `test_validate_auto_translation_evidence`: 67 passed。
+- 注意：曾并行运行 `test_auto_migrate` 和 `test_validate_auto_translation_evidence`，validator 中 4 个 helper 调 `auto_migrate.py` 出现瞬态 `CalledProcessError`；同一失败测试单独复现通过，随后 validator 全量单独通过。后续宽测试不要并发跑这两个大量启动 `auto_migrate.py` 的 test module。
+
+下一步建议：
+
+- section 120 的 effect graph 主线已在第 122 节完成：`auto_migrate.py` 为新生成 pointer graph 写入 v2 `effect_graph`，validator 对 alias-sensitive v2 evidence 条件必填。
+- `validation/tools/run_wave2_l1.py` 后续可加 competition profile guard：默认比赛环境下把 CMake/Go 项目标为 non-default environment required，而不是误当默认 gate。
+
+English mirror summary:
+
+- Bound generated auto-translation validation profiles and cache metadata to the standalone competition environment profile at `config/competition-env/environment.json`.
+- Fixed the machine-readable C++ compiler key from `gpp` to `g++` in both the default and compatibility profile copies.
+- Added tests for the exact competition baseline and profile-directory synchronization.
+- Added schema and validator checks for `competition_environment` and `competition_environment_identity`.
+- Updated bilingual docs; section 122 completes the real `effect_graph` generation path for alias-sensitive pointer evidence.
+
+## 122. 2026-06-27 pointer graph v2 effect graph generation and validator gate
+
+本轮继续 section 120/121 的 alias/memory-model 主线，把 `effect_graph` 从“模板字段”推进到“新生成 evidence 的真实内容和门禁”。核心目标不是扩大 C pointer 翻译语义，而是让 mutable/read pointer slice 的候选生成有可审计的 effect/alias 证据，并让缓存和 validator 能发现证据漂移。
+
+核心改动：
+
+- `validation/tools/auto_migrate.py`
+  - 新增 `POINTER_GRAPH_SCHEMA_VERSION = 2`，新生成 pointer graph 使用 `schema_version=2`。
+  - 从 `pointer_nodes[*].read_effects` / `write_effects` 生成结构化 `effect_graph.effects`。
+  - 从 `alias_risks[*].pointer_nodes` 生成 alias-risk edges；`requires_noalias=true` 时写 `relationship=requires_noalias`，否则写 `may_alias`。
+  - `pointer_graph.cache_invalidation_keys` 纳入 `effect_graph` 和 `effect_graph_sha256=...`。
+  - `cache_identity()` 新增 `effect_graph_identity`，记录 schema version、graph hash、read/write effect counts、参与 pointer nodes、alias-sensitive 状态和最终 alias gate decision。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 对 `schema_version>=2` 的 alias-sensitive read/write pointer graph 条件要求 `effect_graph`。
+  - 要求 effect graph 同时包含 read effects 和 write effects。
+  - 要求 `summary.alias_sensitive=true` 且 `summary.alias_gate_decision` 与 alias contract decision 一致。
+  - 要求每个 alias risk 都能在 effect graph 中找到对应的 `requires_noalias` 或 `may_alias` 边。
+  - legacy v1 pointer graph 仍可缺省 `effect_graph`，避免破坏历史 evidence。
+- 测试：
+  - auto-migrate 正例覆盖 alias-sensitive read/write graph、output-only pointer write graph 和 cache identity。
+  - validator 负例覆盖 v2 alias-sensitive graph 缺 `effect_graph` 必须拒绝。
+  - validator 兼容例覆盖 legacy v1 read/write graph 缺 `effect_graph` 仍允许。
+  - template schema contract 固定 pointer graph example 必须是 `schema_version=2`。
+- 中英文文档同步：
+  - `validation/pointer-graph-template/README.md`
+  - `validation/pointer-graph-template/checklist.md`
+  - `validation/auto-translation-template/README.md`
+  - `validation/auto-translation-template/checklist.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.md`
+  - `docs/c2rust-migration-agent/bounded-auto-translation-pipeline.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+
+已验证：
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts
+python -m unittest validation.tools.test_auto_migrate
+python -m unittest validation.tools.test_validate_auto_translation_evidence
+python -m json.tool validation/pointer-graph-template/pointer-graph.schema.json > $null
+python -m json.tool validation/pointer-graph-template/pointer-graph.example.json > $null
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- `test_template_schema_contracts`: 4 passed。
+- `test_auto_migrate`: 64 passed。
+- `test_validate_auto_translation_evidence`: 69 passed。
+- pointer graph schema/example JSON parse 通过。
+- OpenSpec 全量 strict 校验 38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF 提示。
+
+后续建议：
+
+- 下一刀再考虑 struct/field access 或更宽 pointer ownership model；不要把 v2 effect graph 误当完整 alias solver。
+- 如果继续加宽 mutable pointer read/write 翻译，必须先让新的 pointer effect 进入 `effect_graph_identity` 和 validator 风险边覆盖。
+- `validation/tools/run_wave2_l1.py` 可后续加 competition profile guard：比赛默认环境没有 Go/CMake 时，把相关 target 标成 non-default environment required。
+
+English mirror summary:
+
+- Newly generated pointer graphs now use schema v2 and carry a real structured `effect_graph`.
+- Alias-sensitive v2 read/write pointer graphs are validator-required to contain read effects, write effects, and alias-risk edges.
+- Cache metadata now carries `effect_graph_identity`, so changed effect or alias evidence invalidates generated candidates.
+- Legacy v1 pointer graph artifacts remain compatible when they omit `effect_graph`.
+- Focused and full auto-migrate, validator, template schema, JSON, OpenSpec, and whitespace checks pass.
+
+## 123. 2026-06-27 by-value record dot-field read support
+
+本轮继续按多智能体和红测优先推进 `c2r-translator` 的通用 typed IR 覆盖，不写 FlashDB 专用代码。第 122 节建议的下一刀是 struct/field access；本节先只打通最窄的按值 record dot-field 读取，例如 `struct point p; return p.x;`，不打开 pointer `->`、字段写入或 record layout/ABI 语义。
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangTypeKind` 新增 `Record { name }`，`type_from_qual_type()` 识别简单 `struct <identifier>`。
+  - `ClangExprSkeleton` 新增 `Member { base, field, ty, is_arrow }`。
+  - `expr_skeleton_from_ast_with_options()` 支持 clang `MemberExpr`，读取 base、field name、result type 和 `isArrow`。
+  - `lower_expr()` 将 skeleton member lowering 成 typed IR `IrExpr::Member`。
+  - bounded call argument guard 明确拒绝 member access call argument，避免扩大 call 子集。
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrExpr` 新增 `Member`。
+  - `emit_record_definitions()` 根据 record 参数和实际访问到的字段生成最小 Rust struct definition。
+  - `emit_member_expr()` 只允许按值 record 变量的 dot-field read，并拒绝 `is_arrow=true`。
+  - 递归验证/收集路径补齐 `Member` 分支：definite assignment、nullable pointer usage、inc/dec/assignment/comma side-effect scan、post-increment byte read scan、call callee scan、expr type 等。
+  - `emit_param_type()` 可把按值 record 参数映射为 Rust PascalCase type name，例如 `struct point` -> `Point`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增无 clang direct typed IR 测试：
+    - `typed_ir_emits_record_value_field_read`
+    - `typed_ir_rejects_record_arrow_field_read`
+    - `typed_ir_rejects_record_param_without_modeled_field_use`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_struct_field_read_when_enabled`
+    - `clang_ast_dump_rejects_arrow_member_read_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+
+已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_value_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_param_without_modeled_field_use --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_field_read_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+
+- direct typed IR 正例 1 passed，负例 2 passed。
+- `bounded_translation` with `typed-ir clang-frontend`: 354 passed。
+- 真实 clang AST struct field read 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST arrow member read 负例：1 passed。
+
+边界：
+
+- 可以说：按值 record 参数的 dot-field read 已能从真实 clang AST 进入 typed IR，并生成可编译 Rust candidate。
+- 可以说：当前 Rust struct 是根据实际读取到的标量字段生成的最小候选结构，只用于 candidate generation。
+- 不应说：已支持 C record layout/ABI 等价、无字段使用的 record 参数、`p->x`、字段赋值、compound/update 字段写、nested/anonymous record、union、bitfield、非标量字段、record local/return、struct array、address-taken record、alias write、volatile field 或 semantic acceptance。
+- 后续建议：下一刀可以做 field assignment 或 pointer-aware record access，但必须先把 record layout/ownership/alias evidence 讲清楚，不能直接把 `->` lowering 成 Rust field access。
+
+English mirror summary:
+
+- Added narrow by-value record dot-field read support through clang skeleton, typed IR, and the generic emitter.
+- `struct point p; return p.x;` now emits a minimal Rust `Point` struct plus `return p.x;` as a candidate.
+- Pointer member access `p->x`, record params with no modeled field use, field writes, record layout/ABI claims, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
+- Direct typed IR, full bounded translation, and real clang AST positive/negative smoke tests pass.
+
+## 124. 2026-06-28 by-value record dot-field assignment support
+
+本轮继续扩 generic typed IR emitter 的通用 record 能力，不写 FlashDB/crc32 特例。目标是把上一节的按值 record dot-field read 往前推进一小步：支持简单 `p.x = value; return p.x;` 这种 by-value record 字段赋值 candidate，但仍不打开 pointer `->`、alias-sensitive 字段写、compound/update 字段写或 record layout/ABI 语义。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_assignment_target()` 新增 `IrExpr::Member` 赋值目标分支，复用 `emit_member_expr()` 的窄化 guard。
+  - `validate_definite_assignment_target()` 接受 member 赋值目标并验证 base 表达式。
+  - `assigned_var_name_from_target()` 识别 member base 变量，使 `p.x = value` 能把按值 record 参数发射为 `mut p: Point`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：`typed_ir_emits_record_value_field_assignment`。
+  - 新增 direct typed IR 负测：`typed_ir_rejects_record_arrow_field_assignment`。
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_struct_field_assignment_when_enabled`。
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_value_field_assignment --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_assignment --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_field_assignment_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- direct typed IR field assignment 正例：1 passed。
+- direct typed IR arrow field assignment 负例：1 passed。
+- 真实 clang AST struct field assignment 正例：1 passed，并通过 rustc snippet smoke。
+- `record` filter：12 passed。
+- `bounded_translation` with `typed-ir clang-frontend`：357 passed。
+- `--all-features`：52 个 lib tests + 358 个 bounded tests + doc tests 通过。
+- OpenSpec 全量 strict：38 passed, 0 failed。
+- `git diff --check` exit 0，仅有 Windows LF/CRLF warning。
+
+边界：
+
+- 可以说：按值 record 参数的 dot-field read 和简单 dot-field assignment 已能从真实 clang AST 进入 typed IR，并生成可编译 Rust candidate。
+- 可以说：`p.x = value` 会把 Rust 参数标为 `mut p: Point`，并只复用最小 Rust struct candidate shape。
+- 不应说：已支持 C record layout/ABI 等价、无字段使用的 record 参数、`p->x`、compound/update 字段写、pointer/alias-sensitive 字段写、nested/anonymous record、union、bitfield、非标量字段、record local/return、struct array、address-taken record、alias write、volatile field 或 semantic acceptance。
+- 后续建议：下一刀优先做 record local/return 最小模型或 pointer-aware record access 设计；后者必须先绑定 alias/ownership/effect evidence，不能直接把 `->` 翻译成 Rust field access。
+
+English mirror summary:
+
+- Added narrow by-value record dot-field assignment support to the generic typed IR emitter.
+- `struct point p; p.x = value; return p.x;` now emits a minimal Rust `Point` struct, `mut p: Point`, `p.x = value;`, and `return p.x;` as a candidate.
+- Pointer member access `p->x`, compound/update field writes, pointer/alias-sensitive field writes, record layout/ABI claims, record locals/returns, unions/bitfields, volatile fields, and semantic acceptance still fail closed.
+- Direct typed IR, real clang AST smoke, full bounded translation, all-features tests, OpenSpec, and whitespace checks pass.
+
+## 125. 2026-06-28 initialized by-value record local copy support
+
+本轮继续按多智能体推进 P1 record 子集。只读代理共同结论：不要直接实现 `p->x`，因为它需要 pointer/record ownership、non-null/lifetime/alias/effect evidence；也不要直接实现 whole-record return，因为当前 Rust record 仍是从实际访问到的标量字段生成的最小 candidate shape，不是完整 C layout/ABI proof。本节只收敛纯 by-value 的 record local copy：`struct point q = p; q = r; return q.x;`。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增内部 `emit_value_type()`，允许当前 value-position 在标量之外识别 by-value record type name。
+  - `emit_stmt(Decl)` 支持带 initializer 的 record local declaration，发射 `let q: Point = p;`；无 initializer 的 record local 明确 fail closed。
+  - `emit_expr(Var)` 允许 record value variable 用作本地 copy initializer / assignment RHS。
+  - `validate_expr_matches_type()` 改成用 value type 校验标量和 record type identity，但仍不打开 pointer/array/unsupported aggregate。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_record_local_copy_field_read`
+    - `typed_ir_emits_record_local_copy_with_equivalent_record_spelling`
+    - `typed_ir_emits_record_local_copy_field_assignment`
+    - `typed_ir_emits_record_local_assignment_value_copy`
+  - 新增 direct typed IR 负测：
+    - `typed_ir_rejects_uninitialized_record_local_decl`
+    - `typed_ir_rejects_record_return_value_without_complete_field_model`
+    - `typed_ir_rejects_record_value_direct_call_arguments`
+  - 新增真实 clang AST smoke：
+    - `clang_ast_dump_emits_struct_local_copy_field_read_when_enabled`
+    - `clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_local_copy_field_read --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record_local --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_local_copy_field_read_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_struct_return_value_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+
+- `typed_ir_emits_record_local_copy_field_read` 先红后绿；初始失败为 `stmt[0].decl q has record type point is unsupported`。
+- `typed_ir_emits_record_local_copy_with_equivalent_record_spelling` 先红后绿；初始失败为 `type Point does not match expected type Point`，修复为 value-type compatibility 而不是完整 `IrType` 结构相等。
+- `record_local` filter：5 passed。
+- `record` filter：17 passed。
+- `typed_ir_rejects_record_value_direct_call_arguments`：1 passed，固定 record value direct call argument 继续 fail closed。
+- 真实 clang AST local copy read 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST whole-record return 负例：1 passed。
+- 真实 clang AST local assignment copy 正例：1 passed，并通过 rustc snippet smoke。
+
+边界：
+
+- 可以说：已初始化本地 record copy 和本地 record copy assignment 在后续只访问已建模标量字段时，可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 whole-record return、完整 record local model、record layout/ABI、无初始化 record local、compound literal、designated initializer、`p->x`、record pointer/alias-sensitive field access、address-taken record、volatile/packed/bitfield/union/nested/anonymous record、非标量字段、record call arguments 或 semantic acceptance。
+- 后续建议：下一刀如果继续 record，应先补 whole-record return 的完整 field/layout inventory 证据；如果转向 `p->x`，必须先补 pointer graph v2 示例/校验、record field/layout evidence、non-null/lifetime/alias/effect preconditions 和 fail-closed 测试矩阵。
+
+English mirror summary:
+
+- Added initialized by-value record local copy support to the generic typed IR emitter.
+- `struct point q = p; q = r; return q.x;` now emits a minimal Rust `Point` struct plus `let mut q: Point = p; q = r; return q.x;` as a candidate.
+- Whole-record return, uninitialized record locals, `p->x`, pointer/alias-sensitive field access, record layout/ABI claims, compound literals, designated initializers, unions/bitfields/volatile fields, and semantic acceptance still fail closed.
+- Verification now passes after the value-type compatibility fix: `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation` passed 367/367 tests; `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features` passed 52 lib tests, 368 bounded tests, and doc tests; `openspec validate --all --strict` passed 38/38 items; `git diff --check` reported only Windows LF-to-CRLF warnings.
+
+## 126. 2026-06-28 complete record field inventory and whole-record return candidates
+
+本轮继续按多智能体推进 P1 record 子集。两个只读代理结论一致：`p->x` 不应直接放开，因为它需要 readonly struct pointer、non-null/lifetime/alignment、pointer graph read effect、alias/effect gate 和 record ownership 证据；whole-record return 也不能只改 emitter，必须先有完整字段清单。本节完成的切口是：从真实 clang AST 的唯一具名完整 `RecordDecl` / `FieldDecl` 提取直接标量字段清单，并仅在该清单存在时允许 by-value whole-record return candidate，例如 `struct point { int x; int y; }; struct point identity_point(struct point p) { return p; }`。复审后又收紧了两个边界：同名 tag 不复用字段清单，自引用/指针字段不会递归展开，而是 fail closed。
+
+核心改动：
+
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `IrRecordField`，`IrTypeKind::Record` 现在可携带 `fields: Option<Vec<IrRecordField>>`。
+  - `emit_record_definitions()` 会把 return type 中的完整字段清单并入 Rust struct 定义；字段访问路径仍可沿用实际访问字段的最小候选形状。record 参数本身不会单独打开完整 struct 定义。
+  - `emit_return_type()` 只在 record type 带完整字段清单时允许发射 `-> Point`；无字段清单的 whole-record return 继续 fail closed。
+  - record 字段仍必须由 `emit_scalar_type()` 支持；非标量字段继续 fail closed。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 真实 clang AST dump 路径新增 `record_inventory_from_ast()`，从唯一具名、完整、非 implicit、非 packed 的 `struct RecordDecl` 中收集直接标量 `FieldDecl`。
+  - bitfield、volatile field、匿名/嵌套 record、同名 tag、self-pointer field、unsupported/non-scalar field type 不进入完整字段清单。
+  - lowering 完成后把字段清单 attach 到 `IrFunction` 的 return type、decl、expr 等直接类型位置；不沿 pointer/array/字段类型递归展开，避免自引用 record 在 emitter 前栈溢出。
+- `crates/c2r-translator/src/lib.rs`
+  - 更新 `IrTypeKind::Record` 匹配和测试 helper，兼容新增 `fields` 字段。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正测：
+    - `typed_ir_emits_record_return_value_with_complete_field_inventory`
+  - 新增 direct typed IR 负测：
+    - `typed_ir_rejects_record_return_value_with_non_scalar_field_inventory`
+    - `typed_ir_rejects_record_return_value_with_mismatched_field_inventory`
+  - 将真实 clang AST whole-record return smoke 从拒绝改成正测：
+    - `clang_ast_dump_emits_struct_return_value_when_enabled`
+  - 新增真实 clang AST fail-closed smoke：
+    - `clang_ast_dump_rejects_struct_return_value_with_bitfield_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_volatile_field_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_packed_record_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_packed_field_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_duplicate_tag_name_when_enabled`
+    - `clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabled`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_record_return_value_with_complete_field_inventory --test bounded_translation
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_struct_return_value_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" struct_return --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir record --test bounded_translation
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation
+```
+
+结果：
+
+- `typed_ir_emits_record_return_value_with_complete_field_inventory` 通过，生成 `pub struct Point { pub x: i32, pub y: u32 }` 和 `pub fn identity_point(p: Point) -> Point`。
+- 真实 clang AST `identity_point()` 正例通过，并证明未访问字段 `y` 也来自完整 `RecordDecl` / `FieldDecl` 清单。
+- `struct_return` filter：7 passed。
+- `record` filter：22 passed。
+- `--all-features`：52 个 lib tests + 377 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend` full bounded translation：376 passed；本次设置了 `C2R_RUN_CLANG_AST_TESTS=1` 和 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`，真实 clang smoke 实际执行。
+
+边界：
+
+- 可以说：唯一具名完整直接标量字段清单存在时，by-value whole-record return 可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、`p->x`、record pointer/alias-sensitive access、compound/update 字段写、record pointer writes、同名 tag、self-pointer field、bitfield、volatile/packed record、union、匿名/嵌套 record、非标量字段、struct array 或 address-taken record。
+- 后续建议：下一刀如果继续 record，应优先做 pointer-aware readonly `const struct T *p -> p->scalar_field` 的 evidence 契约和红测；必须先补 pointer graph read effect、non-null/lifetime/alignment preconditions、alias/effect gate 和 fail-closed matrix。
+
+English mirror summary:
+
+- Added unique named complete direct scalar record field inventory to typed IR and real clang AST lowering.
+- Whole-record by-value return is now a candidate only when that unique complete scalar inventory exists.
+- Duplicate tags, self-pointer fields, bitfields, volatile fields, packed records, non-scalar fields, `p->x`, pointer/alias-sensitive record access, layout/ABI claims, and semantic acceptance still fail closed.
+- Verification: record filter, struct-return regression tests, `--all-features`, and full real-clang bounded translation pass. `openspec validate --all --strict` passed 38/38. `git diff --check` reported only Windows LF-to-CRLF warnings.
+
+## 127. 2026-06-28 by-value record field compound assignment candidates
+
+本轮继续按多智能体推进 P1 record/compound-assignment 子集。只读代理结论一致：`p->x` 仍不应直接放开，因为缺少 readonly struct pointer 的 non-null/lifetime/alignment、pointer graph read effect、alias/effect gate 和 record ownership 证据；更安全的下一小步是按值 record dot-field compound assignment。完成切口是：`struct point { int x; int y; }; int add_point_x(struct point p, int value) { p.x += value; return p.x; }` 现在可从真实 clang AST lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate：
+
+```rust
+pub fn add_point_x(mut p: Point, value: i32) -> i32 {
+    p.x = (p.x + value);
+    return p.x;
+}
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - 新增 `compound_assignment_target_type()`，把 compound-assignment target guard 从“只能 `DeclRef`”扩展为“`DeclRef` 或 by-value record dot-field target”。
+  - 新增 record-field compound RHS guard：只有简单整数变量、整数字面量和整数 cast 包裹的简单值可以作为 RHS；`value + 1`、call、member/index、非整数 RHS 都 fail closed。
+  - by-value record dot-field target 要求 `Member { is_arrow: false }`，且 base 必须是直接 `DeclRef` record 变量。
+  - `p->field` 明确以 pointer/record ownership evidence 缺失为由 fail closed；`*p += y`、`a[i] += y`、`(*p).x += y`、非直接 record 变量 base 仍 fail closed。
+  - `lower_compound_assign_stmt()` 不再手写 `IrExpr::Var` target，而是复用 `lower_expr(target)`，因此 `p.x += value` lowering 成 `IrStmt::Assign { target: Member(p.x), value: Binary(Member(p.x), Add, value) }`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR shape 测试：`typed_ir_emits_record_value_field_compound_assignment_shape`。
+  - 新增 clang skeleton lowering 测试：
+    - `clang_lowering_skeleton_maps_record_field_compound_assignment`
+    - `clang_lowering_skeleton_maps_record_field_compound_assignment_literal_and_cast_rhs`
+  - 新增 clang skeleton fail-closed 测试：
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_complex_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_non_integer_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_call_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_member_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_index_rhs`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_arrow_target`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_nested_base`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_deref_target`
+    - `clang_lowering_skeleton_rejects_record_field_compound_assignment_index_target`
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_struct_field_compound_assignment_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke：`clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled`。
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_lowering_skeleton_maps_record_field_compound_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features typed_ir_emits_record_value_field_compound_assignment_shape -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_ast_dump_emits_struct_field_compound_assignment_when_enabled -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features compound_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record_field_compound_assignment --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- TDD 红测先失败于 `unsupported_compound_assignment_target: compound assignment target must be a simple variable`，实现后通过。
+- 复审后补的复杂 RHS 红测先证明 `p.x += value + 1` 会被错误 lowering 成 IR；补 RHS guard 后通过。
+- `compound_assignment` filter：22 passed。
+- `record` filter：41 passed。
+- `record_field_compound_assignment` filter：11 passed。
+- `--all-features`：52 个 lib tests + 391 个 bounded tests + doc tests 通过。
+- 显式真实 clang bounded translation：390 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：仅报告 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：standalone statement 中 RHS 为简单整数变量/字面量/整数 cast 的 by-value record dot-field compound assignment（例如 `p.x += value`）现在可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 `p->x`、`p->x += value`、字段 update/inc-dec（`p.x++`）、record field compound assignment 复杂 RHS（如 `p.x += value + 1` / call / member/index RHS）、指针/alias-sensitive 字段写、非直接 record 变量 base、record layout/ABI 等价、semantic acceptance、volatile/hardware register 或完整 C compound-assignment 语义。
+- 后续建议：如果继续 record，下一刀仍应优先补 pointer-aware readonly `const struct T *p -> p->scalar_field` evidence 契约和红测；如果继续字段写，优先设计 `p.x++` / update field write 的 statement-side-effect 边界，不要把 value-position inc/dec 混进来。
+
+English mirror summary:
+
+- Added by-value record dot-field compound-assignment candidate generation for standalone statements such as `p.x += value`, with RHS limited to a simple integer variable, literal, or integer cast.
+- Clang lowering now accepts compound-assignment targets that are either simple scalar variables or direct by-value record dot fields; arrow members, deref/index targets, and non-direct record bases still fail closed.
+- Record field compound-assignment complex RHS, including `value + 1`, calls, member/index RHS, and non-integer RHS, fails closed.
+- The generic typed IR shape emits `p.x = (p.x + value);` and marks the by-value record parameter mutable.
+- `p->x`, pointer/alias-sensitive field writes, field update/inc-dec, C record layout/ABI claims, and semantic acceptance still fail closed.
+- Verification: targeted TDD red/green test, compound/record filters, `--all-features`, full real-clang bounded translation, OpenSpec strict validation, and `git diff --check` all pass, with only Windows LF-to-CRLF warnings from `git diff --check`.
+
+## 128. 2026-06-28 by-value record dot-field inc/dec statements
+
+本轮继续按多智能体推进 P1 record 字段写入子集，不写 FlashDB/crc32 特例。只读代理结论一致：`p->x` 仍需要 pointer/record ownership、non-null/lifetime/alignment、alias/effect 和 pointer graph read/write evidence；value-position `p.x++` 需要表达式旧值/新值语义和副作用排序证明；更安全的切口是 standalone statement 中表达式值被丢弃的 direct by-value record dot-field inc/dec。完成切口是：`struct point { int x; int y; }; int bump_point_x(struct point p) { p.x++; ++p.x; p.x--; --p.x; return p.x; }` 现在可从真实 clang AST lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate：
+
+```rust
+pub fn bump_point_x(mut p: Point) -> i32 {
+    p.x = (p.x + 1i32);
+    p.x = (p.x + 1i32);
+    p.x = (p.x - 1i32);
+    p.x = (p.x - 1i32);
+    return p.x;
+}
+```
+
+核心改动：
+
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `inc_dec_stmt_skeleton_from_ast()` 不再只接受 simple `DeclRef` target，而是复用新 helper `inc_dec_assignment_target_type()` 判断 inc/dec assignment target。
+  - helper 接受 simple integer variable 和 standalone statement 中的 direct by-value record dot-field integer target。
+  - `Member { is_arrow: true }` 以缺少 pointer/record ownership evidence 为由 fail closed。
+  - dot-field target 要求 base 是直接 `DeclRef` record 变量；嵌套 base、非 record base、deref/index/复杂 target 继续 fail closed。
+  - `ForStmt` step 仍只接受 simple scalar variable inc/dec；record-field inc/dec step 显式 fail closed，避免把 loop step 顺序和字段副作用边界混入本切口。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增真实 clang AST 正测：`clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled`。
+  - 新增真实 clang AST fail-closed smoke：
+    - `clang_ast_dump_rejects_arrow_record_field_inc_dec_statement_when_enabled`
+    - `clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled`
+    - `clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled`
+    - `clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled`
+  - 正测断言 4 个字段 assignment 加 return，并验证生成 Rust snippet 可编译。
+- `crates/c2r-translator/src/clang_frontend.rs` 单元测试新增：
+  - `stmt_skeleton_from_ast_accepts_record_field_inc_dec_statement_as_assignment`
+  - `stmt_skeleton_from_ast_rejects_record_field_inc_dec_arrow_target`
+  - `for_step_stmt_skeleton_from_ast_rejects_record_field_inc_dec_step`
+  - `stmt_skeleton_from_ast_rejects_record_field_inc_dec_nested_base`
+- 中英文文档同步：
+  - `docs/c2rust-migration-agent/COVERAGE.md`
+  - `docs/c2rust-migration-agent/COVERAGE.en.md`
+  - `docs/c2rust-migration-agent/README.md`
+  - `docs/c2rust-migration-agent/README.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+当前已验证：
+
+```powershell
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features record_field_inc_dec -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --test bounded_translation -- --nocapture
+openspec validate --all --strict
+rustfmt --check --edition 2021 crates/c2r-translator/src/clang_frontend.rs crates/c2r-translator/tests/bounded_translation.rs
+git diff --check
+```
+
+结果：
+
+- TDD 红测先失败于 `statement inc/dec target must be a simple variable`，实现后通过。
+- `record_field_inc_dec` filter：4 个 lib 单元测试 + 5 个真实 clang bounded tests 通过。
+- `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- 显式真实 clang bounded translation：395 passed，`C2R_RUN_CLANG_AST_TESTS=1` 且 `CLANG_PATH=C:\Program Files\LLVM\bin\clang.exe`。
+- `openspec validate --all --strict`：38/38 passed。
+- 定向 `rustfmt --check`：exit 0。
+- `git diff --check`：exit 0，仅报告 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：standalone statement 中的 direct by-value record dot-field integer `p.x++` / `++p.x` / `p.x--` / `--p.x` 现在可作为 `GenericTypedIr` candidate 生成可编译 Rust。
+- 不应说：已支持 value-position `p.x++`、return/call/condition 中的字段 inc/dec、`ForStmt` step 中 record-field inc/dec、`p->x++`、nested/complex base、pointer/alias-sensitive 字段写、record layout/ABI 等价、volatile/hardware register 或完整 C inc/dec 表达式语义。
+- 后续建议：如果继续 record，下一刀更适合 pointer-aware readonly `const struct T *p -> p->scalar_field` evidence 契约和红测；如果继续字段更新，需要先设计 value-position inc/dec 旧值语义、副作用排序和 alias gate，而不是直接泛化 helper。
+
+English mirror summary:
+
+- Added by-value record dot-field inc/dec candidate generation for standalone value-discarded statements such as `p.x++`, `++p.x`, `p.x--`, and `--p.x`.
+- Clang statement lowering now accepts simple integer variables and direct by-value record dot-field integer targets; arrow members, nested bases, complex targets, and record-field `ForStmt` steps still fail closed.
+- Real clang smoke covers positive statement lowering, arrow-member rejection, value-position return rejection, record-field `ForStmt` step rejection, and nested-base rejection.
+- This remains candidate generation only. `p->x++`, value-position field inc/dec, pointer/alias-sensitive field writes, C record layout/ABI claims, and semantic acceptance still fail closed.
+
+## 129. 2026-06-28 P0 lib.rs public model split
+
+本轮继续按 P0 “拆分 `crates/c2r-translator/src/lib.rs`”推进维护性工作，不新增翻译语法，也不改变公开行为。两个只读子智能体先复核了 `lib.rs` 职责边界和外部 API：最小风险第一刀是把纯公开 DTO/schema 搬出 `lib.rs`，保留 crate root re-export；暂不碰 parser、emitter、artifact writer 或 `clang-lowering-report` 逻辑，因为这些区域互调密集、feature gate 交叉更多。
+
+核心改动：
+
+- 新增 `crates/c2r-translator/src/model.rs`：
+  - 承载 `BuildProfile`、`SliceSpec`、`SourceFileRef`、`SourceSpanRef`、`TranslationResult`、`TranslationError`、`TypeMapEvidence`、`TypeMapping`、`TypeUncertainty`、`CfgEvidence`、`CfgFunction`、`CfgBlock`、`PointerGraphEvidence`、`PointerNode`、`PointerEdge`、`TranslationPlan`、`CallExpressionEvidence`、`ArtifactManifest`。
+  - 原有 `serde` derive、`Default` derive 和 `#[serde(default)]` 字段保持不变，避免破坏 JSON schema/CLI 输入契约。
+- `crates/c2r-translator/src/lib.rs`：
+  - 新增私有 `mod model;`。
+  - 用显式 `pub use model::{...};` 保持原 root API，例如 `c2r_translator::SliceSpec`、`c2r_translator::BuildProfile`、`c2r_translator::ArtifactManifest`。
+  - `BTreeMap` 改成只在 `clang-lowering-report` feature 下导入，避免默认 feature warning。
+  - 运行 rustfmt 后顺手收敛了两个既有测试断言格式差异；行为不变。
+
+当前已验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+openspec validate --all --strict
+```
+
+结果：
+
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature 测试：35 个 bounded tests 通过。
+- `--all-features`：56 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `openspec validate --all --strict`：38/38 passed。
+- `lib.rs` 当前约 4066 行；公开 model schema 被移到 149 行的 `model.rs`。这只是 P0 拆分第一刀，尚未完成 P0 对 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任的后续拆分要求。
+
+边界：
+
+- 可以说：公开 DTO/schema 已从 `lib.rs` 拆出，crate root API 和 serde schema 保持兼容。
+- 不应说：`lib.rs` 拆分 P0 已完成、translator 架构已模块化完成、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀优先拆 artifact writer / translation event JSONL / clang dry-run artifact writer 这类 IO 边界；再逐步拆 parser、legacy string translator、evidence builder 和 emitter。每一刀都要保持 root API、feature matrix 和现有测试通过。
+
+English mirror summary:
+
+- Started the P0 `lib.rs` split with a behavior-preserving public model extraction.
+- Public DTO/schema types moved into private `model.rs`, while root-level re-exports keep `c2r_translator::SliceSpec`, `BuildProfile`, `TranslationResult`, `ArtifactManifest`, and related types compatible.
+- Serde derives/default fields were preserved; no translation behavior or C syntax coverage changed.
+- This is only the first P0 split step. CLI/manifest, legacy string translator, typed IR route, artifact writing, unsafe/metadata statistics, parser, evidence builder, and emitter responsibilities still need later splits.
+
+## 130. 2026-06-28 P0 artifact/IO leaf helper split
+
+本轮继续按 P0 “拆分 `crates/c2r-translator/src/lib.rs`”推进维护性工作，仍然不新增翻译语法、不改变 public API、不改变 artifact 文件名、manifest status 或 feature gate 语义。两个只读子智能体并行复核后结论一致：`write_translation_artifacts()` 是 public orchestration，仍然绑定 `translate_slice()`、可选 clang-lowering 翻译路径、artifact 顺序和 `ArtifactManifest` 状态，第一刀不应整体搬迁；更稳的切口是先拆纯 leaf helper。
+
+核心改动：
+
+- 新增 `crates/c2r-translator/src/artifacts.rs`：
+  - 承载 `write_json_file()`、`write_text_file()`、`translation_events_jsonl()`。
+  - 三个 helper 都是 `pub(crate)`，模块本身保持私有 `mod artifacts;`，不新增外部 API。
+  - `translation_events_jsonl()` 保持既有事件语义：先写 `translation_started`；有错误时写每个 `translation_blocked`；无错误时写 `translation_generated`。
+- `crates/c2r-translator/src/lib.rs`：
+  - 通过 `use artifacts::{translation_events_jsonl, write_json_file, write_text_file};` 继续调用 leaf helper。
+  - `write_translation_artifacts()`、`write_clang_dry_run_artifact()`、`write_clang_lowering_report_artifact()` 暂留原处，避免把 IO 拆分和 clang/typed-IR 语义路径混在同一提交。
+  - `PathBuf` 改成仅在 `clang-frontend` 或 `clang-lowering-report` feature 下导入，默认 feature 不再产生拆分后的 unused import warning。
+- 新增单元测试 `artifact_tests::translation_events_jsonl_records_blocked_errors`：
+  - 红测先失败于 `crate::artifacts` 不存在。
+  - 实现后验证 blocked JSONL 会包含 `translation_started` + `translation_blocked`，且不会误写 `translation_generated`。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 明确 P0 已完成 public model schema split 与 artifact/IO leaf helper split；P0 整体仍未完成。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml translation_events_jsonl_records_blocked_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+openspec validate --all --strict
+```
+
+结果：
+
+- 定向红绿测试：1 个 `artifact_tests` 测试通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：1 个 lib test + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：1 个 lib test + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：49 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `--all-features`：57 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-dry-run` opt-in 定向测试：3/3 passed。
+- `openspec validate --all --strict`：38/38 passed。
+
+边界：
+
+- 可以说：artifact/IO leaf helper 已从 `lib.rs` 拆出，root public API、artifact 文件名、JSON/JSONL 语义、feature gate 行为和 manifest status 保持兼容。
+- 不应说：P0 `lib.rs` 拆分已完成、artifact writer orchestration 已模块化完成、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀可以继续拆 `write_clang_dry_run_artifact()` 这类相对轻的 feature-gated artifact writer；`write_clang_lowering_report_artifact()` 和 `write_translation_artifacts()` 仍要谨慎，因为前者触发 clang lowering/report 语义路径，后者是 public orchestration。
+
+English mirror summary:
+
+- Continued the P0 `lib.rs` split with a behavior-preserving artifact/IO leaf helper extraction.
+- Added private `artifacts.rs` containing `write_json_file`, `write_text_file`, and `translation_events_jsonl`, all `pub(crate)`.
+- Kept `write_translation_artifacts`, clang dry-run artifact writing, and clang lowering report writing in `lib.rs` for now, preserving the public API, artifact filenames, feature gates, JSON/JSONL semantics, and manifest status behavior.
+- Added a blocked JSONL regression test for `translation_events_jsonl`.
+- Updated the Chinese and English MVP backlog to mark the model schema split and artifact/IO leaf helper split as done, while keeping the broader P0 `lib.rs` split open.
+- Verified default, `clang-frontend`, `typed-ir`, `typed-ir clang-frontend`, and `--all-features` Rust test matrices, selected Python `--emit-clang-dry-run` opt-in tests, and `openspec validate --all --strict`.
+
+## 131. 2026-06-28 P0 clang dry-run artifact writer split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 边界，仍然是行为保持重构，不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API、artifact 文件名、manifest status、feature gate 或 Python `--emit-clang-dry-run` opt-in 语义。两个只读子智能体复核后建议一致：`write_clang_dry_run_artifact()` 可以作为轻量 feature-gated artifact writer 迁入 `artifacts.rs`；`write_translation_artifacts()` 和 `write_clang_lowering_report_artifact()` 仍应留在 `lib.rs`，因为前者是 public orchestration，后者会触发 clang lowering/report 语义路径。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `#[cfg(feature = "clang-frontend")] pub(crate) fn write_clang_dry_run_artifact(...)`。
+  - 保持原 JSON schema：`schema_version`、`target_id`、`slice_id`、`source_commit`、`frontend=clang`、`status`、`dry_run`、`metadata`、`errors`。
+  - metadata 完整时仍写 `status=ready_without_libclang`；metadata 缺失时仍写 `status=blocked` 且 `dry_run=null`。
+  - 新增模块内单测 `artifacts::clang_dry_run_artifact_tests::clang_dry_run_artifact_records_parse_spec_errors`，直接测试 helper 的 blocked JSON，不重复完整 manifest 流程。
+- `crates/c2r-translator/src/lib.rs`
+  - `#[cfg(feature = "clang-frontend")] use artifacts::write_clang_dry_run_artifact;`
+  - 删除本文件里的旧 `write_clang_dry_run_artifact()` 副本。
+  - `PathBuf` import 收窄为只在 `clang-lowering-report` feature 下使用。
+  - `write_translation_artifacts()` 调用逻辑保持不变：默认不写 dry-run；`clang-frontend` 下追加 `l3-{slice_id}-clang-dry-run.json`；`clang-lowering-report` 下仍追加 lowering report。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 仍未完成，只把已完成范围扩展到 feature-gated clang dry-run artifact writer split。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run_artifact_records_parse_spec_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo test --manifest-path crates/c2r-translator/Cargo.toml default_translation_artifacts_do_not_emit_clang_dry_run
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact
+openspec validate --all --strict
+```
+
+结果：
+
+- dry-run helper 红绿测试：初始失败于 `write_clang_dry_run_artifact` 不在 `artifacts.rs` 作用域；迁移后通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：2 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：1 个 lib test + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：50 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `--all-features`：58 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-dry-run` opt-in 定向测试：2/2 passed。
+- `openspec validate --all --strict`：38/38 passed。
+
+边界：
+
+- 可以说：feature-gated clang dry-run artifact writer 已从 `lib.rs` 拆到 `artifacts.rs`，并且默认/opt-in dry-run 行为、manifest 引用和 Python opt-in 路径保持兼容。
+- 不应说：P0 `lib.rs` 拆分完成、artifact orchestration 已完全拆出、clang lowering report writer 已拆出、或新增任何 C 语法翻译能力。
+- 后续建议：下一刀可以继续拆更明确的 writer/schema helper；`write_clang_lowering_report_artifact()` 要单独处理，因为它不仅写文件，还构造 lowering report、typed IR candidate evidence 和 readonly global summary。`write_translation_artifacts()` 继续留到更后面，等 translator/evidence/orchestration 边界更清楚再移动。
+
+English mirror summary:
+
+- Moved the feature-gated clang dry-run artifact writer into private `artifacts.rs`.
+- Kept `write_translation_artifacts` and the clang lowering report writer in `lib.rs`; the former remains public orchestration and the latter still builds lowering/report evidence.
+- Added a direct `clang-frontend` module test for the dry-run writer's blocked parse-spec JSON.
+- Preserved artifact filenames, manifest behavior, feature gates, and Python `--emit-clang-dry-run` opt-in semantics.
+- Updated the Chinese and English MVP backlog to include the dry-run writer split while keeping the broader P0 `lib.rs` split open.
+
+## 132. 2026-06-28 P0 clang lowering report artifact writer split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 边界，仍然是行为保持重构：不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 文件名、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+两个只读子智能体并行复核后结论一致：
+
+- `write_clang_lowering_report_artifact()`、`typed_ir_candidate_evidence()`、`readonly_global_summary()` 是本轮最小完整迁移集合，可以进入 `artifacts.rs`。
+- 不迁移 clang-lowered IR 主翻译路径 helper，因为它们构造 `TranslationResult`、type-map、CFG、pointer graph，并依赖 `lib.rs` 内部翻译/evidence 逻辑。
+- `write_translation_artifacts()` 继续留在 `lib.rs`，它仍是 public orchestration，负责选择翻译路径、追加 artifact、组装 manifest status。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `#[cfg(feature = "clang-lowering-report")] pub(crate) fn write_clang_lowering_report_artifact(...)`。
+  - 同步迁入 `typed_ir_candidate_evidence()` 和 `readonly_global_summary()`。
+  - 保持 report JSON schema：`artifact_kind=clang-lowering-report`、`frontend=clang`、`claim_boundary.role=diagnostic_only`、`affects_manifest_status=false`、`affects_semantic_pass=false`、`authoritative_evidence=false`。
+  - `typed_ir_candidate.semantic_pass` 仍固定为 `false`，即使能生成 `GenericTypedIr` candidate，也不能把 diagnostic report 当成 semantic acceptance。
+  - 新增模块内单测 `artifacts::clang_lowering_report_artifact_tests::clang_lowering_report_artifact_records_parse_spec_errors`，直接覆盖 parse-spec blocked 分支，不把 manifest 责任塞进 writer 单测。
+- `crates/c2r-translator/src/lib.rs`
+  - 通过 `#[cfg(feature = "clang-lowering-report")] use artifacts::write_clang_lowering_report_artifact;` 调用迁出的 writer。
+  - 删除旧的 lowering report artifact writer cluster 副本。
+  - `write_translation_artifacts()` 的调用顺序和 manifest status 计算保持不变。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 总项仍保持未完成，只把 clang lowering report artifact writer cluster 标为已完成子项。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_artifact_records_parse_spec_errors
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature
+```
+
+结果：
+
+- lowering report writer 红绿测试：初始失败于 `write_clang_lowering_report_artifact` 不在 `artifacts.rs` 作用域；迁移后通过。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：1 个 lib test + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：2 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：59 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features`：59 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python `--emit-clang-lowering-report` / dry-run non-opt-in 定向测试：4/4 passed。
+
+边界：
+
+- 可以说：clang lowering report artifact writer cluster 已从 `lib.rs` 拆到 `artifacts.rs`，writer 单测、feature 矩阵和 Python opt-in 路径都保持兼容。
+- 不应说：P0 `lib.rs` 拆分完成、`write_translation_artifacts()` 已拆出、artifact orchestration 已完全模块化、或新增了任何 C 语法翻译能力。
+- 后续建议：下一刀优先从不改变行为的边界继续拆，例如 CLI/manifest helper、unsafe/metadata statistics 或更明确的 evidence builder；翻译主路径和 public orchestration 仍要小步拆，保持每刀 feature matrix 通过。
+
+English mirror summary:
+
+- Moved the clang lowering report artifact writer cluster into private `artifacts.rs`.
+- Extracted `write_clang_lowering_report_artifact`, `typed_ir_candidate_evidence`, and `readonly_global_summary` while keeping `write_translation_artifacts` in `lib.rs`.
+- Preserved artifact filenames, JSON schema, diagnostic-only claim boundary, manifest status behavior, feature gates, and Python `--emit-clang-lowering-report` opt-in semantics.
+- Added a direct module test for the parse-spec blocked report branch.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 133. 2026-06-28 P0 core translation artifact writer helper split
+
+本轮继续拆 `crates/c2r-translator/src/lib.rs` 的 artifact 写出边界，仍然是行为保持重构：不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 文件名、artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+两个只读子智能体并行复核后结论一致：
+
+- 当前最适合收口的是 CLI/manifest helper 里的核心 artifact 写出边界，因为已有 Rust/Python 覆盖最强。
+- `write_translation_artifacts()` 应继续留在 `lib.rs`，作为 public facade 负责建目录、选择默认/clang-lowered 翻译结果、追加 optional clang artifacts、返回 `ArtifactManifest`。
+- 下一刀不要混进本提交；更适合单独做 `clang_lowered_translation.rs` 私有模块，或 metadata/evidence builder 拆分。
+
+核心改动：
+
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `pub(crate) fn write_core_translation_artifacts(...)`。
+  - 负责写出 8 个核心文件：`auto-translation-plan.json`、`auto-translation-events.jsonl`、`type-map.json`、`cfg.json`、`pointer-graph.json`、`ai-candidate-manifest.json`、`blocked-repairs.json`、`rust-draft.rs`。
+  - 保持原有 JSON/JSONL schema、blocked repairs 结构、AI candidate boundary、pointer graph `not_applicable_reason`、type-map status 和 rust draft 文件名不变。
+  - 将原 `translation_events_jsonl_records_blocked_errors` 单测迁入 artifact 模块，并新增 `core_translation_artifacts_write_stable_file_set_and_blocked_repairs`。
+- `crates/c2r-translator/src/lib.rs`
+  - 删除内联核心 artifact 写出列表。
+  - 改为调用 `write_core_translation_artifacts(spec, &result, out_dir, &prefix, status)?`。
+  - 继续保留 `write_translation_artifacts()` public orchestration，以及 feature-gated `write_clang_dry_run_artifact()` / `write_clang_lowering_report_artifact()` 追加逻辑。
+- 同步中英文待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - P0 总项仍保持未完成，只把 core translation artifact writer helper 标为已完成子项。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml core_translation_artifact_tests
+cargo test --manifest-path crates/c2r-translator/Cargo.toml translation_artifacts
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+
+- core artifact helper 红绿测试：初始失败于 `write_core_translation_artifacts` 不存在；实现后通过。
+- `translation_artifacts` 定向集成测试：artifact 模块单测 + 2 个 bounded translation tests 通过。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：2 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：3 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：2 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features`：60 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/route-profile/cache identity 定向测试：3/3 passed。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+
+- 可以说：core translation artifact writer helper 已从 `lib.rs` 拆到 `artifacts.rs`，`write_translation_artifacts()` 现在是更薄的 public facade。
+- 不应说：P0 `lib.rs` 拆分完成、`write_translation_artifacts()` 已拆出、CLI/manifest orchestration 已完全模块化、或新增任何 C 语法翻译能力。
+- 后续建议：下一刀可单独拆 `clang-lowering-report` 私有翻译/evidence cluster 到 `clang_lowered_translation.rs`，或者按 TDD 先抽 metadata/evidence builder；不要把两者混在同一个提交。
+
+English mirror summary:
+
+- Moved the core translation artifact writer set into private `artifacts.rs` as `write_core_translation_artifacts`.
+- Kept `write_translation_artifacts` in `lib.rs` as the public facade that selects the translation path, appends optional clang artifacts, and returns `ArtifactManifest`.
+- Preserved artifact filenames, ordering, JSON/JSONL schema, manifest status behavior, feature gates, and Python default/route-profile/cache identity behavior.
+- Added a direct module test for the stable core artifact file set and blocked repairs JSON, and moved the JSONL test into the artifacts module.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 134. 2026-06-28 P0 clang-lowered translation module split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，目标是把上一节明确的下一刀落地：将 clang-lowered translation/evidence 私有实现簇移动到单独模块。该提交仍然是行为保持重构，不新增 C 语法翻译能力，不改变 `write_translation_artifacts()` public API，不改变 artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+核心改动：
+- 新增 `crates/c2r-translator/src/clang_lowered_translation.rs`。
+  - 迁入 `try_translate_slice_with_clang_lowered_ir()`、`record_clang_lowered_ir_evidence()`、`record_ir_*`、`ir_*`、pointer graph helper 和原 clang-lowered evidence 白盒测试。
+  - `try_translate_slice_with_clang_lowered_ir()` 仅以 `pub(crate)` 暴露给 crate root wrapper；其余 evidence helper 继续保持模块私有。
+  - 模块整体挂在 `#[cfg(feature = "clang-lowering-report")]` 下，继续依赖该 feature 同时启用的 `clang-frontend` 与 `typed-ir`。
+- `crates/c2r-translator/src/lib.rs`
+  - 保留 `translate_slice_with_optional_clang_lowered_ir()` wrapper、`translate_slice()` legacy fallback 和 `write_translation_artifacts()` public facade。
+  - `record_type_mapping()` 改为 `pub(crate)`，供新模块复用既有 type-map 逻辑。
+  - 删除 clang-lowered translation/evidence helper 副本和不再需要的 root `BTreeMap` import。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 2.6k 行，并把 `clang_lowered_translation.rs` 私有模块拆分列为已完成子项；P0 总项仍保持未完成。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_translation_module_exposes_fallback_candidate_entrypoint
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowered_ir_evidence_tests
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend"
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+结果：
+- clang-lowered module entrypoint 红绿测试通过。
+- moved evidence 白盒测试通过：8 passed。
+- manifest/claim-boundary 集成测试通过。
+- `cargo check --all-targets --all-features` exit 0。
+- 默认 feature：2 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：3 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：2 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：51 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：61 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：61 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python clang lowering report route/profile/cache opt-in 定向测试：3/3 passed。
+
+边界：
+- 可以说：clang-lowered translation/evidence 私有实现已从 `lib.rs` 拆到 `clang_lowered_translation.rs`，crate root 只保留薄 wrapper 和 public artifact facade。
+- 可以说：这是维护性拆分，降低 `lib.rs` 体积和职责耦合，为后续继续拆 CLI/manifest、generic typed IR route、legacy translator、metadata/evidence builder 做准备。
+- 不应说：P0 `lib.rs` 拆分完成、translator 架构已完全模块化、支持了新的 C 语法、或任何 generated candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Extracted the private clang-lowered translation/evidence implementation cluster into `clang_lowered_translation.rs`.
+- Kept `write_translation_artifacts` and `translate_slice_with_optional_clang_lowered_ir` in `lib.rs` as the public/facade boundary.
+- Reused the existing type-map logic through `pub(crate) record_type_mapping` and kept evidence helpers private to the new module.
+- Preserved artifact ordering, manifest status behavior, feature gates, Python opt-in behavior, and diagnostic-only semantic claim boundaries.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 `lib.rs` split open.
+
+## 135. 2026-06-28 P0 legacy string translator module split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，选择 legacy string translator 作为下一刀。两个只读子智能体对比后结论一致：generic typed IR route 的核心已经在 `typed_ir.rs` / `translation_route.rs`，继续动它会牵动更宽 feature matrix；legacy 字符串 parser/evidence/emitter 仍集中在 `lib.rs`，更适合做一次行为保持拆分。
+
+核心改动：
+- 新增 `crates/c2r-translator/src/legacy_translation.rs`。
+  - 迁入 `translate_slice()`、`ParsedFunction` / `ParsedStatement` / `StatementKind` / `LValue` 等私有模型、legacy 字符串 parser、CFG/type-map/pointer-graph/call evidence builder、bounded pointer/string translator emitter 和相关 helper。
+  - `translate_slice()` 继续通过 crate root `pub use legacy_translation::translate_slice` 暴露，外部 API 不变。
+  - `record_type_mapping()` 继续以 `pub(crate)` 通过 crate root re-export 给 `clang_lowered_translation.rs` 复用，避免重复 type-map 逻辑。
+- `crates/c2r-translator/src/lib.rs`
+  - 当前约 125 行，只保留 module declarations、public model re-export、`translate_slice` re-export、`write_translation_artifacts()` public facade、clang-lowered fallback wrapper 和模块边界测试。
+  - `write_translation_artifacts()` 仍负责建目录、选择默认/clang-lowered translation result、追加 optional clang artifacts，并返回 `ArtifactManifest`。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 125 行，并把 `legacy_translation.rs` 私有模块拆分列为已完成子项；P0 总项仍保持未完成。
+
+TDD 证据：
+- 新增 `legacy_translation_module_tests::legacy_translation_module_exposes_translate_slice_entrypoint`。
+- 红测先失败于 `could not find legacy_translation in the crate root`。
+- 迁移后同一测试通过，并验证 crate root 内部模块入口可以生成 `pub fn identity(value: i32) -> i32`。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml legacy_translation_module_exposes_translate_slice_entrypoint
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in
+```
+
+结果：
+- legacy module boundary 红绿测试通过。
+- 默认 feature：3 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- `clang-frontend`：4 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：3 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：52 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：62 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：62 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/clang-lowering-report route/profile/cache opt-in 定向测试：6/6 passed。
+
+边界：
+- 可以说：legacy 字符串 translator 私有实现已从 `lib.rs` 拆到 `legacy_translation.rs`，crate root public API 保持兼容。
+- 可以说：`lib.rs` 现在主要是 public facade，不再承载 legacy parser/evidence/emitter 细节。
+- 不应说：P0 拆分全部完成、CLI/manifest orchestration 已完全模块化、generic typed IR route 已拆完、新增任何 C 语法翻译能力、或任何 candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Extracted the private legacy string translator implementation cluster into `legacy_translation.rs`.
+- Kept `translate_slice` available from the crate root through `pub use legacy_translation::translate_slice`.
+- Kept `write_translation_artifacts` in `lib.rs` as the public artifact facade and preserved feature-gated clang optional artifact behavior.
+- Preserved generated Rust behavior, type-map/CFG/pointer-graph evidence behavior, manifest behavior, feature gates, and semantic claim boundaries.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
+
+## 136. 2026-06-28 P0 write_translation_artifacts orchestration split
+
+本轮继续按 P0 拆分 `crates/c2r-translator/src/lib.rs`，把 `write_translation_artifacts()` public orchestration 移入 `artifacts.rs`。这仍然是行为保持重构：不新增 C 语法翻译能力，不改变 crate root public API，不改变 artifact 文件名、artifact 顺序、manifest status、feature gate、Python opt-in 或 semantic pass claim。
+
+核心改动：
+- `crates/c2r-translator/src/artifacts.rs`
+  - 新增 `pub fn write_translation_artifacts(...)`，负责建目录、选择默认/clang-lowered translation result、写 8 个核心 artifacts、追加 optional clang dry-run / lowering-report artifacts，并返回 `ArtifactManifest`。
+  - 同步迁入私有 helper `translate_slice_with_optional_clang_lowered_ir()`；它只服务 `clang-lowering-report` feature 下的 artifact orchestration。
+  - 新增模块边界测试 `core_translation_artifact_tests::write_translation_artifacts_public_orchestration_stays_in_artifacts_module`。
+- `crates/c2r-translator/src/lib.rs`
+  - 改为 `pub use artifacts::write_translation_artifacts;`，继续保持 `c2r_translator::write_translation_artifacts` 外部路径兼容。
+  - 当前约 69 行，只保留 module declarations、public re-export 和两个模块边界测试。
+- 同步中英文 MVP 待办：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+  - 将 `lib.rs` 当前规模更新为约 69 行，并把 `write_translation_artifacts` public orchestration 拆分列为已完成子项；P0 总项仍保持未完成。
+
+TDD 证据：
+- 红测先失败于 `cannot find function write_translation_artifacts in this scope`，证明 orchestration 尚未在 `artifacts.rs` 模块内。
+- 迁移后同一测试通过，并确认默认 feature 下仍只写 8 个核心 artifact。
+- 后续 feature matrix 暴露测试断言过窄：`clang-frontend` 会追加 dry-run artifact，`clang-lowering-report` 会追加 dry-run + lowering-report artifact；测试已改为按 feature 期待 8/9/10 个 artifact，并显式检查 optional artifact 文件存在。
+
+当前已验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml write_translation_artifacts_public_orchestration_stays_in_artifacts_module
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_baseline_and_validation_profile_evidence_are_emitted validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_default_does_not_enable_clang_features validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_keeps_clang_lowering_report_fields_out_by_default validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_lowering_report_enables_report_feature validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+- artifact orchestration 模块边界红绿测试通过。
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- 默认 feature：4 个 lib tests + 35 个 bounded tests + doc tests 通过。
+- `clang-frontend`：5 个 lib tests + 44 个 bounded tests + doc tests 通过。
+- `typed-ir`：4 个 lib tests + 220 个 bounded tests + doc tests 通过。
+- `typed-ir clang-frontend`：53 个 lib tests + 395 个 bounded tests + doc tests 通过。
+- `clang-lowering-report`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- `--all-features --quiet`：63 个 lib tests + 396 个 bounded tests + doc tests 通过。
+- Python 默认/clang optional route/profile/cache opt-in 定向测试：6/6 passed。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+- 可以说：`write_translation_artifacts()` public orchestration 已从 `lib.rs` 拆到 `artifacts.rs`，crate root public API 保持兼容。
+- 可以说：`lib.rs` 现在基本只剩 crate root module/re-export surface。
+- 不应说：P0 全部完成、CLI/manifest orchestration 已完全模块化、generic typed IR route 已拆完、新增任何 C 语法翻译能力、或任何 candidate 因本次拆分获得 semantic pass。
+
+English mirror summary:
+
+- Moved `write_translation_artifacts` public orchestration into `artifacts.rs`.
+- Kept the crate-root public API compatible through `pub use artifacts::write_translation_artifacts`.
+- Preserved default artifacts, optional clang artifacts, manifest status behavior, feature gates, Python opt-in behavior, and semantic claim boundaries.
+- Added a module-boundary red/green test proving the orchestration now lives in the artifacts module.
+- Updated the Chinese and English MVP backlog to mark this sub-split done while keeping the broader P0 split open.
+
+## 137. 2026-06-28 P1 readonly record pointer arrow field read
+
+本轮继续按多智能体推进 P1 record/pointer 子集，不写 FlashDB/crc32 特例。三个只读代理共同审查了 typed IR emitter、clang lowering 和当前 diff；结论是：`const struct T *p` 的简单 `p->scalar_field` 可以作为窄的 readonly single-object candidate 进入 generic typed IR，但它必须映射为 `&T` 而不是 slice，并且不能顺手放开 pointer field writes、compound/update writes、nullable pointer、pointer arithmetic 或 alias-sensitive ownership 语义。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_param_type()` 现在把 readonly record pointer pointee（`Pointer` to `const Record`）映射为 `&RecordName`，与 readonly integer pointer 的 `&[T]` slice 路径分开。
+  - `emit_member_expr()` 对 `is_arrow=true` 增加窄路径 `emit_readonly_record_pointer_member_expr()`：base 必须是已声明变量，类型必须是 readonly record pointer，字段结果必须是 scalar，最终发射 `p.x`。
+  - `emit_assignment_target()` 对 `is_arrow=true` 的 member target 显式 fail closed，错误为缺少 pointer/record ownership evidence；所以 `p->x = value` 和 compound write shape 不会因为 read 路径放开而通过。
+  - `emit_record_definitions()` 会从 readonly record pointer pointee 和字段访问合并 record field inventory。
+  - `add_record_field_use()` 允许同一整数字段声明类型与 const record 读取表达式类型之间仅有顶层 const 差异，例如 `int` 与 `const int`，但仍拒绝真正不同的 field 类型。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `attach_record_inventory_to_function()` 现在处理函数参数。
+  - `attach_record_inventory_to_type()` 递归进入 pointer pointee 和 array element，使真实 clang AST 中 `const struct point *p` 的 pointee 能拿到完整 `RecordDecl`/`FieldDecl` 清单。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - `typed_ir_emits_readonly_record_pointer_arrow_field_read`：手写 typed IR 正例，生成 `pub fn point_x(p: &Point) -> i32` 和 `return p.x;`。
+  - `typed_ir_rejects_record_arrow_field_assignment`：readonly record pointer 的 `p->x = value` 仍拒绝。
+  - `typed_ir_rejects_record_arrow_field_compound_assignment_shape`：`p->x += value` 的 typed IR compound shape 仍拒绝。
+  - `typed_ir_rejects_mutable_record_pointer_arrow_field_read`：非 const `struct point *` 的 arrow read 仍拒绝。
+  - `clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled`：真实 clang AST smoke 断言 IR shape 是 `Return(Member { is_arrow: true, base: Var("p"), field: "x" })`，并验证 Rust candidate 包含完整字段 `x` 和 `y`，再通过 rustc snippet smoke。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 readonly `const struct T *p` 的简单 `p->scalar_field` 读已进入 typed IR candidate 子集，同时明确 pointer field writes 仍拒绝。
+
+已验证：
+
+```powershell
+cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
+cargo check --manifest-path crates/c2r-translator/Cargo.toml --all-targets --all-features
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+openspec validate --all --strict
+git diff --check
+```
+
+结果：
+- `cargo fmt --check`：exit 0。
+- `cargo check --all-targets --all-features`：exit 0。
+- `typed-ir`：4 lib tests + 222 bounded tests 通过。
+- `typed-ir clang-frontend`：53 lib tests + 397 bounded tests 通过。
+- `clang-lowering-report`：63 lib tests + 398 bounded tests 通过。
+- `--all-features`：63 lib tests + 398 bounded tests 通过。
+- 默认 feature：4 lib tests + 35 bounded tests 通过。
+- `clang-frontend`：5 lib tests + 44 bounded tests 通过。
+- 真实 clang AST arrow member read smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+- `openspec validate --all --strict`：38/38 passed。
+- `git diff --check`：exit 0，仅 Windows LF-to-CRLF warnings。
+
+边界：
+- 可以说：readonly `const struct T *p` 的简单 `p->scalar_field` read 已能经真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&T`。
+- 可以说：真实 clang `RecordDecl` 的完整直接标量字段清单现在能递归附着到 pointer pointee，`Point { x, y }` 不再退化成只含被读取字段的最小 shape。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、nullable record pointer、mutable/non-const record pointer read、`p->field = value`、`p->field += value`、`p->field++`、pointer arithmetic record access、alias-sensitive writes、volatile/packed/bitfield/union/nested/anonymous record、非标量字段或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow generic typed IR candidate path for simple readonly record pointer field reads: `const struct T *p; return p->scalar_field;` now emits `pub fn f(p: &T) -> Scalar { return p.scalar_field; }`.
+- Kept arrow member assignment and compound/update write shapes fail-closed with pointer/record ownership evidence errors.
+- Made clang record inventory attach to function params and recursively into pointer pointees/array elements, so real clang record pointer candidates can use complete direct scalar field inventories.
+- Treated declaration `int` and const-read expression `const int` as compatible for the same integer record field while preserving real type mismatch failures.
+- Updated the Chinese and English MVP backlog to mark this narrow readonly pointer field read candidate as supported while keeping pointer field writes and alias-sensitive ownership out of scope.
+
+## 138. 2026-06-28 P1 readonly record pointer null presence checks
+
+本轮继续按多智能体和 TDD 推进 P1 pointer-aware record access 的前置能力。上一节已经支持非 nullable `const struct T *p` 的简单 `p->scalar_field` read；本节不做 flow-sensitive guarded field read，而是先把 readonly record pointer 的 null presence check 打通到 `Option<&T>`，例如 `return p != NULL;` 和 `if (p == NULL) return 0;`。这一步为后续 `if (p == NULL) return ...; return p->x;` 的路径敏感 non-null 证明铺路，但不打开 `Option<&T>` 下的 deref/member use。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `emit_nullable_pointer_param_type()` 现在同时支持 readonly integer pointer slice 和 readonly record pointer：前者仍发 `Option<&[T]>`，后者发 `Option<&RecordName>`。
+  - `collect_nullable_pointer_params()` 改用 `is_supported_nullable_pointer_type()`，使 `const struct T *p` 在直接 `p == NULL` / `p != NULL` 比较中可被识别为 nullable param。
+  - `emit_null_pointer_comparison_condition()` 复用新的 `validate_nullable_pointer_type()`，record pointer 和 integer pointer 的 `.is_none()` / `.is_some()` 发射共用同一条窄路径。
+  - nullable pointer 的非 null-comparison 用途仍由 `validate_nullable_pointer_param_uses_in_expr()` 拒绝；因此本节没有放开 nullable `p->x`、`*p`、`p[i]` 或 call-argument escape。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_value_comparison_with_record_null_pointer_operand`，验证 `return p != NULL;` 生成 `pub fn has_point(p: Option<&Point>) -> i32` 和 `p.is_some()`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_comparison_condition_with_record_null_pointer_operand`，验证 `if (p == NULL)` 生成 `p.is_none()`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled`，验证 `struct point { int x; }; int has_point(const struct point *p) { return p != NULL; }` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 readonly record pointer null presence check 已进入 typed IR candidate 子集，同时把下一步明确为 flow-sensitive null-guarded field read。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_value_comparison_with_record_null_pointer_operand
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_comparison_condition_with_record_null_pointer_operand
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR value comparison 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR condition comparison 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST record null pointer comparison smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：readonly `const struct T *p` 的直接 null presence check 现在会把 Rust 参数建模为 `Option<&T>`，并在 condition/value comparison 中发射 `.is_none()` / `.is_some()`。
+- 不应说：已支持 nullable record pointer 的 guarded `p->field` read、path-sensitive non-null refinement、nullable integer slice deref/index、`if (p)`, `p != NULL && p->x`, loop guard、非支配 guard、pointer field writes、alias-sensitive ownership 或 semantic acceptance。
+- 下一刀建议：按只读代理建议，先做极窄 flow fact：识别 `if (p == NULL) return ...;` 且 else 为空、then 必定 return，之后只允许 proven-nonnull nullable readonly record pointer 的 direct `p->scalar_field` read，发射 `p.unwrap().field` 或等价 shadow binding。
+
+English mirror summary:
+
+- Added readonly record pointer null-presence candidate generation: `const struct T *p` compared directly with `NULL` now maps to `Option<&T>` and emits `.is_none()` / `.is_some()`.
+- Preserved nullable pointer fail-closed behavior for all non-comparison uses, including nullable `p->field`, `*p`, `p[i]`, call-argument escape, and pointer writes.
+- Added direct typed IR tests for value and condition comparisons, plus a real clang AST smoke test for `struct point { int x; }; int has_point(const struct point *p) { return p != NULL; }`.
+- Updated Chinese and English MVP backlog to make flow-sensitive null-guarded record field reads the next explicit P1 target.
+
+## 139. 2026-06-28 P1 flow-sensitive nullable record pointer field read
+
+本轮继续按多智能体和 TDD 推进 P1 pointer-aware record access，不写 FlashDB/crc32 特例。上一节只把 readonly record pointer 的 null presence check 映射到 `Option<&T>`，并明确不支持 guarded `p->field` read；本节落地极窄的 flow-sensitive non-null 事实：只在直接 `p == NULL` / `p != NULL` guard 能证明当前路径非空时，允许 nullable readonly record pointer 的 direct `p->scalar_field` read。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `collect_nullable_pointer_params()` 改为顺序验证函数体，并携带 `proven_nonnull_params` flow state。
+  - `validate_nullable_pointer_param_uses_in_stmt()` 对 `if (p != NULL)` 的 then 分支、`if (p == NULL)` 的 else 分支注入 non-null 事实。
+  - 新增 `null_return_guard_proves_nonnull()`，仅识别 `if (p == NULL) return ...;` 且 else 为空、then body 恰好直接 return 的窄形态；该 if 之后才把 `p` 视为 non-null。
+  - `validate_nullable_pointer_param_uses_in_expr()` 仍默认拒绝 nullable pointer 的普通表达式用途，只额外允许已证明 non-null 的 `IrExpr::Member { is_arrow: true, base: Var(p) }`，且 `p` 必须是 readonly record pointer。
+  - 审查后进一步收紧：上述 nullable arrow read 的字段结果也必须是 scalar；即使 guard 已证明 non-null，`p->child_record` 这类非标量字段仍 fail closed。
+  - `emit_readonly_record_pointer_member_expr()` 在 nullable record pointer 参数上发射 `p.unwrap().field`；未 nullable 的 readonly record pointer 仍发射 `p.field`。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_null_guarded_nullable_record_pointer_arrow_field_read`：`if (p == NULL) return 0; return p->x;` 生成 `Option<&Point>`、`p.is_none()` 和 `p.unwrap().x`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_nullable_record_pointer_arrow_field_read_in_nonnull_branch`：`if (p != NULL) return p->x; return 0;` 只在 then 分支允许 `p.unwrap().x`。
+  - 新增 direct typed IR 负例覆盖未支配 guard、null 分支读取、guard 后非标量字段读取、inverse guard 后读取，确保 nullable `p->x` 不会被泛化放开。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled`，验证真实 C `if (p == NULL) return 0; return p->x;` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 flow-sensitive null-guarded `p->scalar_field` read 已进入 typed IR candidate 子集；下一步改为 value-position/复杂 target/pointer-alias-sensitive update field write、alias/noalias proof 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_null_guarded_nullable_record_pointer_arrow_field_read
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_nullable_record_pointer_arrow_field_read_in_nonnull_branch
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_without_null_guard
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_in_null_branch
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_non_scalar_field_read_even_when_guarded
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_record_pointer_arrow_field_read_after_inverse_guard
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR null-return guard 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR `p != NULL` then 分支正例：1 passed，并通过 rustc snippet smoke。
+- 四个 direct typed IR 负例：均按预期 fail closed。
+- 真实 clang AST null-guarded arrow member read smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：readonly `const struct T *p` 在直接 null guard 后的窄 `p->scalar_field` read 现在能生成 `Option<&T>` + `.is_none()`/`.is_some()` + `unwrap().field` 的可编译 Rust candidate。
+- 可以说：当前 non-null 事实是 statement/branch 层面的窄 flow fact，不是通用 pointer analysis。
+- 不应说：已支持 C record layout/ABI 等价、semantic acceptance、nullable integer slice deref/index、`if (p)`, `p != NULL && p->x`, loop guard、非支配 guard、复杂 path condition、call-argument escape、pointer field writes、mutable/non-const record pointer read、pointer arithmetic record access、alias-sensitive ownership、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow flow-sensitive candidate path for nullable readonly record pointer field reads after direct null guards.
+- `if (p == NULL) return ...; return p->scalar_field;` and `if (p != NULL) return p->scalar_field; ...` now emit `Option<&T>` plus `.is_none()` / `.is_some()` and `p.unwrap().field`.
+- The nullable pointer validator remains fail-closed for ordinary nullable pointer use; only proven-nonnull direct scalar arrow reads on readonly record pointers are allowed.
+- Added direct typed IR positive and negative tests, plus a real clang AST smoke test for the null-return guard shape.
+- Updated the Chinese and English MVP backlog to mark this narrow guarded-read path as supported while keeping pointer writes, alias-sensitive ownership, layout/ABI claims, and semantic acceptance out of scope.
+
+## 140. 2026-06-28 P1 narrow mutable record pointer field assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理独立比较了候选切片，结论一致：本轮优先做极窄 `struct T *p; p->scalar_field = scalar;`，因为它直接补上真实 C out-object/state-update 的常见形态；但必须写死为 candidate 生成，不声明 alias/noalias 已解决，也不放开 compound/update、nullable 或多 pointer 情况。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `EmitContext` 新增 `mutable_record_pointer_write_params`，由 `collect_mutable_record_pointer_write_params()` 从 assignment target 中收集。
+  - 只在 assignment target 是直接 `IrExpr::Member { is_arrow: true, base: Var(p) }`、`p` 是 mutable record pointer 参数、字段结果是 scalar 时收集该参数。
+  - 若本函数出现 mutable record pointer field assignment，则要求函数参数列表中 pointer 参数总数恰好为 1；`struct T *p, struct T *q` 或混入 `int *out` / `const struct T *q` 仍 fail closed，错误为缺少 alias proof。
+  - `emit_param()` 对被上述 gate 选中的 `struct T *p` 发射 `mut p: &mut T`；integer mutable pointer 仍沿用 `&mut [T]`。
+  - `emit_assignment_target()` 的 arrow member target 改走 `emit_mutable_record_pointer_member_assignment_target()`；该 helper 只发射 direct scalar field target `p.field`。
+  - `emit_record_definitions()` 和 record field inventory 现在会从 mutable record pointer pointee 合并完整直接标量字段清单，避免只凭被写字段生成最小 shape。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_assignment`：`struct point *p; p->x = value;` 生成 `pub fn set_point_x(mut p: &mut Point, value: i32)` 和 `p.x = value;`。
+  - 新增 direct typed IR 负例覆盖多 pointer 参数 alias gate、nullable/null-check 形态、非标量字段、mutable arrow compound shape；原 const pointer arrow assignment 和 const arrow compound shape 仍拒绝。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled`：真实 C `void set_point_x(struct point *p, int value) { p->x = value; }` 可 lowering 到 typed IR，并由 generic emitter 生成可编译 Rust candidate。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注单 pointer 参数下 mutable `struct T *p` 的直接 `p->scalar_field = scalar` 已进入 typed IR candidate 子集；下一步仍是多 pointer alias/noalias proof、value-position/复杂 target/update field write 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_assignment_with_multiple_pointer_params
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_non_scalar_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_nullable_mutable_record_pointer_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_shape
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_assignment
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_record_arrow_field_compound_assignment_shape
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR mutable record pointer field assignment 正例：1 passed，并通过 rustc snippet smoke。
+- alias gate、nullable/null-check、非标量字段、mutable arrow compound shape、const arrow assignment、const arrow compound shape 负例：均按预期 fail closed。
+- 真实 clang AST mutable arrow member assignment smoke：1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：单 pointer 参数下的直接 mutable record pointer scalar field assignment 已能从真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&mut T`。
+- 可以说：这是一个临时的 single-pointer alias gate，不是通用 alias/noalias proof。
+- 不应说：已支持多 pointer alias/noalias、nullable mutable record pointer、`p->field += value`、`p->field++`、`return p->field` 的 mutable pointer read、复杂 base（cast/nested/offset）、pointer arithmetic record access、non-scalar field write、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field-assignment candidate path: `struct T *p; p->scalar_field = scalar;` now emits `p: &mut T` and `p.scalar_field = scalar;` only when the function has exactly one pointer parameter.
+- The single-pointer gate is a conservative candidate precondition, not a general alias/noalias proof.
+- Preserved fail-closed behavior for multi-pointer functions, nullable/null-checked mutable pointers, const pointer writes, compound/update arrow writes, non-scalar fields, mutable arrow reads, complex bases, layout/ABI claims, and semantic acceptance.
+- Added direct typed IR positive/negative tests and a real clang AST smoke test for `void set_point_x(struct point *p, int value) { p->x = value; }`.
+- Updated the Chinese and English MVP backlog to mark this narrow write path as supported while keeping the broader pointer/alias-sensitive field-write work open.
+
+## 141. 2026-06-28 P1 narrow mutable record pointer field compound assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理给出不同优先级建议：一个认为 B（写后一般 `return p->field` 读）更像基础对象模型，另一个建议先做 A（`p->field += value`）且保持极窄。主线选择更保守的 A：只支持 standalone、直接 target、简单 RHS 的 mutable record pointer field compound assignment，不打开一般 mutable arrow read。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `IrStmt::Assign` 在普通 `emit_expr_with_prelude()` 前增加专用 helper：只识别 `target = Binary(same_direct_arrow_member_target, op, simple_rhs)`。
+  - 复用上一节的 single-pointer mutable record pointer write gate：只有函数 pointer 参数总数恰好为 1，且 target 是直接 `IrExpr::Member { is_arrow: true, base: Var(p) }` 的 scalar field 时，`struct T *p` 才会发射为 `mut p: &mut T`。
+  - 专用 helper 发射 `p.field = (p.field + rhs);`，因此 `p->field += value` 形态可通过，但 `return p->field`、普通 RHS 里的 `p->field`、复杂 base/cast/offset 仍走原有 fail-closed 路径。
+  - RHS guard 只允许 integer variable、integer literal、integral cast 包裹的简单值；`value + 1`、call、member/index/deref、inc/dec 等复杂 RHS 仍拒绝。
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `compound_assignment_target_type()` 对 direct mutable record pointer arrow field 返回 field type，但仍拒绝 const pointer、复杂 base 和非 record pointer。
+  - 将已有 record field compound RHS guard 从 by-value `p.x += value` 扩展到 direct mutable arrow `p->x += value`，保持 skeleton path 和 real clang AST path 一致。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 把上一节的 mutable arrow compound 负例改为正例 `typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape`。
+  - 新增 direct typed IR 负例 `typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs`，确保复杂 RHS 仍 fail closed。
+  - 保留 `typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment`，确保写后一般 mutable arrow read 没有被顺手放开。
+  - 把 clang skeleton arrow compound 负例改为正例 `clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment`。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled` 和复杂 RHS 负例 `clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled`。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注单 pointer 参数下 mutable `struct T *p` 的直接 `p->scalar_field = scalar` 和简单 standalone `p->scalar_field += scalar` 已进入 typed IR candidate 子集；后续仍优先做 mutable field read-after-write、多 pointer alias/noalias proof、value-position/复杂 target/field inc-dec 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR mutable record pointer field compound assignment 正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR complex RHS 负例：1 passed，错误原因包含 `mutable record pointer field compound assignment RHS`。
+- clang skeleton mutable arrow compound 正例：1 passed，并通过 rustc snippet smoke。
+- 真实 clang AST mutable arrow compound 正例/复杂 RHS 负例：均 1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`。
+- 写后一般 `return p->field` mutable arrow read 负例：1 passed，仍按 `struct point *` arrow read unsupported 拒绝。
+
+边界：
+- 可以说：单 pointer 参数下的直接 mutable record pointer scalar field compound assignment（例如 `p->x += value`）已能从真实 clang AST lowering -> typed IR -> generic emitter 生成可编译 Rust candidate，Rust 签名使用 `&mut T`。
+- 可以说：这是 value-discarded standalone statement 的窄 candidate path，正确性仍要靠后续验证门禁，不是 semantic acceptance。
+- 不应说：已支持一般 mutable `p->field` read、read-after-write 对象模型、多 pointer alias/noalias、nullable mutable pointer、value-position compound assignment、`p->field++`、复杂 RHS/target、integer promotion/truncation 组合、pointer arithmetic record access、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field compound-assignment candidate path: `struct T *p; p->scalar_field += scalar;` now emits `p: &mut T` and `p.scalar_field = (p.scalar_field + scalar);` only under the existing single-pointer-param gate.
+- The implementation does not globally enable mutable arrow field reads. It special-cases only assignment values shaped as `target = Binary(same_direct_arrow_member_target, op, simple_rhs)`.
+- Kept fail-closed behavior for complex RHS/targets, nullable mutable pointers, multi-pointer functions, `return p->field`, `p->field++`, value-position compound assignment, layout/ABI claims, and semantic acceptance.
+- Extended clang skeleton and real clang AST lowering to admit direct mutable record pointer arrow compound targets while applying the same simple-RHS record-field guard used for by-value `p.x += value`.
+- Updated the Chinese and English MVP backlog to mark this narrow compound write path as supported while keeping mutable read-after-write, alias/noalias proof, field inc-dec, and broader pointer ownership modeling open.
+
+## 142. 2026-06-28 P1 narrow mutable record pointer field read-after-write
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写后读路径。两个只读代理确认：clang lowering 已能把 `p->x = value; return p->x;` 解析成 `Assign(Member arrow)` + `Return(Member arrow)`，主要缺口在 typed IR emitter；同时必须避免把整个 `struct T *p` 的一般 field read 打开。主线实现为字段级、顺序敏感的窄 candidate：只有同一个 direct scalar field 在当前路径之前已经 definite written，才允许读取。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - `DefiniteAssignmentState` 新增 mutable record pointer field 状态，按 `(base, field)` 追踪已 definite written 的字段，而不是只按参数 `p` 放开。
+  - `validate_definite_assignment()` 现在返回通过校验的 mutable record pointer read field 集合，并写回 `EmitContext.mutable_record_pointer_read_fields`。
+  - assignment target 是 direct mutable record pointer field 时，先校验 RHS，再把该 `(p, field)` 标记为已写；`p->x += value` 仍通过上一节的 compound 专用逻辑跳过自身 lhs 旧值读取。
+  - `if` 分支后只保留 before 已写或 then/else 两边都写过的字段；`while`/`for`/`do while` 不把循环体内写入提升为循环后的 definite write。
+  - `emit_member_expr()` 先尝试 `emit_mutable_record_pointer_member_expr()`：只有 base 是已声明 direct `Var(p)`、`p` 通过 single-pointer mutable write gate、field 是 scalar、且 validator 已登记该 `(p, field)` 可读时，才发射 `p.field`；否则继续走 readonly record pointer 路径或 fail closed。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 将 `typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_assignment` 改为正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment`，覆盖 `p->x = value; return p->x;`。
+  - 新增 direct typed IR 负例：read-before-write、maybe-write 后读取、写 `x` 后读 `y`。
+  - 新增真实 clang AST smoke：`clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled`。
+  - 新增真实 clang AST 负例：`clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled`。
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` 和 `.en.md`
+  - 同步标注 single-pointer gate 下同字段 definite write 后的 mutable `p->scalar_field` read 已进入 typed IR candidate 子集；后续仍优先做多 pointer alias/noalias proof、value-position/复杂 target/field inc-dec、path-sensitive mutable field definite assignment 和 layout/ABI evidence。
+
+定向验证：
+
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_before_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_maybe_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_different_field_read_after_assignment --test bounded_translation -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled --test bounded_translation -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled --test bounded_translation -- --nocapture
+```
+
+结果：
+- direct typed IR 写后读正例：1 passed，并通过 rustc snippet smoke。
+- direct typed IR read-before-write、maybe-write 后读取、写 `x` 后读 `y` 负例：均 1 passed，错误原因包含 `mutable record pointer field p.<field> is read before definite assignment`。
+- 复合赋值回归 `p->x += value`：1 passed。
+- 真实 clang AST 写后读正例/读前写负例：均 1 passed，使用 `C:\Program Files\LLVM\bin\clang.exe`。
+
+边界：
+- 可以说：single-pointer gate 下 direct mutable record pointer scalar field 在同字段 definite write 后可以读取，例如 `p->x = value; return p->x;` 生成 `p: &mut T` 和 `return p.x;`。
+- 可以说：这是字段级 definite assignment，不是通用 alias/noalias proof，也不是完整 C object model。
+- 不应说：已支持未写先读、maybe-write 后读取、跨循环/复杂 path condition 后读取、多 pointer alias/noalias、nullable mutable pointer、复杂 base、field pointer arithmetic、non-scalar field、`p->field++`、value-position compound assignment、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field read-after-write candidate path.
+- `struct T *p; p->scalar_field = value; return p->scalar_field;` now emits `p: &mut T`, `p.scalar_field = value;`, and `return p.scalar_field;` only when the same direct scalar field has been definitely written earlier on the current path.
+- The definite-write state is field-level: `p->x = value; return p->y;` still fails closed.
+- Reads before writes and reads after maybe-writes still fail closed; loop/body writes are not promoted to post-loop definite writes.
+- Updated Chinese and English MVP backlog to move this narrow read-after-write path into the supported typed IR candidate subset while keeping broader alias/noalias and path-sensitive ownership work open.
+
+## 143. 2026-06-28 P1 mutable record pointer field statement inc/dec
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 写路径，不写 FlashDB/crc32 特例。两个只读代理结论一致：`p->x++` / `--p->x` 不需要新增 typed IR raw inc/dec emitter；更安全的切口是只在 clang statement-position、表达式值被丢弃时，把 direct mutable record pointer scalar field inc/dec desugar 成现有 assignment/update 形状：`p->x = p->x +/- 1`。这复用上一节的 single-pointer gate、field-level definite-write/read 逻辑和 mutable arrow compound update helper。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `inc_dec_assignment_target_type()` 放开 direct mutable record pointer arrow field，但仅限 `context == "statement"`。
+  - arrow base 必须是 direct `DeclRef`，并且类型必须满足非 const record pointer；`const struct T *p`、复杂 base、非 record pointer base 仍 fail closed。
+  - `ForStmt step` context 继续拒绝 record pointer field inc/dec，避免把 loop step 顺序语义混入本切口。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape`，直接验证 `Assign(Member arrow, Binary(Add/Sub, same Member, 1))` 可发射 `p: &mut Point` 和 `p.x = (p.x +/- 1i32);`。
+  - 新增 direct typed IR 负例 `typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr`，先 definite-write 字段后再构造 raw `IrExpr::IncDec(Member arrow)`，确认 raw inc/dec expression 仍 fail closed。
+  - 将真实 clang smoke 改为正例 `clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled`，覆盖 `p->x++; ++p->x; p->x--; --p->x;`。
+  - 新增 clang frontend unit 边界：const record pointer field inc/dec 和 `ForStmt step` 中 record pointer field inc/dec 仍拒绝。
+- `docs/c2rust-migration-agent/README.md` / `.en.md`、`core-translation-architecture.md` / `.en.md`、`COVERAGE.md` / `.en.md`、`future-vision-and-mvp.md` / `.en.md`
+  - 同步把 direct single-pointer mutable record pointer scalar field statement inc/dec 标为窄 candidate 子集。
+  - 明确 raw/value-position inc/dec、`return p->x++`、`for (...; p->x++)`、多 pointer alias、nullable mutable pointer、复杂 base/target/RHS、non-scalar field、layout/ABI 和 semantic acceptance 仍 fail closed。
+
+定向验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_accepts_mutable_record_pointer_field_inc_dec_statement_as_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_statement -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled -- --nocapture
+```
+
+结果：
+- clang frontend statement/const/for-step 单元测试均按预期通过。
+- direct typed IR desugar 正例通过，并通过 rustc snippet smoke。
+- raw `IrExpr::IncDec(Member arrow)` 负例通过，错误保持在 `inc/dec expression is unsupported`。
+- 真实 clang AST `p->x++; ++p->x; p->x--; --p->x;` smoke 通过，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：single-pointer gate 下的 direct mutable record pointer scalar field 在 standalone statement 位置支持 `p->x++` / `++p->x` / `p->x--` / `--p->x`，并发射为 `p.x = (p.x +/- 1i32);`。
+- 可以说：这是 clang statement desugar 后的 assignment/update candidate，不是完整 C inc/dec expression semantics。
+- 不应说：已支持 raw/value-position inc/dec、`return/call/condition` 中的 `p->field++`、`ForStmt` step 中 record-field inc/dec、多 pointer alias/noalias、nullable mutable pointer、复杂 base/target/RHS、non-scalar field、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow mutable record pointer field statement-inc/dec candidate path.
+- `struct T *p; p->scalar_field++; ++p->scalar_field; p->scalar_field--; --p->scalar_field;` now lowers from real clang AST into assignment desugar shapes and emits `p: &mut T` plus direct Rust field updates, under the existing single-pointer-param gate.
+- Raw `IrExpr::IncDec` is still unsupported; value-position inc/dec, `ForStmt` step record-field inc/dec, complex targets, nullable mutable pointers, multi-pointer aliasing, layout/ABI claims, and semantic acceptance remain fail-closed.
+- Updated Chinese and English docs/coverage/backlog to mark this narrow statement-position path as supported while keeping broader pointer ownership and value-position update semantics open.
+
+## 144. 2026-06-28 P1 mutable record pointer field if-return definite assignment
+
+本轮继续按多智能体和 TDD 推进 P1 pointer/record 读路径，不写 FlashDB/crc32 特例。只读代理一致建议：上一节的字段级 definite-write/read 仍过于保守，`if (cond) { p->x = value; } else { return 0; } return p->x;` 这类真实 C 叶子函数应进入 generic typed IR candidate；但不能把它写成通用 path-sensitive 或通用 alias 支持。主线实现为极窄的 branch merge：只有会继续执行的路径都写入同一个字段，未写入路径能被当前 guard 证明直接 return，后续读取才可通过。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `body_definitely_returns()` / `stmt_definitely_returns()`，目前只有直接 `Return` 和 then/else 两边都 definite-return 的 `If` 算作分支级返回证明。
+  - 新增 `merge_definite_branch_set()`，用于合并 scalar local initialized 集合和 mutable record pointer field definite-write 集合。
+  - `IrStmt::If` 的 definite-assignment merge 现在区分 fallthrough 和 returning 分支：returning 分支不要求提供后续事实，但也不会把只在 returning 分支里写入的事实带到后续路径。
+  - both branches return 时只保留 `before`，避免 unreachable 后续代码拿到虚假的新事实。
+  - branch-local scalar declarations 仍不会泄漏到父作用域。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_else_return`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_then_return_else_write`。
+  - 新增 direct typed IR 正例 `typed_ir_emits_uninitialized_scalar_local_after_if_return_assignment`，因为 scalar initialized 集合复用同一合并逻辑。
+  - 新增 direct typed IR 负例覆盖 returning 分支读早于写、只在 returning 分支写入、loop-body return 不算分支级 return。
+  - 新增真实 clang AST smoke `clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_when_enabled`。
+- `docs/c2rust-migration-agent/README.md` / `.en.md`、`COVERAGE.md` / `.en.md`、`core-translation-architecture.md` / `.en.md`、`future-vision-and-mvp.md` / `.en.md`
+  - 同步标注 direct if-return fallthrough write 已进入窄 typed IR candidate 子集。
+  - 明确普通 maybe-write、只在 returning 分支写入、loop/复杂路径 return、多 pointer alias、nullable mutable pointer、复杂 base/target/RHS、layout/ABI 和 semantic acceptance 仍 fail closed。
+
+定向验证：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_else_return -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir read_after_if -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_emits_uninitialized_scalar_local_after_if_return_assignment -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_when_only_returning_branch_writes -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir typed_ir_rejects_mutable_record_pointer_arrow_field_read_after_loop_return_branch -- --nocapture
+$env:C2R_RUN_CLANG_AST_TESTS='1'; $env:CLANG_PATH='C:\Program Files\LLVM\bin\clang.exe'; cargo test --manifest-path crates/c2r-translator/Cargo.toml --features "typed-ir clang-frontend" clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_when_enabled -- --nocapture
+```
+
+结果：
+- RED 已观察：新增正例在实现前按 `mutable record pointer field p.x is read before definite assignment` 失败。
+- direct typed IR if-else-return / then-return-else-write 正例均通过，并通过 rustc snippet smoke。
+- scalar local if-return assignment 正例通过，并通过 rustc snippet smoke。
+- returning branch read-before-write、returning-branch-only write、loop-body return 负例均按预期 fail closed。
+- 真实 clang AST `if (cond) { p->x = value; } else { return 0; } return p->x;` smoke 通过，使用 `C:\Program Files\LLVM\bin\clang.exe`，并通过 rustc snippet smoke。
+
+边界：
+- 可以说：single-pointer gate 下，direct mutable record pointer scalar field 的同字段读取现在支持一个窄化 if-return 分支公差：all fallthrough paths write; non-writing branches must definitely return。
+- 可以说：无初始化 scalar local 的 assignment-before-read proof 也获得同样的窄化 if-return 分支合并。
+- 不应说：已支持通用 path-sensitive definite assignment、通用 maybe-write、通用 alias/noalias、nullable mutable pointer、loop/CFG return proof、复杂 base/target/RHS、field pointer arithmetic、non-scalar field、record layout/ABI 等价、semantic acceptance、volatile/packed/bitfield/union/nested/anonymous record 或完整 pointer ownership model。
+
+English mirror summary:
+
+- Added a narrow if-return definite-assignment merge for mutable record pointer field reads.
+- `if (cond) { p->scalar_field = value; } else { return 0; } return p->scalar_field;` now emits `p: &mut T` and `return p.scalar_field;` only when every fallthrough path writes the same direct scalar field and the non-writing branch definitely returns.
+- The same merge improves uninitialized scalar local assignment-before-read for direct if-return shapes.
+- Writes that occur only on returning branches, reads before writes, ordinary maybe-writes, loop/complex-path returns, nullable mutable pointers, multi-pointer aliasing, complex targets/RHS, layout/ABI claims, and semantic acceptance remain fail-closed.
+- Updated Chinese and English docs/coverage/backlog to move this narrow direct if-return path into the supported typed IR candidate subset while keeping broader path-sensitive/CFG and alias work open.
+
+## 145. 2026-06-28 external review triage: route/wrapping/competition clang
+
+本轮收到外部评价，主线和 3 个只读代理做了代码核查。结论如下：
+
+- route 评价基本成立：`crates/c2r-translator/src/translation_route.rs` 目前只有 `GenericTypedIr` / `Unsupported` 两个 route，以及 `GenericTypedIrEmitter` / `None` 两个 generator；`generic_typed_ir_route()` 和 `unsupported_route()` 是静态 metadata 构造器。`emit_rust_from_ir()` / `emit_rust_from_ir_with_globals()` 只是 emitter 成功贴 `GenericTypedIr`，失败贴 `Unsupported`。这不是多候选调度器，更准确说是 typed IR candidate provenance。
+- legacy fallback 评价方向成立但位置要修正：不是 `lib.rs` 直接 `.unwrap_or_else(legacy)`，实际在 `crates/c2r-translator/src/artifacts.rs` 的 `translate_slice_with_optional_clang_lowered_ir()`：`try_translate_slice_with_clang_lowered_ir(spec).unwrap_or_else(|| translate_slice(spec))`。启用 lowering report 时会另写 artifact，但主翻译结果存在静默 fallback 风险。
+- pipeline route-decision 有规则门禁和 L0/L1/L2/L4 映射，但仍不是候选生成前的真选择引擎；它没有候选列表、score、fallback chain 或 C2Rust/LLM 调度。
+- unsigned wrapping 评价成立且优先级最高：`emit_binary_op()` 对 `Add` / `Sub` / `Mul` 发裸 `+` / `-` / `*`；`uint32_t` 等 C unsigned arithmetic 需要模 `2^n`，而 Rust debug/overflow-checks 下裸运算会 panic。主线用 `rustc -C overflow-checks=on` 复现 `0u32 - 1u32` runtime panic。shift 要分开处理：合法 shift count 的 Rust/C unsigned 结果通常一致，非法 shift count 在 C 中本来就是 UB，因此这是 contract/fail-closed 问题，不是 wrapping 替换问题。
+- competition clang 评价要修正措辞：`config/competition-env/environment.json` 没有把 clang 列为 baseline tool，也没有声明 clang not_found；`cmake` 才明确 unavailable。`auto_migrate.py --emit-clang-lowering-report` 是 opt-in，不传时不会启用 typed IR clang lowering feature。结论是必须显式声明/安装/检测 `CLANG_PATH` 和比赛 clang lane，不能静默依赖本机 Windows clang。
+
+已同步待办：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md` P0 新增 competition clang lane。
+- P0 新增 unsigned integer modulo semantics 修复项，要求先加 debug/overflow-checks runtime RED tests，再发射 wrapping 或等价策略。
+- P0 新增 route metadata/provenance 与真 candidate-selection layer 的边界项，要求禁止无遥测静默 fallback。
+- P2 新增多候选 router 研究项，明确只能在 P0 语义稳定后做，且不能替代 C oracle。
+
+下一刀建议：
+1. 先提交当前 if-return definite-assignment 切片。
+2. 下一提交优先做 unsigned wrapping 红测和修复：新增运行 emitted Rust snippet 的测试 helper，覆盖 `u32::MAX + 1`, `0u32 - 1`, unsigned multiply。修复应只对 unsigned `Add` / `Sub` / `Mul` 使用 wrapping；signed overflow、division/modulo zero、invalid shift count 继续 fail closed 或进入后续 contract。
+3. 再做 competition clang lane：明确 `optional_tools.clang` 或 required clang 配置，补 `CLANG_PATH` 检查和 opt-in wrapper。
+
+## 146. 2026-06-28 P0 unsigned arithmetic wrapping semantics
+
+本轮按外部评价和多智能体只读审计修复 P0 语义 bug：typed IR emitter 过去对 C unsigned `+` / `-` / `*` 发裸 Rust 运算，导致 debug/overflow-checks 下 `uint32_t` 模运算候选会 panic，而 release 下才碰巧回绕。这会直接影响 adler32、crc32、xxhash、checksum/hash 类真实题型，不能依赖编译 profile。
+
+核心改动：
+- `crates/c2r-translator/src/typed_ir.rs`
+  - 新增 `emit_binary_result_expr()` / `unsigned_wrapping_method()` / `is_unsigned_integer_type()`。
+  - 普通 `IrExpr::Binary`、`emit_expr_with_prelude()` 中的 binary 表达式、以及 mutable record pointer field compound assignment 的专用发射路径，现在共享同一策略。
+  - 仅当 result type 是 unsigned integer 且 op 是 `Add` / `Sub` / `Mul` 时发射 `.wrapping_add(...)` / `.wrapping_sub(...)` / `.wrapping_mul(...)`。
+  - signed `+` / `-` / `*`、shift、division、modulo、bitwise 继续保留原有发射边界；signed overflow、division/modulo zero、invalid shift count 是后续 contract/fail-closed 问题。
+- `crates/c2r-translator/tests/bounded_translation.rs`
+  - 新增 `assert_rust_snippet_runs()`，用 `rustc -C overflow-checks=on` 编译并运行 emitted Rust snippet。
+  - 新增运行型 RED/GREEN 用例：`u32::MAX + 1 -> 0`、`0u32 - 1 -> u32::MAX`、`u32::MAX * 2 -> 0xFFFF_FFFE`。
+  - 更新无符号 `usize`/`u32` 旧字符串断言为 `wrapping_add` 形状；legacy string translator 的字符串断言不动。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `COVERAGE.md` / `.en.md`
+  - `core-translation-architecture.md` / `.en.md`
+  - `future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir wrapping_semantics -- --nocapture
+```
+实现前 3 条测试分别因 `attempt to add/subtract/multiply with overflow` 失败。
+
+已跑定向 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir wrapping_semantics -- --nocapture
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features typed-ir --test bounded_translation typed_ir_ -- --nocapture
+```
+结果：3 条 wrapping runtime tests 通过；216 条 `typed_ir_` 集成测试通过。
+
+边界：
+- 可以说：typed IR generic emitter 的 unsigned integer `Add` / `Sub` / `Mul` candidate 不再依赖 debug/release overflow 行为。
+- 可以说：checksum/hash 类候选生成少了一个核心 profile-dependent 正确性风险。
+- 不应说：已完成 adler/crc/xxhash 全语义接受、完整 C arithmetic、signed overflow parity、非法 shift count 处理、division/modulo zero contract、完整 usual arithmetic conversions、pointer arithmetic 或 semantic acceptance。
+
+English mirror summary:
+
+- Fixed the typed IR emitter's profile-dependent C unsigned arithmetic lowering for `+`, `-`, and `*`.
+- Unsigned-result `IrExpr::Binary` now emits explicit Rust `wrapping_add`, `wrapping_sub`, and `wrapping_mul` across the normal expression path, the prelude expression path, and the mutable record pointer field compound-update helper.
+- Added runtime emitted-Rust tests compiled with `rustc -C overflow-checks=on` for `u32::MAX + 1`, `0u32 - 1`, and unsigned multiply.
+- Signed overflow, division/modulo zero, invalid shift counts, full usual arithmetic conversions, pointer arithmetic, and semantic acceptance remain separate fail-closed or validation-gate work.
+
+## 147. 2026-06-28 P0 competition clang lane explicit opt-in
+
+本轮承接第 145 节 P0 待办，明确比赛环境里的 clang 路线，而不是继续让本机 Windows clang 或 diagnostic lowering report 语义混在默认 lane 里。
+
+设计选择：
+- clang 不进入默认必需 toolchain；默认构建、测试、验证仍不要求 clang。
+- `config/competition-env/environment.json` 新增 `optional_tools.clang` 和 `optional_lanes.competition_clang`，声明 `CLANG_PATH` 是该 lane 的必需环境变量，`LIBCLANG_PATH` 只是可选环境变量。
+- 新增 `auto_migrate.py --competition-clang-lane` 作为比赛 typed-IR clang lane wrapper。该 flag 会隐式启用 `--emit-clang-lowering-report`，并在运行 translator 前 fail-fast 检查 `CLANG_PATH`。
+- 保留原有 `--emit-clang-lowering-report` 诊断语义：缺 `CLANG_PATH` 时仍可产出 `status=unavailable` / `missing_clang_path` report，不让默认非 clang lane 失败。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `--competition-clang-lane`。
+  - 新增 `require_competition_clang_lane()`。
+  - `cache_identity()` / `emit_cache_metadata()` 内部使用 effective lowering flag：`emit_clang_lowering_report or competition_clang_lane`，避免只有 `main()` 改写参数时才记录证据。
+  - `clang_lowering_identity(..., competition_clang_lane=True)` 会记录 `lane=competition-clang-lane`、`required=true`、`requires_env=["CLANG_PATH"]`、`optional_env=["LIBCLANG_PATH"]`。
+- `validation/tools/test_auto_migrate.py`
+  - 新增/强化 `test_competition_clang_lane_requires_clang_path`。
+  - `test_cache_identity_records_competition_clang_lane` 现在只传 `competition_clang_lane=True`，并断言 command args、feature set 和 lane identity 都完整记录。
+- `config/competition-env/environment.json` 与兼容 profile 同步新增 optional clang lane。
+- `validation/tools/test_competition_environment_profile.py`
+  - 覆盖 `optional_tools.clang` 和 `optional_lanes.competition_clang`。
+- `config/competition-env/README.md` / `.en.md`、`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - 同步说明 clang 是 explicit opt-in，不是默认 baseline requirement。
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_competition_clang_lane_requires_clang_path
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity
+```
+实现前分别因 argparse 不认识 `--competition-clang-lane`、`cache_identity()` 不认识 `competition_clang_lane`、以及 profile 缺 `optional_lanes` 失败。
+
+已跑定向 GREEN：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_auto_migrate.AutoMigrateTests.test_competition_clang_lane_requires_clang_path validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_default_profile_matches_competition_baseline validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_compatibility_profile_stays_synchronized_with_default_profile
+```
+结果：5 tests OK。
+
+边界：
+- 可以说：比赛 clang typed-IR lane 现在是显式 opt-in，缺 `CLANG_PATH` 会清晰失败。
+- 可以说：默认非 clang lane、普通 `--emit-clang-lowering-report` 诊断 lane 和 toolchain check 默认要求没有被改变。
+- 不应说：比赛环境默认已有 clang、libclang parse 路线已启用、typed IR candidate 已自动成为 semantic pass、或 route metadata 已升级成真正多候选 router。
+
+English mirror summary:
+
+- Added an explicit `--competition-clang-lane` for the competition typed-IR clang path.
+- The lane implicitly enables `clang-lowering-report`, requires `CLANG_PATH`, and fails clearly when `CLANG_PATH` is missing.
+- Default build/test/validation paths still do not require clang, and plain `--emit-clang-lowering-report` remains diagnostic-only when clang is missing.
+- Competition environment JSON now records clang as an optional tool/lane, with synchronized compatibility profile and bilingual docs.
+
+## 148. 2026-06-28 P0 explicit fallback provenance
+
+本轮继续处理外部评价中“route/fallback 仍像空壳”的核心问题，选择最小可提交切片：不一次性实现完整 C2Rust/LLM 多候选 router，而是先消除 `clang-lowering-report` feature 下 clang-lowered typed IR 失败后 fallback 到 legacy string translator 的无遥测风险。
+
+核心改动：
+- `crates/c2r-translator/src/model.rs`
+  - 新增 `TranslationSource`，记录主 Rust draft 的 `selected` generator，并可记录 `fallback_from` / `fallback_reason`。
+- `crates/c2r-translator/src/legacy_translation.rs`
+  - legacy string translator 正常生成时标记 `selected=legacy-string-translator`。
+- `crates/c2r-translator/src/clang_lowered_translation.rs`
+  - clang-lowered typed IR 成功生成时标记 `selected=clang-lowered-typed-ir`。
+- `crates/c2r-translator/src/artifacts.rs`
+  - `translate_slice_with_optional_clang_lowered_ir()` 保留 compatibility fallback，但 fallback 结果现在标记为 `selected=legacy-string-translator`、`fallback_from=clang-lowered-typed-ir`、`fallback_reason=clang_lowered_typed_ir_unavailable`。
+  - raw `auto-translation-plan.json` 写入 `translation_source`。
+  - raw `auto-translation-events.jsonl` 在 fallback 时追加 `translation_fallback` 事件。
+- `validation/tools/auto_migrate.py`
+  - `normalize_translation_artifacts()` 归一化后保留 `translation_source`。
+  - `candidate_generation_evidence()` 写入 `primary_candidate`，使 `route_decision.candidate_generation.primary_candidate` 可审计主候选来源。
+  - 归一化后的 events 在 fallback 时也写入 `event_kind=translation_fallback`，避免覆盖 Rust raw events 后丢遥测。
+- `validation/auto-translation-template/route-decision.schema.json` 与 `validation-profile.schema.json`
+  - 为 `candidate_generation.primary_candidate` 增加 schema 形状。
+- 文档同步：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events -- --nocapture
+```
+实现前失败于 `translation_source.selected == Null`。
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_primary_candidate_fallback_source
+```
+实现前失败于 `KeyError: 'primary_candidate'`。
+
+已跑定向 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_primary_candidate_fallback_source validation.tools.test_auto_migrate.AutoMigrateTests.test_normalized_artifacts_preserve_translation_fallback_source
+```
+
+边界：
+- 可以说：clang-lowered typed IR 不可用后 fallback 到 legacy string translator 不再静默；translator raw artifacts、normalized plan、JSONL events 和 route decision 都能看到主候选来源。
+- 可以说：这把 route metadata 往 provenance 方向做实了一步。
+- 不应说：完整多候选 router、C2Rust baseline/repair 调度、LLM candidate 调度、score/hard-gate 选择器、fallback chain 优先级、或 semantic acceptance 已完成。
+
+English mirror summary:
+
+- Added explicit primary-candidate provenance for clang-lowering-report fallback.
+- Raw translator artifacts now record `translation_source`, including selected generator and optional fallback source/reason.
+- When clang-lowered typed IR is unavailable and the compatibility path uses the legacy string translator, raw and normalized JSONL events include a `translation_fallback` event.
+- `auto_migrate.py` preserves `translation_source` after normalization and binds it into `route_decision.candidate_generation.primary_candidate`.
+- This is provenance, not a full multi-candidate router and not semantic acceptance.
+
+## 149. 2026-06-28 P0 post-generation candidate inventory provenance
+
+本轮继续处理外部评价中“route 只是静态壳、没有真实候选集合”的问题。仍不一次性实现完整 L0-L4 多候选 router，而是先把后生成阶段的候选清单和选择 provenance 落到 route/profile evidence，并让 validator 能拒绝候选集合漂移和语义冒领。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `candidate_generation_evidence()` 现在接收 C2Rust baseline manifest 摘要，并写入：
+    - `selection_policy.stage=post_generation_provenance`
+    - `selection_policy.semantic_acceptance=false`
+    - `selection_policy.full_router=false`
+    - `selected_candidate_id`
+    - `candidate_set`
+  - `candidate_set` 当前包含三类后生成阶段来源：primary Rust draft、typed-IR signal、`c2rust-baseline` context。
+  - `primary_candidate` 增加 `candidate_id` 和 `semantic_pass=false`，继续保留 fallback provenance。
+  - `c2rust-baseline` 候选固定为 `correctness_role=candidate_context_only` 和 `semantic_pass=false`，不能作为语义通过来源。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - 新增 candidate selection record 校验：`candidate_set` id 必须唯一，`selected_candidate_id` 必须指向集合内候选，所有 candidate 必须保持 `semantic_pass=false`。
+  - `c2rust-baseline` candidate 必须保持 `candidate_context_only`，且 `candidate_generation.c2rust_baseline` 必须与 `candidate_set` 中同 id 项一致。
+  - 旧 evidence 不带 `candidate_set` 时保持兼容。
+- `validation/auto-translation-template/route-decision.schema.json` 与 `validation-profile.schema.json`
+  - 增加 `selection_policy`、`selected_candidate_id`、`candidate_set` 和 `c2rust_baseline` 形状。
+  - `candidate_generation` required 仍保持兼容策略，避免破坏旧 route/profile fixtures。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_candidate_set_and_selected_candidate
+```
+实现前失败于 `KeyError: 'selection_policy'`。
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_candidate_selection_id_outside_candidate_set validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_candidate_claiming_semantic_pass
+```
+实现前失败于没有抛出 `SystemExit`。
+
+边界：
+- 可以说：route/profile evidence 现在有最小候选清单 provenance，并能绑定当前 primary draft 与 C2Rust baseline context。
+- 可以说：validator 会拒绝 candidate id 漂移、C2Rust baseline 冒充语义来源，以及任何 candidate 自称 `semantic_pass=true`。
+- 不应说：完整多候选 router、score/hard-gate 决策、C2Rust baseline/repair 实际调度、LLM candidate 调度、fallback chain 优先级、或 semantic acceptance 已完成。
+
+English mirror summary:
+
+- Added post-generation candidate inventory provenance to route/profile evidence.
+- `candidate_set` now records the primary Rust draft, typed-IR signal, and C2Rust baseline context.
+- The selected primary draft is bound through `selected_candidate_id`; C2Rust baseline remains `candidate_context_only`.
+- The validator rejects candidate-set id drift, C2Rust semantic-source claims, and candidate `semantic_pass=true`.
+- This remains provenance with `full_router=false`; full multi-candidate routing and semantic acceptance remain future work.
+
+## 150. 2026-06-28 P0 repo unsafe budget and core translator CI
+
+本轮继续 P0 “可信、可维护的翻译器核心”路线，选择核心 CI 与 repo-level unsafe budget 作为下一刀。原因：P0 要求不能只依赖 `flashDB Rust CI`，同时 unsafe budget 必须持续监控 `crates/c2r-translator`、`flashDB_rust`、`validation/l2_slices` 三个 first-party non-test Rust 范围。
+
+核心改动：
+- `.github/workflows/core-translator-validation-ci.yml`
+  - 新增 core translator validation CI。
+  - 跑 `cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet`。
+  - 跑 `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet`。
+  - 跑核心 Python validation tests：`test_auto_migrate`、`test_validate_auto_translation_evidence`、`test_unsafe_budget`。
+  - 跑 `python validation/tools/unsafe_budget.py --max-ratio 0.10`。
+  - 跑 `git diff --check`。
+  - 触发路径覆盖 translator、validation tools/templates、`validation/l2_slices`、competition env、unsafe ledger 和 workflow 自身。
+- `validation/tools/unsafe_budget.py`
+  - 新增 repo-level first-party non-test Rust unsafe scanner。
+  - 默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`。
+  - 输出 JSON，包含 scopes、scanned_files、scanned_lines、unsafe findings、category counts、unsafe ratio、registration status、failed gates 和 ledger reference。
+  - 默认加载 `validation/unsafe-budget-ledger.json`；当前 ledger 为空但存在，表示 0 unsafe 的登记入口也落盘。
+- `validation/tools/test_unsafe_budget.py`
+  - 覆盖扫描范围、忽略 tests、未登记 unsafe 失败、超过 ratio 失败、当前仓库 gate 通过，以及 core CI workflow contract。
+- `validation/unsafe-budget-ledger.json`
+  - 新增 repo-level unsafe registration entrypoint。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_unsafe_budget
+```
+最初失败于 `ImportError: cannot import name 'unsafe_budget'`。
+
+```powershell
+python -m unittest validation.tools.test_unsafe_budget.UnsafeBudgetTests.test_core_ci_runs_repo_unsafe_budget_gate
+```
+实现前失败于缺 `.github/workflows/core-translator-validation-ci.yml`，随后失败于 workflow 未触发 `validation/unsafe-budget-ledger.json`。
+
+已跑定向 GREEN：
+```powershell
+python -m unittest validation.tools.test_unsafe_budget
+python validation/tools/unsafe_budget.py --max-ratio 0.10
+```
+当前真实仓库 unsafe budget：`status=passed`，扫描 34 个 first-party non-test Rust 源文件、26576 行，unsafe count 为 0，ledger 已加载。
+
+边界：
+- 可以说：核心 translator + validation CI 已有正式 GitHub Actions workflow，不再只依赖 FlashDB 专用 CI。
+- 可以说：repo-level unsafe budget 已有可执行 gate、测试和 ledger 入口，并接入核心 CI。
+- 不应说：unsafe ledger 细粒度治理已完整；当前登记键仍是最小 path+category，后续还要补 span、替代方案、覆盖测试、source evidence 和审核状态。
+
+English mirror summary:
+
+- Added a core translator validation GitHub Actions workflow.
+- Added a repo-level unsafe budget scanner covering `crates/c2r-translator/src`, `flashDB_rust/src`, and `validation/l2_slices/src`.
+- The unsafe budget report records scope, denominator lines, findings, ratio, registration status, failed gates, and ledger reference.
+- Added `validation/unsafe-budget-ledger.json` as the repo-level registration entrypoint.
+- Verified the current repo has 0 first-party non-test unsafe findings across 34 Rust source files and 26576 scanned lines.
+
+## 151. 2026-06-28 P0 C2Rust baseline candidate evidence binding
+
+本轮继续处理外部评价中“route/candidate schema 很重，但 C2Rust baseline 只是松散 status/reason 字段”的问题。目标不是把 C2Rust 输出升级为语义证明，而是把它作为 `candidate_context_only` 时的证据引用钉牢，避免 route/profile 中的 baseline 信息与实际 manifest 或 generated output 漂移。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - `emit_route_decision()` 现在先生成同一份 `c2rust_baseline_artifact` ref，并同时用于 `source_artifacts.c2rust_baseline` 和 `candidate_generation.c2rust_baseline.baseline_manifest`。
+  - `candidate_generation_evidence()` 新增 `generated_draft_semantic_pass=false`。
+  - `c2rust_baseline_candidate_binding()` 现在输出：
+    - `baseline_manifest`
+    - `output_ref`
+    - `generated_draft_semantic_pass=false`
+  - 当 baseline manifest `output` 为 generated object 时，`output_ref` 绑定 path/status/sha256；当 baseline 为 skipped/blocked 或没有 output 时，`output_ref=null`。
+- `validation/tools/validate_auto_translation_evidence.py`
+  - `validate_typed_ir_candidate_binding()` 把 `evidence_dir/prefix` 传给 candidate selection validator。
+  - 新增 C2Rust baseline candidate binding 校验：
+    - baseline manifest ref 必须有 path/status/sha256。
+    - candidate 的 status/reason/correctness_role 必须与 manifest 一致。
+    - generated baseline 必须校验 output_ref path/status/sha256 和实际文件 sha。
+    - skipped/blocked baseline 必须保持 `output_ref=null`。
+  - 新增 `require_file_ref()`，用于校验 Rust output 文件，避免用 JSON evidence helper 去读取 `.rs`。
+- `validation/auto-translation-template/route-decision.schema.json`
+- `validation/auto-translation-template/validation-profile.schema.json`
+  - `candidateGenerationEvidence.required` 现在包含 `generated_draft_semantic_pass`。
+  - `candidateSetItem` 新增可选 `baseline_manifest`、`output_ref`、`generated_draft_semantic_pass=false`。
+  - 对带 `baseline_manifest` 的新格式 item 做 schema 条件约束：generated baseline 必须有 output object，skipped/blocked baseline 必须 output null。
+- 测试：
+  - `test_route_decision_records_candidate_set_and_selected_candidate` 现在断言 C2Rust candidate 绑定 baseline manifest 和 output_ref。
+  - 新增 validator 负测覆盖 baseline status/reason drift 和 generated output_ref drift。
+  - 新增 schema contract 测试覆盖 route/profile candidate set 的 C2Rust baseline ref 字段。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+  - `docs/c2rust-migration-agent/l0-l4-routing-and-evidence-gates.md` / `.en.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_candidate_set_and_selected_candidate
+```
+实现前失败于 `KeyError: 'generated_draft_semantic_pass'`。
+
+```powershell
+python -m unittest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_candidate_status_reason_drift_from_baseline_manifest validation.tools.test_validate_auto_translation_evidence.ValidateAutoTranslationEvidenceTests.test_rejects_c2rust_generated_output_ref_drift_from_baseline_manifest
+```
+实现前失败于未抛出 `SystemExit`。
+
+```powershell
+python -m unittest validation.tools.test_template_schema_contracts.TemplateSchemaContractTests.test_route_and_profile_candidate_set_schema_bind_c2rust_baseline_refs
+```
+实现前失败于 schema 未把 `generated_draft_semantic_pass` 放入 candidate generation required，也缺 baseline/output ref 字段。
+
+已跑相关 GREEN：
+```powershell
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_template_schema_contracts
+python -m json.tool validation/auto-translation-template/route-decision.schema.json
+python -m json.tool validation/auto-translation-template/validation-profile.schema.json
+```
+结果：147 个 Python 相关测试通过；两份 JSON schema 可解析。
+
+边界：
+- 可以说：新生成的 route/profile C2Rust baseline candidate 已绑定 manifest 与 output ref/hash，validator 会拒绝 baseline candidate 与 manifest/output 漂移。
+- 可以说：C2Rust baseline 更像真正可审计的 candidate context，而不是游离的 status/reason 摘要。
+- 不应说：C2Rust baseline 已经实际调度生成候选、C2Rust 输出已经语义通过、或完整 L2 repair/router 已完成。`correctness_role` 仍必须是 `candidate_context_only`。
+
+English mirror summary:
+
+- Bound the route/profile C2Rust baseline candidate to the baseline manifest and optional generated output ref/hash.
+- `candidate_generation` now carries `generated_draft_semantic_pass=false`; C2Rust candidate items carry `baseline_manifest`, `output_ref`, and `generated_draft_semantic_pass=false`.
+- The validator rejects baseline candidate status/reason/role drift from the manifest and generated output_ref drift from the actual file hash.
+- Route/profile schemas now describe the new C2Rust baseline candidate binding while keeping legacy evidence compatibility.
+- This improves auditability only; C2Rust remains candidate context and is not a semantic correctness source.
+
+## 152. 2026-06-28 P0 clang frontend fact boundary
+
+本轮继续处理 P0 “统一 clang 前端事实”。只读子智能体确认真实 lowering 路径已经是 `CLANG_PATH` 调用 `clang -Xclang -ast-dump=json -fsyntax-only`，但 dry-run artifact、cache identity、competition profile 和部分文档仍容易让人误解为 libclang 是当前解析前端。主线选择最小切片：保留 dry-run 的诊断价值，不删除功能；把它明确标记为 diagnostic-only，并把 `LIBCLANG_PATH` 改成 ignored legacy observed metadata。
+
+核心改动：
+- `crates/c2r-translator/src/clang_frontend.rs`
+  - `ClangDryRun.status` 从旧的 `ready_without_libclang` 改为 `diagnostic_only`。
+  - 新增 `active_frontend`：`kind=clang_ast_dump_json`、`command="clang -Xclang -ast-dump=json -fsyntax-only"`、`required_env=["CLANG_PATH"]`、`uses_libclang=false`。
+  - 新增 `claim_boundary`：`role=diagnostic_only`，不影响 manifest status，也不影响 semantic pass。
+  - `ClangEnvironment` 不再暴露 `libclang_path` 作为能力字段，改为 `observed_libclang_path`；设置 `LIBCLANG_PATH` 时状态为 `ignored_for_ast_dump`。
+- `crates/c2r-translator/src/artifacts.rs`
+  - `*-clang-dry-run.json` 写入 `artifact_kind=clang-dry-run`、顶层 `active_frontend` 和 `claim_boundary`。
+  - parse-spec 错误路径同样带 diagnostic boundary，避免 blocked artifact 暗示 libclang 前端。
+- `validation/tools/auto_migrate.py`
+  - `clang_lowering_identity()` 现在记录 `frontend=clang_ast_dump_json`、`command`、`requires_env=["CLANG_PATH"]`。
+  - `LIBCLANG_PATH` 移到 `ignored_env_for_ast_dump.LIBCLANG_PATH`，reason 为 `ignored_for_ast_dump`。
+- `config/competition-env/environment.json` 与 `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json`
+  - competition clang lane 从 `optional_env=["LIBCLANG_PATH"]` 改为 `ignored_env_for_ast_dump=["LIBCLANG_PATH"]`。
+- 文档/OpenSpec/slice spec：
+  - `future-vision-and-mvp.md` / `.en.md` 将 P0 “统一 clang 前端事实”勾选为完成。
+  - `bounded-auto-translation-pipeline.md` / `.en.md`、`build-and-c2rust-baseline.md`、`baseline-record.json`、当前 OpenSpec spec/change 文档和 `validation/slice-specs/flashdb-real-fdb-calc-crc32.json` 都收窄为 `CLANG_PATH` 驱动的 clang AST dump JSON 或 compile_commands 语义事实；不再把 `clang/libclang` 合并写成当前事实源。
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend clang_dry_run -- --nocapture
+```
+实现前失败于 `ClangDryRun` 缺少 `claim_boundary` / `active_frontend`，以及 `ClangEnvironment` 缺少 `observed_libclang_path` / `role`。
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_emit_clang_lowering_report_opt_in validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity
+```
+实现前失败于缺 `frontend`、`artifact_kind`、`ignored_env_for_ast_dump` 等字段。
+
+已跑 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-frontend --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report --quiet
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_competition_environment_profile
+python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence validation.tools.test_template_schema_contracts validation.tools.test_competition_environment_profile validation.tools.test_unsafe_budget
+openspec validate --all --strict
+python validation/tools/unsafe_budget.py --max-ratio 0.10
+python -m json.tool config/competition-env/environment.json > $null
+python -m json.tool validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json > $null
+python -m json.tool docs/c2rust-migration-agent/baseline-record.json > $null
+python -m json.tool validation/slice-specs/flashdb-real-fdb-calc-crc32.json > $null
+git diff --check
+```
+
+结果：
+- Rust all-features：67 lib/bin tests + 435 bounded_translation tests 通过。
+- Python 组合：154 tests 通过（有一条 jsonschema metaschema deprecation warning，不影响结果）。
+- OpenSpec：38 passed, 0 failed。
+- unsafe budget：34 files / 26676 lines，0 unsafe，ratio 0.0。
+- 当前代码/文档/OpenSpec（排除 archive 和历史 CONTEXT）扫描无 `clang/libclang`、`ready_without_libclang`、`optional_env` 旧 contract 残留。
+
+边界：
+- 可以说：当前 active clang frontend fact 已统一为 `CLANG_PATH` + clang AST dump JSON；dry-run 是 diagnostic-only；`LIBCLANG_PATH` 只作为 ignored metadata 记录。
+- 不应说：libclang parse/lowering 已启用、`LIBCLANG_PATH` 是 optional capability、dry-run artifact 能证明 typed semantic pass、或 competition clang lane 默认开启。
+
+English mirror summary:
+
+- Normalized the active clang frontend contract to `CLANG_PATH` + `clang -Xclang -ast-dump=json -fsyntax-only`.
+- `clang-dry-run` artifacts now carry `diagnostic_only` status, explicit claim boundary, and `active_frontend.kind=clang_ast_dump_json`.
+- `LIBCLANG_PATH` is now recorded only as ignored diagnostic metadata (`ignored_env_for_ast_dump` / `observed_libclang_path`), not as an active frontend capability.
+- Competition environment JSON, validation profile, roadmap docs, OpenSpec text, and slice-spec diagnostics were updated to match the current implementation.
+- This completes the P0 clang frontend fact-boundary item, not a real libclang parser implementation.
+
+## 153. 2026-06-28 external review triage: oracle limits, metrics, performance
+
+本轮处理用户贴出的外部评价，重点是判断哪些批评是当前项目已经承认的边界，哪些应该写入 `future-vision-and-mvp.md` 作为后续默认待办。
+
+判断：
+- 评价大方向有道理：C oracle 不是免费的真理机，fail-closed 会带来拒绝率和人工介入成本，Typed IR 仍窄，性能、平台/嵌入式行为、量化评估和公开案例不能靠愿景替代。
+- 但部分内容已经在当前项目中覆盖：candidate 不等于 correctness source、LLM 只作候选源、C2Rust baseline 只能作 context、公开叙述不能把 native-build catalogue 当作翻译成功、unsafe budget/CI/route provenance 已经进入 P0。
+- 最有增量价值的修改是把“Oracle 边界”和“量化评估”写成明确待办，而不是只在原则里泛泛说 C oracle 是 ground truth。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+- `openspec/specs/bounded-auto-translation-pipeline/spec.md`
+- `docs/c2rust-migration-agent/testing-unsafe-cache-and-milestone.md`
+
+新增/强化的待办：
+- 执行规则新增：C oracle 也有边界，必须记录 source commit、fixture、compiler/flags、target ABI、platform model、observable output contract、UB/implementation-defined、硬件/RTOS/volatile 和测试覆盖不足。
+- Phase 4 新增：sanitizer / symbolic execution / property-based exploration 作为高风险 slice 的增强 oracle，不替代 fixture contract 和 C/Rust diff。
+- P0 新增：强化 C oracle/UB/平台边界，每个 accepted slice 必须记录 observable outputs、fixture representativeness、compiler/flags、target ABI、endianness/word-size、sanitizer/diagnostic、UB/implementation-defined 和平台依赖建模情况。
+- P1 新增：生成式能力/拒绝率 metrics artifact 和 report command，统计 generated/blocked/refused/accepted、失败原因、人工介入点、unsafe ratio、fixture case count、negative diff 覆盖和 performance-smoke 状态。
+- P1 新增：把性能 smoke 前移到真实切片扩展；每个新增 L3 named slice 至少有轻量 benchmark/performance-smoke 或明确 `performance_not_claimed`。
+- P1 新增：嵌入式/平台依赖边界，FlashDB/RTOS/文件系统/flash 断电恢复/volatile/硬件寄存器/线程中断交互必须有 platform contract、host simulation、target evidence 或 L4 refusal。
+- P2 新增：milestone 必须发布量化评估和案例报告；没有真实项目/函数数、accepted/refused/blocked 比例、失败类别、人工介入、性能、unsafe、可复现命令、evidence hash、社区复核状态和 non-goals，就只能称研究原型/受限 MVP。
+- OpenSpec active spec 新增：平台依赖 slice 必须声明 mockable platform contract、accepted target evidence 或 L4 refusal；自动翻译 run 必须输出 route/refusal metrics；缺 performance-smoke 的新 L3 named slice 必须记录 `performance_not_claimed`，且性能证据不能替代语义门禁。
+- testing/unsafe/cache 文档新增：高风险 pointer/overflow slice 可声明 sanitizer、MIRI/Kani 或 symbolic-execution profile；工具缺失必须记录 skipped/blocking reason，不能声明穷尽等价。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/15
+- P1: 0/8
+- P2: 0/6
+
+边界：
+- 可以说：这次把评价里有价值的风险显式纳入 roadmap。
+- 不应说：这些新项已经实现、Oracle 完备性已解决、性能回归体系已完成、或项目已经从受限 MVP 变成通用生产工具。
+
+## 154. 2026-06-28 external review triage: clang activation, legacy path, emitter composition
+
+本轮继续处理用户贴出的外部评价，重点核对 typed IR 默认激活、legacy 字符串扫描、CI clang 端到端、signed/UB 语义、组合式 emitter、FlashDB showcase 和 `CONTEXT.md` 体积问题。
+
+判断：
+- 评价大方向成立：默认/比赛非 clang 路径仍可能走 legacy string translator；当前 CI 覆盖 all-features 和缺 clang 行为，但不等于真实 clang -> AST -> typed IR -> Rust 的端到端；value-position/raw `IrExpr::IncDec` 和复杂 side effect 仍主要 fail closed 或靠窄形状 helper；`flashDB_rust` 是手写安全 skeleton/验证基线，不是自动翻译产物。
+- 需要修正的地方：`--competition-clang-lane` 缺 `CLANG_PATH` 会 fail-fast，不是静默 fallback；signed overflow 不能无条件改成 wrapping，因为 C signed overflow 是 UB，只有 `-fwrapv`/二补码 profile 或 slice contract 明确时才能走 wrapping；写自研最小 C parser 不适合作为主线，容易丢宏展开、类型、ABI 和 implicit cast 事实。
+- 最有价值的下一步是让 typed-IR 核心在无 clang 环境也有 fixture replay 回归，同时保留真实 clang lane 做前端集成；再把 legacy string translator 降级为 compatibility-only，并推进组合式 side-effect expression lowering。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：无 clang 默认 CI/比赛路径不能把 legacy string translator 成功包装成 typed-IR success；typed IR 未运行必须在 evidence/metrics/公开叙述中标记 unavailable 或 compatibility fallback。
+- 执行规则新增：`CONTEXT.md` 只能作为短 handoff，长会话日志要拆分或归档，不能当 release 文档、外部评估入口或能力证明。
+- P0 新增：no-clang typed-IR fixture replay CI，提交小型 clang AST JSON 或 skeleton fixture，默认 CI 能跑 `AST JSON/skeleton -> typed IR -> generic emitter -> rustc/check`；手写 IR 单测不能替代这条回归。
+- P0 新增：signed overflow/division/modulo/shift UB contract。signed wrapping 只能在 `-fwrapv`/二补码 profile 或 slice contract 明确时启用；division/modulo zero、非法 shift count 和实现定义 signed shift 必须有 negative test、evidence 字段和 refusal reason。
+- P0 新增：showcase boundary，`flashDB_rust` 是手写安全实现/验证基线，不得当自动翻译产物展示。
+- P0 新增：legacy string translator 降级并退役，标成 compatibility-only candidate source，在 route/metrics 中单独计数；no-clang fixture replay 和真实 clang lane 覆盖最小切片后从 primary candidate path 移除。
+- P1 新增：组合式 side-effect expression lowering，把 sequence point、求值顺序、value-position/statement-position、`++`/`--`、deref/index/member/call side effect 建模为可组合 IR/emitter 规则；整段语句形状 helper 只作为过渡实现。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/19
+- P1: 0/9
+- P2: 0/6
+
+边界：
+- 可以说：这次把 clang 默认激活、legacy path、CI clang E2E、signed/UB contract、FlashDB showcase 和组合式 emitter 风险明确纳入 roadmap。
+- 不应说：no-clang fixture replay、legacy 退役、signed UB contract 或组合式 side-effect emitter 已经实现。
+
+## 155. 2026-06-28 external review triage: engineering debt, unsafe claims, test coverage
+
+本轮继续处理用户给出的附件评价 `d03ac6c6.../pasted-text.txt`。两个只读子智能体分别核对了代码事实和 roadmap 覆盖缺口；评价里有价值的部分已纳入 `future-vision-and-mvp.md` / `.en.md`，过时或过激的结论没有照搬。
+
+判断：
+- 成立或部分成立：`typed_ir.rs` / `clang_frontend.rs` 仍是巨文件；`bounded_translation.rs` 也过大；`flashDB_rust` 是 host-verifiable handwritten skeleton，不是完整 FlashDB 语义等价；`ffi.rs` 仍是 placeholder；L1 native build 不等于翻译能力；0 unsafe findings 不能替代 FFI/hardware/ABI/volatile/thread evidence。
+- 过时或不准确：`lib.rs` 仍 4232 行不符合当前事实（当前约 69 行，已经拆出多个模块）；“翻译器从未翻译 FlashDB 任何一行 C”已过时，`real-fdb-calc-crc32` 已有 clang AST dump -> typed IR -> Rust draft candidate，但 generated draft 仍是 candidate；“40/40 L1 通过”不符合当前 committed summary；“FlashDB 测试完全流于表面”过重，已有 fixture/diff/negative diff/abnormal data 测试，但覆盖仍需要量化。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+- `flashDB_rust/README.md`
+
+新增/强化的待办：
+- P0 新增：拆分 `typed_ir.rs` / `clang_frontend.rs` 巨文件，按 IR 数据类型、validation、emitter、side-effect helpers、clang skeleton/lowering、report/evidence builder 做行为保持拆分。
+- P0 新增：依赖与工具链引入原则。继续以 `CLANG_PATH` + clang AST dump JSON 为当前语义前端事实；libclang/bindgen/syn/quote/tracing/anyhow 等依赖只能在解决具体语义/生成/维护风险且符合 competition env 时引入。
+- P0 新增：translator coverage matrix，按 IR construct、clang fixture replay、手写 IR、负例、runtime emitted Rust、C/Rust diff、legacy fallback 和 route evidence 统计覆盖。
+- P0 新增：拆分 `bounded_translation.rs` 测试巨文件，按能力域拆分，但不能用测试文件数冒充覆盖提升。
+- P0 新增：执行 `CONTEXT.md` handoff 收敛，建立短 current-state 入口，归档或标记 superseded 旧段，release/README/roadmap 不得依赖旧会话段作为能力证明。
+- P1 强化：扩真实切片池时，FlashDB slice 必须绑定 translator-generated candidate，不能只用 `flashDB_rust` 手写 skeleton 当自动翻译证据。
+- P1 新增：FlashDB FFI/C ABI/hardware 路线，`ffi.rs`、C ABI、on-disk layout、FAL/RTOS/Zephyr/hardware backend、错误/日志接口和同步/断电语义必须有 OpenSpec change、unsafe ledger、target evidence 或明确 deferred/L4 refusal。
+- P2 新增：开源反馈循环，外部可评估 milestone 前补 `CONTRIBUTING`/issue template/review checklist 或等价文档；社区指标不是能力证明，但没有公开反馈记录时不能写成熟生产工具。
+- `flashDB_rust/README.md` 修正：0 unsafe scan 只是当前 skeleton 扫描结果，不是生产安全、硬件安全、C ABI 兼容或完整语义等价证明；手写 skeleton 不算自动翻译产物。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/8
+- Phase 4: 0/8
+- P0: 7/26
+- P1: 0/10
+- P2: 0/7
+
+边界：
+- 可以说：这次把附件评价中仍符合当前事实的工程债务和治理风险写进 roadmap，并修正了 `flashDB_rust` README 的 unsafe/handwritten 边界。
+- 不应说：typed IR/clang frontend 已拆分、coverage matrix 已实现、FFI/C ABI/hardware 路线已实现、或项目已有成熟开源反馈循环。
+
+## 156. 2026-06-28 external review triage: maturity, reproducibility, C2Rust baseline
+
+本轮处理用户新贴的“项目缺点深度分析”。两个只读子智能体分别核查代码/evidence 事实与 `future-vision-and-mvp.md` 覆盖情况。结论是：评价大方向仍有价值，但部分事实混淆了 candidate draft、route refusal 和 accepted evidence。
+
+判断：
+- 成立或部分成立：项目还不是大型真实 C 项目自动迁移工具；FlashDB skeleton 是手写 seed/验证脚手架；C2Rust baseline 仍基本 skipped/candidate_context_only；typed IR 覆盖面窄；OpenSpec/validation/evidence 体系重；catalog L1 仍有失败；新手上手和跨平台复现仍需要更直接的入口。
+- 不准确或过时：`real-fdb-calc-crc32` 不是仍 `semantic_pass=false`。当前 committed final verification/summary 是 `semantic_pass=true`，但 `generated_draft_semantic_pass=false`，route decision 可为 L4/accepted-evidence-authoritative/refused boundary。正确说法是：accepted evidence 语义通过，generated draft 仍是 candidate。`README.md` 也已存在，不是完全依赖 `CONTEXT.md`。
+- 重要细节：代码路径支持 real clang AST dump lowering，但当前 committed evidence 仍缺 durable `clang-lowering-report` artifact；如果没有该 artifact，公开叙述应区分“代码路径支持”和“当前 committed evidence 已包含 real-clang lowering 证据”。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：C2Rust baseline 为 `skipped`/`blocked`/no output 时必须记录 reason、toolchain/env、input hash 和 `output_ref=null`，不得计入 generated/compiled/accepted/semantic pass。
+- 执行规则新增：公开复现路径以 competition Linux/CI 为准；PowerShell/Windows 命令只能作为 local convenience，缺等价路径时标 local-only。
+- 执行规则新增：evidence 必须可移植，新 evidence 优先 repo-relative path、profile id/hash、artifact hash，本机绝对路径只能是 diagnostic metadata。
+- 目标描述收窄：Phase 1 证明改为“代码路径可支持 real clang lowering，但 committed evidence 还需补 durable real-clang lowering artifact；generated draft 仍是 candidate”。
+- Phase 3 新增：catalogue L1 失败治理，报告 success/fail/skipped 比例、top failure classes、可修复/不可修复/环境缺失分类、排除规则和下一步。
+- P0 新增：提交 durable real-clang lowering evidence，关键 real-source slice 必须有 real `clang-lowering-report` 或等价 artifact；no-clang/compatibility evidence 不能支撑 real-clang claim。
+- P0 新增：evidence portability 清理，检查本机绝对路径、旧 WSL/Windows 工作目录、临时目录和缺失 profile hash。
+- P0 新增：OpenSpec/validation 复杂度治理，归档 stale active changes，区分 lightweight release gate、developer smoke gate 和 full-regression gate。
+- P2 强化：C2Rust baseline/repair 路线必须至少让一个真实 slice 产生 C2Rust output，并记录 output path/status/sha256，不能长期只有 skipped。
+- P2 强化：量化评估必须加入 raw C2Rust、C2Rust+repair、typed-IR route、LLM candidate 和手写参考实现的竞品/基线对比。
+- P2 新增：新手 quickstart，README 或 docs/quickstart 提供 10-15 分钟最小复现路径、Linux/CI 命令、可选 PowerShell 命令、第一条可验证 slice、预期 artifacts、常见失败和边界。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/9
+- Phase 4: 0/8
+- P0: 7/29
+- P1: 0/10
+- P2: 0/8
+
+边界：
+- 可以说：这次把成熟度、C2Rust skipped、复现路径、catalog L1 failure、竞品对比和 quickstart 风险纳入 roadmap，并收窄了 real-clang evidence 表述。
+- 不应说：C2Rust 已可执行、durable real-clang evidence 已提交、quickstart 已实现、catalog L1 失败治理已实现或 OpenSpec/validation 复杂度已收敛。
+
+## 157. 2026-06-28 external review triage: fail-closed repair and evidence cost
+
+本轮处理用户新贴的缺点评价。两个只读子智能体分别核查当前仓库事实与 `future-vision-and-mvp.md` 覆盖情况。结论是：评价大方向可参考，但多数风险已经在上一轮 roadmap 中覆盖；本轮只补两个真正缺口，避免重复堆待办。
+
+判断：
+- 成立或部分成立：当前语法覆盖仍有限；端到端真实切片案例少；项目不能被包装成生产级通用 C→Rust 工具；严格验证和 fail-closed 会带来人工介入成本；evidence/validation 的时间和存储成本需要治理。
+- 已覆盖不需重复：Agent/LLM 只作为 candidate source；社区反馈和 milestone review；quickstart；公开叙述边界；C2Rust skipped；Linux/CI 复现路径；FlashDB 只是用例；复杂 C 特性如 function pointer/union/macro/多文件 TU 仍在 P1/P2/P4 待办。
+- 不准确或无法仅凭本地仓库确认：根目录并非没有 `README.md`；`CONTEXT.md` 当前可访问，但不能作为外部评估入口；star/fork/watch 属于 GitHub 社区指标，本地仓库只能把“缺少公开反馈记录不得宣称成熟”写入 release 规则，不能把实时社区数字作为代码事实。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：fail-closed 不能变成死胡同；拒绝翻译时必须给出 source span、unsupported construct、缺失 IR/lowering 规则、oracle/fixture 缺口、可尝试候选源和人工 review 输入。
+- 执行规则新增：evidence 成本必须受控；release evidence、developer smoke、diagnostic logs 和 historical archive 要分级，并记录 runtime、file size、retention/compression/prune policy。
+- P0 新增：建立 evidence 成本和保留策略，报告 runtime、artifact count、total bytes、retention class、compression/prune policy。
+- P0 新增：建立 fail-closed repair playbook，每个 L4/refused 或 blocked slice 输出 source span、IR feature gap、oracle/fixture gap、可尝试路线、最小下一步测试和人工介入点。
+- P2 新增：降低单一维护者风险，外部 milestone 前补 CODEOWNERS/ownership 文档、reviewer rotation、issue triage 规则和 release checklist，关键流程不得依赖单个维护者或单次 Codex 会话记忆。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/9
+- Phase 4: 0/8
+- P0: 7/31
+- P1: 0/10
+- P2: 0/9
+
+边界：
+- 可以说：这次把 fail-closed 后续修复路径、evidence 成本治理和单一维护者风险补进 roadmap。
+- 不应说：repair playbook、evidence retention validator、evidence prune policy、CODEOWNERS 或 reviewer rotation 已经实现。

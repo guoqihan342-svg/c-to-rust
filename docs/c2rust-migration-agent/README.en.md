@@ -1,6 +1,6 @@
 # C2Rust Migration Agent
 
-This folder contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
+`docs/c2rust-migration-agent/` is the topic documentation folder for the C2Rust migration agent. It contains the executable design contract for the OpenSpec-governed C-to-Rust migration Agent. The Chinese mirror is `README.md`.
 
 ## Current Status
 
@@ -35,23 +35,16 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 - When an existing document receives more than a small edit, keep the matching English mirror synchronized.
 - OpenSpec parser anchors must remain in English, including `## ADDED Requirements`, `### Requirement:`, `#### Scenario:`, `WHEN`, and `THEN`.
 - Some older files in this directory still use a mixed "Chinese note + English summary" format. When touched, they should be split into full bilingual versions under this convention.
+- The only global backlog source is `future-vision-and-mvp.md`; `future-vision-and-mvp.en.md` is only a synchronized mirror and does not define a separate backlog source.
 
 ## Document Map
 
-- `README.md` / `README.en.md`: directory index, current status, and bilingual documentation convention.
-- `baseline-record.json`: machine-readable version, hash, source, and tool availability record.
-- `baseline-and-versioning.md`: version policy for Agent, schema, PatchPlan, and `flashDB_rust`.
-- `build-and-c2rust-baseline.md`: FlashDB build capture, C2Rust baseline, and C oracle fallback.
-- `agent-contract.md`: OpenCode/Codex runtime contract, phases, IO, subagents, AI policy, async/thread policy.
-- `context-store-and-self-healing.md`: SQLite/JSONL schema, ContextPack, impact sets, rustc repair loop, PatchPlan.
-- `core-translation-architecture.md` / `core-translation-architecture.en.md`: current `clang_frontend -> typed IR + globals -> translation_route -> validation` architecture, core code map, two-route typed IR candidate model, candidate_generation evidence schema, clang-lowered direct-call evidence, external direct-callee binding validator, and typed IR legacy cleanup boundary.
-- `flashdb-rust-skeleton-and-milestone.md`: `flashDB_rust` crate layout and first host-verifiable milestone.
-- `testing-unsafe-cache-and-milestone.md`: tests, differential oracle, unsafe budget, cache policy, performance gates.
-- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`: bounded automatic translation pipeline Agent guide, including pointer graph v2, `effect_graph`, alias-gate cache identity, and validation-gate rules.
-- `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`: detailed design document for L0-L4 route decisions, evidence flow topology, and validation gates, explaining route decisions, validation profiles, candidate routes, alias risk floors, fail-closed principles, and evidence reference chain consistency.
-- `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`: future vision and MVP roadmap, including the three-layer IR design (Semantic IR / Control IR / Typed Value IR) and phased plan.
-- `COVERAGE.md` / `COVERAGE.en.md`: current typed IR + clang frontend + generic emitter C construct support/unsupport inventory, honestly listing supported and explicitly rejected C language features.
-- `../../config/competition-env/`: competition environment entrypoint covering Ubuntu 24.04.4, Rust 1.96.0, Python 3.12.3, Node 24.13.0, Huawei mirrors, Go/CMake absence boundaries, and the self-check script.
+- Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; machine-readable status lives in `baseline-record.json`.
+- Architecture and contracts: see `index/architecture.md`. Covers `agent-contract.md`, `baseline-and-versioning.md`, `context-store-and-self-healing.md`, `core-translation-architecture.md` / `core-translation-architecture.en.md`, and `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`.
+- Operations and validation: see `index/operations.md`. Covers `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
+- Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
+- FlashDB case boundary: see `index/flashdb.md`. Covers `baseline-record.json`, `build-and-c2rust-baseline.md`, `flashdb-rust-skeleton-and-milestone.md`, and `full-regression-runner.md`.
+- Archive/analysis: see `index/archive.md`. Covers `archive/context-history-2026-06-28.md` and `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.
 
 ## Quick Use
 

@@ -1,3 +1,11 @@
+//! Legacy string translator for bounded compatibility candidates.
+//!
+//! This module is a compatibility-only candidate source. It recognizes a small
+//! historical subset of C by string shape, then emits candidate Rust plus route
+//! evidence for that subset. It is not a C semantic authority; new forward
+//! translation should prefer clang lowering into typed IR and use this path only
+//! where existing compatibility fixtures still depend on it.
+
 use crate::{
     BuildProfile, CallExpressionEvidence, CfgBlock, CfgFunction, PointerEdge, PointerNode,
     SliceSpec, TranslationError, TranslationPlan, TranslationResult, TranslationSource,
@@ -92,6 +100,12 @@ enum LValue {
     },
 }
 
+/// Runs the legacy string pipeline end to end for one slice.
+///
+/// The result is useful as a compatibility candidate only: parsing,
+/// unsupported-node detection, evidence, and Rust emission all share the same
+/// bounded string view of the C body. Any uncertainty is recorded on the result
+/// and stops emission instead of being silently interpreted as real C semantics.
 pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
     let parsed = parse_function(&spec.c_source, &spec.function_name);
     let mut result = TranslationResult {
@@ -285,6 +299,11 @@ fn contains_token(text: &str, token: &str) -> bool {
         .any(|part| part == token)
 }
 
+/// Splits a function body into the statement shapes understood by this module.
+///
+/// This is deliberately a shallow scanner, not a C parser. It preserves whole
+/// control-flow statements so later compatibility checks can recursively inspect
+/// their bodies without pretending to model arbitrary syntax.
 fn parse_statements(body: &str) -> Vec<ParsedStatement> {
     let mut statements = Vec::new();
     let mut index = 0;
@@ -872,6 +891,11 @@ fn push_unsupported_expression_value(
     }
 }
 
+/// Converts unknown or unsafe string shapes into explicit translation errors.
+///
+/// The legacy path fails closed by attaching a concrete unsupported reason to
+/// the result before Rust emission is attempted; nested bodies are re-scanned so
+/// unsupported constructs cannot hide inside accepted outer control flow.
 fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut TranslationResult) {
     for statement in statements {
         match statement.kind {
@@ -1364,6 +1388,11 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
     }
 }
 
+/// Builds legacy pointer evidence from parameter spellings and recognized uses.
+///
+/// The graph records boundary decisions for reviewers and gates; it is not a
+/// proof of aliasing or lifetime safety. Only recognized bounded reads/writes
+/// are reported, and suspicious out-pointers are rejected by adding an error.
 fn emit_pointer_graph(
     function: &ParsedFunction,
     statements: &[ParsedStatement],
@@ -1591,6 +1620,11 @@ fn bounded_input_buffer_reads(text: &str) -> Vec<BufferRead> {
     reads
 }
 
+/// Extracts bounded buffer-read evidence from the value side of a statement.
+///
+/// The walker follows accepted nested control-flow bodies but only records
+/// index and pointer-arithmetic patterns that the compatibility translator can
+/// later justify. Other expression forms intentionally produce no evidence.
 fn bounded_input_buffer_reads_for_statement(statement: &ParsedStatement) -> Vec<BufferRead> {
     match statement.kind {
         StatementKind::PrimitiveDeclaration => parse_declaration(&statement.text)
@@ -1795,6 +1829,12 @@ fn collect_pointer_write_effects(
     }
 }
 
+/// Classifies the public Rust boundary suggested for one C pointer parameter.
+///
+/// Decisions are derived from bounded legacy patterns such as loop-guarded
+/// reads, pointer arithmetic reads, output-buffer writes, and wrapper
+/// candidates. The labels are evidence for route selection, not generalized
+/// pointer reasoning.
 fn pointer_boundary_decisions(name: &str, statements: &[ParsedStatement]) -> Vec<String> {
     let mut decisions = Vec::new();
     for statement in statements {
@@ -1953,6 +1993,12 @@ fn supports_pointer_output_buffer_translation(
             .any(statement_has_bounded_pointer_arithmetic_output_write)
 }
 
+/// Emits Rust for the accepted legacy subset after all compatibility gates pass.
+///
+/// This is the last step in the candidate path. It chooses among a few
+/// historical templates and safe-wrapper shapes already backed by collected
+/// evidence; it does not lower arbitrary C and must not be used to bypass typed
+/// IR fail-closed errors.
 fn emit_rust(
     function: &ParsedFunction,
     statements: &[ParsedStatement],
