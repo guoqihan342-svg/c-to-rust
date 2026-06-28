@@ -91,6 +91,7 @@
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
 - **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；C2Rust baseline candidate 还会绑定 baseline manifest 与 generated output ref/hash，防止 route/profile 中的 baseline status、reason 或输出引用漂移。这还不是带 score/hard gate 的完整多候选 router。
 - **仓库级 unsafe budget**: `validation/tools/unsafe_budget.py` 现在默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`，加载 `validation/unsafe-budget-ledger.json`，并作为 core translator validation CI gate 执行。
+- **入口 unsafe claim 边界（P0-162）**: unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。任何这类能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
 
 ## 核心目录
 
@@ -144,7 +145,7 @@ openspec validate --all --strict
 3. **Fail-closed**：不确定时拒绝翻译并记录原因，不可假装成功。
 4. **真实源码优先**：从真实 C 源文件抽取 slice/context，不能继续堆手写 `c_source` demo。
 5. **证据链可审计**：每个函数的迁移证据包含 typed IR route、validation profile、diff、unsafe ledger、cache identity。
-6. **Unsafe 控制**：Rust first-party non-test `unsafe` 比例目标 < 10%，但不把 0% 当硬性验收条件。
+6. **Unsafe 控制**：Rust first-party non-test `unsafe` 比例目标 < 10%，但不把 0% 当硬性验收条件；unsafe < 10% 或 0 findings 也不代表 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已解决。上述能力进入实现前必须绑定 unsafe ledger span、替代方案、target/test evidence 和人工 review 状态。
 7. **比赛环境可追溯**：所有自动翻译证据绑定 `config/competition-env/environment.json` 的 profile identity。
 
 ## 贡献与文档

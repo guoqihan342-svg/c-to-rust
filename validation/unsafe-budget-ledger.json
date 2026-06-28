@@ -1,5 +1,64 @@
 {
   "schema_version": 1,
   "policy": "first-party non-test Rust unsafe findings must be registered with reason and validation gate",
+  "repo_level_policy": {
+    "id": "future-vision-P0-164-unsafe-ledger-governance",
+    "scope": "first-party non-test Rust unsafe findings scanned by validation/tools/unsafe_budget.py",
+    "compatibility": {
+      "registered_findings_identity": [
+        "path",
+        "category"
+      ],
+      "file_field_alias": "path",
+      "span_line_field_alias": "line",
+      "unknown_top_level_fields_are_metadata": true
+    },
+    "required_fields": [
+      "file",
+      "span",
+      "category",
+      "reason",
+      "replacement_or_alternative",
+      "validation_evidence",
+      "source_evidence",
+      "review_status"
+    ],
+    "field_contract": {
+      "file": "Repository-relative Rust source path for the unsafe finding; mirror to path for legacy registration compatibility.",
+      "span": "Object describing the source extent, at minimum start_line and end_line; single-line legacy findings may mirror start_line to line.",
+      "category": "One of the repo unsafe taxonomy values.",
+      "reason": "Why unsafe remains necessary, including the invariant or external contract that makes it sound.",
+      "replacement_or_alternative": "Safe Rust replacement, narrower unsafe wrapper, or justification that no practical alternative exists.",
+      "validation_evidence": "Evidence that the unsafe case is covered by checks, tests, scans, or review gates.",
+      "source_evidence": "Code, upstream, FFI, ABI, or generated-input evidence supporting the finding.",
+      "review_status": "Current governance state from the review_status allowed values."
+    },
+    "category_contract": {
+      "allowed_values": [
+        "unsafe_function",
+        "unsafe_block",
+        "unsafe_impl",
+        "extern_c",
+        "repr_c",
+        "transmute",
+        "raw_pointer"
+      ],
+      "category_required": true
+    },
+    "review_status_contract": {
+      "allowed_values": [
+        "needs_triage",
+        "needs_replacement",
+        "accepted_with_evidence",
+        "validated",
+        "removed"
+      ],
+      "default_for_new_findings": "needs_triage",
+      "terminal_review_states": [
+        "validated",
+        "removed"
+      ]
+    }
+  },
   "registered_findings": []
 }

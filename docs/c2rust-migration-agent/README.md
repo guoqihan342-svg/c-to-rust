@@ -11,6 +11,7 @@
 - Rust 输出项目名：`flashDB_rust`
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
+- 入口 unsafe claim 边界（P0-162）：unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。这些能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
 - 固定宽度整数和窄 raw spelling：clang 前端当前会把 `int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t` lowering 成 typed IR 的对应整数类型；精确 `signed char` spelling 现在也可作为 signed 8-bit integer 进入 typed IR，例如 `signed char value; return value + 1;` 会依赖 clang-preserved `IntegralCast` 发射 `(value as i32) + 1i32`。`short` / `long long` 这类其他目标相关 spelling、plain `char`、plain `long`、完整 usual scalar conversions 和 semantic acceptance 仍保持 fail-closed。
 - 多声明展开：普通 compound body 和 scoped `ForStmt` init 中的 `DeclStmt` 现在可把多个简单 `VarDecl` 按源码顺序展开成连续 typed IR `Decl`，例如 `int a = 1, b = 2;` 和 `for (int i = 0, j = 0; i < limit; i++)`；unsupported type/initializer、VLA/incomplete array、重复符号、复杂 init/step 和 semantic acceptance 仍保持 fail-closed。
 - 无初始化标量局部声明：普通 scalar local `int tmp; tmp = 7; return tmp;`，以及“会继续执行的路径都赋值、未赋值分支直接 return”的直接 `if` 分支，现在可由 typed IR emitter 发射；读取前未赋值、首次赋值读取自身、仅在循环中赋值、可能继续执行的单侧分支、数组/指针/record/function 等非标量声明和 semantic acceptance 仍保持 fail-closed。
@@ -71,6 +72,7 @@ c2rust-migrator --phase index --change design-c2rust-migration-agent --input req
 - 优先迁移小的、可编译通过的 slice。
 - 用 Rust 测试和 C/Rust differential evidence 证明行为。
 - 跟踪 unsafe，并把比例控制在 10% 以下。
+- 不把 unsafe < 10% 或 0 findings 解读为 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已解决；这些能力进入实现前必须具备 unsafe ledger span、替代方案、target/test evidence 和人工 review 状态。
 - 只有显式 invalidation 和 equivalence gates 时才加 cache。
 
 ## Native Windows 工具说明

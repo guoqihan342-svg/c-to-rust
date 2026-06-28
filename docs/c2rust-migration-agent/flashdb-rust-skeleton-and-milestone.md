@@ -4,6 +4,20 @@
 
 English summary: the first milestone builds a small, compilable, host-verifiable Rust crate before broad migration.
 
+## Showcase Boundary / 展示边界
+
+中文说明：`flashDB_rust` 是手写安全 Rust 实现和验证基线，不是 translator-generated candidate，不能被描述成自动 C-to-Rust 管线的输出。
+
+它的作用是先把目标 Rust API 形状、持久化行为、差分 fixture、unsafe ledger 预期和 rollback metadata 具体化，再接受更大的迁移声明。自动翻译器生成的 candidate 可以和这个基线对比，但只有 accepted evidence 证明必需门禁后才不再只是 candidate；semantic pass 由 validation profile 和 evidence gates 判定，不由这个 crate 是否存在决定。
+
+因此 FlashDB showcase 展示的是验证边界和 milestone 形状，不声明 native-build catalogue、FlashDB project entry 或 Rust skeleton 已经代表真实项目端到端自动翻译完成。
+
+`flashDB_rust` is a handwritten safe Rust implementation and validation baseline. It is not a translator-generated candidate and must not be described as output from the automatic C-to-Rust pipeline.
+
+Its role is to make the desired Rust API shape, persistence behavior, differential fixtures, unsafe ledger expectations, and rollback metadata concrete before accepting broader migration claims. A translator-generated candidate can be compared against this baseline, but it remains a candidate until accepted evidence proves the required gates. A semantic pass is the outcome of validation profile plus evidence gates, not the existence of this crate.
+
+The FlashDB showcase therefore demonstrates the intended verification boundary and milestone shape. It does not claim that the native-build catalogue, the FlashDB project entry, or the Rust skeleton means a real project has been automatically translated end to end.
+
 ## Crate Layout
 
 ```text

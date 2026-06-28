@@ -35,6 +35,30 @@ class UnsafeBudgetTests(unittest.TestCase):
             ],
         )
 
+    def test_current_repository_ledger_declares_review_contract(self) -> None:
+        ledger = json.loads(Path("validation/unsafe-budget-ledger.json").read_text(encoding="utf-8"))
+
+        contract = ledger["repo_level_policy"]
+        required_fields = set(contract["required_fields"])
+        for field in {
+            "file",
+            "span",
+            "category",
+            "reason",
+            "replacement_or_alternative",
+            "validation_evidence",
+            "source_evidence",
+            "review_status",
+        }:
+            self.assertIn(field, required_fields)
+        self.assertEqual(contract["compatibility"]["registered_findings_identity"], ["path", "category"])
+        self.assertEqual(contract["compatibility"]["file_field_alias"], "path")
+        self.assertIn("extern_c", contract["category_contract"]["allowed_values"])
+        self.assertIn("repr_c", contract["category_contract"]["allowed_values"])
+        self.assertIn("raw_pointer", contract["category_contract"]["allowed_values"])
+        self.assertIn("needs_triage", contract["review_status_contract"]["allowed_values"])
+        self.assertIn("validated", contract["review_status_contract"]["terminal_review_states"])
+
     def test_scans_configured_first_party_non_test_scopes_and_ignores_tests(self) -> None:
         with tempfile.TemporaryDirectory(prefix="unsafe-budget-test-") as tmp:
             root = Path(tmp)

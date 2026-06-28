@@ -36,6 +36,8 @@ L4: 显式拒绝翻译 / accepted evidence authoritative (拒绝对)
 
 Translation L0 只表示 typed IR candidate generation 的路径分类；真正的语义等价由 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 决定。
 
+FlashDB showcase 中的 `flashDB_rust` 是 handwritten implementation / validation baseline，不是 translator-generated candidate。自动翻译管线只能把真实 C slice 生成的 Rust draft 记录为 candidate；candidate 不能因为存在手写基线、native-build catalogue 通过，或 catalog L0 通过而自动变成 accepted evidence。accepted evidence 必须显式绑定 C oracle、Rust replay、diff、negative diff、unsafe evidence 和 final verification；semantic pass 只由 validation profile + gates 判定。
+
 ### 2.2 各层含义
 
 **L0 (Catalog)**：`projects.json` 是合法 JSON，至少 12 个目标，必填字段齐全。Optional remote HEAD probe 可到达。
@@ -229,6 +231,7 @@ Legacy v1 指针图可缺省 effect_graph，避免破坏历史 evidence。
 
 关键原则：
 - Candidate route 只选择候选生成实现，不决定语义接受。
+- Handwritten implementation（例如 `flashDB_rust`）可以作为验证基线和 showcase，但不能登记为 translator-generated candidate。
 - Evidence route decision 把候选 provenance 纳入 route rationale，但 alias/pointer risk floor 优先。
 - 新 `candidate_set` 只是把已产生或已观测的候选来源列清楚，并用 `selected_candidate_id` 绑定当前 primary draft；C2Rust baseline 保持 `candidate_context_only`，不能成为 semantic source。
 - 只有 validation profile + gates 全部通过 + no skipped required gate 时，才能声明 semantic pass。
@@ -292,6 +295,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-full-regressio
 
 - L0-L4 路由只决定候选生成路径，不是"L3 = 已完成迁移"
 - accepted evidence authoritative 路径是显式 opt-in，不能绕过 spec claim boundary
+- `flashDB_rust` 是手写安全实现和验证基线，不是自动翻译产物；公开叙述中必须把 handwritten implementation、translator-generated candidate、accepted evidence、semantic pass 分开。
+- native-build catalogue 只说明目录项目可定位、可构建或可 smoke，不代表真实项目自动翻译完成，也不能替代 slice 级 accepted evidence。
 - FlashDB crc32 是第一个真实 C 源函数通过 typed IR → Rust draft → rustc smoke 的案例，但不表示所有 C 子集都能翻译
 - pointer graph 的 alias gate 是风险门禁，不是完整 alias solver
 - C2Rust baseline 仍是 `candidate_context_only`，不是语义等价证明

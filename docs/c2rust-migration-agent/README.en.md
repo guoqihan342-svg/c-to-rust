@@ -11,6 +11,7 @@
 - Rust output project name: `flashDB_rust`
 - C2Rust role: baseline/oracle only, not final deliverable
 - Safety target: first-party non-test unsafe below 10%
+- Entry unsafe-claim boundary (P0-162): unsafe < 10% or 0 findings only means the current scan/ledger is within budget or has found no modeled issues. It does not prove that C ABI, FFI, flash hardware, volatile registers, RTOS, multithreading, or interrupt semantics are solved. Before any of these capabilities enter implementation, they need an unsafe ledger span, a safe/typed alternative plan, target/test evidence, and human review status.
 - Fixed-width integers and narrow raw spelling: the clang frontend currently lowers `int8_t`, `int16_t`, `int32_t`, `int64_t`, `uint8_t`, `uint16_t`, `uint32_t`, and `uint64_t` into the corresponding typed IR integer types. The exact `signed char` spelling can now also enter typed IR as a signed 8-bit integer, so `signed char value; return value + 1;` can use clang-preserved `IntegralCast` and emit `(value as i32) + 1i32`. Other target-dependent spellings such as `short` / `long long`, plain `char`, plain `long`, complete usual scalar conversions, and semantic acceptance still fail closed.
 - Multi-declaration expansion: `DeclStmt` nodes in ordinary compound bodies and scoped `ForStmt` init slots can now expand multiple simple `VarDecl` children into consecutive typed IR `Decl` statements in source order, for example `int a = 1, b = 2;` and `for (int i = 0, j = 0; i < limit; i++)`. Unsupported types/initializers, VLAs/incomplete arrays, duplicate symbols, complex init/step forms, and semantic acceptance still fail closed.
 - Uninitialized scalar local declarations: ordinary scalar locals such as `int tmp; tmp = 7; return tmp;` and direct `if` branches where every fallthrough path assigns while the non-assigning branch returns can now emit through the typed IR emitter. Reads before assignment, first assignments that read the same variable, assignments only inside loops, one-sided branches that can fall through, array/pointer/record/function declarations, and semantic acceptance still fail closed.
@@ -70,6 +71,7 @@ c2rust-migrator --phase index --change design-c2rust-migration-agent --input req
 - Prefer small, compile-passing slices.
 - Prove behavior with Rust tests and C/Rust differential evidence.
 - Track unsafe and keep it below 10%.
+- Do not treat unsafe < 10% or 0 findings as proof that C ABI, FFI, flash hardware, volatile registers, RTOS, multithreading, or interrupt semantics are solved. These capabilities need an unsafe ledger span, an alternative plan, target/test evidence, and human review status before implementation.
 - Add caching only with explicit invalidation and equivalence gates.
 
 ## Native Windows Tool Note
