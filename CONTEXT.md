@@ -10420,3 +10420,42 @@ English mirror summary:
 边界：
 - 可以说：这次把附件评价中仍符合当前事实的工程债务和治理风险写进 roadmap，并修正了 `flashDB_rust` README 的 unsafe/handwritten 边界。
 - 不应说：typed IR/clang frontend 已拆分、coverage matrix 已实现、FFI/C ABI/hardware 路线已实现、或项目已有成熟开源反馈循环。
+
+## 156. 2026-06-28 external review triage: maturity, reproducibility, C2Rust baseline
+
+本轮处理用户新贴的“项目缺点深度分析”。两个只读子智能体分别核查代码/evidence 事实与 `future-vision-and-mvp.md` 覆盖情况。结论是：评价大方向仍有价值，但部分事实混淆了 candidate draft、route refusal 和 accepted evidence。
+
+判断：
+- 成立或部分成立：项目还不是大型真实 C 项目自动迁移工具；FlashDB skeleton 是手写 seed/验证脚手架；C2Rust baseline 仍基本 skipped/candidate_context_only；typed IR 覆盖面窄；OpenSpec/validation/evidence 体系重；catalog L1 仍有失败；新手上手和跨平台复现仍需要更直接的入口。
+- 不准确或过时：`real-fdb-calc-crc32` 不是仍 `semantic_pass=false`。当前 committed final verification/summary 是 `semantic_pass=true`，但 `generated_draft_semantic_pass=false`，route decision 可为 L4/accepted-evidence-authoritative/refused boundary。正确说法是：accepted evidence 语义通过，generated draft 仍是 candidate。`README.md` 也已存在，不是完全依赖 `CONTEXT.md`。
+- 重要细节：代码路径支持 real clang AST dump lowering，但当前 committed evidence 仍缺 durable `clang-lowering-report` artifact；如果没有该 artifact，公开叙述应区分“代码路径支持”和“当前 committed evidence 已包含 real-clang lowering 证据”。
+
+文档改动：
+- `docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
+
+新增/强化的待办：
+- 执行规则新增：C2Rust baseline 为 `skipped`/`blocked`/no output 时必须记录 reason、toolchain/env、input hash 和 `output_ref=null`，不得计入 generated/compiled/accepted/semantic pass。
+- 执行规则新增：公开复现路径以 competition Linux/CI 为准；PowerShell/Windows 命令只能作为 local convenience，缺等价路径时标 local-only。
+- 执行规则新增：evidence 必须可移植，新 evidence 优先 repo-relative path、profile id/hash、artifact hash，本机绝对路径只能是 diagnostic metadata。
+- 目标描述收窄：Phase 1 证明改为“代码路径可支持 real clang lowering，但 committed evidence 还需补 durable real-clang lowering artifact；generated draft 仍是 candidate”。
+- Phase 3 新增：catalogue L1 失败治理，报告 success/fail/skipped 比例、top failure classes、可修复/不可修复/环境缺失分类、排除规则和下一步。
+- P0 新增：提交 durable real-clang lowering evidence，关键 real-source slice 必须有 real `clang-lowering-report` 或等价 artifact；no-clang/compatibility evidence 不能支撑 real-clang claim。
+- P0 新增：evidence portability 清理，检查本机绝对路径、旧 WSL/Windows 工作目录、临时目录和缺失 profile hash。
+- P0 新增：OpenSpec/validation 复杂度治理，归档 stale active changes，区分 lightweight release gate、developer smoke gate 和 full-regression gate。
+- P2 强化：C2Rust baseline/repair 路线必须至少让一个真实 slice 产生 C2Rust output，并记录 output path/status/sha256，不能长期只有 skipped。
+- P2 强化：量化评估必须加入 raw C2Rust、C2Rust+repair、typed-IR route、LLM candidate 和手写参考实现的竞品/基线对比。
+- P2 新增：新手 quickstart，README 或 docs/quickstart 提供 10-15 分钟最小复现路径、Linux/CI 命令、可选 PowerShell 命令、第一条可验证 slice、预期 artifacts、常见失败和边界。
+
+当前 roadmap 计数：
+- Phase 1: 9/9
+- Phase 2: 0/8
+- Phase 3: 0/9
+- Phase 4: 0/8
+- P0: 7/29
+- P1: 0/10
+- P2: 0/8
+
+边界：
+- 可以说：这次把成熟度、C2Rust skipped、复现路径、catalog L1 failure、竞品对比和 quickstart 风险纳入 roadmap，并收窄了 real-clang evidence 表述。
+- 不应说：C2Rust 已可执行、durable real-clang evidence 已提交、quickstart 已实现、catalog L1 失败治理已实现或 OpenSpec/validation 复杂度已收敛。
