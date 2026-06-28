@@ -9951,3 +9951,53 @@ English mirror summary:
 - Unsigned-result `IrExpr::Binary` now emits explicit Rust `wrapping_add`, `wrapping_sub`, and `wrapping_mul` across the normal expression path, the prelude expression path, and the mutable record pointer field compound-update helper.
 - Added runtime emitted-Rust tests compiled with `rustc -C overflow-checks=on` for `u32::MAX + 1`, `0u32 - 1`, and unsigned multiply.
 - Signed overflow, division/modulo zero, invalid shift counts, full usual arithmetic conversions, pointer arithmetic, and semantic acceptance remain separate fail-closed or validation-gate work.
+
+## 147. 2026-06-28 P0 competition clang lane explicit opt-in
+
+本轮承接第 145 节 P0 待办，明确比赛环境里的 clang 路线，而不是继续让本机 Windows clang 或 diagnostic lowering report 语义混在默认 lane 里。
+
+设计选择：
+- clang 不进入默认必需 toolchain；默认构建、测试、验证仍不要求 clang。
+- `config/competition-env/environment.json` 新增 `optional_tools.clang` 和 `optional_lanes.competition_clang`，声明 `CLANG_PATH` 是该 lane 的必需环境变量，`LIBCLANG_PATH` 只是可选环境变量。
+- 新增 `auto_migrate.py --competition-clang-lane` 作为比赛 typed-IR clang lane wrapper。该 flag 会隐式启用 `--emit-clang-lowering-report`，并在运行 translator 前 fail-fast 检查 `CLANG_PATH`。
+- 保留原有 `--emit-clang-lowering-report` 诊断语义：缺 `CLANG_PATH` 时仍可产出 `status=unavailable` / `missing_clang_path` report，不让默认非 clang lane 失败。
+
+核心改动：
+- `validation/tools/auto_migrate.py`
+  - 新增 `--competition-clang-lane`。
+  - 新增 `require_competition_clang_lane()`。
+  - `cache_identity()` / `emit_cache_metadata()` 内部使用 effective lowering flag：`emit_clang_lowering_report or competition_clang_lane`，避免只有 `main()` 改写参数时才记录证据。
+  - `clang_lowering_identity(..., competition_clang_lane=True)` 会记录 `lane=competition-clang-lane`、`required=true`、`requires_env=["CLANG_PATH"]`、`optional_env=["LIBCLANG_PATH"]`。
+- `validation/tools/test_auto_migrate.py`
+  - 新增/强化 `test_competition_clang_lane_requires_clang_path`。
+  - `test_cache_identity_records_competition_clang_lane` 现在只传 `competition_clang_lane=True`，并断言 command args、feature set 和 lane identity 都完整记录。
+- `config/competition-env/environment.json` 与兼容 profile 同步新增 optional clang lane。
+- `validation/tools/test_competition_environment_profile.py`
+  - 覆盖 `optional_tools.clang` 和 `optional_lanes.competition_clang`。
+- `config/competition-env/README.md` / `.en.md`、`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - 同步说明 clang 是 explicit opt-in，不是默认 baseline requirement。
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_competition_clang_lane_requires_clang_path
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity
+```
+实现前分别因 argparse 不认识 `--competition-clang-lane`、`cache_identity()` 不认识 `competition_clang_lane`、以及 profile 缺 `optional_lanes` 失败。
+
+已跑定向 GREEN：
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_cache_identity_records_competition_clang_lane validation.tools.test_auto_migrate.AutoMigrateTests.test_competition_clang_lane_requires_clang_path validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_competition_environment_profile_records_clang_lane_identity validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_default_profile_matches_competition_baseline validation.tools.test_competition_environment_profile.CompetitionEnvironmentProfileTests.test_compatibility_profile_stays_synchronized_with_default_profile
+```
+结果：5 tests OK。
+
+边界：
+- 可以说：比赛 clang typed-IR lane 现在是显式 opt-in，缺 `CLANG_PATH` 会清晰失败。
+- 可以说：默认非 clang lane、普通 `--emit-clang-lowering-report` 诊断 lane 和 toolchain check 默认要求没有被改变。
+- 不应说：比赛环境默认已有 clang、libclang parse 路线已启用、typed IR candidate 已自动成为 semantic pass、或 route metadata 已升级成真正多候选 router。
+
+English mirror summary:
+
+- Added an explicit `--competition-clang-lane` for the competition typed-IR clang path.
+- The lane implicitly enables `clang-lowering-report`, requires `CLANG_PATH`, and fails clearly when `CLANG_PATH` is missing.
+- Default build/test/validation paths still do not require clang, and plain `--emit-clang-lowering-report` remains diagnostic-only when clang is missing.
+- Competition environment JSON now records clang as an optional tool/lane, with synchronized compatibility profile and bilingual docs.

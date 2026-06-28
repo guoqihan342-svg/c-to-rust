@@ -85,11 +85,19 @@ def main() -> int:
         help="Opt in to the translator clang lowering report artifact under a temporary or explicit out-root.",
     )
     parser.add_argument(
+        "--competition-clang-lane",
+        action="store_true",
+        help="Require the competition clang typed-IR lane: enables clang lowering report and fails clearly when CLANG_PATH is not configured.",
+    )
+    parser.add_argument(
         "--accept-existing-evidence",
         action="store_true",
         help="Bind already accepted oracle/replay/diff/unsafe evidence from the slice spec instead of claiming the generated draft is accepted.",
     )
     args = parser.parse_args()
+    if args.competition_clang_lane:
+        args.emit_clang_lowering_report = True
+        require_competition_clang_lane()
 
     spec = read_json(args.slice_spec)
     target_id = required_str(spec, "target_id")
@@ -132,6 +140,7 @@ def main() -> int:
         accept_existing_evidence=args.accept_existing_evidence,
         emit_clang_dry_run=args.emit_clang_dry_run,
         emit_clang_lowering_report=args.emit_clang_lowering_report,
+        competition_clang_lane=args.competition_clang_lane,
     )
     manifest = emit_manifest(
         spec,
@@ -2749,13 +2758,16 @@ def emit_cache_metadata(
     accept_existing_evidence: bool = False,
     emit_clang_dry_run: bool = False,
     emit_clang_lowering_report: bool = False,
+    competition_clang_lane: bool = False,
 ) -> dict[str, Any]:
+    effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
     identity = cache_identity(
         spec,
         slice_spec,
         accept_existing_evidence=accept_existing_evidence,
         emit_clang_dry_run=emit_clang_dry_run,
-        emit_clang_lowering_report=emit_clang_lowering_report,
+        emit_clang_lowering_report=effective_emit_clang_lowering_report,
+        competition_clang_lane=competition_clang_lane,
         c2rust_baseline=c2rust_baseline,
         route_decision=route_decision,
         validation_profile=validation_profile,
@@ -2773,7 +2785,7 @@ def emit_cache_metadata(
         **identity,
         "dependent_artifacts": dependent_artifacts,
         "cache_input_fields": cache_input_fields(
-            emit_clang_lowering_report=emit_clang_lowering_report
+            emit_clang_lowering_report=effective_emit_clang_lowering_report
         ),
         "invalidates": CACHE_INVALIDATED_ARTIFACTS,
     }
@@ -4865,19 +4877,23 @@ def cache_identity(
     accept_existing_evidence: bool = False,
     emit_clang_dry_run: bool = False,
     emit_clang_lowering_report: bool = False,
+    competition_clang_lane: bool = False,
     c2rust_baseline: dict[str, Any] | None = None,
     route_decision: dict[str, Any] | None = None,
     validation_profile: dict[str, Any] | None = None,
     oracle: dict[str, Any] | None = None,
     environment: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
     command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
     if accept_existing_evidence:
         command_arguments.append("--accept-existing-evidence")
     if emit_clang_dry_run:
         command_arguments.append("--emit-clang-dry-run")
-    if emit_clang_lowering_report:
+    if effective_emit_clang_lowering_report:
         command_arguments.append("--emit-clang-lowering-report")
+    if competition_clang_lane:
+        command_arguments.append("--competition-clang-lane")
     identity = {
         "source_commit": source_commit(spec),
         "source_file_hashes": source_file_hashes(spec),
@@ -4910,13 +4926,14 @@ def cache_identity(
         },
         "c_oracle_harness_identity": oracle_harness_identity(oracle),
     }
-    if emit_clang_lowering_report:
+    if effective_emit_clang_lowering_report:
         identity["translator_feature_set"] = translator_feature_set(
             emit_clang_dry_run=emit_clang_dry_run,
-            emit_clang_lowering_report=emit_clang_lowering_report,
+            emit_clang_lowering_report=effective_emit_clang_lowering_report,
         )
         identity["clang_lowering_identity"] = clang_lowering_identity(
             environment=environment,
+            competition_clang_lane=competition_clang_lane,
         )
     return identity
 
@@ -4930,7 +4947,21 @@ def competition_environment_identity() -> dict[str, str]:
     }
 
 
-def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dict[str, Any]:
+def require_competition_clang_lane(*, environment: dict[str, str] | None = None) -> None:
+    env = os.environ if environment is None else environment
+    clang_path = str(env.get("CLANG_PATH", "")).strip()
+    if clang_path:
+        return
+    raise SystemExit(
+        "competition clang lane requires CLANG_PATH; install clang in the competition "
+        "environment and export CLANG_PATH, or omit --competition-clang-lane to keep "
+        "the diagnostic/fail-closed non-clang lane."
+    )
+
+
+def clang_lowering_identity(
+    *, environment: dict[str, str] | None = None, competition_clang_lane: bool = False
+) -> dict[str, Any]:
     env = os.environ if environment is None else environment
     clang_path = str(env.get("CLANG_PATH", "")).strip()
     libclang_path = str(env.get("LIBCLANG_PATH", "")).strip()
@@ -4940,7 +4971,7 @@ def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dic
         clang_version = command_version([clang_path, "--version"])
     else:
         clang_version = "not_configured"
-    return {
+    identity = {
         "enabled": True,
         "features": ["clang-lowering-report"],
         "clang_path_status": clang_path_status,
@@ -4949,6 +4980,16 @@ def clang_lowering_identity(*, environment: dict[str, str] | None = None) -> dic
         "libclang_path": libclang_path,
         "clang_version": clang_version,
     }
+    if competition_clang_lane:
+        identity.update(
+            {
+                "lane": "competition-clang-lane",
+                "required": True,
+                "requires_env": ["CLANG_PATH"],
+                "optional_env": ["LIBCLANG_PATH"],
+            }
+        )
+    return identity
 
 
 def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:

@@ -24,6 +24,7 @@
 - g++：`13.3.0`
 - GNU Make：`4.3`
 - CMake：未找到
+- clang：默认不要求；typed IR 比赛路线需要显式安装并设置 `CLANG_PATH`
 
 ## 文件说明
 
@@ -40,6 +41,7 @@
 
 - 默认构建、测试和验证路径不能依赖 Go。
 - 默认构建、测试和验证路径不能依赖 CMake；C/C++ oracle 路径优先使用 `gcc`、`g++` 和 GNU Make。
+- 默认构建、测试和验证路径不能依赖 clang。需要真实 clang AST dump typed-IR 路线时，先安装 clang，导出 `CLANG_PATH`，再使用 `auto_migrate.py --competition-clang-lane`；缺少 `CLANG_PATH` 时该 lane 必须清晰失败。
 - Rust 代码必须兼容 stable Rust `1.96.0`，不得引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
 - Node/npm 脚本按 Node `v24.13.0` / npm `11.6.2` 适配。
@@ -53,6 +55,15 @@
 source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 ```
+
+clang typed-IR 比赛路线是显式 opt-in：
+
+```bash
+export CLANG_PATH="$(command -v clang)"
+python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+```
+
+只传 `--emit-clang-lowering-report` 仍是诊断模式；缺 clang 时会产出 unavailable 报告，不会把默认非 clang lane 改成失败。
 
 如果需要把包管理器配置安装到用户目录，按本目录内对应文件同步到工具默认位置；仓库不会自动修改用户全局配置。
 

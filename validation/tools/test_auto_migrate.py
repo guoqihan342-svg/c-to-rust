@@ -4268,6 +4268,36 @@ class AutoMigrateTests(unittest.TestCase):
                 },
             )
 
+    def test_cache_identity_records_competition_clang_lane(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+            environment = {"CLANG_PATH": "/usr/bin/clang"}
+
+            with mock.patch.object(module, "command_version", return_value="clang version unit-test"):
+                identity = module.cache_identity(
+                    spec,
+                    spec_path,
+                    competition_clang_lane=True,
+                    environment=environment,
+                )
+
+            self.assertIn("--emit-clang-lowering-report", identity["command_arguments"])
+            self.assertIn("--competition-clang-lane", identity["command_arguments"])
+            self.assertEqual(identity["translator_feature_set"], ["clang-lowering-report"])
+            self.assertTrue(identity["clang_lowering_identity"]["required"])
+            self.assertEqual(identity["clang_lowering_identity"]["lane"], "competition-clang-lane")
+            self.assertEqual(identity["clang_lowering_identity"]["requires_env"], ["CLANG_PATH"])
+            self.assertEqual(identity["clang_lowering_identity"]["clang_path_status"], "configured")
+
     def test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
@@ -4359,6 +4389,36 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(cache["clang_lowering_identity"]["clang_path_status"], "not_configured")
             self.assertIn("translator_feature_set", cache["cache_input_fields"])
             self.assertIn("clang_lowering_identity", cache["cache_input_fields"])
+
+    def test_competition_clang_lane_requires_clang_path(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            environment = dict(os.environ)
+            environment.pop("CLANG_PATH", None)
+            environment.pop("LIBCLANG_PATH", None)
+            result = subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--competition-clang-lane",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "competition clang lane requires CLANG_PATH",
+                result.stdout + result.stderr,
+            )
 
     def test_cache_drift_invalidates_on_clang_lowering_report_identity_change(self) -> None:
         auto_migrate = load_auto_migrate_module()

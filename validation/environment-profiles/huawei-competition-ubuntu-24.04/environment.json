@@ -43,6 +43,31 @@
     "go": "not_installed",
     "cmake": "not_found"
   },
+  "optional_tools": {
+    "clang": {
+      "default_required": false,
+      "env_var": "CLANG_PATH",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "required_for": [
+        "auto_migrate.py --competition-clang-lane"
+      ],
+      "missing_status": "missing_clang_path"
+    }
+  },
+  "optional_lanes": {
+    "competition_clang": {
+      "default_enabled": false,
+      "auto_migrate_flag": "--competition-clang-lane",
+      "feature": "clang-lowering-report",
+      "requires_env": [
+        "CLANG_PATH"
+      ],
+      "optional_env": [
+        "LIBCLANG_PATH"
+      ],
+      "missing_status": "missing_clang_path"
+    }
+  },
   "adaptation_policy": [
     "Do not require Go for build, test, validation, or migration gates.",
     "Do not require CMake in default competition gates; use Cargo, Python, gcc/g++, and GNU Make paths.",

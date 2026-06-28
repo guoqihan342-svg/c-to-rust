@@ -70,6 +70,28 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(toolchain["make"], "4.3")
         self.assertEqual(profile["unavailable_tools"]["go"], "not_installed")
         self.assertEqual(profile["unavailable_tools"]["cmake"], "not_found")
+        self.assertEqual(profile["optional_tools"]["clang"]["default_required"], False)
+        self.assertEqual(profile["optional_tools"]["clang"]["env_var"], "CLANG_PATH")
+        self.assertEqual(
+            profile["optional_tools"]["clang"]["command"],
+            "clang -Xclang -ast-dump=json -fsyntax-only",
+        )
+        self.assertEqual(
+            profile["optional_tools"]["clang"]["required_for"],
+            ["auto_migrate.py --competition-clang-lane"],
+        )
+        self.assertEqual(profile["optional_tools"]["clang"]["missing_status"], "missing_clang_path")
+
+    def test_competition_environment_profile_records_clang_lane_identity(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        lane = profile["optional_lanes"]["competition_clang"]
+
+        self.assertEqual(lane["default_enabled"], False)
+        self.assertEqual(lane["auto_migrate_flag"], "--competition-clang-lane")
+        self.assertEqual(lane["feature"], "clang-lowering-report")
+        self.assertEqual(lane["requires_env"], ["CLANG_PATH"])
+        self.assertEqual(lane["optional_env"], ["LIBCLANG_PATH"])
+        self.assertEqual(lane["missing_status"], "missing_clang_path")
 
     def test_compatibility_profile_stays_synchronized_with_default_profile(self) -> None:
         synchronized_files = [
