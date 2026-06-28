@@ -31,7 +31,7 @@
 | `long long` / `unsigned long long` | 不支持 | 如不是 typedef alias，拒绝 |
 | `float` / `double` / `long double` | 不支持 | 浮点类型完全未支持 |
 | `_Bool` | 不支持 | 未建模 |
-| `enum` | 不支持 | 未建模 |
+| `enum` 类型 | 不支持 | enum 参数、返回值、局部变量、字段类型和底层 ABI 仍未建模；当前只在表达式层窄支持显式整数 enum 常量引用，见下方“enum 常量引用” |
 | `union` | 不支持 | 未建模 |
 | `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、按值 dot-field compound assignment、statement 位置 dot-field inc/dec、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；record-field 子集已有 no-clang AST fixture replay 覆盖按值 dot 读/写、readonly arrow 读和 single-pointer mutable arrow 写，但这不是 C/Rust diff 或语义通过证明；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；pointer member access 只限 readonly 和 single-pointer mutable 窄子集，不是通用 `->`；value-position field update、多 pointer alias-sensitive field write、嵌套、匿名仍不支持 |
 
@@ -55,6 +55,7 @@
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
 | 变量引用 | 已支持 | 局部变量和参数 |
+| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；隐式枚举值、负值、计算表达式、enum 类型变量/参数/返回值、底层 ABI 和全局 initializer 中的 enum 常量仍 fail-closed |
 | `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；clang-proven usual arithmetic `IntegralCast`/`IntegralPromotion` 会以显式 IR cast 参与运算，缺少该 cast 的混合宽度/符号 operand 会 fail-closed，不由 emitter 猜转换；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | 窄支持 | 标量整数，shift 的 lhs/result 同型；literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift fail closed |
 | `~` (bitwise not) | 已支持 | |

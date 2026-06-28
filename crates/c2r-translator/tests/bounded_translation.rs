@@ -470,6 +470,131 @@ fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clan
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_explicit_enum_constant_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let status_code = lower_function_and_globals_from_clang_ast_json_value(&ast, "status_code")
+        .expect("lower explicit enum constant fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::LitInt {
+                value,
+                spelling,
+                ty,
+                ..
+            }),
+        ..
+    }] = status_code.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected enum constant return literal, got {:?}",
+            status_code.function_ir.body
+        );
+    };
+    assert_eq!(*value, 7);
+    assert_eq!(spelling, "7");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&status_code.function_ir, &status_code.globals)
+        .expect("emit Rust from explicit enum constant fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn status_code() -> i32"), "{rust}");
+    assert!(rust.contains("return 7i32;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_enum_constant_in_binary_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let add_status = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_status")
+        .expect("lower explicit enum constant binary fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary { rhs, ty, .. }),
+        ..
+    }] = add_status.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected enum constant binary return, got {:?}",
+            add_status.function_ir.body
+        );
+    };
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt {
+            value: 7,
+            spelling,
+            ..
+        } if spelling == "7"
+    ));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&add_status.function_ir, &add_status.globals)
+        .expect("emit Rust from enum constant binary fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn add_status(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return value.checked_add(7i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant-binary", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_enum_constant_without_explicit_value_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "implicit_status_code")
+        .expect_err("implicit enum constant without explicit ConstantExpr must fail closed");
+    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert!(
+        error.message.contains("EnumConstantDecl STATUS_PENDING"),
+        "{}",
+        error.message
+    );
+    assert!(
+        error.message.contains("explicit ConstantExpr value"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_status")
+        .expect_err("enum-typed functions remain unsupported");
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(error.message.contains("enum status"), "{}", error.message);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/pointer_value_boundary_ast.json"

@@ -29,7 +29,7 @@ This document honestly lists C language constructs that are "currently supported
 | `long long` / `unsigned long long` | Unsupported | Rejected unless a typedef alias |
 | `float` / `double` / `long double` | Unsupported | Floating-point entirely unsupported |
 | `_Bool` | Unsupported | Not modeled |
-| `enum` | Unsupported | Not modeled |
+| `enum` types | Unsupported | Enum parameters, return values, local variables, field types, and underlying ABI remain unmodeled; the only current support is the narrow expression-level explicit integer enum constant reference listed below |
 | `union` | Unsupported | Not modeled |
 | `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, by-value dot-field compound assignment, statement-position dot-field inc/dec, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; the record-field subset now has no-clang AST fixture replay for by-value dot read/write, readonly arrow read, and single-pointer mutable arrow write, but this is not a C/Rust diff or semantic-pass proof; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; pointer member access is limited to the readonly and single-pointer mutable subsets, not general `->`; value-position field updates, multi-pointer alias-sensitive field writes, nesting, anonymous remain unsupported |
 
@@ -53,6 +53,7 @@ This document honestly lists C language constructs that are "currently supported
 |-----------|--------|-------|
 | Integer literal | Supported | Including unsigned suffix |
 | Variable reference | Supported | Locals and params |
+| Enum constant reference | Narrow | Only clang AST `DeclRefExpr -> EnumConstantDecl` references whose declaration has an explicit non-negative integer `ConstantExpr.value` plus a matching direct `IntegerLiteral` child are rewritten at the skeleton boundary into typed IR integer literals; implicit enum values, negative values, computed expressions, enum-typed variables/params/returns, underlying ABI, and enum constants in global initializers still fail closed |
 | `+` `-` `*` `/` `%` | Narrow | Scalar integer, same-type operands required; clang-proven usual-arithmetic `IntegralCast`/`IntegralPromotion` participates as an explicit IR cast, while mixed-width/signedness operands without that cast fail closed instead of being guessed by the emitter; unsigned-result `+` / `-` / `*` emit explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul`; signed-result `+` / `-` / `*` emit `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`, making no signed overflow a runtime precondition; literal `/ 0` and `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | Narrow | Scalar integer, shift lhs/result must match; literal negative shift counts, `shift_count >= width`, and signed right shift without a contract fail closed |
 | `~` (bitwise not) | Supported | |

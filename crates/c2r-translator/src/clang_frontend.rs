@@ -649,11 +649,14 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let record_inventory = record_inventory_from_ast(&ast);
+    let enum_constant_inventory = enum_constant_inventory_from_ast(&ast);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
     })?;
-    let mut skeleton = function_skeleton_from_ast(function)?;
+    let mut function = function.clone();
+    rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
+    let mut skeleton = function_skeleton_from_ast(&function)?;
     if let Some(target_abi) = target_abi {
         bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);
     }
@@ -968,6 +971,224 @@ fn integer_literal_init_value(item: &Value) -> Option<u64> {
             integer_literal_init_value(operand)
         }
         _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ClangEnumConstantLiteral {
+    name: String,
+    value: u64,
+    spelling: String,
+    ty: ClangTypeSkeleton,
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Default)]
+struct EnumConstantInventory {
+    by_id: BTreeMap<String, Result<ClangEnumConstantLiteral, String>>,
+    by_name: BTreeMap<String, Option<Result<ClangEnumConstantLiteral, String>>>,
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_inventory_from_ast(ast: &Value) -> EnumConstantInventory {
+    let mut inventory = EnumConstantInventory::default();
+    collect_enum_constant_inventory_from_ast(ast, &mut inventory);
+    inventory
+}
+
+#[cfg(feature = "typed-ir")]
+fn collect_enum_constant_inventory_from_ast(node: &Value, inventory: &mut EnumConstantInventory) {
+    if string_field(node, "kind").as_deref() == Some("EnumConstantDecl") {
+        let entry = enum_constant_literal_from_decl(node);
+        if let Some(id) = string_field(node, "id") {
+            match inventory.by_id.entry(id) {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    slot.insert(entry.clone());
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    let _previous = slot.insert(Err(
+                    "duplicate EnumConstantDecl id in clang AST; enum constant lowering requires a unique declaration id"
+                        .to_string(),
+                ));
+                }
+            }
+        }
+        if let Some(name) = enum_constant_decl_name(node) {
+            match inventory.by_name.entry(name) {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    slot.insert(Some(entry));
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    slot.insert(None);
+                }
+            }
+        }
+    }
+    for child in inner(node) {
+        collect_enum_constant_inventory_from_ast(child, inventory);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLiteral, String> {
+    let name = enum_constant_decl_name(node)
+        .ok_or_else(|| "EnumConstantDecl is missing name".to_string())?;
+    let qual_type = node
+        .get("type")
+        .and_then(|value| string_field(value, "qualType"))
+        .ok_or_else(|| format!("EnumConstantDecl {name} is missing type.qualType"))?;
+    let ty = type_from_qual_type(&qual_type).map_err(|error| {
+        format!(
+            "EnumConstantDecl {name} has unsupported type: {}",
+            error.message
+        )
+    })?;
+    if !matches!(ty.kind, ClangTypeKind::Integer { .. }) {
+        return Err(format!(
+            "EnumConstantDecl {name} type {} is not an integer type; enum type lowering is outside the current skeleton",
+            ty.spelled
+        ));
+    }
+
+    let constant_expr = inner(node)
+        .iter()
+        .find(|child| string_field(child, "kind").as_deref() == Some("ConstantExpr"))
+        .ok_or_else(|| {
+            format!(
+                "EnumConstantDecl {name} is missing explicit ConstantExpr value; implicit enum values are outside the current clang lowering skeleton"
+            )
+        })?;
+    let spelling = string_field(constant_expr, "value").ok_or_else(|| {
+        format!(
+            "EnumConstantDecl {name} is missing explicit ConstantExpr value; computed enum constants are outside the current clang lowering skeleton"
+        )
+    })?;
+    let value = spelling.parse::<u64>().map_err(|error| {
+        format!(
+            "EnumConstantDecl {name} explicit ConstantExpr value {spelling} is not a supported non-negative u64 integer literal: {error}"
+        )
+    })?;
+    if !enum_constant_has_matching_direct_integer_literal(constant_expr, &spelling) {
+        return Err(format!(
+            "EnumConstantDecl {name} requires a direct IntegerLiteral child matching explicit ConstantExpr value {spelling}; computed enum constants are outside the current clang lowering skeleton"
+        ));
+    }
+
+    Ok(ClangEnumConstantLiteral {
+        name,
+        value,
+        spelling,
+        ty,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_has_matching_direct_integer_literal(
+    constant_expr: &Value,
+    spelling: &str,
+) -> bool {
+    inner(constant_expr).iter().any(|child| {
+        string_field(child, "kind").as_deref() == Some("IntegerLiteral")
+            && string_field(child, "value").as_deref() == Some(spelling)
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_decl_name(node: &Value) -> Option<String> {
+    string_field(node, "name").filter(|name| !name.trim().is_empty())
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_enum_constant_decl_refs_to_integer_literals(
+    node: &mut Value,
+    inventory: &EnumConstantInventory,
+) -> Result<(), ClangFrontendError> {
+    if enum_constant_ref_from_decl_ref_expr(node).is_some() {
+        let literal = enum_constant_literal_for_decl_ref_expr(node, inventory)?;
+        *node = serde_json::json!({
+            "kind": "IntegerLiteral",
+            "type": {
+                "qualType": literal.ty.spelled,
+            },
+            "value": literal.spelling,
+        });
+        return Ok(());
+    }
+
+    if let Some(children) = node.get_mut("inner").and_then(Value::as_array_mut) {
+        for child in children {
+            rewrite_enum_constant_decl_refs_to_integer_literals(child, inventory)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_ref_from_decl_ref_expr(node: &Value) -> Option<&Value> {
+    if string_field(node, "kind").as_deref() != Some("DeclRefExpr") {
+        return None;
+    }
+    let referenced_decl = node.get("referencedDecl")?;
+    if string_field(referenced_decl, "kind").as_deref() == Some("EnumConstantDecl") {
+        Some(referenced_decl)
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_literal_for_decl_ref_expr(
+    node: &Value,
+    inventory: &EnumConstantInventory,
+) -> Result<ClangEnumConstantLiteral, ClangFrontendError> {
+    let referenced_decl =
+        enum_constant_ref_from_decl_ref_expr(node).ok_or_else(|| ClangFrontendError {
+            kind: "invalid_decl_ref_expr".to_string(),
+            message: "DeclRefExpr is not an EnumConstantDecl reference".to_string(),
+        })?;
+    let name = enum_constant_decl_name(referenced_decl).ok_or_else(|| ClangFrontendError {
+        kind: "invalid_decl_ref_expr".to_string(),
+        message: "DeclRefExpr EnumConstantDecl reference is missing name".to_string(),
+    })?;
+    if let Some(id) = string_field(referenced_decl, "id") {
+        let entry = inventory.by_id.get(&id).ok_or_else(|| ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!(
+                "EnumConstantDecl {name} with id {id} is not present in the clang enum constant inventory"
+            ),
+        })?;
+        return enum_constant_inventory_entry_result(&name, entry);
+    }
+
+    match inventory.by_name.get(&name) {
+        Some(Some(entry)) => enum_constant_inventory_entry_result(&name, entry),
+        Some(None) => Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!(
+                "EnumConstantDecl {name} reference is ambiguous without a declaration id; enum constant lowering requires unique clang provenance"
+            ),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!(
+                "EnumConstantDecl {name} is not present in the clang enum constant inventory"
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_inventory_entry_result(
+    name: &str,
+    entry: &Result<ClangEnumConstantLiteral, String>,
+) -> Result<ClangEnumConstantLiteral, ClangFrontendError> {
+    match entry {
+        Ok(literal) => Ok(literal.clone()),
+        Err(reason) => Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!("EnumConstantDecl {name}: {reason}"),
+        }),
     }
 }
 

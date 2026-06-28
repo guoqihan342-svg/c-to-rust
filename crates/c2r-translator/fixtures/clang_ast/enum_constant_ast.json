@@ -1,0 +1,208 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "0x1000",
+      "kind": "EnumDecl",
+      "name": "status",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "id": "0x1001",
+          "kind": "EnumConstantDecl",
+          "name": "STATUS_OK",
+          "type": {
+            "qualType": "int"
+          },
+          "inner": [
+            {
+              "kind": "ConstantExpr",
+              "type": {
+                "qualType": "int"
+              },
+              "value": "7",
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "7"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "0x1002",
+          "kind": "EnumConstantDecl",
+          "name": "STATUS_PENDING",
+          "type": {
+            "qualType": "int"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "status_code",
+      "type": {
+        "qualType": "int ()"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "referencedDecl": {
+                    "id": "0x1001",
+                    "kind": "EnumConstantDecl",
+                    "name": "STATUS_OK"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "add_status",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "referencedDecl": {
+                        "id": "0x1001",
+                        "kind": "EnumConstantDecl",
+                        "name": "STATUS_OK"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "implicit_status_code",
+      "type": {
+        "qualType": "int ()"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "referencedDecl": {
+                    "id": "0x1002",
+                    "kind": "EnumConstantDecl",
+                    "name": "STATUS_PENDING"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "identity_status",
+      "type": {
+        "qualType": "enum status (enum status)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "enum status"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "enum status"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "value"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
