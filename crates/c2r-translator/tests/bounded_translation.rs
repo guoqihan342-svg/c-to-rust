@@ -6029,9 +6029,140 @@ fn typed_ir_emits_direct_call_argument_integral_cast() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_reserved_c_macro_direct_call() {
+fn typed_ir_emits_assert_int_direct_call_as_rust_assert_macro() {
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let ir = IrFunction {
+        name: "assert_positive".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "assert".to_string(),
+                    args: vec![ir_var("value", i32_ty.clone())],
+                    ty: void_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit modeled C assert(int)");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn assert_positive(value: i32) -> i32"));
+    assert!(rust.contains("assert!(value != 0i32);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-assert-int-model", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_assert_calls_outside_minimal_model() {
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let pointer_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let cases = [
+        (
+            "assert_no_args",
+            vec![],
+            void_ty.clone(),
+            "requires exactly one condition argument",
+        ),
+        (
+            "assert_two_args",
+            vec![
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+            ],
+            void_ty.clone(),
+            "requires exactly one condition argument",
+        ),
+        (
+            "assert_non_void_result",
+            vec![ir_var("value", i32_ty.clone())],
+            i32_ty.clone(),
+            "requires void result type",
+        ),
+        (
+            "assert_pointer_arg",
+            vec![ir_var("values", pointer_ty.clone())],
+            void_ty.clone(),
+            "pointer value argument",
+        ),
+        (
+            "assert_nested_call_arg",
+            vec![IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![ir_var("value", i32_ty.clone())],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }],
+            void_ty.clone(),
+            "nested call expressions",
+        ),
+    ];
+
+    for (name, args, call_ty, expected_reason) in cases {
+        let mut params = vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }];
+        if name == "assert_pointer_arg" {
+            params.push(IrParam {
+                name: "values".to_string(),
+                ty: pointer_ty.clone(),
+                source_span: None,
+            });
+        }
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: i32_ty.clone(),
+            params,
+            body: vec![
+                IrStmt::Expr {
+                    expr: IrExpr::Call {
+                        callee: "assert".to_string(),
+                        args,
+                        ty: call_ty,
+                        source_span: None,
+                    },
+                    source_span: None,
+                },
+                IrStmt::Return {
+                    value: Some(ir_var("value", i32_ty.clone())),
+                    source_span: None,
+                },
+            ],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).expect_err("unsupported assert shape must fail closed");
+        assert!(
+            error.reason.contains(expected_reason),
+            "{name}: {:?}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_unmodeled_reserved_c_macro_direct_call() {
     for callee in [
-        "assert",
         "static_assert",
         "_Static_assert",
         "sizeof",
@@ -24437,6 +24568,10 @@ fn blocks_unsupported_call_expressions_without_rust_draft() {
         (
             "side-effect-call-argument",
             "int side_effect_call_argument(int value) { return helper(value++); }",
+        ),
+        (
+            "assert-call-expression",
+            "int assert_call_expression(int value) { assert(value); return value; }",
         ),
     ] {
         let spec = SliceSpec {

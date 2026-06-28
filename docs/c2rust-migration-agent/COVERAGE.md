@@ -64,13 +64,14 @@
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context、direct-call argument context、`?:` condition context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；普通表达式、参数位置或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast 和 `LValueToRValue`/`NoOp` skeleton 边界可继续 |
-| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；`assert(int)` 有最小模型并降为 Rust `assert!(condition)`，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
 | `p[i]` (array subscript) | 窄支持 | readonly pointer slice 或 local/global array |
 | `p->field` (arrow member) | 窄支持 | readonly `const struct T *p` scalar field read、null-presence/guarded readonly read，以及 direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/direct if-return fallthrough write/statement inc-dec 已支持；multi-pointer alias、nullable mutable pointer、read-before-write、普通 maybe-write 后读取、只在 returning 分支写入、loop/复杂路径 return、复杂 base/target/RHS、非标量字段、value-position inc-dec、`ForStmt` step inc-dec、layout/ABI 声明和 semantic acceptance 仍不支持 |
 | `p.field` (dot member access) | 窄支持 | 仅按值 record dot-field read、简单 `p.field = value`、statement 位置 `p.field += value`（RHS 仅简单整数变量/字面量/整数 cast）、standalone statement 位置 `p.field++` / `++p.field` / `p.field--` / `--p.field`（base 必须是直接按值 record 变量，field 必须是受支持整数）、本地 copy 后字段访问；value-position `p.field++`、复杂 RHS/复杂 base 和 pointer/alias-sensitive field write 仍不支持 |
+| `assert(int)` | 窄支持 | 仅 modeled C assert macro 直接调用，返回类型必须为 `void`，恰好一个 bounded integer/condition argument；pointer、record、nested call、inc/dec、deref/member 等参数仍 fail-closed |
 | `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
 | `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
 | `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |
@@ -156,7 +157,7 @@
 
 | 函数/头文件 | 状态 | 说明 |
 |-------------|------|------|
-| 任何标准库函数 | 不支持 | 无 stub / extern callee 证明 |
+| 其它标准库函数 | 不支持 | 无 stub / extern callee 证明；`assert(int)` 是上方单独列出的 macro 模型例外 |
 
 ## 关键边界说明
 

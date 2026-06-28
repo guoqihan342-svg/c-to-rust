@@ -1000,6 +1000,7 @@
       "ir_constructs": [
         "direct CallExpr",
         "bounded external callee context",
+        "modeled C assert(int) direct call",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1039,6 +1040,10 @@
             {
               "name": "typed_ir_emits_direct_call_argument_integral_cast",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1047,6 +1052,10 @@
           "evidence": [
             {
               "name": "unsupported call expressions fail closed",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_assert_calls_outside_minimal_model",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1068,6 +1077,10 @@
             },
             {
               "name": "typed_ir_emits_direct_call_argument_integral_cast",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1119,6 +1132,10 @@
         {
           "name": "typed_ir_emits_direct_call_argument_integral_cast",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1128,9 +1145,14 @@
           "fail_closed_reason": "calls outside the bounded direct-callee subset must not produce a Rust draft"
         },
         {
-          "name": "typed_ir_rejects_reserved_c_macro_direct_call",
+          "name": "typed_ir_rejects_unmodeled_reserved_c_macro_direct_call",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "reserved C macro/stdlib/extern-like callees must not be emitted as plain Rust function calls without explicit lowering or extern binding"
+          "fail_closed_reason": "unmodeled reserved C macro/stdlib/extern-like callees must not be emitted as plain Rust function calls without explicit lowering or extern binding"
+        },
+        {
+          "name": "typed_ir_rejects_assert_calls_outside_minimal_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "modeled C assert requires a void result and exactly one bounded integer/condition argument"
         },
         {
           "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",
@@ -1161,7 +1183,8 @@
         "translation_source",
         "fallback_from",
         "fallback_reason",
-        "translation_fallback event"
+        "translation_fallback event",
+        "legacy reserved C macro/stdlib raw-draft fail-closed"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1178,6 +1201,10 @@
             {
               "name": "fallback telemetry regression test",
               "path": "crates/c2r-translator/src/artifacts.rs"
+            },
+            {
+              "name": "blocks_unsupported_call_expressions_without_rust_draft",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1223,6 +1250,11 @@
           "name": "validator rejects candidate selection id drift",
           "path": "validation/tools/test_validate_auto_translation_evidence.py",
           "fail_closed_reason": "route metadata must not let fallback or baseline candidates masquerade as accepted semantic sources"
+        },
+        {
+          "name": "blocks_unsupported_call_expressions_without_rust_draft",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "legacy compatibility translation must not emit raw reserved C macro/stdlib calls such as assert(value)"
         }
       ]
     },

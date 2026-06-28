@@ -1218,6 +1218,20 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
                 ),
                 source_span: Some(statement.text.clone()),
             }),
+            StatementKind::SimpleCall => {
+                if let Some((callee, _)) = parse_simple_call(&statement.text) {
+                    if reserved_c_macro_or_stdlib_callee(callee) {
+                        result.errors.push(TranslationError {
+                            kind: "unsupported_syntax".to_string(),
+                            message: format!(
+                                "simple call `{}` targets reserved C macro/stdlib/extern surface `{callee}` and requires the typed-IR pipeline with explicit lowering/modeling or extern binding",
+                                statement.text
+                            ),
+                            source_span: Some(statement.text.clone()),
+                        });
+                    }
+                }
+            }
             StatementKind::If => {
                 if let Some((condition, then_body, else_body)) = parse_if_parts(&statement.text) {
                     push_unsupported_expression_value(statement, &condition, result);
@@ -1291,6 +1305,35 @@ fn record_unsupported_statements(statements: &[ParsedStatement], result: &mut Tr
             _ => {}
         }
     }
+}
+
+fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
+    matches!(
+        callee,
+        "assert"
+            | "static_assert"
+            | "_Static_assert"
+            | "sizeof"
+            | "offsetof"
+            | "malloc"
+            | "calloc"
+            | "realloc"
+            | "free"
+            | "memcpy"
+            | "memmove"
+            | "memset"
+            | "memcmp"
+            | "strlen"
+            | "printf"
+            | "fprintf"
+            | "sprintf"
+            | "snprintf"
+            | "puts"
+            | "putchar"
+            | "getchar"
+            | "exit"
+            | "abort"
+    )
 }
 
 fn record_unbounded_buffer_reads(statements: &[ParsedStatement], result: &mut TranslationResult) {

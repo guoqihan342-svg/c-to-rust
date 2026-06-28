@@ -2522,6 +2522,9 @@ fn emit_call_expr(
     context: &EmitContext,
 ) -> Result<String, String> {
     let callee = emit_identifier(callee, "call callee")?;
+    if callee == "assert" {
+        return emit_c_assert_call_expr(args, ty, symbols, context);
+    }
     if reserved_c_macro_or_stdlib_callee(&callee) {
         return Err(format!(
             "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
@@ -2548,9 +2551,36 @@ fn emit_call_expr(
     Ok(format!("{callee}({args})"))
 }
 
+fn emit_c_assert_call_expr(
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !is_void_type(ty) {
+        return Err(format!(
+            "C assert model requires void result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [condition] = args else {
+        return Err(format!(
+            "C assert model requires exactly one condition argument, got {}",
+            args.len()
+        ));
+    };
+    validate_bounded_call_arg(condition, false)
+        .map_err(|detail| format!("C assert condition {detail}"))?;
+    let condition = emit_condition_expr(condition, symbols, context)
+        .map_err(|detail| format!("C assert condition {detail}"))?;
+    Ok(format!("assert!({condition})"))
+}
+
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
     matches!(
         callee,
+        // Keep modeled macro names here as a fail-closed backstop; modeled
+        // forms must be intercepted before this reserved-surface guard.
         "assert"
             | "static_assert"
             | "_Static_assert"

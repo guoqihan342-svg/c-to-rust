@@ -62,13 +62,14 @@ This document honestly lists C language constructs that are "currently supported
 | `&&` `\|\|` (short-circuit) | Narrow | Condition and value-position C int 0/1 |
 | `?:` (conditional) | Narrow | Pure integer value-position only; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
 | Integer cast (explicit/implicit) | Narrow | Clang-proven `IntegralCast` / `IntegralPromotion`, source/target both supported integers; integral `ImplicitCastExpr` nodes in ordinary value contexts, direct-call argument contexts, `?:` condition contexts, and `if`/`while`/`do-while`/`for` condition contexts are preserved as explicit IR casts; `FloatingToIntegral`, `IntegralToFloating`, and unknown/missing `ImplicitCastExpr.castKind` in ordinary expressions, argument positions, or conditions fail closed, and only modeled integer casts plus the `LValueToRValue`/`NoOp` skeleton boundary continue |
-| Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, and clang-proven integer `ImplicitCastExpr` in argument position is preserved as an explicit cast; reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
+| Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, and clang-proven integer `ImplicitCastExpr` in argument position is preserved as an explicit cast; `assert(int)` has a minimal model and lowers to Rust `assert!(condition)`, while other reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
 | Nested direct call | Narrow | One-level single nested arg only |
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
 | `p[i]` (array subscript) | Narrow | Readonly pointer slice or local/global array |
 | `p->field` (arrow member) | Narrow | Readonly `const struct T *p` scalar field reads, null-presence/guarded readonly reads, and direct non-nullable single-pointer mutable `struct T *p` scalar field assignment/compound update/read-after-write/direct if-return fallthrough write/statement inc-dec are supported; multi-pointer aliasing, nullable mutable pointers, read-before-write, ordinary maybe-write reads, writes only on returning branches, loop/complex-path returns, complex bases/targets/RHS, non-scalar fields, value-position inc-dec, `ForStmt` step inc-dec, layout/ABI claims, and semantic acceptance remain unsupported |
 | `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, statement-position `p.field += value` (RHS limited to a simple integer variable, literal, or integer cast), standalone statement-position `p.field++` / `++p.field` / `p.field--` / `--p.field` (base must be a direct by-value record variable and the field must be a supported integer), and field access after local copy only; value-position `p.field++`, complex RHS/base forms, and pointer/alias-sensitive field writes remain unsupported |
+| `assert(int)` | Narrow | Direct modeled C assert macro calls only; result type must be `void`, with exactly one bounded integer/condition argument; pointer, record, nested call, inc/dec, deref/member, and similar arguments still fail closed |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |
@@ -154,7 +155,7 @@ This document honestly lists C language constructs that are "currently supported
 
 | Function/Header | Status | Notes |
 |-----------------|--------|-------|
-| Any standard library function | Unsupported | No stub / extern callee proof |
+| Other standard library functions | Unsupported | No stub / extern callee proof; `assert(int)` is the separately listed macro-model exception above |
 
 ## Key Boundary Notes
 
