@@ -87,13 +87,17 @@ flowchart TD
   - Defines route metadata for typed IR candidate generation.
   - `GenericTypedIr` is the normal typed IR emitter.
   - `Unsupported` means no Rust candidate; the error keeps route metadata and the fail-closed reason.
-- `crates/c2r-translator/src/lib.rs`
+- `crates/c2r-translator/src/model.rs`
+  - `TranslationSource` records the actual generator selected for the primary Rust draft, plus optional `fallback_from` and `fallback_reason`.
+- `crates/c2r-translator/src/artifacts.rs`
   - `try_translate_slice_with_clang_lowered_ir()` passes both `ClangLoweringReport.function_ir` and `report.globals` into `emit_rust_from_ir_with_globals()`.
   - `write_translation_artifacts()` can produce a Rust draft driven by clang-lowered typed IR when the `clang-lowering-report` feature is enabled.
+  - If clang-lowered typed IR is unavailable and the compatibility path falls back to the legacy string translator, the fallback is now recorded in `translation_source` and `translation_fallback` JSONL events instead of being silent.
   - The `clang-lowering-report` artifact now includes `typed_ir_candidate`, recording the `CandidateRouteDecision`, readonly globals summary, and the `semantic_pass=false` boundary.
   - Bounded direct identifier calls in clang-lowered typed IR now populate `plan.call_expressions`; `auto_migrate.py` maps that into `translation_summary.call_expressions` and context-pack `direct_call_edges`, and adds `callee_signature_id` / `call_edge_to_callee_binding` when the slice spec declares an external direct callee. This is signature/call-edge/source-binding provenance only; it hardens evidence consistency and does not raise `semantic_pass`.
   - The old string translator crc32 byte-cursor recognizer and local `emit_crc32_byte_cursor_rust()` have been removed. The raw string path now fails closed on unmodeled side effects such as `*p++` / `size--` and no longer emits the `crc32_update_byte()` template. The positive FlashDB crc32 Rust draft comes only from clang-lowered typed IR + readonly globals + `GenericTypedIr`.
 - `validation/tools/auto_migrate.py`
+  - Normalized auto-translation plans preserve `translation_source`, and route decisions bind it as `candidate_generation.primary_candidate`. This is route provenance, not semantic acceptance and not yet a full multi-candidate scheduler.
   - Newly generated `route_decision.candidate_generation.typed_ir` binds the typed IR candidate route, readonly globals identity, and Rust draft provenance from the clang-lowering-report artifact.
   - Newly generated `validation_profile.candidate_generation` repeats the same binding while keeping `generated_draft_semantic_pass=false`.
   - `typed_ir.status=generated` with route `GenericTypedIr` acts as a typed IR route signal; if the slice is scalar-only and `token_cost=0`, it routes as an L0 deterministic candidate, otherwise generated typed IR remains at least an L1 signal. `typed_ir.status=unsupported` preserves the reason and acts as an L2 repair/baseline route signal. Hard-refuse conditions, `alias_blocked`, `requires_noalias_contract`, and unknown pointer-ownership floors still take priority; typed IR provenance stays in the rationale but cannot override those risk floors.

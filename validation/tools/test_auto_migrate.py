@@ -1374,6 +1374,130 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
             self.assertFalse(profile["generated_draft_semantic_pass"])
 
+    def test_route_decision_records_primary_candidate_fallback_source(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "legacy-fallback-route-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-legacy-fallback-route-source"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            primary = route["candidate_generation"]["primary_candidate"]
+            self.assertEqual(primary["selected"], "legacy-string-translator")
+            self.assertEqual(primary["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(primary["fallback_reason"], "clang_lowered_typed_ir_unavailable")
+
+    def test_normalized_artifacts_preserve_translation_fallback_source(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "normalized-fallback-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec_path = tmp_path / "slice.json"
+            slice_spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            prefix = "l3-normalized-fallback-source"
+            (evidence_dir / f"{prefix}-translator-input.json").write_text(
+                json.dumps({"slice_id": "normalized-fallback-source"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"type_map": {"mappings": [], "uncertainties": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"cfg": {"functions": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"pointer_graph": {"nodes": [], "edges": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                        "plan": {
+                            "translation_rule_ids": ["primitive-return"],
+                            "unsupported_node_count": 0,
+                            "unsafe_candidate_count": 0,
+                            "call_expressions": [],
+                        },
+                        "errors": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-rust-draft.rs").write_text(
+                "pub fn identity(value: i32) -> i32 { value }\n", encoding="utf-8"
+            )
+
+            module.normalize_translation_artifacts(spec, slice_spec_path, evidence_dir)
+
+            plan = json.loads((evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["translation_source"]["selected"], "legacy-string-translator")
+            self.assertEqual(plan["translation_source"]["fallback_from"], "clang-lowered-typed-ir")
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / f"{prefix}-auto-translation-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            fallback_events = [
+                event for event in events if event.get("event_kind") == "translation_fallback"
+            ]
+            self.assertEqual(len(fallback_events), 1)
+            self.assertEqual(fallback_events[0]["selected"], "legacy-string-translator")
+            self.assertEqual(fallback_events[0]["fallback_from"], "clang-lowered-typed-ir")
+
     def test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1(self) -> None:
         module = load_auto_migrate_module()
         spec = {

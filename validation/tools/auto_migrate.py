@@ -864,6 +864,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
     write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
 
     raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    translation_source = translation_source_from_plan(raw_plan)
     raw_call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
     external_callee_context = external_direct_callee_context(spec, raw_call_expressions)
     call_expressions = bind_external_callee_context(raw_call_expressions, external_callee_context)
@@ -892,6 +893,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
             "status": "draft_generated" if raw_plan.get("status") == "generated" else "blocked",
             "source_commit": source,
             "repo_commit": repo,
+            "translation_source": translation_source,
             "inputs": {
                 "slice_spec": slice_ref,
                 "type_map": {"path": rel(evidence_dir / f"{prefix}-type-map.json"), "status": "recorded"},
@@ -2956,9 +2958,40 @@ def candidate_generation_evidence(spec: dict[str, Any], evidence_dir: Path) -> d
     slice_id = required_str(spec, "slice_id")
     prefix = f"l3-{slice_id}"
     report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    plan = read_json(plan_path) if plan_path.exists() else {}
     return {
+        "primary_candidate": primary_candidate_binding(plan),
         "typed_ir": typed_ir_candidate_binding(report_path),
     }
+
+
+def primary_candidate_binding(plan: dict[str, Any]) -> dict[str, Any]:
+    source = translation_source_from_plan(plan)
+    binding: dict[str, Any] = {
+        "selected": source["selected"],
+        "fallback": bool(source.get("fallback_from")),
+    }
+    if source.get("fallback_from"):
+        binding["fallback_from"] = source["fallback_from"]
+    if source.get("fallback_reason"):
+        binding["fallback_reason"] = source["fallback_reason"]
+    return binding
+
+
+def translation_source_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    source = plan.get("translation_source")
+    if not isinstance(source, dict):
+        return {"selected": "unknown"}
+    selected = str(source.get("selected") or "unknown")
+    normalized = {"selected": selected}
+    fallback_from = source.get("fallback_from")
+    fallback_reason = source.get("fallback_reason")
+    if fallback_from:
+        normalized["fallback_from"] = str(fallback_from)
+    if fallback_reason:
+        normalized["fallback_reason"] = str(fallback_reason)
+    return normalized
 
 
 def typed_ir_candidate_binding(report_path: Path) -> dict[str, Any]:
@@ -4461,6 +4494,9 @@ def write_auto_translation_events(spec: dict[str, Any], slice_spec_path: Path, e
     target_id = required_str(spec, "target_id")
     prefix = f"l3-{slice_id}"
     timestamp = "2026-06-24T00:00:00Z"
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    plan = read_json(plan_path) if plan_path.exists() else {}
+    translation_source = translation_source_from_plan(plan)
     event_defs = [
         ("input-normalized", "input_normalized", "recorded", slice_spec_path),
         ("context-extracted", "context_extracted", "recorded", evidence_dir / f"{prefix}-context-pack.json"),
@@ -4484,6 +4520,24 @@ def write_auto_translation_events(spec: dict[str, Any], slice_spec_path: Path, e
                 "message": event_message(kind),
                 "artifact_refs": [evidence_ref(artifact, status)],
             }
+        )
+    if translation_source.get("fallback_from"):
+        events.insert(
+            -1,
+            {
+                "schema_version": 1,
+                "event_id": f"{target_id}-{slice_id}-translation-fallback",
+                "timestamp_utc": timestamp,
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "event_kind": "translation_fallback",
+                "status": "recorded",
+                "message": "Primary candidate generation fell back to another translator path.",
+                "selected": translation_source["selected"],
+                "fallback_from": translation_source["fallback_from"],
+                "fallback_reason": translation_source.get("fallback_reason", "unspecified"),
+                "artifact_refs": [evidence_ref(plan_path, "recorded")],
+            },
         )
     write_text(
         evidence_dir / f"{prefix}-auto-translation-events.jsonl",

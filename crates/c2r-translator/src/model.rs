@@ -57,10 +57,52 @@ pub struct SourceSpanRef {
 pub struct TranslationResult {
     pub rust_code: String,
     pub errors: Vec<TranslationError>,
+    #[serde(default)]
+    pub translation_source: TranslationSource,
     pub type_map: TypeMapEvidence,
     pub cfg: CfgEvidence,
     pub pointer_graph: PointerGraphEvidence,
     pub plan: TranslationPlan,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TranslationSource {
+    pub selected: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_reason: Option<String>,
+}
+
+impl Default for TranslationSource {
+    fn default() -> Self {
+        Self {
+            selected: "unknown".to_string(),
+            fallback_from: None,
+            fallback_reason: None,
+        }
+    }
+}
+
+impl TranslationSource {
+    pub fn selected(selected: impl Into<String>) -> Self {
+        Self {
+            selected: selected.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn fallback(
+        selected: impl Into<String>,
+        fallback_from: impl Into<String>,
+        fallback_reason: impl Into<String>,
+    ) -> Self {
+        Self {
+            selected: selected.into(),
+            fallback_from: Some(fallback_from.into()),
+            fallback_reason: Some(fallback_reason.into()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

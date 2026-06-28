@@ -1,6 +1,7 @@
 use crate::{
     BuildProfile, CallExpressionEvidence, CfgBlock, CfgFunction, PointerEdge, PointerNode,
-    SliceSpec, TranslationError, TranslationPlan, TranslationResult, TypeMapping, TypeUncertainty,
+    SliceSpec, TranslationError, TranslationPlan, TranslationResult, TranslationSource,
+    TypeMapping, TypeUncertainty,
 };
 #[derive(Clone, Debug)]
 struct ParsedFunction {
@@ -94,6 +95,7 @@ enum LValue {
 pub fn translate_slice(spec: &SliceSpec) -> TranslationResult {
     let parsed = parse_function(&spec.c_source, &spec.function_name);
     let mut result = TranslationResult {
+        translation_source: TranslationSource::selected("legacy-string-translator"),
         plan: TranslationPlan {
             target_id: spec.target_id.clone(),
             slice_id: spec.slice_id.clone(),

@@ -97,8 +97,22 @@
       "additionalProperties": true,
       "required": ["typed_ir"],
       "properties": {
+        "primary_candidate": {"$ref": "#/definitions/primaryCandidateEvidence"},
         "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
         "generated_draft_semantic_pass": {"const": false}
+      }
+    },
+    "primaryCandidateEvidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["selected", "fallback"],
+      "properties": {
+        "selected": {
+          "enum": ["unknown", "legacy-string-translator", "clang-lowered-typed-ir"]
+        },
+        "fallback": {"type": "boolean"},
+        "fallback_from": {"enum": ["clang-lowered-typed-ir", "legacy-string-translator"]},
+        "fallback_reason": {"type": "string", "minLength": 1}
       }
     },
     "typedIrCandidateEvidence": {

@@ -24,6 +24,10 @@ This folder contains the executable design contract for the OpenSpec-governed C-
 
 - typed IR emits explicit `wrapping_add` / `wrapping_sub` / `wrapping_mul` for C unsigned `+` / `-` / `*`, avoiding debug/release overflow-behavior divergence; this remains candidate generation, and semantic pass is still decided by the C oracle and validation gates.
 
+## Latest Route Provenance Boundary
+
+- When `clang-lowering-report` is enabled but clang-lowered typed IR cannot produce the primary Rust draft, fallback to the legacy string translator is no longer silent. Raw translator artifacts and normalized `auto_migrate.py` evidence record `translation_source`, JSONL includes `translation_fallback`, and `route_decision.candidate_generation.primary_candidate` binds the selected generator plus fallback source/reason. This is provenance only; the full multi-candidate router for C2Rust/LLM candidates remains future work.
+
 ## Bilingual Documentation Convention
 
 - New user-facing or Agent-facing docs use a Chinese primary `.md` file and an English mirror `.en.md` by default.

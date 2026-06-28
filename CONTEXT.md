@@ -10001,3 +10001,59 @@ English mirror summary:
 - The lane implicitly enables `clang-lowering-report`, requires `CLANG_PATH`, and fails clearly when `CLANG_PATH` is missing.
 - Default build/test/validation paths still do not require clang, and plain `--emit-clang-lowering-report` remains diagnostic-only when clang is missing.
 - Competition environment JSON now records clang as an optional tool/lane, with synchronized compatibility profile and bilingual docs.
+
+## 148. 2026-06-28 P0 explicit fallback provenance
+
+本轮继续处理外部评价中“route/fallback 仍像空壳”的核心问题，选择最小可提交切片：不一次性实现完整 C2Rust/LLM 多候选 router，而是先消除 `clang-lowering-report` feature 下 clang-lowered typed IR 失败后 fallback 到 legacy string translator 的无遥测风险。
+
+核心改动：
+- `crates/c2r-translator/src/model.rs`
+  - 新增 `TranslationSource`，记录主 Rust draft 的 `selected` generator，并可记录 `fallback_from` / `fallback_reason`。
+- `crates/c2r-translator/src/legacy_translation.rs`
+  - legacy string translator 正常生成时标记 `selected=legacy-string-translator`。
+- `crates/c2r-translator/src/clang_lowered_translation.rs`
+  - clang-lowered typed IR 成功生成时标记 `selected=clang-lowered-typed-ir`。
+- `crates/c2r-translator/src/artifacts.rs`
+  - `translate_slice_with_optional_clang_lowered_ir()` 保留 compatibility fallback，但 fallback 结果现在标记为 `selected=legacy-string-translator`、`fallback_from=clang-lowered-typed-ir`、`fallback_reason=clang_lowered_typed_ir_unavailable`。
+  - raw `auto-translation-plan.json` 写入 `translation_source`。
+  - raw `auto-translation-events.jsonl` 在 fallback 时追加 `translation_fallback` 事件。
+- `validation/tools/auto_migrate.py`
+  - `normalize_translation_artifacts()` 归一化后保留 `translation_source`。
+  - `candidate_generation_evidence()` 写入 `primary_candidate`，使 `route_decision.candidate_generation.primary_candidate` 可审计主候选来源。
+  - 归一化后的 events 在 fallback 时也写入 `event_kind=translation_fallback`，避免覆盖 Rust raw events 后丢遥测。
+- `validation/auto-translation-template/route-decision.schema.json` 与 `validation-profile.schema.json`
+  - 为 `candidate_generation.primary_candidate` 增加 schema 形状。
+- 文档同步：
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+  - `docs/c2rust-migration-agent/README.md` / `.en.md`
+  - `docs/c2rust-migration-agent/core-translation-architecture.md` / `.en.md`
+
+已观察 RED：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events -- --nocapture
+```
+实现前失败于 `translation_source.selected == Null`。
+
+```powershell
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_primary_candidate_fallback_source
+```
+实现前失败于 `KeyError: 'primary_candidate'`。
+
+已跑定向 GREEN：
+```powershell
+cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events -- --nocapture
+python -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_route_decision_records_primary_candidate_fallback_source validation.tools.test_auto_migrate.AutoMigrateTests.test_normalized_artifacts_preserve_translation_fallback_source
+```
+
+边界：
+- 可以说：clang-lowered typed IR 不可用后 fallback 到 legacy string translator 不再静默；translator raw artifacts、normalized plan、JSONL events 和 route decision 都能看到主候选来源。
+- 可以说：这把 route metadata 往 provenance 方向做实了一步。
+- 不应说：完整多候选 router、C2Rust baseline/repair 调度、LLM candidate 调度、score/hard-gate 选择器、fallback chain 优先级、或 semantic acceptance 已完成。
+
+English mirror summary:
+
+- Added explicit primary-candidate provenance for clang-lowering-report fallback.
+- Raw translator artifacts now record `translation_source`, including selected generator and optional fallback source/reason.
+- When clang-lowered typed IR is unavailable and the compatibility path uses the legacy string translator, raw and normalized JSONL events include a `translation_fallback` event.
+- `auto_migrate.py` preserves `translation_source` after normalization and binds it into `route_decision.candidate_generation.primary_candidate`.
+- This is provenance, not a full multi-candidate router and not semantic acceptance.

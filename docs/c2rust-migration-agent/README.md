@@ -24,6 +24,10 @@
 
 - typed IR 对 C unsigned `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`，避免 debug/release 溢出行为分叉；这仍是 candidate generation，semantic pass 仍由 C oracle 和 validation gates 决定。
 
+## 最新路由来源边界
+
+- 启用 `clang-lowering-report` 但 clang-lowered typed IR 不能生成主 Rust draft 时，fallback 到 legacy string translator 不再是静默行为。translator 原始 artifacts 和 `auto_migrate.py` 归一化 evidence 都记录 `translation_source`，JSONL 包含 `translation_fallback`，`route_decision.candidate_generation.primary_candidate` 绑定 selected generator、fallback source 和 reason。这只是 provenance，不代表 C2Rust/LLM 多候选 router 已完成。
+
 ## 双语文档约定
 
 - 面向用户或 Agent 的新增文档，默认使用中文主文档 `.md` 和英文镜像 `.en.md`。

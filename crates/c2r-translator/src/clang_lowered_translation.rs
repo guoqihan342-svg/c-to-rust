@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     clang_frontend, record_type_mapping, typed_ir, BuildProfile, CallExpressionEvidence, CfgBlock,
-    CfgFunction, PointerNode, SliceSpec, TranslationPlan, TranslationResult,
+    CfgFunction, PointerNode, SliceSpec, TranslationPlan, TranslationResult, TranslationSource,
 };
 
 pub(crate) fn try_translate_slice_with_clang_lowered_ir(
@@ -19,6 +19,7 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
 
     let mut result = TranslationResult {
         rust_code,
+        translation_source: TranslationSource::selected("clang-lowered-typed-ir"),
         plan: TranslationPlan {
             target_id: spec.target_id.clone(),
             slice_id: spec.slice_id.clone(),

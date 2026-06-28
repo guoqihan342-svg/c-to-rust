@@ -12,6 +12,8 @@ use serde_json::json;
 use crate::clang_frontend;
 #[cfg(feature = "clang-lowering-report")]
 use crate::typed_ir;
+#[cfg(feature = "clang-lowering-report")]
+use crate::TranslationSource;
 use crate::{legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationResult};
 
 pub(crate) fn write_json_file(
@@ -60,6 +62,17 @@ pub(crate) fn translation_events_jsonl(
             "source_span": error.source_span,
         }))?);
     }
+    if let Some(fallback_from) = &result.translation_source.fallback_from {
+        lines.push(serde_json::to_string(&json!({
+            "schema_version": 1,
+            "target_id": spec.target_id,
+            "slice_id": spec.slice_id,
+            "event": "translation_fallback",
+            "selected": result.translation_source.selected,
+            "fallback_from": fallback_from,
+            "fallback_reason": result.translation_source.fallback_reason,
+        }))?);
+    }
     if result.errors.is_empty() {
         lines.push(serde_json::to_string(&json!({
             "schema_version": 1,
@@ -90,6 +103,7 @@ pub(crate) fn write_core_translation_artifacts(
                 "source_commit": spec.source_commit,
                 "fixture_hash": spec.fixture_hash,
                 "status": status,
+                "translation_source": &result.translation_source,
                 "plan": &result.plan,
                 "errors": &result.errors,
             }),
@@ -219,8 +233,18 @@ pub fn write_translation_artifacts(
 
 #[cfg(feature = "clang-lowering-report")]
 fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> TranslationResult {
-    crate::clang_lowered_translation::try_translate_slice_with_clang_lowered_ir(spec)
-        .unwrap_or_else(|| translate_slice(spec))
+    if let Some(result) =
+        crate::clang_lowered_translation::try_translate_slice_with_clang_lowered_ir(spec)
+    {
+        return result;
+    }
+    let mut result = translate_slice(spec);
+    result.translation_source = TranslationSource::fallback(
+        "legacy-string-translator",
+        "clang-lowered-typed-ir",
+        "clang_lowered_typed_ir_unavailable",
+    );
+    result
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -700,5 +724,48 @@ mod clang_lowering_report_artifact_tests {
         );
         assert_eq!(value["lowering_report"], Value::Null);
         assert_eq!(value["errors"][0]["kind"], "missing_source_root");
+    }
+
+    #[test]
+    fn clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events() {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: "fallback-identity".to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: "identity".to_string(),
+            c_source: "int identity(int value) { return value; }".to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            build_profile: profile(),
+            ..SliceSpec::default()
+        };
+        let out_dir = unique_out_dir("clang-lowering-fallback");
+
+        let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+        assert_eq!(manifest.status, "generated");
+        let plan: Value = serde_json::from_str(
+            &fs::read_to_string(out_dir.join("l3-fallback-identity-auto-translation-plan.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            plan["translation_source"]["selected"],
+            "legacy-string-translator"
+        );
+        assert_eq!(
+            plan["translation_source"]["fallback_from"],
+            "clang-lowered-typed-ir"
+        );
+        assert_eq!(
+            plan["translation_source"]["fallback_reason"],
+            "clang_lowered_typed_ir_unavailable"
+        );
+
+        let events =
+            fs::read_to_string(out_dir.join("l3-fallback-identity-auto-translation-events.jsonl"))
+                .unwrap();
+        assert!(events.contains("\"event\":\"translation_fallback\""));
+        assert!(events.contains("\"selected\":\"legacy-string-translator\""));
+        assert!(events.contains("\"fallback_from\":\"clang-lowered-typed-ir\""));
     }
 }
