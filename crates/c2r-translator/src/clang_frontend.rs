@@ -1902,7 +1902,7 @@ fn expr_skeleton_from_ast_with_options(
                 });
             };
             Ok(ClangExprSkeleton::Conditional {
-                condition: Box::new(expr_skeleton_from_ast_with_options(condition, false)?),
+                condition: Box::new(condition_expr_skeleton_from_ast(condition)?),
                 then_expr: Box::new(expr_skeleton_from_ast_with_options(then_expr, true)?),
                 else_expr: Box::new(expr_skeleton_from_ast_with_options(else_expr, true)?),
                 ty: expr_type(expr)?,
@@ -3926,6 +3926,36 @@ mod tests {
         })
     }
 
+    fn integral_promotion_condition_ast() -> Value {
+        serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "IntegralPromotion",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "signed char" },
+                    "referencedDecl": { "name": "small" }
+                }
+            ]
+        })
+    }
+
+    fn floating_to_integral_condition_ast() -> Value {
+        serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "FloatingToIntegral",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "float" },
+                    "referencedDecl": { "name": "flag" }
+                }
+            ]
+        })
+    }
+
     fn return_one_stmt_ast() -> Value {
         serde_json::json!({
             "kind": "ReturnStmt",
@@ -3947,6 +3977,23 @@ mod tests {
                 target: ClangTypeSkeleton {
                     kind: ClangTypeKind::Integer {
                         signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ));
+    }
+
+    fn assert_signed_integral_condition_cast(condition: ClangExprSkeleton) {
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Cast {
+                implicit: true,
+                target: ClangTypeSkeleton {
+                    kind: ClangTypeKind::Integer {
+                        signed: true,
                         width: 32
                     },
                     ..
@@ -5345,6 +5392,94 @@ mod tests {
     }
 
     #[test]
+    fn expr_skeleton_from_ast_preserves_conditional_condition_integral_cast() {
+        let expr = serde_json::json!({
+            "kind": "ConditionalOperator",
+            "type": { "qualType": "int" },
+            "inner": [
+                integral_cast_condition_ast(),
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "0"
+                }
+            ]
+        });
+
+        let skeleton = value_expr_skeleton_from_ast(&expr).expect("conditional skeleton");
+        let ClangExprSkeleton::Conditional { condition, .. } = skeleton else {
+            panic!("expected conditional skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(*condition);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_conditional_condition_integral_promotion() {
+        let expr = serde_json::json!({
+            "kind": "ConditionalOperator",
+            "type": { "qualType": "int" },
+            "inner": [
+                integral_promotion_condition_ast(),
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "0"
+                }
+            ]
+        });
+
+        let skeleton = value_expr_skeleton_from_ast(&expr).expect("conditional skeleton");
+        let ClangExprSkeleton::Conditional { condition, .. } = skeleton else {
+            panic!("expected conditional skeleton, got {skeleton:?}");
+        };
+        assert_signed_integral_condition_cast(*condition);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_conditional_condition_non_integer_implicit_cast() {
+        let expr = serde_json::json!({
+            "kind": "ConditionalOperator",
+            "type": { "qualType": "int" },
+            "inner": [
+                floating_to_integral_condition_ast(),
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "0"
+                }
+            ]
+        });
+
+        let skeleton = value_expr_skeleton_from_ast(&expr).expect("conditional skeleton");
+        let ClangExprSkeleton::Conditional { condition, .. } = &skeleton else {
+            panic!("expected conditional skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            condition.as_ref(),
+            ClangExprSkeleton::Unsupported { node, reason }
+                if node == "ImplicitCastExpr"
+                    && reason.contains("FloatingToIntegral")
+        ));
+        let error = lower_expr(&skeleton).expect_err("non-integer condition cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+    }
+
+    #[test]
     fn expr_skeleton_from_ast_rejects_binary_conditional_operator() {
         let expr = serde_json::json!({
             "kind": "BinaryConditionalOperator",
@@ -6107,6 +6242,48 @@ mod tests {
             panic!("expected if skeleton, got {skeleton:?}");
         };
         assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_if_condition_integral_promotion() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                integral_promotion_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert_signed_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_if_condition_non_integer_implicit_cast() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                floating_to_integral_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = &skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Unsupported { node, reason }
+                if node == "ImplicitCastExpr"
+                    && reason.contains("FloatingToIntegral")
+        ));
+        let error =
+            lower_stmt(&skeleton).expect_err("non-integer if condition cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
     }
 
     #[test]
