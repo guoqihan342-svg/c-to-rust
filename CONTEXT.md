@@ -10110,3 +10110,60 @@ English mirror summary:
 - The selected primary draft is bound through `selected_candidate_id`; C2Rust baseline remains `candidate_context_only`.
 - The validator rejects candidate-set id drift, C2Rust semantic-source claims, and candidate `semantic_pass=true`.
 - This remains provenance with `full_router=false`; full multi-candidate routing and semantic acceptance remain future work.
+
+## 150. 2026-06-28 P0 repo unsafe budget and core translator CI
+
+本轮继续 P0 “可信、可维护的翻译器核心”路线，选择核心 CI 与 repo-level unsafe budget 作为下一刀。原因：P0 要求不能只依赖 `flashDB Rust CI`，同时 unsafe budget 必须持续监控 `crates/c2r-translator`、`flashDB_rust`、`validation/l2_slices` 三个 first-party non-test Rust 范围。
+
+核心改动：
+- `.github/workflows/core-translator-validation-ci.yml`
+  - 新增 core translator validation CI。
+  - 跑 `cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet`。
+  - 跑 `cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet`。
+  - 跑核心 Python validation tests：`test_auto_migrate`、`test_validate_auto_translation_evidence`、`test_unsafe_budget`。
+  - 跑 `python validation/tools/unsafe_budget.py --max-ratio 0.10`。
+  - 跑 `git diff --check`。
+  - 触发路径覆盖 translator、validation tools/templates、`validation/l2_slices`、competition env、unsafe ledger 和 workflow 自身。
+- `validation/tools/unsafe_budget.py`
+  - 新增 repo-level first-party non-test Rust unsafe scanner。
+  - 默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`。
+  - 输出 JSON，包含 scopes、scanned_files、scanned_lines、unsafe findings、category counts、unsafe ratio、registration status、failed gates 和 ledger reference。
+  - 默认加载 `validation/unsafe-budget-ledger.json`；当前 ledger 为空但存在，表示 0 unsafe 的登记入口也落盘。
+- `validation/tools/test_unsafe_budget.py`
+  - 覆盖扫描范围、忽略 tests、未登记 unsafe 失败、超过 ratio 失败、当前仓库 gate 通过，以及 core CI workflow contract。
+- `validation/unsafe-budget-ledger.json`
+  - 新增 repo-level unsafe registration entrypoint。
+- 文档同步：
+  - `README.md`
+  - `docs/c2rust-migration-agent/future-vision-and-mvp.md` / `.en.md`
+
+已观察 RED：
+```powershell
+python -m unittest validation.tools.test_unsafe_budget
+```
+最初失败于 `ImportError: cannot import name 'unsafe_budget'`。
+
+```powershell
+python -m unittest validation.tools.test_unsafe_budget.UnsafeBudgetTests.test_core_ci_runs_repo_unsafe_budget_gate
+```
+实现前失败于缺 `.github/workflows/core-translator-validation-ci.yml`，随后失败于 workflow 未触发 `validation/unsafe-budget-ledger.json`。
+
+已跑定向 GREEN：
+```powershell
+python -m unittest validation.tools.test_unsafe_budget
+python validation/tools/unsafe_budget.py --max-ratio 0.10
+```
+当前真实仓库 unsafe budget：`status=passed`，扫描 34 个 first-party non-test Rust 源文件、26576 行，unsafe count 为 0，ledger 已加载。
+
+边界：
+- 可以说：核心 translator + validation CI 已有正式 GitHub Actions workflow，不再只依赖 FlashDB 专用 CI。
+- 可以说：repo-level unsafe budget 已有可执行 gate、测试和 ledger 入口，并接入核心 CI。
+- 不应说：unsafe ledger 细粒度治理已完整；当前登记键仍是最小 path+category，后续还要补 span、替代方案、覆盖测试、source evidence 和审核状态。
+
+English mirror summary:
+
+- Added a core translator validation GitHub Actions workflow.
+- Added a repo-level unsafe budget scanner covering `crates/c2r-translator/src`, `flashDB_rust/src`, and `validation/l2_slices/src`.
+- The unsafe budget report records scope, denominator lines, findings, ratio, registration status, failed gates, and ledger reference.
+- Added `validation/unsafe-budget-ledger.json` as the repo-level registration entrypoint.
+- Verified the current repo has 0 first-party non-test unsafe findings across 34 Rust source files and 26576 scanned lines.

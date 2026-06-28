@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "policy": "first-party non-test Rust unsafe findings must be registered with reason and validation gate",
+  "registered_findings": []
+}

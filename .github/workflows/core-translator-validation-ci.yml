@@ -1,0 +1,67 @@
+name: Core Translator Validation CI
+
+on:
+  push:
+    paths:
+      - ".github/workflows/core-translator-validation-ci.yml"
+      - "crates/c2r-translator/**"
+      - "validation/tools/**"
+      - "validation/l2_slices/**"
+      - "validation/unsafe-budget-ledger.json"
+      - "validation/auto-translation-template/**"
+      - "validation/l3-template/**"
+      - "validation/type-map-template/**"
+      - "validation/cfg-template/**"
+      - "validation/pointer-graph-template/**"
+      - "validation/slice-spec-template/**"
+      - "config/competition-env/**"
+  pull_request:
+    paths:
+      - ".github/workflows/core-translator-validation-ci.yml"
+      - "crates/c2r-translator/**"
+      - "validation/tools/**"
+      - "validation/l2_slices/**"
+      - "validation/unsafe-budget-ledger.json"
+      - "validation/auto-translation-template/**"
+      - "validation/l3-template/**"
+      - "validation/type-map-template/**"
+      - "validation/cfg-template/**"
+      - "validation/pointer-graph-template/**"
+      - "validation/slice-spec-template/**"
+      - "config/competition-env/**"
+  workflow_dispatch:
+
+jobs:
+  core-validation:
+    name: Translator and validation gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - name: Show Python version
+        run: python --version
+
+      - name: Run translator default tests
+        run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
+
+      - name: Run translator feature matrix tests
+        run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet
+
+      - name: Run core validation Python tests
+        run: |
+          python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+          python -m unittest validation.tools.test_unsafe_budget
+
+      - name: Run repository unsafe budget gate
+        run: python validation/tools/unsafe_budget.py --max-ratio 0.10
+
+      - name: Check diff whitespace
+        run: git diff --check

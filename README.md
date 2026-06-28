@@ -90,6 +90,7 @@
 - **FlashDB crc32**: accepted evidence 已通过 semantic pass（L4 authoritative 路径），generated draft 仍是 candidate
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
 - **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；这还不是带 score/hard gate 的完整多候选 router。
+- **仓库级 unsafe budget**: `validation/tools/unsafe_budget.py` 现在默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`，加载 `validation/unsafe-budget-ledger.json`，并作为 core translator validation CI gate 执行。
 
 ## 核心目录
 
@@ -129,6 +130,7 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python validation/tools/unsafe_budget.py --max-ratio 0.10
 openspec validate --all --strict
 ```
 
