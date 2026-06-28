@@ -1811,19 +1811,21 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(generation["selection_policy"]["semantic_acceptance"])
             self.assertEqual(
                 generation["selected_candidate_id"],
-                "primary:legacy-string-translator",
+                None,
             )
             candidates = {item["candidate_id"]: item for item in generation["candidate_set"]}
             self.assertEqual(
                 set(candidates),
                 {
-                    "primary:legacy-string-translator",
+                    "compat:legacy-string-translator",
                     "typed-ir:clang-lowered",
                     "c2rust-baseline",
                 },
             )
-            self.assertEqual(candidates["primary:legacy-string-translator"]["kind"], "legacy-string-translator")
-            self.assertEqual(candidates["primary:legacy-string-translator"]["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["kind"], "legacy-string-translator")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["role"], "compatibility_rust_draft")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["correctness_role"], "compatibility_only")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["fallback_from"], "clang-lowered-typed-ir")
             self.assertEqual(candidates["typed-ir:clang-lowered"]["status"], "missing")
             self.assertFalse(candidates["typed-ir:clang-lowered"]["semantic_pass"])
             self.assertEqual(candidates["c2rust-baseline"]["status"], "skipped")

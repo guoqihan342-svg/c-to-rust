@@ -1645,6 +1645,8 @@ def validate_candidate_selection_record(
                 "route_decision.candidate_generation.selected_candidate_id must reference candidate_set"
             )
 
+    validate_legacy_string_translator_candidate_binding(candidates_by_id, selected_candidate_id)
+
     c2rust_candidate = candidates_by_id.get("c2rust-baseline")
     if c2rust_candidate is not None and c2rust_candidate.get("correctness_role") != "candidate_context_only":
         raise SystemExit(
@@ -1665,6 +1667,31 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+def validate_legacy_string_translator_candidate_binding(
+    candidates_by_id: dict[str, dict[str, Any]],
+    selected_candidate_id: Any,
+) -> None:
+    legacy = [
+        (candidate_id, candidate)
+        for candidate_id, candidate in candidates_by_id.items()
+        if candidate.get("kind") == "legacy-string-translator"
+    ]
+    for candidate_id, candidate in legacy:
+        if candidate_id == selected_candidate_id:
+            raise SystemExit(
+                "legacy-string-translator cannot be selected as the primary candidate; "
+                "it is compatibility-only"
+            )
+        if not candidate_id.startswith("compat:"):
+            raise SystemExit("legacy-string-translator candidate_id must use compat: prefix")
+        if candidate.get("role") != "compatibility_rust_draft":
+            raise SystemExit("legacy-string-translator role must be compatibility_rust_draft")
+        if candidate.get("correctness_role") != "compatibility_only":
+            raise SystemExit("legacy-string-translator correctness_role must be compatibility_only")
+        if candidate.get("compatibility_only") is not True:
+            raise SystemExit("legacy-string-translator must set compatibility_only=true")
 
 
 def validate_c2rust_baseline_candidate_binding(

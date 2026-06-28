@@ -141,10 +141,20 @@
           ]
         },
         "status": {"type": "string", "minLength": 1},
-        "role": {"type": "string", "minLength": 1},
+        "role": {
+          "enum": [
+            "primary_rust_draft",
+            "typed_ir_signal",
+            "typed_ir_candidate_signal",
+            "candidate_context_only",
+            "baseline_or_repair_candidate_context",
+            "compatibility_rust_draft"
+          ]
+        },
         "semantic_pass": {"const": false},
         "generated_draft_semantic_pass": {"const": false},
-        "correctness_role": {"enum": ["candidate_context_only"]},
+        "correctness_role": {"enum": ["candidate_context_only", "compatibility_only"]},
+        "compatibility_only": {"const": true},
         "baseline_manifest": {"$ref": "#/definitions/artifactRef"},
         "output_ref": {
           "anyOf": [

@@ -3427,12 +3427,16 @@ def candidate_generation_evidence(
 
 def primary_candidate_binding(plan: dict[str, Any]) -> dict[str, Any]:
     source = translation_source_from_plan(plan)
+    candidate_prefix = "compat" if source["selected"] == "legacy-string-translator" else "primary"
     binding: dict[str, Any] = {
-        "candidate_id": f"primary:{source['selected']}",
+        "candidate_id": f"{candidate_prefix}:{source['selected']}",
         "selected": source["selected"],
         "fallback": bool(source.get("fallback_from")),
         "semantic_pass": False,
     }
+    if source["selected"] == "legacy-string-translator":
+        binding["compatibility_only"] = True
+        binding["correctness_role"] = "compatibility_only"
     if source.get("fallback_from"):
         binding["fallback_from"] = source["fallback_from"]
     if source.get("fallback_reason"):
@@ -3452,6 +3456,8 @@ def candidate_selection_policy() -> dict[str, Any]:
 def selected_candidate_id(primary_candidate: dict[str, Any]) -> str | None:
     if primary_candidate.get("selected") == "unknown":
         return None
+    if primary_candidate.get("compatibility_only") is True:
+        return None
     return str(primary_candidate.get("candidate_id"))
 
 
@@ -3466,9 +3472,14 @@ def candidate_set_binding(
         "candidate_id": primary_candidate.get("candidate_id", "primary:unknown"),
         "kind": selected,
         "status": primary_status,
-        "role": "primary_rust_draft",
+        "role": "compatibility_rust_draft"
+        if primary_candidate.get("compatibility_only") is True
+        else "primary_rust_draft",
         "semantic_pass": False,
     }
+    if primary_candidate.get("compatibility_only") is True:
+        primary["compatibility_only"] = True
+        primary["correctness_role"] = "compatibility_only"
     if primary_candidate.get("fallback"):
         primary["fallback"] = True
     if primary_candidate.get("fallback_from"):

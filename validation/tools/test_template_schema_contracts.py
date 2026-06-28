@@ -264,6 +264,14 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn("generated_draft_semantic_pass", generation_schema["required"])
             self.assertIn("baseline_manifest", candidate_schema["properties"])
             self.assertIn("output_ref", candidate_schema["properties"])
+            self.assertIn(
+                "baseline_or_repair_candidate_context",
+                candidate_schema["properties"]["role"]["enum"],
+            )
+            self.assertIn(
+                "typed_ir_candidate_signal",
+                candidate_schema["properties"]["role"]["enum"],
+            )
 
             baseline_manifest_schema = candidate_schema["properties"]["baseline_manifest"]
             self.assertEqual(baseline_manifest_schema["$ref"], "#/definitions/artifactRef")
@@ -271,6 +279,32 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertEqual(output_ref_schema["anyOf"][0]["type"], "null")
             self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
             self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
+
+    def test_route_and_profile_candidate_set_schema_allows_legacy_compatibility_only(self) -> None:
+        for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
+            schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
+            schema = load_json(schema_path)
+            candidate_schema = schema["definitions"]["candidateSetItem"]
+
+            self.assertIn("compatibility_rust_draft", candidate_schema["properties"]["role"]["enum"])
+            self.assertIn(
+                "compatibility_only",
+                candidate_schema["properties"]["correctness_role"]["enum"],
+            )
+            self.assertEqual(candidate_schema["properties"]["compatibility_only"]["const"], True)
+
+            jsonschema.validate(
+                {
+                    "candidate_id": "compat:legacy-string-translator",
+                    "kind": "legacy-string-translator",
+                    "status": "generated",
+                    "role": "compatibility_rust_draft",
+                    "semantic_pass": False,
+                    "correctness_role": "compatibility_only",
+                    "compatibility_only": True,
+                },
+                candidate_schema,
+            )
 
     def test_blocked_repairs_schema_requires_repair_playbook_fields(self) -> None:
         schema_path = REPO_ROOT / "validation" / "auto-translation-template" / "blocked-repairs.schema.json"

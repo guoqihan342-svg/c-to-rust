@@ -751,6 +751,56 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
         self.assertIn("selected_candidate_id", str(raised.exception))
 
+    def test_rejects_legacy_string_translator_as_selected_primary_candidate(self) -> None:
+        module = load_validator_module()
+        c2rust_candidate = {
+            "candidate_id": "c2rust-baseline",
+            "kind": "c2rust-baseline",
+            "status": "skipped",
+            "role": "baseline_or_repair_candidate_context",
+            "correctness_role": "candidate_context_only",
+            "reason": "blocked_by_missing_tools",
+            "semantic_pass": False,
+        }
+        legacy_primary = {
+            "selection_policy": {
+                "stage": "post_generation_provenance",
+                "selection_basis": "translator_artifact_primary_candidate",
+                "semantic_acceptance": False,
+                "full_router": False,
+            },
+            "selected_candidate_id": "primary:legacy-string-translator",
+            "candidate_set": [
+                {
+                    "candidate_id": "primary:legacy-string-translator",
+                    "kind": "legacy-string-translator",
+                    "status": "generated",
+                    "role": "primary_rust_draft",
+                    "semantic_pass": False,
+                },
+                {
+                    "candidate_id": "typed-ir:clang-lowered",
+                    "kind": "typed-ir",
+                    "status": "missing",
+                    "role": "typed_ir_candidate_signal",
+                    "rust_draft_generated": False,
+                    "semantic_pass": False,
+                },
+                c2rust_candidate,
+            ],
+            "c2rust_baseline": c2rust_candidate,
+        }
+
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                {"candidate_generation": legacy_primary},
+                {"candidate_generation": legacy_primary},
+            )
+
+        self.assertIn("legacy-string-translator", str(raised.exception))
+
     def test_rejects_c2rust_candidate_claiming_semantic_pass(self) -> None:
         module = load_validator_module()
         route = {"candidate_generation": self._candidate_selection_record()}
@@ -4035,13 +4085,15 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 "semantic_acceptance": False,
                 "full_router": False,
             },
-            "selected_candidate_id": "primary:legacy-string-translator",
+            "selected_candidate_id": None,
             "candidate_set": [
                 {
-                    "candidate_id": "primary:legacy-string-translator",
+                    "candidate_id": "compat:legacy-string-translator",
                     "kind": "legacy-string-translator",
                     "status": "generated",
-                    "role": "primary_rust_draft",
+                    "role": "compatibility_rust_draft",
+                    "correctness_role": "compatibility_only",
+                    "compatibility_only": True,
                     "semantic_pass": False,
                 },
                 {
