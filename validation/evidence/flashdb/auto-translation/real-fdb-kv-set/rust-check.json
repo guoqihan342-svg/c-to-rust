@@ -1,0 +1,55 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
+    "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+    "status": "skipped"
+  },
+  "command": null,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [
+      {
+        "name": "fdb_blob_make",
+        "reason": "missing_declared_external_direct_callee",
+        "semantics_verified": false,
+        "stub_kind": "none"
+      },
+      {
+        "name": "fdb_kv_del",
+        "reason": "missing_declared_external_direct_callee",
+        "semantics_verified": false,
+        "stub_kind": "none"
+      },
+      {
+        "name": "fdb_kv_set_blob",
+        "reason": "missing_declared_external_direct_callee",
+        "semantics_verified": false,
+        "stub_kind": "none"
+      },
+      {
+        "name": "strlen",
+        "reason": "missing_declared_external_direct_callee",
+        "semantics_verified": false,
+        "stub_kind": "none"
+      }
+    ],
+    "blocked_count": 4,
+    "declared_callees": [],
+    "declared_count": 0,
+    "status": "blocked"
+  },
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
+    "sha256": "bb8da7b369fa9dfd60ef625d50c48b55264469985c6efb2a7f5be9ccc01e5825",
+    "status": "refused"
+  },
+  "schema_version": 1,
+  "status": "skipped",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
+    "profile": "L4-dev",
+    "sha256": "98c525e90df22bf76efe305da5f5de48389ac4edb3029a136da681ef16354b65",
+    "status": "blocked"
+  }
+}

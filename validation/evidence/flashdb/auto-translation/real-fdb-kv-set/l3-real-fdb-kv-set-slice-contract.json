@@ -1,0 +1,128 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "fdb_err_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "fdb_kvdb_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "char",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "callee",
+        "name": "strlen",
+        "source": "stdlib_model_pending_named_slice_evidence"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_blob_make",
+        "source": "src/fdb_utils.c#fdb_blob_make"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_kv_set_blob",
+        "source": "src/fdb_kvdb.c#fdb_kv_set_blob"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_kv_del",
+        "source": "src/fdb_kvdb.c#fdb_kv_del"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    },
+    "files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "functions": [
+      "fdb_kv_set"
+    ],
+    "signatures": [
+      {
+        "c_source": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)\n{\n    struct fdb_blob blob;\n\n    if (value) {\n        return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)));\n    } else {\n        return fdb_kv_del(db, key);\n    }\n}",
+        "definition_status": "real_source_bound",
+        "function": "fdb_kv_set",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "direction": "input",
+            "name": "db"
+          },
+          {
+            "c_type": "const char*",
+            "direction": "input",
+            "name": "key"
+          },
+          {
+            "c_type": "const char*",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "fdb_err_t",
+        "source_span": {
+          "byte_end": 49710,
+          "byte_start": 49451,
+          "file": "src/fdb_kvdb.c",
+          "line_end": 1378,
+          "line_start": 1369,
+          "sha256": "c71859844c82437b87ee6d52739f623d82771252a0eb2b29dc373d6a8ce4dd95"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "fdb_kv_set semantic pass before committed route/profile/final verification evidence exists"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
+    ]
+  },
+  "fixture": {
+    "hash": "real-fdb-kv-set-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json"
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_kv_set.rs",
+    "public_api": [
+      {
+        "boundary_kind": "internal_ffi",
+        "name": "fdb_kv_set",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "recorded",
+  "target_id": "flashdb"
+}

@@ -3112,6 +3112,90 @@ class AutoMigrateTests(unittest.TestCase):
                 "missing_declared_external_direct_callee",
             )
 
+    def test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-set-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-dry-run",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-kv-set"
+            translator_input = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-translator-input.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            context_pack = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-context-pack.json").read_text(encoding="utf-8")
+            )
+            route = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-route-decision.json").read_text(encoding="utf-8")
+            )
+            profile = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-validation-profile.json").read_text(encoding="utf-8")
+            )
+            blocked = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-self-healing-blocked-repairs.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(translator_input["function_source_span"]["file"], "src/fdb_kvdb.c")
+            self.assertEqual(translator_input["function_source_span"]["line_start"], 1369)
+            dependency_names = {
+                dependency["name"]
+                for dependency in context_pack["call_edges"]
+                if dependency.get("kind") == "callee"
+            }
+            self.assertEqual(
+                dependency_names,
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(context_pack["direct_call_edges"], [])
+            external_context = plan["inputs"]["external_callee_context"]
+            self.assertEqual(external_context["status"], "blocked")
+            self.assertEqual(external_context["declared_count"], 0)
+            self.assertEqual(external_context["blocked_count"], 4)
+            blocked_callees = {
+                item["name"]
+                for item in plan["translation_summary"]["external_direct_callee_blocks"]
+            }
+            self.assertEqual(
+                blocked_callees,
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertFalse(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(profile["status"], "blocked")
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            repair = blocked["blocked_repairs"][0]
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "external_direct_callee_context")
+            self.assertEqual(
+                sorted(repair["ir_feature_gap"]["blocked_callees"]),
+                sorted(blocked_callees),
+            )
+            self.assertEqual(repair["smallest_next_test"]["kind"], "external_callee_context_regression")
+
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {
             "target_id": "demo",

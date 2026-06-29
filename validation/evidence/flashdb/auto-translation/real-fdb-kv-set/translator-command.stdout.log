@@ -1,0 +1,17 @@
+{
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-kv-set",
+  "status": "blocked",
+  "artifact_paths": [
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-events.jsonl",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-ai-candidate-manifest.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-blocked-repairs.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-dry-run.json",
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json"
+  ]
+}

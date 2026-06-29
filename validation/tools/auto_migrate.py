@@ -402,13 +402,7 @@ def external_direct_callee_context(
 ) -> dict[str, Any]:
     entry_name = entry_function_name(spec)
     declared_map = declared_external_direct_callee_map(spec)
-    callee_names = sorted(
-        {
-            str(call.get("callee"))
-            for call in (call_expressions or [])
-            if call.get("callee") and str(call.get("callee")) != entry_name
-        }
-    )
+    callee_names = sorted(external_direct_callee_names(spec, call_expressions, entry_name))
     declared = []
     blocked = []
     for name in callee_names:
@@ -448,6 +442,25 @@ def external_direct_callee_context(
         "declared_count": len(declared),
         "blocked_count": len(blocked),
     }
+
+
+def external_direct_callee_names(
+    spec: dict[str, Any],
+    call_expressions: list[dict[str, Any]] | None,
+    entry_name: str,
+) -> set[str]:
+    names = {
+        str(call.get("callee"))
+        for call in (call_expressions or [])
+        if call.get("callee") and str(call.get("callee")) != entry_name
+    }
+    for dependency in spec.get("c_boundary", {}).get("direct_dependencies", []):
+        if dependency.get("kind") != "callee":
+            continue
+        name = str(dependency.get("name") or "")
+        if name and name != entry_name:
+            names.add(name)
+    return names
 
 
 def external_context_input_ref(evidence_dir: Path, slice_id: str, context: dict[str, Any]) -> dict[str, Any]:
@@ -3093,6 +3106,25 @@ def route_refused_repair_playbook(
     route_decision: dict[str, Any],
 ) -> dict[str, Any]:
     gap = route_refused_ir_feature_gap(spec, evidence_dir, route_decision)
+    smallest_next_test = {
+        "kind": "route_refusal_regression",
+        "command": (
+            "python -B -m unittest "
+            "validation.tools.test_auto_migrate.AutoMigrateTests."
+            "test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
+        ),
+        "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
+    }
+    if gap["kind"] == "external_direct_callee_context":
+        smallest_next_test = {
+            "kind": "external_callee_context_regression",
+            "command": (
+                "python -B -m unittest "
+                "validation.tools.test_auto_migrate.AutoMigrateTests."
+                "test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim"
+            ),
+            "expected_gate": "external direct callees are declared, stubbed, or kept blocked before candidate acceptance",
+        }
     return {
         "ir_feature_gap": gap,
         "oracle_fixture_gap": {
@@ -3100,15 +3132,7 @@ def route_refused_repair_playbook(
             "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
         },
         "candidate_routes": repair_candidate_routes(gap["kind"]),
-        "smallest_next_test": {
-            "kind": "route_refusal_regression",
-            "command": (
-                "python -B -m unittest "
-                "validation.tools.test_auto_migrate.AutoMigrateTests."
-                "test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
-            ),
-            "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
-        },
+        "smallest_next_test": smallest_next_test,
         "human_intervention_point": (
             "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, "
             "then rerun auto_migrate before promoting any candidate."
@@ -3139,6 +3163,18 @@ def route_refused_ir_feature_gap(
             "kind": "unsupported_control_flow",
             "source": "cfg.unsupported_control_flow",
             "evidence_refs": [rel(cfg_path)],
+        }
+    external_blocks = summary.get("external_direct_callee_blocks")
+    if isinstance(external_blocks, list) and external_blocks:
+        return {
+            "kind": "external_direct_callee_context",
+            "source": "auto_translation_plan.translation_summary.external_direct_callee_blocks",
+            "blocked_callees": [
+                str(item.get("name"))
+                for item in external_blocks
+                if isinstance(item, dict) and item.get("name")
+            ],
+            "evidence_refs": [rel(plan_path), rel(evidence_dir / f"{prefix}-context-pack.json")],
         }
     rationale = route_decision.get("rationale", [])
     feature = "route_refused"

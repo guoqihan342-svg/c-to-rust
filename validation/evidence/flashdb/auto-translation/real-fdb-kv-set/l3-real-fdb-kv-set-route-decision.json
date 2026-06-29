@@ -1,0 +1,193 @@
+{
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
+        "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "not_available"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
+          "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "primary_candidate": {
+      "candidate_id": "primary:unknown",
+      "fallback": false,
+      "selected": "unknown",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": null,
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "post_generation_provenance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "reason": "function_ir_missing",
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
+        "sha256": "d6369fd17316adcebe7cfc107145c00c3c0d3df427429b149e65ae65e141a9b2",
+        "status": "unavailable"
+      },
+      "status": "not_available"
+    }
+  },
+  "level": "L4",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "recorded"
+      },
+      "weight": "hard_refuse"
+    }
+  ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-project migration",
+        "semantic equivalence without C oracle and Rust replay evidence",
+        "fdb_kv_set semantic pass before committed route/profile/final verification evidence exists"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
+      "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
+      "sha256": "72fd878dccce8c4f5a393c1b2be158f24886dbe80f311c881109634001ba5d1a",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
+      "sha256": "d6369fd17316adcebe7cfc107145c00c3c0d3df427429b149e65ae65e141a9b2",
+      "status": "unavailable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
+      "sha256": "5c8c620947f05bcc913a02d8e363b451ad5506a8b59b761ee5beb85e12d615aa",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
+      "status": "blocked"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
+      "sha256": "ef4729c2b3819eb1b2c75c497ae032adf3f5ace6379a00a4aec4e59bbbbee26a",
+      "status": "recorded"
+    }
+  },
+  "status": "refused",
+  "target_id": "flashdb",
+  "translator": {
+    "candidate_generation_allowed": false,
+    "kind": "refuse"
+  },
+  "verification_profile": "L4-dev"
+}

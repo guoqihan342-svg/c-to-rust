@@ -1,0 +1,107 @@
+{
+  "boundary": "Draft generation is not oracle success.",
+  "compile_command_draft": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
+      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
+      "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
+      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+      "-o",
+      "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+    ],
+    "defines": [],
+    "link_source_files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "resolved_include_paths": [
+      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
+      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests"
+    ],
+    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+    "status": "draft_not_executed",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
+  },
+  "compile_execution": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
+      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
+      "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
+      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+      "-o",
+      "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+    ],
+    "attempted": false,
+    "diagnostics": [
+      "C oracle compile execution skipped by --skip-c-oracle."
+    ],
+    "semantic_pass": false,
+    "status": "skipped_by_flag",
+    "toolchain_adapter": "not_executed",
+    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+    "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
+  },
+  "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+  "fixture_binding": {
+    "behavior_fields": [
+      "return_code"
+    ],
+    "binding_status": "missing_or_empty",
+    "case_bindings": [],
+    "case_count": 0,
+    "expected_output_status": "missing_or_empty",
+    "observable_outputs": [
+      "return_code"
+    ],
+    "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json"
+  },
+  "global_linkage_requirements": [],
+  "harness_contract": {
+    "fixture": {
+      "behavior_fields": [
+        "return_code"
+      ],
+      "binding_status": "missing_or_empty",
+      "case_bindings": [],
+      "case_count": 0,
+      "expected_output_status": "missing_or_empty",
+      "observable_outputs": [
+        "return_code"
+      ],
+      "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json"
+    },
+    "function_prototype": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);",
+    "global_dependencies": [],
+    "source_files": [
+      {
+        "path": "src/fdb_kvdb.c",
+        "role": "source",
+        "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      }
+    ],
+    "status": "draft_requires_review"
+  },
+  "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
+    "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+    "status": "draft"
+  },
+  "required_final_status": "C_ORACLE_GENERATED",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-kv-set",
+  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "target_id": "flashdb",
+  "toolchain_status": "DRAFT_NOT_EXECUTED"
+}
