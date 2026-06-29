@@ -19,11 +19,69 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             self.assertEqual(report["metrics"]["capability_delta_ledger"]["ledger_count"], 1)
             self.assertEqual(report["metrics"]["capability_delta_ledger"]["semantic_pass_count"], 0)
             self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["metrics"]["candidate_classification"]["refused_delta_count"], 1)
+            self.assertEqual(report["metrics"]["candidate_classification"]["generated_candidate_delta_count"], 0)
+            self.assertEqual(report["metrics"]["candidate_classification"]["semantic_pass_delta_count"], 0)
             self.assertFalse(report["metrics"]["native_build_catalogue_included_in_translation_coverage"])
             self.assertFalse(report["metrics"]["handwritten_reference_included_in_translation_coverage"])
             self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
             self.assertIn("not semantic acceptance evidence", report["claim_boundary"])
             self.assertIn("capability_delta_ledger", report["release_note_inputs"])
+
+    def test_report_classifies_generated_candidates_without_counting_them_as_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {
+                "generated": 2,
+                "refused": 1,
+            }
+            payload["capability_delta_ledger"]["route_levels"] = {"L2": 2, "L4": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"candidate": 2, "refused": 1}
+            payload["capability_delta_ledger"]["delta_count"] = 3
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            classes = report["metrics"]["candidate_classification"]
+            self.assertEqual(classes["generated_candidate_delta_count"], 2)
+            self.assertEqual(classes["refused_delta_count"], 1)
+            self.assertEqual(classes["semantic_pass_delta_count"], 0)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_classifies_l3_semantic_pass_as_translation_numerator(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 3}
+            payload["capability_delta_ledger"]["route_levels"] = {"L3": 3}
+            payload["capability_delta_ledger"]["route_statuses"] = {"accepted": 3}
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 3
+            payload["capability_delta_ledger"]["delta_count"] = 3
+            payload["capability_delta_ledger"]["ledgers"] = [
+                {
+                    "path": f"validation/evidence/demo/auto-translation/slice-{index}/l3-slice-{index}-capability-delta.json",
+                    "target_id": "demo",
+                    "slice_id": f"slice-{index}",
+                    "route_level": "L3",
+                    "route_status": "accepted",
+                    "delta_count": 1,
+                }
+                for index in range(3)
+            ]
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            classes = report["metrics"]["candidate_classification"]
+            self.assertEqual(classes["semantic_pass_delta_count"], 3)
+            self.assertEqual(classes["generated_candidate_delta_count"], 0)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 3)
+            self.assertNotIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+            self.assertNotIn("translator_generated_semantic_pass_below_p0_minimum", report["readiness"]["blockers"])
 
     def test_rejects_coverage_report_without_capability_delta_ledger(self) -> None:
         with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
@@ -42,6 +100,8 @@ class MilestoneReleaseReportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
             root = Path(tmp)
             payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 1}
+            payload["capability_delta_ledger"]["route_levels"] = {"L4": 1}
             payload["capability_delta_ledger"]["route_statuses"] = {"refused": 1}
             payload["capability_delta_ledger"]["semantic_pass_count"] = 1
             coverage_path = root / "coverage.json"
@@ -51,6 +111,32 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 milestone_release_report.build_report(root, coverage_report_path=coverage_path)
 
             self.assertIn("L4/refused", str(raised.exception))
+
+    def test_rejects_semantic_count_without_semantic_status_backing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"generated": 1}
+            payload["capability_delta_ledger"]["route_levels"] = {"L3": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"accepted": 1}
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["ledgers"] = [
+                {
+                    "path": "validation/evidence/demo/auto-translation/slice/l3-slice-capability-delta.json",
+                    "target_id": "demo",
+                    "slice_id": "slice",
+                    "route_level": "L3",
+                    "route_status": "accepted",
+                    "delta_count": 1,
+                }
+            ]
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertIn("semantic_pass_count", str(raised.exception))
 
     def test_core_ci_runs_milestone_release_report_gate(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml")

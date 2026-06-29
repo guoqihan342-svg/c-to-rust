@@ -17,6 +17,13 @@ if str(REPO_ROOT) not in sys.path:
 from validation.tools import translator_coverage_matrix
 
 
+REFUSED_STATUSES = {"refused"}
+BLOCKED_STATUSES = {"blocked"}
+GENERATED_CANDIDATE_STATUSES = {"candidate", "generated", "generated_candidate", "compiled"}
+SEMANTIC_PASS_STATUSES = {"accepted", "passed", "semantic_pass"}
+SEMANTIC_ROUTE_STATUSES = {"accepted", "passed", "semantic_pass"}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
@@ -56,6 +63,12 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
     require(isinstance(ledgers, list), "capability_delta_ledger ledgers must be a list")
     if semantic_pass_count > 0 and ledgers and all(is_l4_refused(item) for item in ledgers):
         raise SystemExit("L4/refused ledger entries cannot be the translation coverage numerator")
+    candidate_classification = classify_candidate_statuses(
+        generated_status,
+        route_levels=route_levels,
+        route_statuses=route_statuses,
+        semantic_pass_count=semantic_pass_count,
+    )
 
     blockers = []
     if semantic_pass_count == 0:
@@ -83,6 +96,7 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
             "tracked_capability_delta_count": delta_count,
             "native_build_catalogue_included_in_translation_coverage": False,
             "handwritten_reference_included_in_translation_coverage": False,
+            "candidate_classification": candidate_classification,
             "capability_delta_ledger": {
                 "ledger_count": ledger_count,
                 "delta_count": delta_count,
@@ -117,6 +131,51 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
     }
 
 
+def classify_candidate_statuses(
+    generated_status: dict[str, Any],
+    *,
+    route_levels: dict[str, Any],
+    route_statuses: dict[str, Any],
+    semantic_pass_count: int,
+) -> dict[str, Any]:
+    normalized = {
+        str(key): require_nonnegative_int(value, f"generated_candidate_status.{key}")
+        for key, value in generated_status.items()
+    }
+    refused_count = sum(normalized.get(status, 0) for status in REFUSED_STATUSES)
+    blocked_count = sum(normalized.get(status, 0) for status in BLOCKED_STATUSES)
+    generated_count = sum(normalized.get(status, 0) for status in GENERATED_CANDIDATE_STATUSES)
+    semantic_status_count = sum(normalized.get(status, 0) for status in SEMANTIC_PASS_STATUSES)
+    require(
+        semantic_pass_count <= semantic_status_count,
+        "semantic_pass_count must be backed by semantic-pass generated_candidate_status entries",
+    )
+    if semantic_pass_count > 0:
+        route_level_l3 = require_nonnegative_int(route_levels.get("L3", 0), "route_levels.L3")
+        semantic_route_count = sum(
+            require_nonnegative_int(route_statuses.get(status, 0), f"route_statuses.{status}")
+            for status in SEMANTIC_ROUTE_STATUSES
+        )
+        require(route_level_l3 >= semantic_pass_count, "semantic_pass_count must be backed by L3 route evidence")
+        require(
+            semantic_route_count >= semantic_pass_count,
+            "semantic_pass_count must be backed by accepted/passed route status",
+        )
+    return {
+        "refused_delta_count": refused_count,
+        "blocked_delta_count": blocked_count,
+        "generated_candidate_delta_count": generated_count,
+        "semantic_pass_delta_count": semantic_pass_count,
+        "semantic_pass_status_count": semantic_status_count,
+        "unclassified_delta_count": sum(normalized.values())
+        - refused_count
+        - blocked_count
+        - generated_count
+        - semantic_status_count,
+        "status_counts": normalized,
+    }
+
+
 def load_coverage_report(repo_root: Path, *, coverage_report_path: Path | None) -> dict[str, Any]:
     if coverage_report_path is None:
         return translator_coverage_matrix.build_report(repo_root)
@@ -133,6 +192,11 @@ def require_int(payload: dict[str, Any], key: str) -> int:
 def require_dict(payload: dict[str, Any], key: str) -> dict[str, Any]:
     value = payload.get(key)
     require(isinstance(value, dict), f"{key} must be an object")
+    return value
+
+
+def require_nonnegative_int(value: Any, message: str) -> int:
+    require(isinstance(value, int) and value >= 0, f"{message} must be a non-negative integer")
     return value
 
 
