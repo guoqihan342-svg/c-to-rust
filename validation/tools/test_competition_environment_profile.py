@@ -231,7 +231,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("does_not_require_unavailable_tool", policy["admission_rule"]["required_environment_fit"])
 
         approved_rust = policy["approved_direct_dependencies"]["rust"]
-        self.assertEqual(sorted(approved_rust), ["serde", "serde_json"])
+        self.assertEqual(sorted(approved_rust), ["serde", "serde_json", "sha2"])
         for dependency_name, admission in approved_rust.items():
             with self.subTest(dependency_name=dependency_name):
                 self.assertEqual(admission["admission"], "approved")

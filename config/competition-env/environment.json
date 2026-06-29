@@ -184,6 +184,17 @@
             "uses_configured_cargo_mirror",
             "does_not_require_go_cmake_or_default_clang"
           ]
+        },
+        "sha2": {
+          "admission": "approved",
+          "risk_basis": [
+            "stable_hashing_for_validation_fixtures_and_evidence_identity"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
         }
       }
     },
