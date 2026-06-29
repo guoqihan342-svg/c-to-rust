@@ -135,7 +135,7 @@ def main() -> int:
     route_decision = emit_route_decision(spec, evidence_dir, translator_summary, c2rust_baseline)
     mark_route_refused_candidate_artifacts(spec, evidence_dir, route_decision)
     oracle = generate_oracle_harness_draft(spec, evidence_dir, args.skip_c_oracle)
-    replay = generate_rust_replay_test_draft(spec, evidence_dir, route_decision)
+    replay = generate_rust_replay_test_draft(spec, evidence_dir, args.slice_spec, route_decision)
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
     accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
     if accepted is not None:
@@ -148,7 +148,7 @@ def main() -> int:
     emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
-    emit_capability_delta_ledger(spec, evidence_dir, route_decision, validation_profile)
+    emit_capability_delta_ledger(spec, evidence_dir, route_decision, validation_profile, rust_check, replay)
     cache = emit_cache_metadata(
         spec,
         args.slice_spec,
@@ -165,6 +165,7 @@ def main() -> int:
     manifest = emit_manifest(
         spec,
         evidence_dir,
+        args.slice_spec,
         translator_summary,
         oracle,
         replay,
@@ -2462,6 +2463,7 @@ def normalize_path_text(path: Any) -> str:
 def generate_rust_replay_test_draft(
     spec: dict[str, Any],
     evidence_dir: Path,
+    slice_spec_path: Path,
     route_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
@@ -2553,7 +2555,7 @@ def generate_rust_replay_test_draft(
         "known_gaps": [
             "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
         ],
-        "cache_invalidation_keys": cache_keys(spec, evidence_dir / f"l3-{slice_id}-translator-input.json"),
+        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
     }
     write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", payload)
     return payload
@@ -2561,6 +2563,8 @@ def generate_rust_replay_test_draft(
 
 def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
     if behavior_fields(spec) != ["return_code"]:
+        if fdb_blob_make_replay_supported(spec):
+            return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
         return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
 
     function_name = safe_ident(required_str(spec, "function_name"))
@@ -2607,6 +2611,113 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
     )
     lines.extend(unsupported_comments)
     return "".join(lines)
+
+
+def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_blob_make" and behavior_fields(spec) == [
+        "return_same_blob",
+        "blob.buf",
+        "blob.size",
+    ]
+
+
+def rust_replay_fdb_blob_make_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_blob_make_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this fdb_blob_make replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        value_buf: &'static [u8],\n",
+        "        value_buf_is_null: bool,\n",
+        "        buf_len: usize,\n",
+        "        initial_blob_size: usize,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        if !case.value_buf_is_null {\n",
+            '            assert!(case.value_buf.len() >= case.buf_len, "{} fixture buffer shorter than declared length", case.id);\n',
+            "        }\n",
+            "        let value_ptr: *const core::ffi::c_void = if case.value_buf_is_null {\n",
+            "            core::ptr::null::<core::ffi::c_void>()\n",
+            "        } else {\n",
+            "            case.value_buf.as_ptr().cast::<core::ffi::c_void>()\n",
+            "        };\n",
+            "        let mut blob = FdbBlob { buf: core::ptr::null_mut(), size: case.initial_blob_size };\n",
+            "        let blob_ptr = &mut blob as *mut FdbBlob;\n",
+            "        let returned_ptr = {\n",
+            f"            let returned = {function_name}(&mut blob, value_ptr, case.buf_len);\n",
+            "            returned as *mut FdbBlob\n",
+            "        };\n",
+            '        assert_eq!(returned_ptr, blob_ptr, "{} return_same_blob drifted", case.id);\n',
+            '        assert_eq!(blob.buf, value_ptr as *mut core::ffi::c_void, "{} blob.buf drifted", case.id);\n',
+            '        assert_eq!(blob.size, case.buf_len, "{} blob.size drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_blob_make_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    return_same_blob = expected_outputs.get("return_same_blob")
+    expected_blob_buf = expected_outputs.get("blob.buf")
+    expected_blob_size = expected_outputs.get("blob.size")
+    buf_len = case_payload.get("buf_len")
+    initial_blob_size = case_payload.get("initial_blob_size", 0)
+    value_buf = case_payload.get("value_buf")
+    if return_same_blob is not True or expected_blob_buf != "value_buf":
+        return None
+    if not is_size_value(buf_len) or not is_size_value(initial_blob_size):
+        return None
+    if expected_blob_size != int(buf_len):
+        return None
+    if value_buf is None:
+        value_buf_literal = "&[]"
+        value_buf_is_null = "true"
+    elif is_byte_list(value_buf):
+        value_buf_literal = rust_byte_slice_literal(value_buf)
+        value_buf_is_null = "false"
+    else:
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"value_buf: {value_buf_literal}, "
+        f"value_buf_is_null: {value_buf_is_null}, "
+        f"buf_len: {int(buf_len)}usize, "
+        f"initial_blob_size: {int(initial_blob_size)}usize "
+        "},\n"
+    )
 
 
 def rust_replay_fixture_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
@@ -2662,10 +2773,10 @@ def run_generated_rust_replay(
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
     result = run_generated_rust_replay_once(draft_path, replay_path)
-    write_log_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
-    write_log_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
-    write_log_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
-    write_log_text(evidence_dir / "generated-rust-replay.stderr.log", result["run_stderr"])
+    write_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
+    write_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
+    write_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
+    write_text(evidence_dir / "generated-rust-replay.stderr.log", result["run_stderr"])
     passed = result["status"] == "passed"
     replay["status"] = "passed" if passed else "failed"
     replay["generated_draft_replay_pass"] = passed
@@ -2691,7 +2802,7 @@ def run_generated_rust_replay(
 
 
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
-    if behavior_fields(spec) != ["return_code"]:
+    if behavior_fields(spec) != ["return_code"] and not fdb_blob_make_replay_supported(spec):
         return False
     slice_id = required_str(spec, "slice_id")
     plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
@@ -3183,6 +3294,8 @@ def emit_capability_delta_ledger(
     evidence_dir: Path,
     route_decision: dict[str, Any],
     validation_profile: dict[str, Any],
+    rust_check: dict[str, Any] | None = None,
+    replay: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     target_id = required_str(spec, "target_id")
@@ -3200,6 +3313,87 @@ def emit_capability_delta_ledger(
         verification_commands.append("python -B validation/tools/validate_auto_translation_evidence.py")
     generated_status = "refused" if route_refuses_candidate_generation(route_decision) else generated_rust_draft_status(route_decision)
     semantic_pass = bool(validation_profile.get("generated_draft_semantic_pass") is True)
+    capability_delta = [
+        {
+            "delta_id": f"cap-{slice_id}-{construct_id}",
+            "kind": "refusal_classification" if generated_status == "refused" else "candidate_status",
+            "construct_id": construct_id,
+            "real_c_slice": slice_id,
+            "generated_candidate_status": generated_status,
+            "semantic_pass": semantic_pass,
+            "blocked_callees": gap.get("blocked_callees", []),
+            "evidence_refs": evidence_refs,
+            "negative_coverage": [
+                {
+                    "kind": repair.get("smallest_next_test", {}).get("kind", "validation_regression"),
+                    "command": command,
+                }
+                for command in verification_commands
+            ],
+        }
+    ]
+    governance_delta = [
+        {
+            "delta_id": f"gov-{slice_id}-{construct_id}-evidence",
+            "kind": "evidence_contract",
+            "construct_id": construct_id,
+            "evidence_refs": evidence_refs,
+            "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+        }
+    ]
+    if (
+        isinstance(rust_check, dict)
+        and isinstance(replay, dict)
+        and rust_check.get("status") == "passed"
+        and replay.get("status") == "passed"
+        and replay.get("generated_draft_replay_pass") is True
+    ):
+        replay_construct_id = "rust_replay_fixture_passed"
+        replay_refs = list(
+            dict.fromkeys(
+                [
+                    route_ref,
+                    profile_ref,
+                    rel(evidence_dir / "rust-check.json"),
+                    rel(evidence_dir / f"{prefix}-test-translation-generated.json"),
+                    rel(evidence_dir / f"{prefix}-final-verification.json"),
+                ]
+            )
+        )
+        replay_command = (
+            "python -B -m unittest "
+            "validation.tools.test_auto_migrate.AutoMigrateTests."
+            "test_real_fdb_blob_make_rust_replay_passes_without_semantic_claim"
+        )
+        capability_delta.append(
+            {
+                "delta_id": f"cap-{slice_id}-{replay_construct_id}",
+                "kind": "candidate_verification",
+                "construct_id": replay_construct_id,
+                "real_c_slice": slice_id,
+                "generated_candidate_status": generated_status,
+                "semantic_pass": semantic_pass,
+                "blocked_callees": [],
+                "evidence_refs": replay_refs,
+                "negative_coverage": [
+                    {
+                        "kind": "rust_replay_regression",
+                        "command": replay_command,
+                    }
+                ],
+            }
+        )
+        governance_delta.append(
+            {
+                "delta_id": f"gov-{slice_id}-{replay_construct_id}-evidence",
+                "kind": "evidence_contract",
+                "construct_id": replay_construct_id,
+                "evidence_refs": replay_refs,
+                "bound_to": "P0 capability delta; governance records that Rust replay passed without semantic acceptance.",
+            }
+        )
+        if replay_command not in verification_commands:
+            verification_commands.append(replay_command)
     payload = {
         "schema_version": 1,
         "target_id": target_id,
@@ -3207,34 +3401,8 @@ def emit_capability_delta_ledger(
         "status": "recorded",
         "route_level": route_decision.get("level"),
         "route_status": route_decision.get("status"),
-        "capability_delta": [
-            {
-                "delta_id": f"cap-{slice_id}-{construct_id}",
-                "kind": "refusal_classification" if generated_status == "refused" else "candidate_status",
-                "construct_id": construct_id,
-                "real_c_slice": slice_id,
-                "generated_candidate_status": generated_status,
-                "semantic_pass": semantic_pass,
-                "blocked_callees": gap.get("blocked_callees", []),
-                "evidence_refs": evidence_refs,
-                "negative_coverage": [
-                    {
-                        "kind": repair.get("smallest_next_test", {}).get("kind", "validation_regression"),
-                        "command": command,
-                    }
-                    for command in verification_commands
-                ],
-            }
-        ],
-        "governance_delta": [
-            {
-                "delta_id": f"gov-{slice_id}-{construct_id}-evidence",
-                "kind": "evidence_contract",
-                "construct_id": construct_id,
-                "evidence_refs": evidence_refs,
-                "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-            }
-        ],
+        "capability_delta": capability_delta,
+        "governance_delta": governance_delta,
         "verification_commands": verification_commands,
         "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
     }
@@ -4180,6 +4348,7 @@ def semantic_pass_for_run(
 def emit_manifest(
     spec: dict[str, Any],
     evidence_dir: Path,
+    slice_spec_path: Path,
     translator_summary: dict[str, Any],
     oracle: dict[str, Any],
     replay: dict[str, Any],
@@ -4195,6 +4364,7 @@ def emit_manifest(
     l3_manifest = emit_l3_evidence_manifest(
         spec,
         evidence_dir,
+        slice_spec_path,
         oracle,
         replay,
         rust_check,
@@ -4331,6 +4501,7 @@ def mark_accepted_evidence_authoritative_route(
 def emit_l3_evidence_manifest(
     spec: dict[str, Any],
     evidence_dir: Path,
+    slice_spec_path: Path,
     oracle: dict[str, Any],
     replay: dict[str, Any],
     rust_check: dict[str, Any],
@@ -4346,6 +4517,7 @@ def emit_l3_evidence_manifest(
     write_l3_candidate_supporting_evidence(
         spec,
         evidence_dir,
+        slice_spec_path,
         oracle,
         replay,
         rust_check,
@@ -4534,6 +4706,7 @@ def generated_candidate_diff_from_diagnostics(
 def write_l3_candidate_supporting_evidence(
     spec: dict[str, Any],
     evidence_dir: Path,
+    slice_spec_path: Path,
     oracle: dict[str, Any],
     replay: dict[str, Any],
     rust_check: dict[str, Any],
@@ -4575,7 +4748,7 @@ def write_l3_candidate_supporting_evidence(
             "claim_boundary": spec.get("claim_boundary", {}),
         },
     )
-    write_l3_config_profile(spec, evidence_dir)
+    write_l3_config_profile(spec, evidence_dir, slice_spec_path)
     if accepted is not None:
         write_accepted_supporting_evidence(
             spec,
@@ -5264,7 +5437,7 @@ def accepted_binding_summary(accepted: dict[str, Any] | None) -> dict[str, Any] 
     }
 
 
-def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path) -> None:
+def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path, slice_spec_path: Path) -> None:
     slice_id = required_str(spec, "slice_id")
     build = spec.get("build_profile", {})
     target = build.get("target", {})
@@ -5310,7 +5483,7 @@ def write_l3_config_profile(spec: dict[str, Any], evidence_dir: Path) -> None:
                 "openspec_version": "captured_by_validation",
                 "target_triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or "unknown",
             },
-            "cache_invalidation_keys": cache_keys(spec, translator_input),
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
             "non_goals": non_goals(spec),
         },
     )

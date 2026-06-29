@@ -2,12 +2,12 @@
   "ai_required_for_default_pipeline": false,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-    "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
+    "sha256": "eec50a6a5cd84df3a9aa91f7d6227fee5f36e44b715e4e765698875df5d473bf",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=33bb5381ba77946b13caf8e276432e8bfd803b7a80169b4d4471fe08981a18f9",
+    "slice_spec_sha256=b8a6d4645b3815e56b053a7c58478abc6918be3b54aec066ced336c3acefbb96",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -17,7 +17,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-    "sha256": "5321bb1ab08521b0689f20e8246658695eff265d5c1c987a3fcbbd65492630ec",
+    "sha256": "20166f1e6e35b998f277eb29d2cc9f5224d35d9a1c33d03b39e0accbf7000ab7",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -28,7 +28,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "ca360b391e5469f31a106511b2a3ca5ecf4eecf7ac534d43dcf64d2fd7d7baf3",
+    "sha256": "ee90ecb1a08c50e65a729bcb3b46d6ea1b5ae7393326a9b0db6d17c88b2c774b",
     "status": "incomplete"
   }
 }

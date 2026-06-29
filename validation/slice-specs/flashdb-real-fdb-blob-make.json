@@ -181,7 +181,38 @@
     "fixture_id": "real-fdb-blob-make-fixture",
     "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
     "hash": "real-fdb-blob-make-fixture",
-    "cases": [],
+    "cases": [
+      {
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 0,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "null-empty",
+        "input_ref": "cases[0]"
+      },
+      {
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 3,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "nominal-bytes",
+        "input_ref": "cases[1]"
+      },
+      {
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 2,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "shorter-length-than-buffer",
+        "input_ref": "cases[2]"
+      }
+    ],
     "observable_outputs": [
       "return_same_blob",
       "blob.buf",

@@ -977,6 +977,8 @@ class AutoMigrateTests(unittest.TestCase):
                     "behavior_fields": ["return_code"],
                 },
             }
+            spec_path = tmp_path / "slice-spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
             (evidence_dir / "l3-candidate-diff-rust-draft.rs").write_text(
                 "pub fn candidate_diff() -> i32 { 0 }\n",
                 encoding="utf-8",
@@ -998,6 +1000,7 @@ class AutoMigrateTests(unittest.TestCase):
             module.write_l3_candidate_supporting_evidence(
                 spec,
                 evidence_dir,
+                spec_path,
                 oracle={
                     "status": "DRAFT_GENERATED",
                     "semantic_pass": False,
@@ -3275,6 +3278,71 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
             self.assertIn("pub struct FdbBlob", draft)
             self.assertIn("pub fn fdb_blob_make", draft)
+
+    def test_real_fdb_blob_make_rust_replay_passes_without_semantic_claim(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-blob-make-replay-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-blob-make"
+            prefix = "l3-real-fdb-blob-make"
+            rust_check = json.loads((evidence_dir / "rust-check.json").read_text(encoding="utf-8"))
+            profile = json.loads((evidence_dir / f"{prefix}-validation-profile.json").read_text(encoding="utf-8"))
+            replay = json.loads((evidence_dir / f"{prefix}-test-translation-generated.json").read_text(encoding="utf-8"))
+            rust_report = json.loads((evidence_dir / f"{prefix}-rust-report.json").read_text(encoding="utf-8"))
+            config_profile = json.loads((evidence_dir / f"{prefix}-config-profile.json").read_text(encoding="utf-8"))
+            final = json.loads((evidence_dir / f"{prefix}-final-verification.json").read_text(encoding="utf-8"))
+            capability = json.loads((evidence_dir / f"{prefix}-capability-delta.json").read_text(encoding="utf-8"))
+            expected_slice_spec_key = f"slice_spec_sha256={hashlib.sha256(spec_path.read_bytes()).hexdigest()}"
+
+            self.assertEqual(rust_check["status"], "passed")
+            self.assertEqual(replay["status"], "passed")
+            self.assertTrue(replay["generated_draft_replay_pass"])
+            self.assertFalse(replay["generated_draft_semantic_pass"])
+            for keys in (
+                replay["cache_invalidation_keys"],
+                rust_report["replay"]["cache_invalidation_keys"],
+                config_profile["cache_invalidation_keys"],
+                manifest["replay"]["cache_invalidation_keys"],
+            ):
+                slice_spec_keys = [key for key in keys if str(key).startswith("slice_spec_sha256=")]
+                self.assertEqual(slice_spec_keys, [expected_slice_spec_key])
+            replay_execution = replay["replay_execution"]
+            self.assertTrue((REPO_ROOT / replay_execution["stdout_log"]).exists())
+            self.assertTrue((REPO_ROOT / replay_execution["stderr_log"]).exists())
+            self.assertEqual(profile["required_gate_status"]["compile"], "passed")
+            self.assertEqual(profile["required_gate_status"]["c_oracle_diff"], "SKIPPED_LOCAL_NO_C_TOOLCHAIN")
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertEqual(final["rust_check_status"], "passed")
+            self.assertFalse(final["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            delta_ids = {item["construct_id"] for item in capability["capability_delta"]}
+            self.assertIn("typed_ir_candidate_generated", delta_ids)
+            self.assertIn("rust_replay_fixture_passed", delta_ids)
+            replay_delta = next(
+                item for item in capability["capability_delta"] if item["construct_id"] == "rust_replay_fixture_passed"
+            )
+            self.assertEqual(replay_delta["generated_candidate_status"], "candidate")
+            self.assertFalse(replay_delta["semantic_pass"])
 
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {

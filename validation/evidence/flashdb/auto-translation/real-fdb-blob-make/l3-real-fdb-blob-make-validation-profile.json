@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
+        "sha256": "eec50a6a5cd84df3a9aa91f7d6227fee5f36e44b715e4e765698875df5d473bf",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -36,7 +36,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
+          "sha256": "eec50a6a5cd84df3a9aa91f7d6227fee5f36e44b715e4e765698875df5d473bf",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -147,14 +147,13 @@
     },
     "fixture_representativeness": {
       "case_source": "fixture_contract",
-      "declared_case_count": 0,
+      "declared_case_count": 3,
       "fixture_hash": "real-fdb-blob-make-fixture",
       "fixture_path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
       "limitations": [],
       "representativeness": "bounded_fixture_contract"
     },
     "insufficient_reasons": [
-      "fixture_declared_case_count_missing",
       "fixture_accepted_oracle_case_count_missing"
     ],
     "observable_outputs": [
@@ -201,7 +200,7 @@
   "profile": "L1-dev",
   "required_gate_status": {
     "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-    "compile": "skipped"
+    "compile": "passed"
   },
   "required_gates": [
     "compile",
@@ -236,10 +235,6 @@
   },
   "schema_version": 1,
   "skipped_gates": [
-    {
-      "gate": "compile",
-      "reason": "skipped"
-    },
     {
       "gate": "c_oracle_diff",
       "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"

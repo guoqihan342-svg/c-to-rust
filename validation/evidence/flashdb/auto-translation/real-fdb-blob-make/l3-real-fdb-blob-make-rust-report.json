@@ -1,14 +1,42 @@
 {
-  "case_count": 0,
-  "cases": [],
+  "case_count": 3,
+  "cases": [
+    {
+      "buf": null,
+      "coverage_kind": "null-empty",
+      "crc": null,
+      "id": "null-empty",
+      "return_code": null,
+      "size": null,
+      "status": "ok"
+    },
+    {
+      "buf": null,
+      "coverage_kind": "nominal-bytes",
+      "crc": null,
+      "id": "nominal-bytes",
+      "return_code": null,
+      "size": null,
+      "status": "ok"
+    },
+    {
+      "buf": null,
+      "coverage_kind": "shorter-length-than-buffer",
+      "crc": null,
+      "id": "shorter-length-than-buffer",
+      "return_code": null,
+      "size": null,
+      "status": "ok"
+    }
+  ],
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
     "sha256": "80d9916ad5ec0fdd716109f794d594c7df40d1fd0950e1131dc1b50ecd75e4b0",
     "status": "candidate"
   },
-  "generated_draft_replay_pass": false,
+  "generated_draft_replay_pass": true,
   "generated_draft_semantic_pass": false,
-  "reason": "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+  "reason": "Generated Rust replay passed fixture cases; semantic acceptance still requires C oracle, diff, negative diff, unsafe, and final verification gates.",
   "replay": {
     "behavior_fields": [
       "return_same_blob",
@@ -17,7 +45,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec_sha256=9d2ba0af103372dfd0a417003223f0541730fd25dd67a1319c1c6be1ee30c862",
+      "slice_spec_sha256=b8a6d4645b3815e56b053a7c58478abc6918be3b54aec066ced336c3acefbb96",
       "fixture_hash=real-fdb-blob-make-fixture",
       "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
       "translator_version=0.1.0",
@@ -45,17 +73,28 @@
       }
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+    "generated_draft_replay_pass": true,
     "generated_draft_semantic_pass": false,
     "known_gaps": [
-      "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+      "Generated Rust replay passed committed fixture cases; C oracle, schema diff, negative diff, unsafe, and final verification gates are still required."
     ],
     "level": "L3",
-    "repo_commit": "3bfe95015cae236fff7179d4187d5466bbafb0f2",
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-bh0wzgwr\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-bh0wzgwr\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-bh0wzgwr\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stdout.log"
+    },
+    "repo_commit": "c28e9de20f292aaf3887011ae0b46d8c69712c72",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_blob_make_fixture_contract",
         "file": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs",
-        "file_hash": "9768015c668473dcf64df8110fb232bef61adafae68c3060a4bcea3e6a57a91d",
+        "file_hash": "65743b7e7e6631851b4ab69c486a1f568d1638eeed611ff81b689b4240005383",
         "framework": "cargo test",
         "test_names": [
           "replay_real_fdb_blob_make_fixture_contract"
@@ -69,7 +108,7 @@
       "fixtures": [
         {
           "hash": "real-fdb-blob-make-fixture",
-          "operation_count": 0,
+          "operation_count": 3,
           "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
           "source_kind": "fixture"
         }
@@ -82,7 +121,7 @@
       ],
       "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED."
     },
-    "status": "recorded",
+    "status": "passed",
     "target_id": "flashdb",
     "test_draft": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs",
     "translation_mappings": [
@@ -101,13 +140,13 @@
         ],
         "rust_test": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs::replay_real_fdb_blob_make_fixture_contract",
         "source": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-        "status": "mapped"
+        "status": "passed"
       }
     ]
   },
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-blob-make",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "flashdb"
 }

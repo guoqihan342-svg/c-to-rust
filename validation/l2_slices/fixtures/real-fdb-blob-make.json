@@ -1,0 +1,67 @@
+{
+  "case_count": 3,
+  "cases": [
+    {
+      "buf_len": 0,
+      "coverage_kind": "null-empty",
+      "expected_outputs": {
+        "blob.buf": "value_buf",
+        "blob.size": 0,
+        "return_same_blob": true
+      },
+      "id": "null-empty",
+      "initial_blob_size": 99,
+      "status": "ok",
+      "value_buf": null
+    },
+    {
+      "buf_len": 3,
+      "coverage_kind": "nominal-bytes",
+      "expected_outputs": {
+        "blob.buf": "value_buf",
+        "blob.size": 3,
+        "return_same_blob": true
+      },
+      "id": "nominal-bytes",
+      "initial_blob_size": 0,
+      "status": "ok",
+      "value_buf": [16, 32, 48]
+    },
+    {
+      "buf_len": 2,
+      "coverage_kind": "shorter-length-than-buffer",
+      "expected_outputs": {
+        "blob.buf": "value_buf",
+        "blob.size": 2,
+        "return_same_blob": true
+      },
+      "id": "shorter-length-than-buffer",
+      "initial_blob_size": 7,
+      "status": "ok",
+      "value_buf": [170, 187, 204, 221]
+    }
+  ],
+  "compared_fields": [
+    "return_same_blob",
+    "blob.buf",
+    "blob.size"
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "source_boundary": {
+    "files": [
+      "src/fdb_utils.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_blob_make"
+    ],
+    "signature": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "fixture_only",
+  "target_id": "flashdb",
+  "toolchain_status": "RUST_REPLAY_FIXTURE_ONLY"
+}

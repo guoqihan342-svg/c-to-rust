@@ -1501,7 +1501,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "record field subset currently has unit/runtime emitter checks but no committed named-slice C/Rust diff"
+          "reason": "real-fdb-blob-make now has committed Rust compile and Rust replay fixture evidence, but no committed C oracle/diff/negative-diff/final semantic acceptance"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -1513,20 +1513,30 @@
             {
               "name": "real-fdb-blob-make L1 candidate route decision",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-              "proof_class": "committed_l4_refused_provenance"
+              "proof_class": "committed_l1_candidate_generated"
             },
             {
               "name": "real-fdb-blob-make validation profile",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-              "proof_class": "committed_l4_refused_provenance"
+              "proof_class": "committed_l1_candidate_generated_compile_passed"
             },
             {
               "name": "real-fdb-blob-make clang lowering report",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
               "proof_class": "committed_no_clang_fixture_candidate_provenance"
+            },
+            {
+              "name": "real-fdb-blob-make rust check",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
+              "proof_class": "committed_rust_check_passed"
+            },
+            {
+              "name": "real-fdb-blob-make Rust replay fixture",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-test-translation-generated.json",
+              "proof_class": "committed_rust_replay_fixture_passed"
             }
           ],
-          "reason": "committed L1 candidate_generated provenance evidence exists; semantic C/Rust diff remains a separate gap"
+          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence exists; semantic C oracle/diff acceptance remains a separate gap"
         }
       },
       "positive_cases": [

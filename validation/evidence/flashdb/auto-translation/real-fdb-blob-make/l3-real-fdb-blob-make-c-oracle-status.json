@@ -58,10 +58,62 @@
       "blob.buf",
       "blob.size"
     ],
-    "binding_status": "missing_or_empty",
-    "case_bindings": [],
-    "case_count": 0,
-    "expected_output_status": "missing_or_empty",
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 0,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "null-empty",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.buf",
+          "blob.size"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 3,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "nominal-bytes",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.buf",
+          "blob.size"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "blob.buf": "value_buf",
+          "blob.size": 2,
+          "return_same_blob": true
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+        "id": "shorter-length-than-buffer",
+        "input_ref": "cases[2]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_same_blob",
+          "blob.buf",
+          "blob.size"
+        ]
+      }
+    ],
+    "case_count": 3,
+    "expected_output_status": "declared_not_executed",
     "observable_outputs": [
       "return_same_blob",
       "blob.buf",
@@ -77,10 +129,62 @@
         "blob.buf",
         "blob.size"
       ],
-      "binding_status": "missing_or_empty",
-      "case_bindings": [],
-      "case_count": 0,
-      "expected_output_status": "missing_or_empty",
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.buf": "value_buf",
+            "blob.size": 0,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+          "id": "null-empty",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.buf",
+            "blob.size"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.buf": "value_buf",
+            "blob.size": 3,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+          "id": "nominal-bytes",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.buf",
+            "blob.size"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "blob.buf": "value_buf",
+            "blob.size": 2,
+            "return_same_blob": true
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+          "id": "shorter-length-than-buffer",
+          "input_ref": "cases[2]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_same_blob",
+            "blob.buf",
+            "blob.size"
+          ]
+        }
+      ],
+      "case_count": 3,
+      "expected_output_status": "declared_not_executed",
       "observable_outputs": [
         "return_same_blob",
         "blob.buf",
@@ -102,7 +206,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-    "sha256": "dfd95b6e6f3ec25fb63d26ad4fe006bf31c4d5537cd6d4a670c460844889944a",
+    "sha256": "ec3fb92c84b019b753e99551fdf970a6d5a1183d352bea55da7b996e8cf04d89",
     "status": "draft"
   },
   "required_final_status": "C_ORACLE_GENERATED",
