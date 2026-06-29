@@ -123,7 +123,7 @@ This document honestly lists C language constructs that are "currently supported
 | Global array subscript write | Unsupported | Readonly global |
 | Variable-length array (VLA) | Unsupported | |
 | Incomplete array (no initializer) | Unsupported | |
-| Array-to-pointer decay | Narrow | Decay in an `ArraySubscriptExpr` base is consumed by the existing narrow index-access path; `*(local_fixed_array)` as unary deref of a direct complete fixed array DeclRef lowers to `local_fixed_array[0]`; `*(local_fixed_array + integer_expr)` / `*(integer_expr + local_fixed_array)` lowers to a fixed-array index read and uses the fixed-array index emitter; other pointer arithmetic, call arguments, non-direct `DeclRef`, incomplete/VLA/multi-dimensional arrays, complex expressions, and general pointer values still fail closed |
+| Array-to-pointer decay | Narrow | Decay in an `ArraySubscriptExpr` base is consumed by the existing narrow index-access path; `*(local_fixed_array)` as unary deref of a direct complete fixed array DeclRef lowers to `local_fixed_array[0]`; `*(local_fixed_array + integer_expr)` / `*(integer_expr + local_fixed_array)` lowers to a fixed-array index read and uses the fixed-array index emitter; other ordinary `ArrayToPointerDecay` expressions first enter explicit typed IR as `IrExpr::ArrayToPointerDecay`, but pointer arithmetic, call arguments, non-direct `DeclRef`, incomplete/VLA/multi-dimensional arrays, complex expressions, and general pointer values still fail closed without explicit lowering evidence |
 | Multi-dimensional array | Unsupported | |
 | Array as function parameter | Unsupported | Partially covered indirectly by pointer lowering |
 

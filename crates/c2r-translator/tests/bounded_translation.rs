@@ -2176,6 +2176,57 @@ fn clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang() {
     );
 }
 
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let array_ty = ir_array(i32_ty.clone(), 4);
+    let pointer_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let decay_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "ArrayToPointerDecay": {
+            "target": serde_json::to_value(&pointer_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("table", array_ty.clone())).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit array-to-pointer decay IR node");
+    let ir = IrFunction {
+        name: "bad_array_decay_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: array_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1", i32_ty.clone()),
+                        ir_lit(2, "2", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
+                        ir_lit(4, "4", i32_ty.clone()),
+                    ],
+                    ty: array_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: decay_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("array-to-pointer decay must stay fail closed");
+    assert!(error.reason.contains("array-to-pointer decay"));
+    assert!(error.reason.contains("explicit lowering evidence"));
+}
+
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
@@ -2184,13 +2235,19 @@ fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
     ))
     .expect("fixture JSON");
 
-    let error =
+    let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table_sub")
-            .expect_err("array decay through pointer-sub deref must stay fail-closed");
+            .expect("array decay through pointer-sub deref should stay visible in typed IR");
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("array decay through pointer-sub deref must stay fail-closed at emission");
 
     assert!(
-        error.message.contains("ArrayToPointerDecay"),
-        "unexpected error: {error}"
+        error.reason.contains("array-to-pointer decay")
+            || error
+                .reason
+                .contains("deref expression requires readonly pointer evidence")
+            || error.reason.contains("deref pointer must be Var"),
+        "unexpected error: {error:?}"
     );
 }
 

@@ -973,7 +973,7 @@
         "ArrayToPointerDecay in ArraySubscriptExpr base",
         "ArrayToPointerDecay unary deref of direct fixed array DeclRef lowers to index zero",
         "ArrayToPointerDecay pointer-add deref of direct fixed array DeclRef lowers to indexed read",
-        "general ArrayToPointerDecay pointer arithmetic remains fail-closed before typed IR lowering",
+        "ordinary ArrayToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "readonly pointer parameter without read-access evidence fail-closed",
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
@@ -1175,9 +1175,9 @@
           "fail_closed_reason": "complex mutable pointer offsets lack alias and bounds proof"
         },
         {
-          "name": "expr_skeleton_from_ast_rejects_array_to_pointer_decay_in_pointer_arithmetic",
-          "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "ArrayToPointerDecay in ordinary pointer arithmetic is visible in the clang skeleton, but only ArraySubscriptExpr base decay, unary deref of a direct complete fixed array DeclRef, and bounded pointer-add deref of a direct complete fixed array DeclRef are modeled"
+          "name": "typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "ArrayToPointerDecay in ordinary expression position is visible as explicit typed IR, but Rust emission still requires explicit lowering evidence"
         },
         {
           "name": "clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang",

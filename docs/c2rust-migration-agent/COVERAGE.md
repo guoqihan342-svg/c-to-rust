@@ -125,7 +125,7 @@
 | 全局数组下标写 | 不支持 | readonly global |
 | 变长数组 (VLA) | 不支持 | |
 | 不完整数组 (无 initializer) | 不支持 | |
-| array-to-pointer decay | 窄支持 | `ArraySubscriptExpr` base 中的 decay 在既有下标访问窄路径里被消费；`*(local_fixed_array)` 这类 unary deref of direct complete fixed array DeclRef 会降为 `local_fixed_array[0]`；`*(local_fixed_array + integer_expr)` / `*(integer_expr + local_fixed_array)` 会降为 fixed-array index read 并走 fixed-array index emitter；其它 pointer arithmetic、call argument、非 direct DeclRef、incomplete/VLA/multi-dimensional array、复杂表达式和一般 pointer value 仍 fail-closed |
+| array-to-pointer decay | 窄支持 | `ArraySubscriptExpr` base 中的 decay 在既有下标访问窄路径里被消费；`*(local_fixed_array)` 这类 unary deref of direct complete fixed array DeclRef 会降为 `local_fixed_array[0]`；`*(local_fixed_array + integer_expr)` / `*(integer_expr + local_fixed_array)` 会降为 fixed-array index read 并走 fixed-array index emitter；其它普通 `ArrayToPointerDecay` 会先进入显式 typed IR `IrExpr::ArrayToPointerDecay`，但 pointer arithmetic、call argument、非 direct DeclRef、incomplete/VLA/multi-dimensional array、复杂表达式和一般 pointer value 在缺少 explicit lowering evidence 时仍 fail-closed |
 | 多维数组 | 不支持 | |
 | 数组作为函数参数 | 不支持 | 由 pointer lowering 间接覆盖部分场景 |
 
