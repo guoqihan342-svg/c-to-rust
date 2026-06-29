@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
+        "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -37,7 +37,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
+          "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -176,12 +176,12 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
+      "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-cfg.json",
-      "sha256": "06ecd0ea924a2456654d9ecfafe189542e7c3b8d5f96731e102c70e1968f527b",
+      "sha256": "c19f8c9d7051f904598657be46121f41f8eff737f0dcbd481ac2ac6d69d35405",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -191,7 +191,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
-      "sha256": "e483b12c1364d0cd67dd7d7fcbc629b60a58f99a8fe74ef839fe21826ba50fc0",
+      "sha256": "4ae75a1b10b36085ebe96bae0c4f97c9c15ea7c51a3f1a693dea9f969260ece6",
       "status": "recorded"
     },
     "translation_plan": {
@@ -200,7 +200,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-type-map.json",
-      "sha256": "37b310a35392872be5acdfb856ddb04aaabff89467c39da70dd2fda544192961",
+      "sha256": "979881d6198a36295280f9059d8c886316654bcae89ad3795c91df30b4cbb90b",
       "status": "blocked"
     }
   },
