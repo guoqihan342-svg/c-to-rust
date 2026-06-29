@@ -1380,6 +1380,38 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         self.assertIn("$.generated_artifacts[1].status", paths)
         self.assertIn("$.generated_artifacts[2].status", paths)
 
+    def test_rejects_l4_unsupported_control_flow_cfg_without_relooper_refusal_contract(self) -> None:
+        validator = load_validator_module()
+        cfg = {
+            "unsupported_control_flow": [
+                {
+                    "id": "unsupported-1",
+                    "kind": "goto",
+                    "reason": "goto requires CFG/relooper support",
+                    "source_span": {"file": "slice-spec", "line_start": 1, "line_end": 1},
+                    "translation_effect": "requires_relooper",
+                }
+            ],
+            "functions": [
+                {
+                    "name": "again",
+                    "basic_blocks": [{"id": "entry", "kind": "entry", "statements": []}],
+                    "edges": [],
+                    "structured_control_flow": {
+                        "has_goto": True,
+                        "has_switch": False,
+                        "relooper_required": False,
+                        "relooper_refusals": [],
+                    },
+                }
+            ],
+        }
+
+        with self.assertRaises(SystemExit) as raised:
+            validator.validate_unsupported_control_flow_cfg_contract(cfg, "unit-test-cfg")
+
+        self.assertIn("unsupported control-flow CFG contract", str(raised.exception))
+
     def test_l4_refused_repair_playbook_rejects_missing_required_fields(self) -> None:
         validator = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

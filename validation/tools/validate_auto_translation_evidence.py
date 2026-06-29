@@ -354,6 +354,10 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
     if "skipped_gates" not in final:
         raise SystemExit(f"validation profile skipped gates missing from {final_path}")
 
+    validate_unsupported_control_flow_cfg_contract(
+        load_json(evidence_dir / f"{prefix}-cfg.json"),
+        rel(evidence_dir / f"{prefix}-cfg.json"),
+    )
     validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
 
     cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
@@ -1363,6 +1367,65 @@ def validate_route_source_artifact_refs(evidence_dir: Path, prefix: str, route: 
     }
     for key, expected_path in expected_paths.items():
         require_ref(source_artifacts.get(key), expected_path, f"route_decision.source_artifacts.{key}")
+
+
+def validate_unsupported_control_flow_cfg_contract(cfg: dict[str, Any], label: str) -> None:
+    unsupported = cfg.get("unsupported_control_flow")
+    if not isinstance(unsupported, list) or not unsupported:
+        return
+    unsupported_kinds = {
+        str(item.get("kind"))
+        for item in unsupported
+        if isinstance(item, dict) and item.get("kind")
+    }
+    functions = cfg.get("functions")
+    if not isinstance(functions, list) or not functions:
+        raise SystemExit(f"unsupported control-flow CFG contract missing functions in {label}")
+
+    block_ids: set[str] = set()
+    edge_pairs: set[tuple[str, str]] = set()
+    saw_relooper_required = False
+    saw_relooper_refusal = False
+    for function in functions:
+        if not isinstance(function, dict):
+            continue
+        structured = function.get("structured_control_flow")
+        if not isinstance(structured, dict):
+            raise SystemExit(f"unsupported control-flow CFG contract missing structured_control_flow in {label}")
+        saw_relooper_required = saw_relooper_required or bool(structured.get("relooper_required"))
+        refusals = structured.get("relooper_refusals")
+        saw_relooper_refusal = saw_relooper_refusal or (isinstance(refusals, list) and bool(refusals))
+        for block in function.get("basic_blocks", []):
+            if isinstance(block, dict) and block.get("id"):
+                block_ids.add(str(block["id"]))
+        for edge in function.get("edges", []):
+            if isinstance(edge, dict) and edge.get("from") and edge.get("to"):
+                edge_pairs.add((str(edge["from"]), str(edge["to"])))
+
+    if not saw_relooper_required or not saw_relooper_refusal:
+        raise SystemExit(f"unsupported control-flow CFG contract missing relooper refusal evidence in {label}")
+    if "goto" in unsupported_kinds:
+        has_goto_block = any(block_id.startswith("goto-") for block_id in block_ids)
+        has_label_block = any(block_id.startswith("label-") for block_id in block_ids)
+        has_goto_to_label_edge = any(
+            source.startswith("goto-") and target.startswith("label-")
+            for source, target in edge_pairs
+        )
+        if not (has_goto_block and has_label_block and has_goto_to_label_edge):
+            raise SystemExit(f"unsupported control-flow CFG contract missing goto/label block-edge evidence in {label}")
+    if "switch" in unsupported_kinds:
+        has_switch_block = any(block_id.startswith("switch-") for block_id in block_ids)
+        has_case_or_default_block = any(
+            block_id.startswith("case-") or block_id == "default"
+            for block_id in block_ids
+        )
+        has_switch_edge = any(
+            source.startswith("switch-")
+            and (target.startswith("case-") or target == "default")
+            for source, target in edge_pairs
+        )
+        if not (has_switch_block and has_case_or_default_block and has_switch_edge):
+            raise SystemExit(f"unsupported control-flow CFG contract missing switch/case/default edge evidence in {label}")
 
 
 def validate_typed_ir_candidate_binding(

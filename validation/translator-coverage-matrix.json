@@ -1730,6 +1730,7 @@
         "relooper_refusal evidence for goto/switch",
         "schema-bound unsupported_control_flow kind contract",
         "normalized CFG block/edge preservation for goto/switch refusals",
+        "validator rejection for malformed unsupported_control_flow CFG shells",
         "minimal structured_control_flow recovery evidence for goto/switch",
         "relooper_precondition evidence for resolved goto targets and enumerated switch cases"
       ],
@@ -1807,9 +1808,14 @@
               "name": "CFG template pins control-flow refusal kinds",
               "path": "validation/tools/test_template_schema_contracts.py",
               "test": "test_cfg_template_schema_pins_control_flow_refusal_kinds"
+            },
+            {
+              "name": "validator rejects malformed L4 unsupported-control-flow CFG shells",
+              "path": "validation/tools/test_validate_auto_translation_evidence.py",
+              "test": "test_rejects_l4_unsupported_control_flow_cfg_without_relooper_refusal_contract"
             }
           ],
-          "scope_note": "covers route/profile/manifest/refusal evidence plus schema-bound CFG blocks/edges only; it does not claim Rust candidate lowering or C/Rust differential semantic pass for switch/goto"
+          "scope_note": "covers route/profile/manifest/refusal evidence plus schema-bound CFG blocks/edges and validator rejection of malformed CFG shells only; it does not claim Rust candidate lowering or C/Rust differential semantic pass for switch/goto"
         }
       },
       "positive_cases": [
