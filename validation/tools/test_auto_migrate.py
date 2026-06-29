@@ -3265,6 +3265,24 @@ class AutoMigrateTests(unittest.TestCase):
             capability = json.loads(
                 (evidence_dir / "l3-real-fdb-kv-set-capability-delta.json").read_text(encoding="utf-8")
             )
+            validation_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-kv-set",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
 
             self.assertEqual(translator_input["function_source_span"]["file"], "src/fdb_kvdb.c")
             self.assertEqual(translator_input["function_source_span"]["line_start"], 1369)
@@ -3280,13 +3298,13 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(context_pack["direct_call_edges"], [])
             external_context = plan["inputs"]["external_callee_context"]
             self.assertEqual(external_context["status"], "blocked")
-            self.assertEqual(external_context["declared_count"], 1)
+            self.assertEqual(external_context["declared_count"], 2)
             self.assertEqual(external_context["declared_spec_count"], 4)
             self.assertEqual(
                 set(external_context["declared_spec_names"]),
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
-            self.assertEqual(external_context["blocked_count"], 3)
+            self.assertEqual(external_context["blocked_count"], 2)
             self.assertEqual(
                 {
                     item["name"]
@@ -3300,7 +3318,7 @@ class AutoMigrateTests(unittest.TestCase):
             }
             self.assertEqual(
                 blocked_callees,
-                {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+                {"fdb_kv_set_blob", "fdb_kv_del"},
             )
             modeled_callees = {
                 item["name"]: item
@@ -3312,6 +3330,21 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(modeled_callees["strlen"]["return_type"], "size_t")
             self.assertEqual(modeled_callees["strlen"]["parameters"][0]["c_type"], "const char*")
             self.assertFalse(modeled_callees["strlen"]["semantics_verified"])
+            self.assertIn("fdb_blob_make", modeled_callees)
+            blob_make_binding = modeled_callees["fdb_blob_make"]["accepted_named_slice_evidence"]
+            self.assertEqual(modeled_callees["fdb_blob_make"]["stub_kind"], "accepted_named_slice_evidence")
+            self.assertEqual(modeled_callees["fdb_blob_make"]["stub_boundary"], "accepted_named_slice_context_only")
+            self.assertFalse(modeled_callees["fdb_blob_make"]["semantics_verified"])
+            self.assertEqual(blob_make_binding["target_id"], "flashdb")
+            self.assertEqual(blob_make_binding["slice_id"], "real-fdb-blob-make")
+            self.assertTrue(blob_make_binding["semantic_pass"])
+            self.assertTrue(blob_make_binding["accepted_evidence_authoritative"])
+            self.assertFalse(blob_make_binding["generated_draft_semantic_pass"])
+            self.assertTrue(
+                blob_make_binding["final_verification_path"].endswith(
+                    "flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"
+                )
+            )
             self.assertEqual(
                 {
                     item["reason"]
@@ -3334,13 +3367,14 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(repair["smallest_next_test"]["kind"], "external_callee_context_regression")
             self.assertEqual(capability["status"], "recorded")
+            self.assertEqual(json.loads(validation_result.stdout)["status"], "passed")
             self.assertEqual(capability["slice_id"], "real-fdb-kv-set")
             self.assertEqual(capability["capability_delta"][0]["construct_id"], "external_direct_callee_context")
             self.assertEqual(capability["capability_delta"][0]["generated_candidate_status"], "refused")
             self.assertFalse(capability["capability_delta"][0]["semantic_pass"])
             self.assertEqual(
                 set(capability["capability_delta"][0]["blocked_callees"]),
-                {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+                {"fdb_kv_set_blob", "fdb_kv_del"},
             )
             self.assertTrue(capability["capability_delta"][0]["negative_coverage"])
             governance = capability["governance_delta"][0]

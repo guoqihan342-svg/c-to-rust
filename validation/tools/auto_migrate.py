@@ -334,6 +334,46 @@ def is_modeled_strlen_contract(
     return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
 
 
+def accepted_named_slice_evidence_for_callee(spec: dict[str, Any], name: str) -> dict[str, Any] | None:
+    if spec.get("target_id") != "flashdb" or name != "fdb_blob_make":
+        return None
+    final_verification = (
+        REPO_ROOT
+        / "validation"
+        / "evidence"
+        / "flashdb"
+        / "auto-translation"
+        / "real-fdb-blob-make"
+        / "l3-real-fdb-blob-make-final-verification.json"
+    )
+    if not final_verification.exists():
+        return None
+    try:
+        final = json.loads(final_verification.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if final.get("target_id") != "flashdb" or final.get("slice_id") != "real-fdb-blob-make":
+        return None
+    if final.get("semantic_pass") is not True:
+        return None
+    if final.get("accepted_evidence_authoritative") is not True:
+        return None
+    return {
+        "kind": "accepted_named_slice_evidence",
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-blob-make",
+        "final_verification_path": rel(final_verification),
+        "final_verification_sha256": sha256(final_verification),
+        "semantic_pass": True,
+        "accepted_evidence_authoritative": True,
+        "generated_draft_semantic_pass": bool(final.get("generated_draft_semantic_pass") is True),
+        "boundary": (
+            "This validates the named fdb_blob_make slice through accepted evidence only; "
+            "it does not validate the fdb_kv_set caller or its generated Rust draft."
+        ),
+    }
+
+
 def declared_external_direct_callee_map(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     c_boundary = spec.get("c_boundary", {})
     signatures = c_boundary.get("signatures", [])
@@ -396,23 +436,42 @@ def external_callee_descriptor(
     modeled_strlen = is_modeled_strlen_contract(name, return_type, parameters)
     if modeled_strlen:
         unsupported_reasons = []
-    return {
+    accepted_named_slice = accepted_named_slice_evidence_for_callee(spec, name)
+    if accepted_named_slice:
+        unsupported_reasons = []
+    stub_kind = "compile_only"
+    stub_boundary = item.get("stub_boundary", "compile_only")
+    stub_generation = "generated_compile_only"
+    model_contract = ""
+    if modeled_strlen:
+        stub_boundary = "stdlib_readonly_string_model"
+        stub_generation = "not_emitted_modeled_stdlib"
+        model_contract = "strlen_readonly_nul_terminated"
+    if accepted_named_slice:
+        stub_kind = "accepted_named_slice_evidence"
+        stub_boundary = "accepted_named_slice_context_only"
+        stub_generation = "not_emitted_named_slice_evidence"
+        model_contract = "fdb_blob_make_named_slice_accepted_evidence"
+    descriptor = {
         "name": name,
         "signature_ref": signature_ref,
         "source_ref": item.get("source_ref") or signature.get("source_ref") or "",
         "source_files": item.get("source_files") or source_files_for_external_callee(spec, name),
         "header_files": item.get("header_files", []),
         "definition_status": item.get("definition_status") or signature.get("definition_status") or "real_source_bound",
-        "stub_kind": "compile_only",
-        "stub_boundary": "stdlib_readonly_string_model" if modeled_strlen else item.get("stub_boundary", "compile_only"),
-        "stub_generation": "not_emitted_modeled_stdlib" if modeled_strlen else "generated_compile_only",
-        "model_contract": "strlen_readonly_nul_terminated" if modeled_strlen else "",
+        "stub_kind": stub_kind,
+        "stub_boundary": stub_boundary,
+        "stub_generation": stub_generation,
+        "model_contract": model_contract,
         "semantics_verified": False,
         "parameters": parameters,
         "return_type": return_type,
         "supported": not unsupported_reasons,
         "unsupported_reasons": sorted(set(unsupported_reasons)),
     }
+    if accepted_named_slice:
+        descriptor["accepted_named_slice_evidence"] = accepted_named_slice
+    return descriptor
 
 
 def source_files_for_external_callee(spec: dict[str, Any], name: str) -> list[dict[str, Any]]:
@@ -555,6 +614,8 @@ def call_edge_to_callee_binding(
         if callee not in declared:
             continue
         descriptor = declared[callee]
+        if descriptor.get("stub_kind") != "compile_only":
+            continue
         bindings.append(
             {
                 "callee": callee,
@@ -600,11 +661,27 @@ def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "callee": callee["name"],
             "stub_kind": callee["stub_kind"],
-            "allowed_use": "standalone_rust_check_only",
+            "allowed_use": (
+                "named_slice_evidence_reference_only"
+                if callee.get("stub_kind") == "accepted_named_slice_evidence"
+                else "standalone_rust_check_only"
+            ),
             "semantics_verified": False,
         }
         for callee in context.get("declared", [])
     ]
+
+
+def external_scope_stub_kind(context: dict[str, Any]) -> str:
+    kinds = {
+        str(callee.get("stub_kind") or "compile_only")
+        for callee in context.get("declared", [])
+    }
+    if not kinds:
+        return "none"
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "mixed_context"
 
 
 def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
@@ -618,7 +695,7 @@ def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
         "declared_spec_names": context["declared_spec_names"],
         "declared_count": context["declared_count"],
         "blocked_count": context["blocked_count"],
-        "stub_kind": "compile_only" if context["declared_count"] else "none",
+        "stub_kind": external_scope_stub_kind(context),
         "semantics_verified": False,
     }
 
@@ -658,7 +735,10 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
-        if callee.get("stub_generation") == "not_emitted_modeled_stdlib":
+        if callee.get("stub_generation") in {
+            "not_emitted_modeled_stdlib",
+            "not_emitted_named_slice_evidence",
+        }:
             continue
         name = rust_identifier(callee["name"])
         params = []

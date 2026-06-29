@@ -14,7 +14,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import jsonschema
 
@@ -2613,13 +2613,19 @@ def validate_external_direct_callee_context(
             raise SystemExit(f"external callee {name} signature_ref mismatch in context pack")
         validate_external_callee_signature_descriptor(name, signature, plan_callee, "translation plan")
         validate_external_callee_signature_descriptor(name, signature, context_callee, "context pack")
+        stub_kind = str(plan_callee.get("stub_kind") or "")
+        if stub_kind != str(context_callee.get("stub_kind") or ""):
+            raise SystemExit(f"external callee {name} stub_kind mismatch between translation plan and context pack")
+        contract["stub_kind"] = stub_kind
         contracts[name] = contract
         validate_external_callee_descriptor_binding(name, contract, plan_callee, "translation plan")
         validate_external_callee_descriptor_binding(name, contract, context_callee, "context pack")
-        if plan_callee.get("stub_kind") != "compile_only" or context_callee.get("stub_kind") != "compile_only":
-            raise SystemExit(f"external callee {name} must record compile_only stub boundary")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            raise SystemExit(f"external callee {name} has unsupported stub_kind={stub_kind}")
+        if stub_kind == "accepted_named_slice_evidence":
+            validate_external_callee_accepted_named_slice_evidence(name, plan_callee, context_callee)
         if plan_callee.get("semantics_verified") or context_callee.get("semantics_verified"):
-            raise SystemExit(f"external callee {name} compile-only stub must not claim semantics_verified")
+            raise SystemExit(f"external callee {name} context must not claim semantics_verified")
         if len(bindings.get(name, [])) != 1:
             raise SystemExit(f"external callee {name} missing signature binding in context pack")
         validate_external_callee_signature_binding(name, signature_ref, bindings[name][0])
@@ -2642,7 +2648,7 @@ def validate_external_direct_callee_context(
 
     claim_scope = manifest.get("claim_boundary", {}).get("external_callee_scope", {})
     final_scope = final_verification.get("external_callee_scope", claim_scope)
-    expected_scope_stub_kind = "compile_only" if contracts else "none"
+    expected_scope_stub_kind = external_callee_scope_stub_kind(contracts.values())
     for label, scope in [("manifest", claim_scope), ("final_verification", final_scope)]:
         if scope.get("stub_kind") != expected_scope_stub_kind:
             raise SystemExit(f"external callee {label} scope must record stub_kind={expected_scope_stub_kind}")
@@ -2701,6 +2707,58 @@ def external_callee_expected_contract(
     }
 
 
+def external_callee_scope_stub_kind(contracts: Iterable[dict[str, Any]]) -> str:
+    kinds = {str(contract.get("stub_kind") or "compile_only") for contract in contracts}
+    if not kinds:
+        return "none"
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "mixed_context"
+
+
+def validate_external_callee_accepted_named_slice_evidence(
+    name: str,
+    plan_callee: dict[str, Any],
+    context_callee: dict[str, Any],
+) -> None:
+    plan_binding = plan_callee.get("accepted_named_slice_evidence")
+    context_binding = context_callee.get("accepted_named_slice_evidence")
+    if not isinstance(plan_binding, dict) or not isinstance(context_binding, dict):
+        raise SystemExit(f"external callee {name} accepted named-slice evidence binding missing")
+    if plan_binding != context_binding:
+        raise SystemExit(f"external callee {name} accepted named-slice evidence binding drift")
+    final_path_text = str(plan_binding.get("final_verification_path") or "")
+    final_sha = str(plan_binding.get("final_verification_sha256") or "")
+    if not final_path_text or not final_sha:
+        raise SystemExit(f"external callee {name} accepted named-slice final verification ref missing")
+    final_path = resolve_ref_path(final_path_text)
+    if not final_path.exists():
+        raise SystemExit(f"external callee {name} accepted named-slice final verification missing: {final_path}")
+    actual_sha = sha256(final_path)
+    if actual_sha != final_sha:
+        raise SystemExit(
+            f"external callee {name} accepted named-slice final verification sha mismatch: {final_sha} != {actual_sha}"
+        )
+    final = load_json(final_path)
+    if final.get("target_id") != plan_binding.get("target_id"):
+        raise SystemExit(f"external callee {name} accepted named-slice target_id mismatch")
+    if final.get("slice_id") != plan_binding.get("slice_id"):
+        raise SystemExit(f"external callee {name} accepted named-slice slice_id mismatch")
+    if final.get("semantic_pass") is not True or plan_binding.get("semantic_pass") is not True:
+        raise SystemExit(f"external callee {name} accepted named-slice evidence must have semantic_pass=true")
+    if (
+        final.get("accepted_evidence_authoritative") is not True
+        or plan_binding.get("accepted_evidence_authoritative") is not True
+    ):
+        raise SystemExit(
+            f"external callee {name} accepted named-slice evidence must be accepted_evidence_authoritative"
+        )
+    if final.get("generated_draft_semantic_pass") is True or plan_binding.get("generated_draft_semantic_pass") is True:
+        raise SystemExit(
+            f"external callee {name} accepted named-slice evidence must not accept generated draft semantics"
+        )
+
+
 def validate_external_callee_descriptor_binding(
     name: str,
     contract: dict[str, Any],
@@ -2748,9 +2806,9 @@ def validate_external_callee_signature_binding(
 ) -> None:
     if binding.get("signature_ref") != signature_ref:
         raise SystemExit(f"external callee signature binding mismatch for {name}")
-    if binding.get("stub_kind") != "compile_only":
+    if binding.get("stub_kind") not in {"compile_only", "accepted_named_slice_evidence"}:
         raise SystemExit(
-            f"external callee signature binding for {name} must record stub_kind=compile_only"
+            f"external callee signature binding for {name} must record supported stub_kind"
         )
     if binding.get("semantics_verified"):
         raise SystemExit(
