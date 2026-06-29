@@ -851,8 +851,6 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
         unsupported_cf.extend(function_unsupported_cf)
         blocks = function.get("blocks", [])
         statements = blocks[0].get("statements", []) if blocks else []
-        statement_kinds = blocks[0].get("statement_kinds", []) if blocks else []
-        lvalue_kinds = blocks[0].get("lvalue_kinds", []) if blocks else []
         functions.append(
             {
                 "name": function.get("name", required_str(spec, "slice_id")),
@@ -860,20 +858,8 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "source_span": source_span(),
                 "entry_block": "entry",
                 "exit_blocks": ["return"] if blocks and blocks[0].get("terminator") == "return" else ["exit"],
-                "basic_blocks": [
-                    {
-                        "id": "entry",
-                        "kind": "entry",
-                        "statements": statements,
-                        "statement_kinds": statement_kinds,
-                        "lvalue_kinds": lvalue_kinds,
-                        "lvalue_decisions": lvalue_decisions(statements, lvalue_kinds),
-                        "source_span": source_span(),
-                    }
-                ],
-                "edges": [
-                    {"from": "entry", "to": "return", "kind": "return", "source_span": source_span()}
-                ],
+                "basic_blocks": cfg_basic_blocks(blocks),
+                "edges": cfg_edges(blocks),
                 "branches": [],
                 "returns": [
                     {"block": "entry", "expression": extract_return_expression(statements), "source_span": source_span()}
@@ -5790,6 +5776,98 @@ def lvalue_decisions(statements: list[str], lvalue_kinds: list[str]) -> list[dic
             }
         )
     return decisions
+
+
+def cfg_basic_blocks(raw_blocks: list[Any]) -> list[dict[str, Any]]:
+    if not raw_blocks:
+        return [
+            {
+                "id": "entry",
+                "kind": "entry",
+                "statements": [],
+                "statement_kinds": [],
+                "lvalue_kinds": [],
+                "lvalue_decisions": [],
+                "source_span": source_span(),
+            }
+        ]
+    blocks: list[dict[str, Any]] = []
+    for index, raw_block in enumerate(raw_blocks):
+        if not isinstance(raw_block, dict):
+            continue
+        block_id = str(raw_block.get("id") or ("entry" if index == 0 else f"block-{index}"))
+        statements = [str(item) for item in raw_block.get("statements", [])]
+        statement_kinds = [str(item) for item in raw_block.get("statement_kinds", [])]
+        lvalue_kinds = [str(item) for item in raw_block.get("lvalue_kinds", [])]
+        blocks.append(
+            {
+                "id": block_id,
+                "kind": cfg_block_kind(block_id, str(raw_block.get("terminator", "")), index),
+                "statements": statements,
+                "statement_kinds": statement_kinds,
+                "lvalue_kinds": lvalue_kinds,
+                "lvalue_decisions": lvalue_decisions(statements, lvalue_kinds),
+                "terminator": str(raw_block.get("terminator", "")),
+                "source_span": source_span(),
+            }
+        )
+    return blocks
+
+
+def cfg_block_kind(block_id: str, terminator: str, index: int) -> str:
+    if block_id == "entry" or index == 0:
+        return "entry"
+    if terminator.startswith("unsupported_"):
+        return "unsupported"
+    if terminator == "return":
+        return "return"
+    if terminator in {"if", "switch"}:
+        return "branch"
+    if terminator in {"while", "for"}:
+        return "loop_header"
+    return "body"
+
+
+def cfg_edges(raw_blocks: list[Any]) -> list[dict[str, Any]]:
+    edges: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for raw_block in raw_blocks:
+        if not isinstance(raw_block, dict):
+            continue
+        for raw_edge in raw_block.get("edges", []):
+            edge = cfg_edge_from_raw(str(raw_edge))
+            if edge is None:
+                continue
+            key = (edge["from"], edge["to"], edge["kind"])
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append(edge)
+    if not edges:
+        edges.append({"from": "entry", "to": "return", "kind": "return", "source_span": source_span()})
+    return edges
+
+
+def cfg_edge_from_raw(raw_edge: str) -> dict[str, Any] | None:
+    if "->" not in raw_edge:
+        return None
+    from_block, to_block = [part.strip() for part in raw_edge.split("->", 1)]
+    if not from_block or not to_block:
+        return None
+    return {
+        "from": from_block,
+        "to": to_block,
+        "kind": cfg_edge_kind(from_block, to_block),
+        "source_span": source_span(),
+    }
+
+
+def cfg_edge_kind(from_block: str, to_block: str) -> str:
+    if to_block.startswith("return"):
+        return "return"
+    if from_block.startswith("goto-") or to_block.startswith(("goto-", "label-", "switch-", "case-", "default")):
+        return "unsupported"
+    return "unsupported"
 
 
 def lvalue_decision_for_kind(kind: str) -> str:

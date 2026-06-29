@@ -1,6 +1,7 @@
 import json
 import hashlib
 import importlib.util
+import jsonschema
 import os
 import subprocess
 import sys
@@ -3977,6 +3978,9 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
     def test_unsupported_control_flow_blocks_auto_migrate_candidate_generation(self) -> None:
+        cfg_schema = json.loads(
+            (REPO_ROOT / "validation/cfg-template/cfg.schema.json").read_text(encoding="utf-8")
+        )
         cases = [
             (
                 "goto-loop",
@@ -4041,6 +4045,7 @@ class AutoMigrateTests(unittest.TestCase):
                 evidence_dir = out_root / "demo" / "auto-translation" / slice_id
                 prefix = f"l3-{slice_id}"
                 cfg = json.loads((evidence_dir / f"{prefix}-cfg.json").read_text(encoding="utf-8"))
+                jsonschema.Draft7Validator(cfg_schema).validate(cfg)
                 plan = json.loads(
                     (evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8")
                 )
@@ -4087,6 +4092,21 @@ class AutoMigrateTests(unittest.TestCase):
                         structured["relooper_refusals"],
                     )
                 self.assertIn("no Rust candidate lowering", structured["scope_note"])
+                block_ids = {block["id"] for block in cfg["functions"][0]["basic_blocks"]}
+                edge_pairs = {
+                    (edge["from"], edge["to"], edge["kind"])
+                    for edge in cfg["functions"][0]["edges"]
+                }
+                if expected_kind == "goto":
+                    self.assertTrue({"label-again", "goto-again"}.issubset(block_ids))
+                    self.assertIn(("entry", "label-again", "unsupported"), edge_pairs)
+                    self.assertIn(("entry", "goto-again", "unsupported"), edge_pairs)
+                    self.assertIn(("goto-again", "label-again", "unsupported"), edge_pairs)
+                if expected_kind == "switch":
+                    self.assertTrue({"switch-0", "case-1", "default"}.issubset(block_ids))
+                    self.assertIn(("entry", "switch-0", "unsupported"), edge_pairs)
+                    self.assertIn(("switch-0", "case-1", "unsupported"), edge_pairs)
+                    self.assertIn(("switch-0", "default", "unsupported"), edge_pairs)
                 self.assertEqual(manifest["translator"]["status"], "blocked")
                 self.assertEqual(plan["status"], "blocked")
                 self.assertEqual(route["level"], "L4")

@@ -336,6 +336,27 @@ class TemplateSchemaContractTests(unittest.TestCase):
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(incomplete, schema)
 
+    def test_cfg_template_schema_pins_control_flow_refusal_kinds(self) -> None:
+        schema_path = REPO_ROOT / "validation" / "cfg-template" / "cfg.schema.json"
+        schema = load_json(schema_path)
+
+        kind_enum = set(
+            schema["definitions"]["unsupportedControlFlow"]["properties"]["kind"]["enum"]
+        )
+        self.assertTrue(
+            {
+                "goto",
+                "switch",
+                "label",
+                "case",
+                "default",
+                "setjmp",
+                "longjmp",
+                "inline_assembly",
+                "relooper_refusal",
+            }.issubset(kind_enum)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

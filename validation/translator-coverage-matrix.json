@@ -1728,6 +1728,8 @@
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
         "relooper_refusal evidence for goto/switch",
+        "schema-bound unsupported_control_flow kind contract",
+        "normalized CFG block/edge preservation for goto/switch refusals",
         "minimal structured_control_flow recovery evidence for goto/switch",
         "relooper_precondition evidence for resolved goto targets and enumerated switch cases"
       ],
@@ -1800,9 +1802,14 @@
               "name": "auto-migration L4 route refusal evidence for switch/goto",
               "path": "validation/tools/test_auto_migrate.py",
               "test": "test_unsupported_control_flow_blocks_auto_migrate_candidate_generation"
+            },
+            {
+              "name": "CFG template pins control-flow refusal kinds",
+              "path": "validation/tools/test_template_schema_contracts.py",
+              "test": "test_cfg_template_schema_pins_control_flow_refusal_kinds"
             }
           ],
-          "scope_note": "covers route/profile/manifest/refusal evidence only; it does not claim Rust candidate lowering or C/Rust differential semantic pass for switch/goto"
+          "scope_note": "covers route/profile/manifest/refusal evidence plus schema-bound CFG blocks/edges only; it does not claim Rust candidate lowering or C/Rust differential semantic pass for switch/goto"
         }
       },
       "positive_cases": [
