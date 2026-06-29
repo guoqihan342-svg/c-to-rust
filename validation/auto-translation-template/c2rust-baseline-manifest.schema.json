@@ -66,7 +66,8 @@
       "properties": {
         "path": {"type": "string", "minLength": 1},
         "status": {"enum": ["present", "missing"]},
-        "cargo_toml": {"type": "string"}
+        "cargo_toml": {"type": "string"},
+        "diagnostic_only": {"type": "boolean"}
       }
     },
     "output": {
@@ -75,7 +76,28 @@
         {"type": "object"}
       ]
     },
-    "diagnostics": {"type": "array", "items": {"type": "string"}}
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "must_not_claim": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    },
+    "tool_probe": {
+      "type": "object",
+      "required": ["os_name", "path_search", "probed_at", "diagnostic_only"],
+      "properties": {
+        "os_name": {"type": "string", "minLength": 1},
+        "path_search": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1
+        },
+        "probed_at": {"type": "string", "minLength": 1},
+        "diagnostic_only": {"type": "boolean"},
+        "environment_profile_hash": {"type": "string"},
+        "competition_environment_identity": {"type": "object"}
+      }
+    }
   },
   "allOf": [
     {

@@ -43,7 +43,8 @@ Diagnostic metadata:
 - `metadata.source_root`
 - `lowering_report.arguments`
 - `source_file`
-- skipped C2Rust baseline `reference_tree`
+- skipped C2Rust baseline `reference_tree` and `tool_probe`
+- `reference_tree.diagnostic_only` (when `true`, the path is default diagnostic context, not a reproducible entrypoint)
 - stdout/stderr/log excerpts
 
 These fields may record host facts, but they must not become reproducible entrypoints for release claims.

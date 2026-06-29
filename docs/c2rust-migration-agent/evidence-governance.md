@@ -45,7 +45,8 @@ python -B -m unittest validation.tools.test_evidence_governance
 - `metadata.source_root`
 - `lowering_report.arguments`
 - `source_file`
-- skipped C2Rust baseline 的 `reference_tree`
+- skipped C2Rust baseline 的 `reference_tree` 和 `tool_probe`
+- `reference_tree.diagnostic_only`（为 `true` 时表示该路径只是默认诊断上下文，不是可复现入口）
 - stdout/stderr/log excerpts
 
 这些字段可以记录宿主机事实，但不能作为 release claim 的可复现入口。

@@ -18,6 +18,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -3397,7 +3398,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
     prefix = f"l3-{slice_id}"
     commands = c2rust_command_candidates()
     selected = next((item for item in commands if item.get("path")), None)
-    reference_tree = Path("F:/agent/c2rust-master")
+    reference_tree, reference_tree_configured = resolve_c2rust_reference_tree()
     reference_status = "present" if reference_tree.exists() else "missing"
     status = "skipped"
     diagnostics: list[str] = []
@@ -3423,9 +3424,10 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
         "commands": commands,
         "selected_command": selected,
         "reference_tree": {
-            "path": str(reference_tree),
+            "path": rel(reference_tree),
             "status": reference_status,
-            "cargo_toml": str(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
+            "cargo_toml": rel(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
+            "diagnostic_only": not reference_tree_configured,
         },
         "output": None,
         "diagnostics": diagnostics,
@@ -3433,6 +3435,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
             "C2Rust output proves semantic equivalence",
             "C2Rust baseline was generated" if status != "generated" else "",
         ],
+        "tool_probe": c2rust_tool_probe(),
     }
     manifest["must_not_claim"] = [item for item in manifest["must_not_claim"] if item]
     write_json(evidence_dir / f"{prefix}-c2rust-baseline-manifest.json", manifest)
@@ -3465,6 +3468,31 @@ def c2rust_command_version(path: str | None) -> dict[str, str]:
     return {
         "version_status": "OK" if result.returncode == 0 and version else "UNKNOWN",
         "version": version,
+    }
+
+
+def resolve_c2rust_reference_tree() -> tuple[Path, bool]:
+    configured = os.environ.get("C2RUST_REFERENCE_TREE", "").strip()
+    if configured:
+        path = Path(configured)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        return path, True
+    return REPO_ROOT / "tools" / "c2rust-reference", False
+
+
+def c2rust_tool_probe() -> dict[str, Any]:
+    return {
+        "os_name": os.name,
+        "path_search": ["c2rust-transpile", "c2rust"],
+        "probed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "diagnostic_only": True,
+        "environment_profile_hash": sha256(COMPETITION_ENVIRONMENT_PROFILE)
+        if COMPETITION_ENVIRONMENT_PROFILE.exists()
+        else "missing",
+        "competition_environment_identity": competition_environment_identity()
+        if COMPETITION_ENVIRONMENT_PROFILE.exists()
+        else {"status": "missing"},
     }
 
 

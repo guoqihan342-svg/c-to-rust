@@ -5836,6 +5836,80 @@ class AutoMigrateTests(unittest.TestCase):
 
         self.assertEqual(hashes["src/fdb_utils.c"], "real-source-sha")
 
+    def test_c2rust_baseline_manifest_records_tool_probe_without_generation_claim(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "c2rust-probe",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int x) { return x + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+
+            with mock.patch.object(auto_migrate.shutil, "which", return_value=None):
+                manifest = auto_migrate.emit_c2rust_baseline_manifest(
+                    spec,
+                    slice_spec,
+                    evidence_dir,
+                )
+
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["status"], "skipped")
+            self.assertEqual(manifest["reason"], "blocked_by_missing_tools")
+            self.assertEqual(manifest["correctness_role"], "candidate_context_only")
+            self.assertIsNone(manifest["selected_command"])
+            self.assertIsNone(manifest["output"])
+            self.assertEqual(manifest["tool_probe"]["path_search"], ["c2rust-transpile", "c2rust"])
+            self.assertEqual(manifest["tool_probe"]["os_name"], os.name)
+            self.assertTrue(manifest["tool_probe"]["diagnostic_only"])
+            self.assertIn("environment_profile_hash", manifest["tool_probe"])
+            self.assertEqual(manifest["reference_tree"]["path"], "tools/c2rust-reference")
+            self.assertTrue(manifest["reference_tree"]["diagnostic_only"])
+            self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
+            self.assertIn("C2Rust baseline was generated", manifest["must_not_claim"])
+
+            schema = json.loads(
+                (
+                    REPO_ROOT
+                    / "validation"
+                    / "auto-translation-template"
+                    / "c2rust-baseline-manifest.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            jsonschema.validate(manifest, schema)
+
+    def test_c2rust_reference_tree_can_be_configured_without_becoming_acceptance_evidence(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with mock.patch.dict(os.environ, {"C2RUST_REFERENCE_TREE": "vendor/c2rust-src"}):
+            reference_tree, configured = auto_migrate.resolve_c2rust_reference_tree()
+
+        self.assertTrue(configured)
+        self.assertEqual(reference_tree, REPO_ROOT / "vendor" / "c2rust-src")
+
+    def test_c2rust_baseline_candidate_binding_never_semantic_pass(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        manifest_ref = {"path": "l3-demo-c2rust-baseline-manifest.json", "status": "skipped", "sha256": "abc"}
+
+        binding = auto_migrate.c2rust_baseline_candidate_binding(
+            {"status": "skipped", "reason": "blocked_by_missing_tools"},
+            baseline_manifest_ref=manifest_ref,
+        )
+
+        self.assertEqual(binding["candidate_id"], "c2rust-baseline")
+        self.assertEqual(binding["correctness_role"], "candidate_context_only")
+        self.assertFalse(binding["semantic_pass"])
+        self.assertFalse(binding["generated_draft_semantic_pass"])
+        self.assertIsNone(binding["output_ref"])
+        self.assertEqual(binding["baseline_manifest"], manifest_ref)
+
     def _accepted_evidence_spec(self, root: Path, include_toolchain_marker: bool) -> dict:
         fixture = root / "fixture.json"
         c_oracle = root / "c-oracle.json"
