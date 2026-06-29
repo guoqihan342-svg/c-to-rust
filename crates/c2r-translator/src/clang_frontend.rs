@@ -274,6 +274,7 @@ pub enum ClangTypeKind {
     Record {
         name: String,
     },
+    Function,
     Unsupported {
         reason: String,
     },
@@ -383,6 +384,10 @@ pub enum ClangExprSkeleton {
         implicit: bool,
     },
     ArrayToPointerDecay {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+    },
+    FunctionToPointerDecay {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
     },
@@ -1532,6 +1537,10 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;
         }
+        ClangExprSkeleton::FunctionToPointerDecay { expr, target } => {
+            rewrite_supported_enum_types_in_expr(expr, inventory)?;
+            rewrite_supported_enum_type(target, inventory)?;
+        }
         ClangExprSkeleton::Index { base, index, ty } => {
             rewrite_supported_enum_types_in_expr(base, inventory)?;
             rewrite_supported_enum_types_in_expr(index, inventory)?;
@@ -2444,17 +2453,17 @@ fn expr_skeleton_from_ast_with_options(
     match string_field(expr, "kind").as_deref() {
         Some("ImplicitCastExpr") => {
             let cast_kind = string_field(expr, "castKind");
-            if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
-                return Ok(ClangExprSkeleton::Unsupported {
-                    node: "ImplicitCastExpr".to_string(),
-                    reason: "castKind FunctionToPointerDecay creates a function pointer value and requires explicit function-pointer lowering outside direct callee position".to_string(),
-                });
-            }
             let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
             let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+            if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
+                return Ok(ClangExprSkeleton::FunctionToPointerDecay {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
+                });
+            }
             if cast_kind.as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
             }
@@ -3355,6 +3364,7 @@ fn bounded_call_arg_rejection_reason(
             "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
                 .to_string(),
         ),
+        ClangExprSkeleton::FunctionToPointerDecay { .. } => None,
         ClangExprSkeleton::Conditional { .. } => {
             Some("conditional call arguments are outside the bounded call subset".to_string())
         }
@@ -3587,6 +3597,18 @@ fn type_from_qual_type_with_target_abi(
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     let trimmed = qual_type.trim();
+    if let Some(function_pointer) = split_function_pointer_qual_type(trimmed) {
+        let function = function_type_skeleton(function_pointer.function.trim(), target_abi)?;
+        let canonical = format!("{} *", function.canonical);
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical,
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(function),
+                width: target_abi.and_then(|abi| nonzero_width(abi.pointer_width)),
+            },
+        });
+    }
     if let Some(pointer) = split_pointer_qual_type(trimmed) {
         let pointee = type_from_qual_type_with_target_abi(pointer.pointee.trim(), target_abi)?;
         let canonical = match pointer.restrict_qualifier {
@@ -3624,6 +3646,9 @@ fn type_from_qual_type_with_target_abi(
                 len,
             },
         });
+    }
+    if split_function_qual_type(trimmed).is_some() {
+        return function_type_skeleton(trimmed, target_abi);
     }
     if let Some(name) = trimmed.strip_prefix("struct ") {
         let name = name.trim();
@@ -3944,7 +3969,8 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
             bind_target_abi_to_type(ty, target_abi);
         }
         ClangExprSkeleton::Cast { target, .. }
-        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => {
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
+        | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => {
             bind_target_abi_to_type(target, target_abi);
         }
         ClangExprSkeleton::Unsupported { .. } => {}
@@ -3978,6 +4004,9 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
             bind_target_abi_to_expr(expr, target_abi);
         }
         ClangExprSkeleton::ArrayToPointerDecay { expr, .. } => {
+            bind_target_abi_to_expr(expr, target_abi);
+        }
+        ClangExprSkeleton::FunctionToPointerDecay { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
         ClangExprSkeleton::SizeOfType { arg_type, .. } => {
@@ -4025,6 +4054,86 @@ fn bind_target_abi_to_type(ty: &mut ClangTypeSkeleton, target_abi: &TargetAbiPro
 struct PointerQualType<'a> {
     pointee: &'a str,
     restrict_qualifier: Option<&'static str>,
+}
+
+#[cfg(feature = "typed-ir")]
+struct FunctionPointerQualType<'a> {
+    function: String,
+    _source: &'a str,
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_function_pointer_qual_type(qual_type: &str) -> Option<FunctionPointerQualType<'_>> {
+    let trimmed = qual_type.trim();
+    let marker = "(*";
+    let marker_index = trimmed.find(marker)?;
+    let suffix = &trimmed[marker_index + marker.len()..];
+    let close_pointer = suffix.find(')')?;
+    if !suffix[..close_pointer].trim().is_empty() {
+        return None;
+    }
+    let params = suffix[close_pointer + 1..].trim();
+    if !params.starts_with('(') || !params.ends_with(')') {
+        return None;
+    }
+    let return_type = trimmed[..marker_index].trim();
+    if return_type.is_empty() || return_type.contains('(') || return_type.contains(')') {
+        return None;
+    }
+    Some(FunctionPointerQualType {
+        function: format!("{return_type} {params}"),
+        _source: trimmed,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_function_qual_type(qual_type: &str) -> Option<(&str, &str)> {
+    let trimmed = qual_type.trim();
+    let open = trimmed.find('(')?;
+    if !trimmed.ends_with(')') {
+        return None;
+    }
+    let return_type = trimmed[..open].trim();
+    let params = trimmed[open + 1..trimmed.len() - 1].trim();
+    if return_type.is_empty() {
+        return None;
+    }
+    Some((return_type, params))
+}
+
+#[cfg(feature = "typed-ir")]
+fn function_type_skeleton(
+    qual_type: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    let trimmed = qual_type.trim();
+    let Some((return_type, _params)) = split_function_qual_type(trimmed) else {
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: trimmed.to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason: format!("{trimmed} is outside the current function type skeleton"),
+            },
+        });
+    };
+    let return_type = type_from_qual_type_with_target_abi(return_type, target_abi)?;
+    if matches!(return_type.kind, ClangTypeKind::Unsupported { .. }) {
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: trimmed.to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason: format!(
+                    "function return type {} is outside the current type skeleton",
+                    return_type.spelled
+                ),
+            },
+        });
+    }
+    Ok(ClangTypeSkeleton {
+        spelled: trimmed.to_string(),
+        canonical: trimmed.to_string(),
+        kind: ClangTypeKind::Function,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4282,7 +4391,9 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
         | IrExpr::Call { ty, .. }
         | IrExpr::Member { ty, .. }
         | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
-        IrExpr::Cast { target, .. } | IrExpr::ArrayToPointerDecay { target, .. } => {
+        IrExpr::Cast { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => {
             ir_types_match_for_clang(target, expected)
         }
         IrExpr::Unsupported { .. } => false,
@@ -4385,6 +4496,13 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         }),
         ClangExprSkeleton::ArrayToPointerDecay { target, expr } => {
             Ok(IrExpr::ArrayToPointerDecay {
+                target: lower_type(target)?,
+                expr: Box::new(lower_expr(expr)?),
+                source_span: None,
+            })
+        }
+        ClangExprSkeleton::FunctionToPointerDecay { target, expr } => {
+            Ok(IrExpr::FunctionToPointerDecay {
                 target: lower_type(target)?,
                 expr: Box::new(lower_expr(expr)?),
                 source_span: None,
@@ -4525,7 +4643,8 @@ fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkelet
         | ClangExprSkeleton::Call { ty, .. }
         | ClangExprSkeleton::Member { ty, .. } => Some(ty),
         ClangExprSkeleton::Cast { target, .. }
-        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => Some(target),
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
+        | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => Some(target),
         ClangExprSkeleton::Unsupported { .. } => None,
     }
 }
@@ -4830,6 +4949,14 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             width_bits: None,
             source_span: None,
         }),
+        ClangTypeKind::Function => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Function,
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_type".to_string(),
             message: reason.clone(),
@@ -5095,7 +5222,9 @@ fn attach_record_inventory_to_expr(
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => attach_record_inventory_to_type(ty, inventory),
-        IrExpr::Cast { target, .. } | IrExpr::ArrayToPointerDecay { target, .. } => {
+        IrExpr::Cast { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => {
             attach_record_inventory_to_type(target, inventory)
         }
         IrExpr::Unsupported { .. } => {}
@@ -5109,6 +5238,7 @@ fn attach_record_inventory_to_expr(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
             target: operand, ..
         }
@@ -6653,7 +6783,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_function_to_pointer_decay_value_argument() {
+    fn expr_skeleton_from_ast_preserves_function_to_pointer_decay_as_explicit_ir() {
         let expr = serde_json::json!({
             "kind": "ImplicitCastExpr",
             "castKind": "FunctionToPointerDecay",
@@ -6673,19 +6803,15 @@ mod tests {
         let skeleton =
             expr_skeleton_from_ast(&expr).expect("function-to-pointer decay value skeleton");
 
-        assert!(matches!(
-            skeleton,
-            ClangExprSkeleton::Unsupported { ref node, ref reason }
-                if node == "ImplicitCastExpr"
-                    && reason.contains("FunctionToPointerDecay")
-                    && reason.contains("function pointer value")
-                    && reason.contains("explicit function-pointer lowering")
-        ));
-        let error =
-            lower_expr(&skeleton).expect_err("function-to-pointer decay value must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error.message.contains("FunctionToPointerDecay"));
-        assert!(error.message.contains("function pointer value"));
+        let lowered =
+            lower_expr(&skeleton).expect("function-to-pointer decay should lower to explicit IR");
+        let lowered_json =
+            serde_json::to_value(&lowered).expect("serialize function-to-pointer decay IR");
+        let Some(decay) = lowered_json.get("FunctionToPointerDecay") else {
+            panic!("expected FunctionToPointerDecay IR node, got {lowered_json}");
+        };
+        assert_eq!(decay["target"]["spelled"], "int (*)(int)");
+        assert_eq!(decay["expr"]["Var"]["name"], "helper");
     }
 
     #[test]
@@ -8478,6 +8604,19 @@ mod tests {
         };
         assert_eq!(width, Some(64));
         assert_eq!(pointee.canonical, "int");
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_function_pointer_with_function_pointer_param() {
+        let ty = type_from_qual_type("int (*)(int (*)(int), int)")
+            .expect("function pointer type skeleton");
+
+        let ClangTypeKind::Pointer { pointee, .. } = ty.kind else {
+            panic!("expected function pointer type, got {:?}", ty.kind);
+        };
+        assert_eq!(ty.spelled, "int (*)(int (*)(int), int)");
+        assert_eq!(pointee.spelled, "int (int (*)(int), int)");
+        assert!(matches!(pointee.kind, ClangTypeKind::Function));
     }
 
     #[test]

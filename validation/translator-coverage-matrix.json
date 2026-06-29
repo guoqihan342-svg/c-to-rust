@@ -1634,7 +1634,7 @@
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
-        "function-to-pointer decay value fail-closed",
+        "ordinary FunctionToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "pointer value call argument/return fail-closed",
         "route candidate evidence"
       ],
@@ -1655,7 +1655,7 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/pointer_value_boundary_ast.json"
             },
             {
-              "name": "function-to-pointer decay value no-clang AST fixture",
+              "name": "function-to-pointer decay explicit typed IR no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/function_decay_boundary_ast.json"
             },
             {
@@ -1785,7 +1785,7 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
-              "name": "function-to-pointer decay value boundary test",
+              "name": "function-to-pointer decay explicit typed IR boundary tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2033,7 +2033,12 @@
         {
           "name": "clang_ast_fixture_rejects_function_decay_value_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "function-to-pointer decay outside direct callee position creates a function pointer value and requires explicit function-pointer lowering"
+          "fail_closed_reason": "function-to-pointer decay outside direct callee position is visible as explicit typed IR, but Rust emission still requires explicit function-pointer lowering evidence"
+        },
+        {
+          "name": "typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "FunctionToPointerDecay in ordinary expression position creates a function pointer value and requires explicit function-pointer lowering evidence"
         },
         {
           "name": "typed_ir_rejects_memset_calls_outside_minimal_statement_model",

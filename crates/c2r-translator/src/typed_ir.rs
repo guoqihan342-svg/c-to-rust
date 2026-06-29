@@ -15,7 +15,7 @@
 //!
 //! **Layer 3: Typed Value IR** — integer/pointer/struct/array with explicit casts only.
 //! All implicit conversions from Layer 1 become explicit `Cast` nodes here. Pointer
-//! arithmetic is decomposed into element access. Array-to-pointer decay is explicit.
+//! arithmetic is decomposed into element access. Array/function-to-pointer decay is explicit.
 //!
 //! **Lowering layer** (not yet a separate module): converts from Semantic IR to a Rust
 //! candidate. Every lowering rule must be provable. When lowering fails, the reason is
@@ -178,6 +178,11 @@ pub enum IrExpr {
         source_span: Option<SourceSpan>,
     },
     ArrayToPointerDecay {
+        target: IrType,
+        expr: Box<IrExpr>,
+        source_span: Option<SourceSpan>,
+    },
+    FunctionToPointerDecay {
         target: IrType,
         expr: Box<IrExpr>,
         source_span: Option<SourceSpan>,
@@ -1053,6 +1058,7 @@ fn collect_record_field_uses_from_expr<'a>(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
             target: operand, ..
         }
@@ -2516,6 +2522,9 @@ fn emit_expr(
         IrExpr::ArrayToPointerDecay { .. } => {
             Err("array-to-pointer decay requires explicit lowering evidence".to_string())
         }
+        IrExpr::FunctionToPointerDecay { .. } => Err(
+            "function-to-pointer decay creates a function pointer value and requires explicit function-pointer lowering evidence".to_string(),
+        ),
         IrExpr::Index {
             base, index, ty, ..
         } => emit_index_expr(base, index, ty, symbols, context),
@@ -2793,6 +2802,9 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
         }
         IrExpr::ArrayToPointerDecay { .. } => {
             Err("deref pointer add index cannot use array-to-pointer decay".to_string())
+        }
+        IrExpr::FunctionToPointerDecay { .. } => {
+            Err("deref pointer add index cannot use function-to-pointer decay".to_string())
         }
         IrExpr::Call { callee, .. } => Err(format!(
             "deref pointer add index call expression {callee} is unsupported"
@@ -3462,6 +3474,10 @@ fn validate_bounded_call_arg(
             "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
                 .to_string(),
         ),
+        IrExpr::FunctionToPointerDecay { .. } => Err(
+            "call arguments cannot use function-to-pointer decay; function pointer value requires explicit function-pointer lowering evidence"
+                .to_string(),
+        ),
         IrExpr::Conditional { .. } => {
             Err("conditional call arguments are outside the bounded call subset".to_string())
         }
@@ -3535,9 +3551,9 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         } => find_call_callee(condition)
             .or_else(|| find_call_callee(then_expr))
             .or_else(|| find_call_callee(else_expr)),
-        IrExpr::Cast { expr, .. } | IrExpr::ArrayToPointerDecay { expr, .. } => {
-            find_call_callee(expr)
-        }
+        IrExpr::Cast { expr, .. }
+        | IrExpr::ArrayToPointerDecay { expr, .. }
+        | IrExpr::FunctionToPointerDecay { expr, .. } => find_call_callee(expr),
         IrExpr::Index { base, index, .. } => {
             find_call_callee(base).or_else(|| find_call_callee(index))
         }
@@ -3641,6 +3657,9 @@ fn emit_expr_with_prelude(
         }
         IrExpr::ArrayToPointerDecay { .. } => Err(format!(
             "{path} array-to-pointer decay requires explicit lowering evidence"
+        )),
+        IrExpr::FunctionToPointerDecay { .. } => Err(format!(
+            "{path} function-to-pointer decay creates a function pointer value and requires explicit function-pointer lowering evidence"
         )),
         IrExpr::Conditional {
             condition,
@@ -4565,6 +4584,7 @@ fn expr_has_inc_dec(expr: &IrExpr) -> bool {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_inc_dec(operand),
         IrExpr::Conditional {
             condition,
@@ -4600,6 +4620,7 @@ fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_assign_or_comma(operand),
         IrExpr::Conditional {
             condition,
@@ -5120,6 +5141,10 @@ fn validate_definite_assignment_expr(
             .map_err(|detail| format!("cast expr {detail}")),
         IrExpr::ArrayToPointerDecay { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("array-to-pointer decay expr {detail}")),
+        IrExpr::FunctionToPointerDecay { expr, .. } => {
+            validate_definite_assignment_expr(expr, state)
+                .map_err(|detail| format!("function-to-pointer decay expr {detail}"))
+        }
         IrExpr::Index { base, index, .. } => {
             validate_definite_assignment_expr(base, state)
                 .map_err(|detail| format!("index base {detail}"))?;
@@ -5432,6 +5457,7 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
         IrExpr::Conditional {
             condition,
@@ -5472,6 +5498,7 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
         IrExpr::Conditional {
             condition,
@@ -5645,6 +5672,7 @@ fn reject_nullable_mutable_pointer_params_in_expr(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::Member { base: operand, .. }
@@ -5854,6 +5882,7 @@ fn collect_nullable_pointer_params_from_expr(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => collect_nullable_pointer_params_from_expr(
             operand,
             readonly_pointer_params,
@@ -6575,6 +6604,7 @@ fn collect_readonly_pointer_read_params_from_expr(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
         | IrExpr::Member { base: operand, .. }
         | IrExpr::IncDec {
@@ -7021,6 +7051,7 @@ fn validate_nullable_pointer_param_uses_in_expr(
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
             operand,
             nullable_params,
@@ -7356,7 +7387,9 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => Some(ty),
-        IrExpr::Cast { target, .. } | IrExpr::ArrayToPointerDecay { target, .. } => Some(target),
+        IrExpr::Cast { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => Some(target),
         IrExpr::Unsupported { .. } => None,
     }
 }

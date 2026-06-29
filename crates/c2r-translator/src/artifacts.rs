@@ -553,6 +553,9 @@ fn collect_expr_runtime_preconditions(
         typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
             collect_expr_runtime_preconditions(expr, preconditions);
         }
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
         typed_ir::IrExpr::Index { base, index, .. } => {
             collect_expr_runtime_preconditions(base, preconditions);
             collect_expr_runtime_preconditions(index, preconditions);

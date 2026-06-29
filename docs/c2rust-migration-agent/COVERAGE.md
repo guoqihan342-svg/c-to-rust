@@ -67,7 +67,7 @@
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context、binary usual arithmetic context、direct-call argument context、`?:` condition context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；显式 C-style same-width integer `NoOp` cast 也会保留为 `implicit=false` 的显式 cast；已有 no-clang AST fixture replay 覆盖 `uint32_t + uint8_t` 中的 clang-proven RHS cast 和缺失 cast 的 fail-closed；普通表达式、参数位置或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast 和 `LValueToRValue`/`NoOp` skeleton 边界可继续 |
-| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、bounded `strnlen(const char *, size_t)`、受限 `memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, byte_literal, size)` 和 statement-only `memcpy(out, src, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；direct callee 位置的 `FunctionToPointerDecay` 仅作为 direct-call parser 的 clang 形状被消费，普通 value/argument 位置会进入显式 typed IR `IrExpr::FunctionToPointerDecay` 并在缺少 explicit function-pointer lowering evidence 时 fail-closed；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、bounded `strnlen(const char *, size_t)`、受限 `memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, byte_literal, size)` 和 statement-only `memcpy(out, src, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
@@ -90,7 +90,7 @@
 | `sizeof` | 窄支持 | 支持 clang `UnaryExprOrTypeTraitExpr` 的 ABI-bound integer type operand、完整定长整数数组 type operand、带 `argType.qualType` 的 expression operand，以及带 target `pointer_width` 的 pointer type operand，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`、`sizeof(int[3])`、`sizeof(value)`、`sizeof(const int *)`；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度；缺少 `argType` 的 expression operand、缺少 pointer width profile 的 pointer operand、incomplete/VLA array、enum/record/struct layout、需要布局证据的 object operand、packing/alignment 仍 fail-closed |
 | `_Alignof` | 不支持 | clang `_Alignof(type)` 会显式 fail-closed；当前 target profile 只有宽度证据，没有 alignment/layout profile，不能猜 alignment |
 | `(type){init}` compound literal | 不支持 | |
-| 函数指针 | 不支持 | |
+| 函数指针 | 不支持 | 普通 `FunctionToPointerDecay` 仅显式进入 typed IR 以保留 C 语义边界；函数指针调用、传递、ABI 和 Rust lowering 仍需 explicit function-pointer lowering evidence |
 | 逗号表达式 | 不支持 | |
 | 赋值表达式 (value-position) | 不支持 | 仅 statement |
 | compound assignment (value-position) | 不支持 | 仅 statement |

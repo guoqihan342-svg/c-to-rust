@@ -1609,26 +1609,66 @@ fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
     ))
     .expect("fixture JSON");
 
-    let error =
+    let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "call_with_function_value")
-            .expect_err("function-to-pointer decay outside the callee position must fail closed");
+            .expect("function-to-pointer decay argument should stay visible in typed IR");
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("function-to-pointer decay argument must fail closed at emission");
 
-    assert_eq!(error.kind, "unsupported_clang_expr");
     assert!(
-        error.message.contains("FunctionToPointerDecay"),
+        error.reason.contains("function-to-pointer decay"),
         "{:?}",
-        error.message
+        error.reason
     );
     assert!(
-        error.message.contains("function pointer value"),
+        error.reason.contains("function pointer value"),
         "{:?}",
-        error.message
+        error.reason
     );
     assert!(
-        error.message.contains("explicit function-pointer lowering"),
+        error.reason.contains("explicit function-pointer lowering"),
         "{:?}",
-        error.message
+        error.reason
     );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let function_ty = ir_function_type("int (int)");
+    let function_pointer_ty =
+        ir_pointer("int (*)(int)", "int (*)(int)", function_ty.clone(), false);
+    let decay_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "FunctionToPointerDecay": {
+            "target": serde_json::to_value(&function_pointer_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("helper", function_ty)).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit function-to-pointer decay IR node");
+    let ir = IrFunction {
+        name: "bad_function_decay_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Expr {
+                expr: decay_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("function-to-pointer decay must stay fail closed");
+    assert!(error.reason.contains("function-to-pointer decay"));
+    assert!(error.reason.contains("function pointer value"));
+    assert!(error.reason.contains("explicit function-pointer lowering"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -2511,6 +2551,18 @@ fn ir_void() -> IrType {
         spelled: "void".to_string(),
         canonical: "void".to_string(),
         kind: IrTypeKind::Void,
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_function_type(spelled: &str) -> IrType {
+    IrType {
+        spelled: spelled.to_string(),
+        canonical: spelled.to_string(),
+        kind: IrTypeKind::Function,
         is_const: false,
         width_bits: None,
         source_span: None,
