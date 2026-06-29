@@ -1138,6 +1138,7 @@
         "modeled C assert(int) direct call",
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
+        "modeled C strlen(const char *) as a one-level nested direct-call argument",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1209,6 +1210,10 @@
             {
               "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1266,6 +1271,10 @@
             },
             {
               "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1334,6 +1343,10 @@
         },
         {
           "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

@@ -6660,6 +6660,63 @@ fn typed_ir_emits_strlen_direct_call_with_nul_precondition() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_strlen_as_nested_direct_call_argument() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let ir = IrFunction {
+        name: "observe_name_len".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![IrParam {
+            name: "name".to_string(),
+            ty: const_u8_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![IrExpr::Call {
+                    callee: "strlen".to_string(),
+                    args: vec![ir_var("name", const_u8_ptr_ty)],
+                    ty: usize_ty,
+                    source_span: None,
+                }],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit nested modeled C strlen argument");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn observe_name_len(name: &[u8])"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "observe(name.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\"));"
+        ),
+        "{rust}"
+    );
+    assert!(!rust.contains("strlen(name)"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-nested-strlen-argument",
+        &format!("fn observe(_: usize) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_strlen_calls_outside_minimal_model() {
     let usize_ty = ir_usize();
     let i32_ty = ir_i32();

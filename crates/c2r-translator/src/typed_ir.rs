@@ -2621,6 +2621,19 @@ fn emit_c_strlen_call_expr(
     symbols: &HashSet<String>,
     _context: &EmitContext,
 ) -> Result<String, String> {
+    let name = validate_c_strlen_call_shape(args, ty)?;
+    let name = emit_identifier(name, "C strlen argument")?;
+    if !symbols.contains(&name) {
+        return Err(format!(
+            "C strlen argument {name} is not a function parameter or local binding"
+        ));
+    }
+    Ok(format!(
+        "{name}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
+    ))
+}
+
+fn validate_c_strlen_call_shape<'a>(args: &'a [IrExpr], ty: &IrType) -> Result<&'a str, String> {
     if !is_c_strlen_result_type(ty) {
         return Err(format!(
             "C strlen model requires size_t/usize result type, got {}",
@@ -2651,15 +2664,7 @@ fn emit_c_strlen_call_expr(
             type_label(arg_ty)
         ));
     }
-    let name = emit_identifier(name, "C strlen argument")?;
-    if !symbols.contains(&name) {
-        return Err(format!(
-            "C strlen argument {name} is not a function parameter or local binding"
-        ));
-    }
-    Ok(format!(
-        "{name}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
-    ))
+    Ok(name)
 }
 
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
@@ -2781,6 +2786,10 @@ fn validate_bounded_nested_call_arg(
     ty: &IrType,
 ) -> Result<(), String> {
     emit_identifier(callee, "nested call callee")?;
+    if callee == "strlen" {
+        validate_c_strlen_call_shape(args, ty)?;
+        return Ok(());
+    }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
     for (index, arg) in args.iter().enumerate() {
         validate_bounded_call_arg(arg, false)
