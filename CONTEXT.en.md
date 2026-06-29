@@ -19,6 +19,13 @@ The Chinese source currently contains these major headings:
 - `## 常用验证命令`
 - `## 最近交接`
 
+## Current Handoff Summary
+
+- Current branch: `codex/agent-harness-flashdb-mvp`.
+- `real-fdb-calc-crc32` and `real-fdb-blob-make` currently pass through L4 accepted-evidence-authoritative semantic bindings; generated Rust drafts remain candidates with `generated_draft_semantic_pass=false`.
+- `fdb_kv_set` remains L4 refused/blocked until external callee shim/model/oracle semantics are closed.
+- The OpenCode harness has a minimal `run-worker` executor for deterministic runs and an OpenCode wrapper mode; SQLite remains a scheduling ledger, not evidence.
+
 ## Maintenance Notes
 
 - Keep filenames paired as `CONTEXT.md` and `CONTEXT.en.md` in the same directory.

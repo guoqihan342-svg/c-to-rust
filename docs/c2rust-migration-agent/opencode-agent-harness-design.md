@@ -86,7 +86,8 @@ target/competition-out/
     evidence/
     slice-specs/
     summary/competition-run-summary.json
-    logs/commands.jsonl
+    harness/run-worker-report.json
+    logs/
   summary/competition-run-summary.json
   logs/commands.jsonl
 ```
@@ -108,6 +109,31 @@ OpenCode 可以直接调用 repo-local wrapper：
 ```bash
 python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
 ```
+
+Harness 也提供最小执行器，优先用于可复现路径：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode deterministic
+```
+
+`run-worker --mode deterministic` 调用同一个 repo-local wrapper，并把 stdout/stderr、return code、summary path、record status 和最终任务状态写入 `workers/<worker-id>/harness/run-worker-report.json`。如果子进程失败、summary 缺失，或 summary 的 `final_gate.status` 不是 `passed`，worker 任务必须记录为 failed，最终合并不能把它当成通过。
+
+连接本机 OpenCode / DeepSeek V4 Pro 时，可以让 OpenCode 包装同一份 assignment request：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+复用已提交 accepted evidence 时，`assign-slice` 必须同时记录真实源信息和维护版 `--slice-spec`，并显式传 `--reuse-accepted-evidence --accepted-evidence-root validation/evidence`。这只验证已提交 evidence，不把重新生成的 Rust draft 提升为 semantic pass。
 
 `request.json` 可包含直接 slice 输入：
 

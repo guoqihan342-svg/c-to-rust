@@ -35,6 +35,27 @@ The Chinese README now treats the 600-minute figure as an optional external eval
 
 The current typed-IR route includes local fixed-size integer arrays and readonly `static const` fixed-size integer global array index reads, including the restricted clang `array_filler` sparse initializer subset.
 
+Current FlashDB accepted evidence includes both `real-fdb-calc-crc32` and `real-fdb-blob-make` through the L4 accepted-evidence-authoritative path. Their generated Rust drafts remain candidates with `generated_draft_semantic_pass=false`. `fdb_kv_set` still has L4 refused/blocked evidence because its external callee semantics are not closed by verified shims, models, or oracle evidence.
+
+The current documentation-update branch is `codex/agent-harness-flashdb-mvp`; the baseline development branch remains `codex/flashdb-rust-skeleton`.
+
+## Current Harness MVP Status
+
+- Current branch: `codex/agent-harness-flashdb-mvp`.
+- The OpenCode harness now has a minimal executor: `python -m validation.tools.opencode_agent_harness run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and records the worker summary into the SQLite ledger when present.
+- The OpenCode wrapper path is wired: `run-worker --mode opencode --opencode-variant max` runs the same assignment request. OpenCode/LLM output remains non-evidence.
+- Accepted-evidence reuse is wired: `assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` validates committed evidence inside an isolated worker output directory.
+- FlashDB slices currently passing through semantic evidence binding: `real-fdb-calc-crc32` and `real-fdb-blob-make`. Both are L4 accepted-evidence authoritative; generated drafts are still not semantic pass.
+- FlashDB slice currently blocked: `real-fdb-kv-set`. Its direct callees have signature/source provenance, but `strlen`, `fdb_blob_make`, `fdb_kv_set_blob`, and `fdb_kv_del` shim/model/oracle semantics are not closed.
+
+Key commands mirrored from the Chinese README:
+
+```bash
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
+python -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
+```
+
 ## Maintenance Notes
 
 - Keep filenames paired as `README.md` and `README.en.md` in the same directory.

@@ -49,7 +49,7 @@ cd c-to-rust
 如果需要在已有仓库上工作，确保在正确的分支：
 
 ```bash
-git checkout codex/flashdb-rust-skeleton
+git checkout codex/agent-harness-flashdb-mvp
 ```
 
 ## 3. 激活比赛环境

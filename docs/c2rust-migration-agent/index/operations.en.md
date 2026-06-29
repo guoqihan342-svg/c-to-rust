@@ -14,6 +14,17 @@ The Chinese source currently contains these major headings:
 
 - No Markdown headings are present in the Chinese source yet.
 
+## Current Contents
+
+- `quickstart.md` / `quickstart.en.md`
+- `opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`
+- `build-and-c2rust-baseline.md`
+- `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`
+- `evidence-governance.md` / `evidence-governance.en.md`
+- `testing-unsafe-cache-and-milestone.md`
+- `full-regression-runner.md`
+- `config/competition-env/`
+
 ## Maintenance Notes
 
 - Keep filenames paired as `operations.md` and `operations.en.md` in the same directory.

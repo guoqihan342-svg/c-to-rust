@@ -9,6 +9,10 @@
 - Source clone: `sources/FlashDB`
 - Source commit: `93d175549da579b8abac07bd175ce4c3f9dde829`
 - Rust output project name: `flashDB_rust`
+- Current harness branch: `codex/agent-harness-flashdb-mvp`
+- OpenCode harness: `opencode_agent_harness.py run-worker` supports `--mode deterministic`, which calls the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`, and `--mode opencode --opencode-variant max`, which wraps the same request through OpenCode. When `competition-run-summary.json` exists, the worker summary is recorded into the SQLite ledger automatically.
+- FlashDB accepted evidence: `real-fdb-calc-crc32` and `real-fdb-blob-make` currently pass through L4 accepted-evidence-authoritative semantic bindings. Generated Rust drafts still keep `generated_draft_semantic_pass=false`; do not describe them as accepted translator-generated drafts.
+- FlashDB blocked evidence: `fdb_kv_set` currently has source/signature provenance plus L4 refused/blocked evidence only. The `strlen`, `fdb_blob_make`, `fdb_kv_set_blob`, and `fdb_kv_del` callee shim/model/oracle semantics are not closed yet.
 - C2Rust role: baseline/oracle only, not final deliverable
 - Safety target: first-party non-test unsafe below 10%
 - Entry unsafe-claim boundary (P0-162): unsafe < 10% or 0 findings only means the current scan/ledger is within budget or has found no modeled issues. It does not prove that C ABI, FFI, flash hardware, volatile registers, RTOS, multithreading, or interrupt semantics are solved. Before any of these capabilities enter implementation, they need an unsafe ledger span, a safe/typed alternative plan, target/test evidence, and human review status.
@@ -43,7 +47,7 @@
 
 - Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; machine-readable status lives in `baseline-record.json`.
 - Architecture and contracts: see `index/architecture.md`. Covers `agent-contract.md`, `baseline-and-versioning.md`, `context-store-and-self-healing.md`, `core-translation-architecture.md` / `core-translation-architecture.en.md`, and `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`.
-- Operations and validation: see `index/operations.md`. Covers `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
+- Operations and validation: see `index/operations.md`. Covers `quickstart.md` / `quickstart.en.md`, `opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`, `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
 - Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
 - FlashDB case boundary: see `index/flashdb.md`. Covers `baseline-record.json`, `build-and-c2rust-baseline.md`, `flashdb-rust-skeleton-and-milestone.md`, and `full-regression-runner.md`.
 - Archive/analysis: see `index/archive.md`. Covers `archive/context-history-2026-06-28.md` and `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.

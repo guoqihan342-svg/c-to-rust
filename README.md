@@ -89,11 +89,21 @@
 
 - **typed IR emitter**: `GenericTypedIr` 覆盖 scalar 算术（无符号 `+`/`-`/`*` 显式 wrapping）/控制流、bitwise、comparison、logical not、short-circuit、`?:`、scoped `for`/`do-while`、`break`/`continue`、readonly pointer slice、mutable pointer write、global/local fixed-length integer array read/write/init（global 仅 readonly `static const` index read，含受限 clang `array_filler` sparse initializer）、record field read、bounded direct call
 - **clang 前端**: 真实 `fdb_calc_crc32` 已能经 clang AST dump → skeleton → typed IR → global table → Rust draft 生成 `GenericTypedIr` candidate
-- **FlashDB crc32**: accepted evidence 已通过 semantic pass（L4 authoritative 路径），generated draft 仍是 candidate
+- **FlashDB accepted evidence**: `real-fdb-calc-crc32` 和 `real-fdb-blob-make` 已通过 semantic pass（L4 accepted-evidence authoritative 路径），generated draft 仍是 candidate，`generated_draft_semantic_pass=false`
+- **FlashDB `fdb_kv_set`**: 已有 source/signature provenance 和 L4 refused/blocked evidence；`strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` callee 语义仍未由 shim/model/oracle 关闭，不能声明 `fdb_kv_set` semantic pass
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
 - **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；C2Rust baseline candidate 还会绑定 baseline manifest 与 generated output ref/hash，防止 route/profile 中的 baseline status、reason 或输出引用漂移。这还不是带 score/hard gate 的完整多候选 router。
 - **仓库级 unsafe budget**: `validation/tools/unsafe_budget.py` 现在默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`，加载 `validation/unsafe-budget-ledger.json`，并作为 core translator validation CI gate 执行。
 - **入口 unsafe claim 边界（P0-162）**: unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。任何这类能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
+
+## 当前 Harness MVP 状态
+
+- 当前分支：`codex/agent-harness-flashdb-mvp`
+- OpenCode harness 已有最小执行器：`python -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
+- OpenCode 包装入口已接好：`run-worker --mode opencode --opencode-variant max` 执行同一份 assignment request；OpenCode/LLM 输出仍不是 evidence。
+- accepted evidence 复用链路已接好：`assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` 可在 worker 隔离目录下验证已提交 evidence。
+- FlashDB 当前已通过语义证据绑定的切片：`real-fdb-calc-crc32`、`real-fdb-blob-make`。二者均是 L4 accepted-evidence authoritative，generated draft 仍不是 semantic pass。
+- FlashDB 当前阻塞切片：`real-fdb-kv-set`。其 direct callees 已有 signature/source provenance，但 `strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` 的 shim/model/oracle 语义尚未关闭。
 
 ## 核心目录
 
@@ -141,6 +151,10 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 
 # 语义通过验证
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
+
+# Harness worker accepted-evidence 复用 smoke
+python -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
 
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
@@ -172,5 +186,6 @@ openspec validate --all --strict
 
 ## 代码分支
 
-- 主开发分支：`codex/flashdb-rust-skeleton`
+- 当前文档更新分支：`codex/agent-harness-flashdb-mvp`
+- 主开发基线分支：`codex/flashdb-rust-skeleton`
 - GitHub: `https://github.com/guoqihan342-svg/c-to-rust`

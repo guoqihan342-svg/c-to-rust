@@ -84,7 +84,8 @@ target/competition-out/
     evidence/
     slice-specs/
     summary/competition-run-summary.json
-    logs/commands.jsonl
+    harness/run-worker-report.json
+    logs/
   summary/competition-run-summary.json
   logs/commands.jsonl
 ```
@@ -106,6 +107,31 @@ OpenCode can invoke the repo-local wrapper directly:
 ```bash
 python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
 ```
+
+The harness also provides a minimal executor for the reproducible path:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode deterministic
+```
+
+`run-worker --mode deterministic` invokes the same repo-local wrapper and writes stdout/stderr, return code, summary path, record status, and final task status to `workers/<worker-id>/harness/run-worker-report.json`. If the child process fails, the summary is missing, or the summary `final_gate.status` is not `passed`, the worker task must be recorded as failed and final aggregation must not treat it as passed.
+
+When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+When reusing committed accepted evidence, `assign-slice` must record both the real source metadata and the maintained `--slice-spec`, and must pass `--reuse-accepted-evidence --accepted-evidence-root validation/evidence` explicitly. This validates committed evidence only; it does not promote the regenerated Rust draft to semantic pass.
 
 `request.json` can contain direct slice input:
 

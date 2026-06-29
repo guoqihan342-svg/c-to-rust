@@ -11,6 +11,10 @@
 - 源码克隆：`sources/FlashDB`
 - 源码 commit：`93d175549da579b8abac07bd175ce4c3f9dde829`
 - Rust 输出项目名：`flashDB_rust`
+- 当前 harness 分支：`codex/agent-harness-flashdb-mvp`
+- OpenCode harness：`opencode_agent_harness.py run-worker` 已支持 `--mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，也支持 `--mode opencode --opencode-variant max` 包装同一 request；`competition-run-summary.json` 存在时自动入 SQLite ledger。
+- FlashDB accepted evidence：`real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过 L4 accepted-evidence authoritative 语义绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`，不能写成 translator-generated draft 自身已 accepted。
+- FlashDB blocked evidence：`fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；`strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` callee shim/model/oracle 语义尚未关闭。
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
 - 入口 unsafe claim 边界（P0-162）：unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。这些能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
@@ -45,7 +49,7 @@
 
 - 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，机器可读状态见 `baseline-record.json`。
 - 架构与合约：见 `index/architecture.md`。覆盖 `agent-contract.md`、`baseline-and-versioning.md`、`context-store-and-self-healing.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`、`l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`。
-- 运行与验证：见 `index/operations.md`。覆盖 `build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
+- 运行与验证：见 `index/operations.md`。覆盖 `quickstart.md` / `quickstart.en.md`、`opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`、`build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
 - 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
 - FlashDB 用例边界：见 `index/flashdb.md`。覆盖 `baseline-record.json`、`build-and-c2rust-baseline.md`、`flashdb-rust-skeleton-and-milestone.md`、`full-regression-runner.md`。
 - 归档/分析：见 `index/archive.md`。覆盖 `archive/context-history-2026-06-28.md`、`analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。

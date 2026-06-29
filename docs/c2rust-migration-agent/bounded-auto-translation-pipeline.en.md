@@ -18,7 +18,7 @@ This guide is for OpenCode, Codex, and other executable agents working on OpenSp
 3. Generate or refresh `l3-<slice>-context-pack.json`, `l3-<slice>-type-map.json`, `l3-<slice>-cfg.json`, and `l3-<slice>-pointer-graph.json`. Newly generated pointer graphs use `schema_version=2`; when a slice has both pointer reads and pointer writes and triggers the alias-sensitive gate, `effect_graph` must record read/write effects plus a `requires_noalias` or `may_alias` edge for each alias risk.
 4. Generate a Rust draft only for the supported C subset, then write `l3-<slice>-auto-translation-plan.json` and `l3-<slice>-auto-translation-events.jsonl`.
 5. Generate a C oracle harness draft and Rust replay test draft from the same fixture contract. If inputs or outputs cannot be mapped, mark the run blocked.
-6. Run `cargo check --message-format=json`. On failure, write `l3-<slice>-rust-check.json`, generate a PatchPlan, and run at most three bounded repair rounds by default.
+6. Run `cargo check --message-format=json`. On failure, write `l3-<slice>-rust-check.json`, generate a PatchPlan, and run at most five bounded repair rounds by default.
 7. Run Rust replay, schema-aware diff, negative diff, unsafe scan, version/cache gates, and evidence manifest gates.
 8. Promote the candidate to an accepted slice only when C oracle, Rust replay, diff, unsafe, version/cache, and OpenSpec validation pass for the same source commit, fixture hash, slice spec hash, and build profile hash.
 
