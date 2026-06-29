@@ -15,7 +15,7 @@ Use this skill when working on C-to-Rust migration slices in this repository.
 - Do not edit `validation/tools/auto_migrate.py` or `validation/tools/test_auto_migrate.py` for this scaffold slice.
 - Do not claim full verifier/runtime completion from this skill or MCP scaffold.
 
-## Thin MCP Scaffold
+## Thin MCP / Stdio Server
 
 The repo-local scaffold is `validation/tools/c2rust_verifier_mcp.py`.
 It registers:
@@ -24,6 +24,14 @@ It registers:
 - `run_oracle`: plans the existing verifier/oracle command path.
 - `read_evidence`: reads existing JSON evidence inside the repository.
 - `coverage_matrix`: delegates to the existing translator coverage matrix report.
+
+It also exposes a minimal MCP-style stdio JSON-RPC server:
+
+```bash
+python -B validation/tools/c2rust_verifier_mcp.py --stdio
+```
+
+The server supports `initialize`, `tools/list`, `tools/call`, and `notifications/initialized`. Tool calls still only plan existing commands or read evidence; they do not execute semantic verification or turn any candidate into accepted evidence.
 
 Run the focused contract tests with:
 

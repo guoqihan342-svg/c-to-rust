@@ -149,6 +149,154 @@ class C2RustVerifierMcpTests(unittest.TestCase):
         self.assertIn("translate_slice", completed.stdout)
         self.assertIn("coverage_matrix", completed.stdout)
 
+    def test_mcp_initialize_and_tools_list_use_jsonrpc_envelope(self) -> None:
+        initialize = c2rust_verifier_mcp.handle_mcp_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            },
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(initialize["jsonrpc"], "2.0")
+        self.assertEqual(initialize["id"], 1)
+        result = initialize["result"]
+        self.assertEqual(result["serverInfo"]["name"], "c2rust-verifier")
+        self.assertIn("tools", result["capabilities"])
+        self.assertIn("protocolVersion", result)
+
+        listed = c2rust_verifier_mcp.handle_mcp_message(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            },
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(listed["jsonrpc"], "2.0")
+        self.assertEqual(listed["id"], 2)
+        self.assertEqual(
+            {tool["name"] for tool in listed["result"]["tools"]},
+            {"translate_slice", "run_oracle", "read_evidence", "coverage_matrix"},
+        )
+
+    def test_mcp_tools_call_wraps_tool_result_as_text_content(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c2rust-verifier-mcp-") as tmp:
+            root = Path(tmp)
+            evidence = root / "validation/evidence/demo/result.json"
+            evidence.parent.mkdir(parents=True)
+            evidence.write_text(json.dumps({"status": "recorded"}), encoding="utf-8")
+
+            response = c2rust_verifier_mcp.handle_mcp_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "read_evidence",
+                        "arguments": {"path": "validation/evidence/demo/result.json"},
+                    },
+                },
+                repo_root=root,
+            )
+
+        self.assertEqual(response["jsonrpc"], "2.0")
+        self.assertEqual(response["id"], 3)
+        self.assertFalse(response["result"]["isError"])
+        content = response["result"]["content"]
+        self.assertEqual(content[0]["type"], "text")
+        payload = json.loads(content[0]["text"])
+        self.assertEqual(payload["status"], "recorded")
+        self.assertEqual(payload["payload"], {"status": "recorded"})
+
+    def test_mcp_rejects_non_jsonrpc_2_request(self) -> None:
+        response = c2rust_verifier_mcp.handle_mcp_message(
+            {"id": 4, "method": "tools/list", "params": {}},
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(response["jsonrpc"], "2.0")
+        self.assertEqual(response["id"], 4)
+        self.assertEqual(response["error"]["code"], -32600)
+        self.assertIn("jsonrpc", response["error"]["message"])
+
+    def test_run_oracle_is_planner_not_semantic_verification(self) -> None:
+        result = c2rust_verifier_mcp.run_oracle(
+            {
+                "slice_spec": "validation/slice-specs/demo-store-add-one.json",
+                "out_root": "target/c2rust-verifier",
+            }
+        )
+
+        self.assertEqual(result["status"], "planned")
+        self.assertFalse(result["executed"])
+        self.assertIn("not semantic acceptance evidence", result["claim_boundary"])
+
+    def test_script_stdio_handles_mcp_jsonrpc_lines(self) -> None:
+        request_lines = "\n".join(
+            [
+                json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
+                json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}),
+                json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
+            ]
+        ) + "\n"
+        completed = subprocess.run(
+            [sys.executable, "-B", "validation/tools/c2rust_verifier_mcp.py", "--stdio"],
+            cwd=REPO_ROOT,
+            input=request_lines,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        responses = [json.loads(line) for line in completed.stdout.splitlines() if line.strip()]
+        self.assertEqual([response["id"] for response in responses], [1, 2])
+        self.assertEqual(responses[0]["result"]["serverInfo"]["name"], "c2rust-verifier")
+        self.assertIn("translate_slice", json.dumps(responses[1]))
+
+    def test_stdio_returns_parse_error_for_invalid_json_line(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, "-B", "validation/tools/c2rust_verifier_mcp.py", "--stdio"],
+            cwd=REPO_ROOT,
+            input="{bad\n",
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        response = json.loads(completed.stdout)
+        self.assertEqual(response["jsonrpc"], "2.0")
+        self.assertEqual(response["error"]["code"], -32700)
+
+    def test_stdio_tools_call_reports_tool_error_without_crashing(self) -> None:
+        request = {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {"name": "read_evidence", "arguments": {"path": "../escape.json"}},
+        }
+        completed = subprocess.run(
+            [sys.executable, "-B", "validation/tools/c2rust_verifier_mcp.py", "--stdio"],
+            cwd=REPO_ROOT,
+            input=json.dumps(request) + "\n",
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        response = json.loads(completed.stdout)
+        self.assertEqual(response["id"], 5)
+        self.assertTrue(response["result"]["isError"])
+        self.assertIn("path must not escape repository", response["result"]["content"][0]["text"])
+
     def _write(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")

@@ -25,6 +25,8 @@ CLAIM_BOUNDARY = (
     "C2Rust verifier MCP scaffold: repo-confined planning and evidence reads only; "
     "not a full verifier/runtime completion and not semantic acceptance evidence."
 )
+MCP_PROTOCOL_VERSION = "2024-11-05"
+SERVER_INFO = {"name": "c2rust-verifier", "version": "0.1.0"}
 
 
 def tool_metadata() -> list[dict[str, Any]]:
@@ -147,13 +149,106 @@ def handle_call(name: str, arguments: dict[str, Any], *, repo_root: Path = REPO_
     return handlers[name](arguments)
 
 
+def handle_mcp_message(message: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any] | None:
+    if not isinstance(message, dict):
+        return _mcp_error(None, -32600, "invalid request")
+    request_id = message.get("id")
+    method = message.get("method")
+    if message.get("jsonrpc") != "2.0":
+        return _mcp_error(request_id, -32600, "jsonrpc must be '2.0'")
+    if method == "notifications/initialized":
+        return None
+    if method == "initialize":
+        return _mcp_response(
+            request_id,
+            {
+                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "serverInfo": SERVER_INFO,
+                "capabilities": {"tools": {}},
+                "claim_boundary": CLAIM_BOUNDARY,
+            },
+        )
+    if method == "tools/list":
+        return _mcp_response(request_id, {"tools": mcp_tool_metadata()})
+    if method == "tools/call":
+        params = message.get("params") or {}
+        if not isinstance(params, dict):
+            return _mcp_error(request_id, -32602, "tools/call params must be an object")
+        name = params.get("name")
+        arguments = params.get("arguments") or {}
+        if not isinstance(name, str) or not name:
+            return _mcp_error(request_id, -32602, "tools/call name must be a non-empty string")
+        if not isinstance(arguments, dict):
+            return _mcp_error(request_id, -32602, "tools/call arguments must be an object")
+        try:
+            payload = handle_call(name, arguments, repo_root=repo_root)
+        except SystemExit as exc:
+            return _mcp_response(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": str(exc)}],
+                    "isError": True,
+                    "claim_boundary": CLAIM_BOUNDARY,
+                },
+            )
+        return _mcp_response(
+            request_id,
+            {
+                "content": [{"type": "text", "text": json.dumps(payload, sort_keys=True)}],
+                "isError": False,
+                "claim_boundary": CLAIM_BOUNDARY,
+            },
+        )
+    return _mcp_error(request_id, -32601, f"unknown MCP method: {method}")
+
+
+def mcp_tool_metadata() -> list[dict[str, Any]]:
+    tools = []
+    for tool in tool_metadata():
+        item = dict(tool)
+        item["inputSchema"] = item.pop("input_schema")
+        tools.append(item)
+    return tools
+
+
+def serve_stdio(
+    *,
+    repo_root: Path = REPO_ROOT,
+    stdin: Any = sys.stdin,
+    stdout: Any = sys.stdout,
+) -> int:
+    for line in stdin:
+        if not line.strip():
+            continue
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError as exc:
+            response = _mcp_error(None, -32700, f"parse error: {exc}")
+        else:
+            response = handle_mcp_message(message, repo_root=repo_root)
+        if response is not None:
+            print(json.dumps(response, sort_keys=True), file=stdout, flush=True)
+    return 0
+
+
+def _mcp_response(request_id: Any, result: dict[str, Any]) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def _mcp_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list-tools", action="store_true")
+    parser.add_argument("--stdio", action="store_true")
     parser.add_argument("--call", choices=[tool["name"] for tool in tool_metadata()])
     parser.add_argument("--arguments", default="{}")
     args = parser.parse_args(argv)
 
+    if args.stdio:
+        return serve_stdio()
     if args.list_tools:
         print(json.dumps({"tools": tool_metadata(), "claim_boundary": CLAIM_BOUNDARY}, indent=2))
         return 0
