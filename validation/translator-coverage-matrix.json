@@ -1046,7 +1046,8 @@
         "record value field read",
         "record field assignment",
         "readonly record pointer field read",
-        "mutable record pointer field write"
+        "mutable record pointer field write",
+        "mutable record pointer identity return after field write"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1068,6 +1069,10 @@
             {
               "name": "record field typed IR tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1077,6 +1082,10 @@
             {
               "name": "record field fail-closed tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1085,6 +1094,10 @@
           "evidence": [
             {
               "name": "record field emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1114,6 +1127,10 @@
         {
           "name": "typed_ir_emits_mutable_record_pointer_arrow_field_assignment",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1126,6 +1143,11 @@
           "name": "typed_ir_rejects_record_return_value_with_non_scalar_field_inventory",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "whole-record return only supports complete direct scalar field inventory"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "mutable record pointer identity return requires prior mutable record field-write ownership evidence"
         }
       ]
     },

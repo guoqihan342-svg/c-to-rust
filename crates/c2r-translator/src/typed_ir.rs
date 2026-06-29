@@ -1085,6 +1085,8 @@ fn emit_global_const(global: &IrGlobal) -> Result<String, String> {
 fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
     if is_void_type(ty) {
         Ok(None)
+    } else if let Some(pointee) = mutable_record_pointer_pointee_type(ty) {
+        emit_value_type(pointee).map(|ty| Some(format!("&mut {ty}")))
     } else if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
         Err(format!(
             "pointer value return {} requires explicit ownership/lifetime/ABI lowering",
@@ -1316,6 +1318,15 @@ fn emit_stmt(
                     return Err("return value in void function".to_string());
                 }
                 if let Some(line) = emit_post_increment_deref_return(
+                    value,
+                    return_type,
+                    indent_level,
+                    symbols,
+                    context,
+                )? {
+                    return Ok(line);
+                }
+                if let Some(line) = emit_mutable_record_pointer_identity_return(
                     value,
                     return_type,
                     indent_level,
@@ -1661,6 +1672,44 @@ fn emit_assignment_target<'a>(
                 .to_string(),
         ),
     }
+}
+
+fn emit_mutable_record_pointer_identity_return(
+    value: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    if mutable_record_pointer_pointee_type(return_type).is_none() {
+        return Ok(None);
+    }
+    let IrExpr::Var { name, ty, .. } = value else {
+        return Err(
+            "mutable record pointer return must return the owned record pointer parameter"
+                .to_string(),
+        );
+    };
+    if ty != return_type {
+        return Err(format!(
+            "mutable record pointer return type {} does not match function return type {}",
+            type_label(ty),
+            type_label(return_type)
+        ));
+    }
+    if !symbols.contains(name) {
+        return Err(format!(
+            "mutable record pointer return value {name} is not declared"
+        ));
+    }
+    if !context.is_mutable_record_pointer_write_param(name) {
+        return Err(format!(
+            "mutable record pointer return {name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    let indent = "    ".repeat(indent_level);
+    let name = emit_identifier(name, "mutable record pointer return value")?;
+    Ok(Some(format!("{indent}return {name};\n")))
 }
 
 fn emit_mutable_record_pointer_member_assignment_target(
