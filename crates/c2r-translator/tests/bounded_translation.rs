@@ -849,6 +849,72 @@ fn clang_ast_fixture_replays_enum_constant_in_binary_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_status_table")
+        .expect("lower explicit enum constant global initializer fixture without invoking clang");
+    assert_eq!(
+        lowered
+            .globals
+            .iter()
+            .find(|global| global.name == "status_table")
+            .map(|global| &global.init),
+        Some(&IrGlobalInit::IntegerArray(vec![7, 0]))
+    );
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from enum constant global initializer fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("const STATUS_TABLE: [i32; 2] = [7i32, 0i32];"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return STATUS_TABLE[0i32 as usize];"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-enum-constant-global-initializer",
+        rust,
+        r#"
+    assert_eq!(lookup_status_table(), 7);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_pending_status_table")
+            .expect("function shape should lower before unsupported enum global is emitted");
+    assert!(
+        lowered
+            .globals
+            .iter()
+            .all(|global| global.name != "pending_status_table"),
+        "implicit enum global initializer must not be collected"
+    );
+
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("referenced implicit enum global initializer must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("index base pending_status_table is not declared"),
+        "unexpected error: {error:?}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_enum_constant_without_explicit_value_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))

@@ -902,16 +902,28 @@ fn lowering_status_for_error(error: &ClangFrontendError) -> &'static str {
 
 #[cfg(feature = "typed-ir")]
 fn readonly_globals_from_ast(ast: &Value) -> Result<Vec<IrGlobal>, ClangFrontendError> {
+    let enum_constant_inventory = enum_constant_inventory_from_ast(ast);
+    readonly_globals_from_ast_with_enum_inventory(ast, &enum_constant_inventory)
+}
+
+#[cfg(feature = "typed-ir")]
+fn readonly_globals_from_ast_with_enum_inventory(
+    ast: &Value,
+    enum_constant_inventory: &EnumConstantInventory,
+) -> Result<Vec<IrGlobal>, ClangFrontendError> {
     inner(ast)
         .iter()
         .filter(|child| string_field(child, "kind").as_deref() == Some("VarDecl"))
-        .filter_map(readonly_global_from_toplevel_var_decl)
+        .filter_map(|var_decl| {
+            readonly_global_from_toplevel_var_decl(var_decl, enum_constant_inventory)
+        })
         .collect()
 }
 
 #[cfg(feature = "typed-ir")]
 fn readonly_global_from_toplevel_var_decl(
     var_decl: &Value,
+    enum_constant_inventory: &EnumConstantInventory,
 ) -> Option<Result<IrGlobal, ClangFrontendError>> {
     if string_field(var_decl, "storageClass").as_deref() != Some("static") {
         return None;
@@ -937,7 +949,7 @@ fn readonly_global_from_toplevel_var_decl(
     }
 
     let array_len = (*len)?;
-    let values = integer_literal_init_list_values(initializer, array_len)?;
+    let values = integer_literal_init_list_values(initializer, array_len, enum_constant_inventory)?;
     if values.len() != array_len {
         return None;
     }
@@ -951,16 +963,27 @@ fn readonly_global_from_toplevel_var_decl(
 }
 
 #[cfg(feature = "typed-ir")]
-fn integer_literal_init_list_values(init_list: &Value, len: usize) -> Option<Vec<u64>> {
+fn integer_literal_init_list_values(
+    init_list: &Value,
+    len: usize,
+    enum_constant_inventory: &EnumConstantInventory,
+) -> Option<Vec<u64>> {
     let entries = inner(init_list);
     if entries.is_empty() {
-        return integer_literal_array_filler_values(init_list, len);
+        return integer_literal_array_filler_values(init_list, len, enum_constant_inventory);
     }
-    entries.iter().map(integer_literal_init_value).collect()
+    entries
+        .iter()
+        .map(|entry| integer_literal_init_value(entry, enum_constant_inventory))
+        .collect()
 }
 
 #[cfg(feature = "typed-ir")]
-fn integer_literal_array_filler_values(init_list: &Value, len: usize) -> Option<Vec<u64>> {
+fn integer_literal_array_filler_values(
+    init_list: &Value,
+    len: usize,
+    enum_constant_inventory: &EnumConstantInventory,
+) -> Option<Vec<u64>> {
     let filler_entries = array_filler(init_list)?;
     let filler = filler_entries.first()?;
     if string_field(filler, "kind").as_deref() != Some("ImplicitValueInitExpr") {
@@ -969,10 +992,10 @@ fn integer_literal_array_filler_values(init_list: &Value, len: usize) -> Option<
     if filler_entries.len().saturating_sub(1) > len {
         return None;
     }
-    let filler_value = integer_literal_init_value(filler)?;
+    let filler_value = integer_literal_init_value(filler, enum_constant_inventory)?;
     let mut values = filler_entries[1..]
         .iter()
-        .map(integer_literal_init_value)
+        .map(|entry| integer_literal_init_value(entry, enum_constant_inventory))
         .collect::<Option<Vec<_>>>()?;
     while values.len() < len {
         values.push(filler_value);
@@ -981,9 +1004,17 @@ fn integer_literal_array_filler_values(init_list: &Value, len: usize) -> Option<
 }
 
 #[cfg(feature = "typed-ir")]
-fn integer_literal_init_value(item: &Value) -> Option<u64> {
+fn integer_literal_init_value(
+    item: &Value,
+    enum_constant_inventory: &EnumConstantInventory,
+) -> Option<u64> {
     match string_field(item, "kind").as_deref() {
         Some("IntegerLiteral") => string_field(item, "value")?.parse::<u64>().ok(),
+        Some("DeclRefExpr") => {
+            enum_constant_literal_for_decl_ref_expr(item, enum_constant_inventory)
+                .ok()
+                .map(|literal| literal.value)
+        }
         Some("ImplicitValueInitExpr") => {
             let ty = expr_type(item).ok()?;
             if matches!(ty.kind, ClangTypeKind::Integer { .. }) {
@@ -996,7 +1027,7 @@ fn integer_literal_init_value(item: &Value) -> Option<u64> {
             let [operand] = inner(item) else {
                 return None;
             };
-            integer_literal_init_value(operand)
+            integer_literal_init_value(operand, enum_constant_inventory)
         }
         _ => None,
     }
@@ -8613,6 +8644,130 @@ mod tests {
         assert!(
             globals.is_empty(),
             "malformed array_filler globals must stay fail-closed: {globals:?}"
+        );
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_maps_static_const_integer_array_enum_constant_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "EnumDecl",
+                    "name": "status",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "id": "0x1001",
+                            "kind": "EnumConstantDecl",
+                            "name": "STATUS_OK",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "ConstantExpr",
+                                    "type": { "qualType": "int" },
+                                    "value": "7",
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "7"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[2]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[2]" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": {
+                                        "id": "0x1001",
+                                        "kind": "EnumConstantDecl",
+                                        "name": "STATUS_OK"
+                                    }
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "0"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert_eq!(globals.len(), 1);
+        assert_eq!(globals[0].name, "table");
+        assert_eq!(globals[0].init, IrGlobalInit::IntegerArray(vec![7, 0]));
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_rejects_implicit_enum_constant_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "EnumDecl",
+                    "name": "status",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "id": "0x1001",
+                            "kind": "EnumConstantDecl",
+                            "name": "STATUS_PENDING",
+                            "type": { "qualType": "int" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[1]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[1]" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": {
+                                        "id": "0x1001",
+                                        "kind": "EnumConstantDecl",
+                                        "name": "STATUS_PENDING"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert!(
+            globals.is_empty(),
+            "implicit enum global initializer must stay fail-closed: {globals:?}"
         );
     }
 

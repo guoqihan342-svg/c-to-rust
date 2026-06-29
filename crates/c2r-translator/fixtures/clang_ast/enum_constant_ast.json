@@ -139,6 +139,197 @@
       ]
     },
     {
+      "kind": "VarDecl",
+      "name": "status_table",
+      "type": {
+        "qualType": "const int[2]"
+      },
+      "storageClass": "static",
+      "init": "c",
+      "inner": [
+        {
+          "kind": "InitListExpr",
+          "type": {
+            "qualType": "const int[2]"
+          },
+          "inner": [
+            {
+              "kind": "DeclRefExpr",
+              "type": {
+                "qualType": "int"
+              },
+              "referencedDecl": {
+                "id": "0x1001",
+                "kind": "EnumConstantDecl",
+                "name": "STATUS_OK"
+              }
+            },
+            {
+              "kind": "IntegerLiteral",
+              "type": {
+                "qualType": "int"
+              },
+              "value": "0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "lookup_status_table",
+      "type": {
+        "qualType": "int ()"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ArraySubscriptExpr",
+                      "type": {
+                        "qualType": "const int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "ArrayToPointerDecay",
+                          "type": {
+                            "qualType": "const int *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "const int[2]"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "status_table"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "VarDecl",
+      "name": "pending_status_table",
+      "type": {
+        "qualType": "const int[1]"
+      },
+      "storageClass": "static",
+      "init": "c",
+      "inner": [
+        {
+          "kind": "InitListExpr",
+          "type": {
+            "qualType": "const int[1]"
+          },
+          "inner": [
+            {
+              "kind": "DeclRefExpr",
+              "type": {
+                "qualType": "int"
+              },
+              "referencedDecl": {
+                "id": "0x1002",
+                "kind": "EnumConstantDecl",
+                "name": "STATUS_PENDING"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "lookup_pending_status_table",
+      "type": {
+        "qualType": "int ()"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ArraySubscriptExpr",
+                      "type": {
+                        "qualType": "const int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "ArrayToPointerDecay",
+                          "type": {
+                            "qualType": "const int *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "const int[1]"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "pending_status_table"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "kind": "FunctionDecl",
       "name": "implicit_status_code",
       "type": {

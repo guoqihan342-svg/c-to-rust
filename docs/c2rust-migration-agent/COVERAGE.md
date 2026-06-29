@@ -55,7 +55,7 @@
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
 | 变量引用 | 已支持 | 局部变量和参数 |
-| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；隐式枚举值、负值、计算表达式、enum 类型变量/参数/返回值、底层 ABI 和全局 initializer 中的 enum 常量仍 fail-closed |
+| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；隐式枚举值、负值、计算表达式、enum 类型变量/参数/返回值、底层 ABI 和 enum 类型数组元素仍 fail-closed |
 | `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；clang-proven usual arithmetic `IntegralCast`/`IntegralPromotion` 会以显式 IR cast 参与运算，缺少该 cast 的混合宽度/符号 operand 会 fail-closed，不由 emitter 猜转换；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | 窄支持 | 标量整数，shift 的 lhs/result 同型；literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift fail closed |
 | `~` (bitwise not) | 已支持 | |
@@ -118,7 +118,7 @@
 | 局部固定长度整数数组声明 | 窄支持 | `uint32_t table[3] = {1, 2, 3};`；包括连续 initializer 和受限 index-designated sparse initializer；未指定元素按声明长度补零，initializer 长度/下标必须与固定数组长度一致并可验证 |
 | 局部数组下标读 | 窄支持 | `table[i]` |
 | 局部数组下标写 | 窄支持 | `table[i] = value;` |
-| 全局 const 整数数组 | 窄支持 | 顶层 readonly `static const uint32_t table[3] = {...};`；包括连续 initializer 和 clang 已语义化 `array_filler` 的受限 index-designated sparse initializer，生成 `IrGlobalInit::IntegerArray` 和 Rust `const`；非 `static const`、不完整数组、非整数元素、未展开 `DesignatedInitExpr`、嵌套/struct/union/range designator 仍 fail-closed |
+| 全局 const 整数数组 | 窄支持 | 顶层 readonly `static const uint32_t table[3] = {...};`；包括连续 initializer、clang 已语义化 `array_filler` 的受限 index-designated sparse initializer，以及显式非负整数 enum 常量引用，生成 `IrGlobalInit::IntegerArray` 和 Rust `const`；非 `static const`、不完整数组、非整数元素、隐式/负值/计算 enum 常量、未展开 `DesignatedInitExpr`、嵌套/struct/union/range designator 仍 fail-closed |
 | 全局数组下标读 | 窄支持 | `CRC32_TABLE[index as usize]` |
 | 全局数组下标写 | 不支持 | readonly global |
 | 变长数组 (VLA) | 不支持 | |

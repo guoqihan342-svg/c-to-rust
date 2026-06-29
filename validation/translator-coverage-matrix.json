@@ -1193,7 +1193,9 @@
       "ir_constructs": [
         "EnumConstantDecl explicit non-negative integer ConstantExpr",
         "DeclRefExpr to EnumConstantDecl rewritten to typed IR integer literal",
+        "DeclRefExpr to EnumConstantDecl in readonly static const integer global initializer",
         "implicit enum value fail-closed",
+        "implicit enum global initializer fail-closed",
         "enum typed function fail-closed"
       ],
       "dimension_status": {
@@ -1211,12 +1213,16 @@
             {
               "name": "clang_ast_fixture_replays_enum_constant_in_binary_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
         "handwritten_ir": {
           "status": "not_applicable",
-          "reason": "enum constants are resolved at the clang AST skeleton boundary before typed IR exists"
+          "reason": "enum constants are resolved at the clang AST skeleton or readonly-global initializer boundary before handwritten typed IR exists"
         },
         "negative_case": {
           "status": "covered",
@@ -1228,6 +1234,14 @@
             {
               "name": "clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "readonly_globals_from_ast_rejects_implicit_enum_constant_initializer",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
         },
@@ -1240,6 +1254,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_enum_constant_in_binary_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1265,6 +1283,14 @@
         {
           "name": "clang_ast_fixture_replays_enum_constant_in_binary_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "readonly_globals_from_ast_maps_static_const_integer_array_enum_constant_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1276,7 +1302,17 @@
         {
           "name": "clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "enum types remain unsupported; this row only covers explicit enum constants in value position"
+          "fail_closed_reason": "enum types remain unsupported; this row only covers explicit enum constants in value position and readonly integer global initializers"
+        },
+        {
+          "name": "readonly_globals_from_ast_rejects_implicit_enum_constant_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "implicit enum values in readonly global initializers are not inferred from declaration order"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "referenced readonly global arrays with implicit enum constants must fail closed at emission"
         }
       ]
     },
