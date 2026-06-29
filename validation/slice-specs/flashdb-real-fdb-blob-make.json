@@ -224,7 +224,13 @@
       "return_same_blob",
       "blob.buf",
       "blob.size"
-    ]
+    ],
+    "c_oracle": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
+    "rust_report": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
+    "diff": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
+    "negative_diff": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+    "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json"
   },
   "rust_boundary": {
     "crate": "validation/l2_slices",
@@ -323,6 +329,7 @@
     }
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "non_goals": [
       "No full project migration claim.",
@@ -334,7 +341,7 @@
       "full automatic C99/C11 translation",
       "whole-project migration",
       "semantic equivalence without C oracle and Rust replay evidence",
-      "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+      "generated fdb_blob_make Rust draft is itself semantically accepted"
     ]
   },
   "accepted_metadata_differences": [],

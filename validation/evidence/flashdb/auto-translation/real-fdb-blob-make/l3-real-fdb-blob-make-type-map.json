@@ -6,7 +6,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -16,57 +16,52 @@
   "level": "L3",
   "mappings": [
     {
-      "c_name": "return",
-      "c_type": "struct fdb_blob *",
+      "c_name": "value_buf",
+      "c_type": "const void*",
       "confidence": "proven",
       "id": "type-1",
       "kind": "pointer",
-      "rust_type": "&mut FdbBlob",
+      "rust_type": "&[u8]",
       "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
-    },
-    {
-      "c_name": "blob",
-      "c_type": "struct fdb_blob *",
-      "confidence": "proven",
-      "id": "type-2",
-      "kind": "pointer",
-      "rust_type": "&mut FdbBlob",
-      "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
-    },
-    {
-      "c_name": "value_buf",
-      "c_type": "const void *",
-      "confidence": "proven",
-      "id": "type-3",
-      "kind": "pointer",
-      "rust_type": "*const core::ffi::c_void",
-      "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
+      "translation_rule_id": "supported MVP C subset mapping"
     },
     {
       "c_name": "buf_len",
       "c_type": "size_t",
       "confidence": "proven",
-      "id": "type-4",
+      "id": "type-2",
       "kind": "unsupported",
       "rust_type": "usize",
       "source": "translator_rule",
-      "translation_rule_id": "clang-lowered typed IR mapping"
+      "translation_rule_id": "supported MVP C subset mapping"
     }
   ],
-  "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
+  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "sha256": "30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "sha256": "5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "status": "ready"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "status": "recorded",
+  "status": "blocked",
   "target_id": "flashdb",
-  "uncertainties": [],
+  "uncertainties": [
+    {
+      "affected_mapping_ids": [],
+      "id": "uncertainty-1",
+      "kind": "declaration_resolution",
+      "reason": "clang-backed type extraction is unavailable for this unknown C type",
+      "resolution": "block_translation"
+    },
+    {
+      "affected_mapping_ids": [],
+      "id": "uncertainty-2",
+      "kind": "declaration_resolution",
+      "reason": "clang-backed type extraction is unavailable for this unknown C type",
+      "resolution": "block_translation"
+    }
+  ],
   "unsupported_nodes": []
 }

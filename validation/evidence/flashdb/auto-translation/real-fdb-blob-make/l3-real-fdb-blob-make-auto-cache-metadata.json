@@ -10,7 +10,7 @@
   },
   "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
   "c2rust_baseline_identity": {
-    "sha256": "bf99c1ef72454888bee85f21f1f786649c2cbe7779d02ab54371d86db375e150",
+    "sha256": "9319acc20115531c32e7eb5667f6c0536cf10ee1fd9f7bb2a76d5247c3784ceb",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
@@ -39,60 +39,37 @@
     "route_decision_identity",
     "validation_profile_identity",
     "global_dependency_identity",
-    "c_oracle_harness_identity",
-    "translator_feature_set",
-    "clang_lowering_identity"
+    "c_oracle_harness_identity"
   ],
   "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
-  "clang_lowering_identity": {
-    "clang_path": "",
-    "clang_path_status": "not_configured",
-    "clang_version": "not_configured",
-    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
-    "enabled": true,
-    "features": [
-      "clang-lowering-report"
-    ],
-    "frontend": "clang_ast_dump_json",
-    "ignored_env_for_ast_dump": {
-      "LIBCLANG_PATH": {
-        "reason": "ignored_for_ast_dump",
-        "status": "not_configured",
-        "value": ""
-      }
-    },
-    "requires_env": [
-      "CLANG_PATH"
-    ]
-  },
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
     "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "--emit-clang-lowering-report"
+    "--accept-existing-evidence"
   ],
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    "sha256": "71ceb466d3b054559c7dec2ba514cc8a741161b7880c286873f082d876595770"
   },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
+      "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
       "status": "skipped"
     },
     "route_decision": {
-      "level": "L1",
+      "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-      "sha256": "6d84d1de69d9ca6d6f994d2a9f5acd288bc1ec56653cb14f115f62e6e7c0ec44",
-      "status": "recorded"
+      "sha256": "7fe0b3e7f5c0eb84c3b2c162c764efe1b86747c92bcbcc025ef6eeb9e3b266b2",
+      "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-      "profile": "L1-dev",
-      "sha256": "f014e93a51b40bce8d5ab7ff6464984cf777cf458aa2c08dc2ca538d4035fb13",
-      "status": "incomplete"
+      "profile": "L4-accepted-evidence",
+      "sha256": "aa7c0bd2d5ac5008e9a496820bd4beded5f296742399a932e4daa450ad22c96c",
+      "status": "passed"
     }
   },
   "effect_graph_identity": {
@@ -134,15 +111,15 @@
     "summary"
   ],
   "oracle_boundary_contract_identity": {
-    "sha256": "425e0b182c7d9a8ff27e05deb4895b7dff31b3e5f00d3b4fa6d0b99caa6e010e",
-    "status": "insufficient"
+    "sha256": "97ef1668bc5a7a2e634a3ae1293984b236b00b132a81d8cf799678548bcd3f3d",
+    "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "ea31fa8c00f63b917147350af8fba42c512629cf780839c370ef83e9eefba24f",
-    "status": "recorded"
+    "sha256": "c7036be39b2666d9317670f98bc94c74d02c43cabc0e3e470281eefaa4722149",
+    "status": "refused"
   },
   "scalar_ub_contract_identity": {
-    "sha256": "3cc6998d3f4769d4cf31c32ce28bb6e70a6062d4b2fbc4acb96e05c4f4b821a1",
+    "sha256": "6fa0480149687aad229d93cf931a7e37c29b70ace29b5829b1c4daf54f41b8f5",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -155,7 +132,7 @@
     "type_map": 1
   },
   "slice_id": "real-fdb-blob-make",
-  "slice_spec_sha256": "30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+  "slice_spec_sha256": "5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "source_file_hashes": {
     "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -167,13 +144,10 @@
     "python": "Python 3.14.2",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
-  "translator_feature_set": [
-    "clang-lowering-report"
-  ],
-  "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+  "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "31d71de29029fd74b3818451319b7741016f1b7cdc2a7f29b415beadad52ac53",
-    "status": "incomplete"
+    "sha256": "ba957c596c91a737da4394de41233b12488fb67fa635b646d82673ce7762503d",
+    "status": "passed"
   }
 }

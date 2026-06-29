@@ -1,0 +1,81 @@
+{
+  "accepted_boundary": "Accepted C oracle report is bound to fixture cases and compile/harness evidence captured by the auto-translation oracle draft; generated Rust draft remains non-authoritative.",
+  "case_count": 3,
+  "cases": [
+    {
+      "blob.buf": "value_buf",
+      "blob.size": 0,
+      "id": "null-empty",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.buf": "value_buf",
+      "blob.size": 3,
+      "id": "nominal-bytes",
+      "return_same_blob": true,
+      "status": "passed"
+    },
+    {
+      "blob.buf": "value_buf",
+      "blob.size": 2,
+      "id": "shorter-length-than-buffer",
+      "return_same_blob": true,
+      "status": "passed"
+    }
+  ],
+  "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
+  "compared_fields": [
+    "return_same_blob",
+    "blob.buf",
+    "blob.size"
+  ],
+  "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+  "generator": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_blob_make",
+  "level": "L3",
+  "provenance": {
+    "compile_execution": {
+      "semantic_pass": false,
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
+    },
+    "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
+    "evidence_refs": {
+      "c_oracle_status": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
+      "evidence_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-evidence-manifest.json",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+      "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-version-manifest.json"
+    },
+    "fixture_identity": "real-fdb-blob-make-fixture",
+    "harness_draft_ref": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
+      "sha256": "cbc0052615980a2451f35f989a8fa57ccfa6091d23612927f9ac2136eec80e23",
+      "status": "draft"
+    },
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    },
+    "source_span_sha256": "42934484da8b00d932a4d7a18d59f9656b7da8686cc3423f74745d15836e963e"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "real-fdb-blob-make",
+  "source_boundary": {
+    "files": [
+      "src/fdb_utils.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_blob_make"
+    ],
+    "signature": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "passed",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

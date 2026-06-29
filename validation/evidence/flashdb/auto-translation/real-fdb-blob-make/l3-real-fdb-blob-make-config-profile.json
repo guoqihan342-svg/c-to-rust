@@ -1,10 +1,37 @@
 {
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+    "fixture_sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+      "diff": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
+      "negative_diff": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+      "rust_report": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+      "unsafe_ledger": "021277711f266e0547319d18ca2e05cd68f8474e6754e3f50114e164823a92d3",
+      "unsafe_scan": "ff71f6a2dae692754ddd983663bcd15658fa8ad997a1d76dcb16e3e23cb076d6"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
+      "diff": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
+      "negative_diff": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+      "rust_report": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
+      "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-scan.json"
+    },
+    "slice_id": "real-fdb-blob-make",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "status": "accepted",
+    "target_id": "flashdb",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
   "c_defines": {
     "none": true
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -42,7 +69,7 @@
     "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
   ],
   "profile_id": "flashdb-real-fdb-blob-make-real-source",
-  "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
+  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
@@ -52,7 +79,7 @@
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "status": "incomplete",
+  "status": "recorded",
   "target_id": "flashdb",
   "toolchain": {
     "cargo_version": "captured_by_validation",

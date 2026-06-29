@@ -1,0 +1,18 @@
+{
+  "case_id": "null-empty",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "null-empty",
+    "field": "blob.size",
+    "mutated_c_value": 1,
+    "rust_value": 0
+  },
+  "level": "L3",
+  "mutation": "first oracle case blob.size is changed by wrapping +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "expected_failed",
+  "target_id": "flashdb"
+}

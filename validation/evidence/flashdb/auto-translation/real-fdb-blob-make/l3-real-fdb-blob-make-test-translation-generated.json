@@ -6,7 +6,7 @@
   ],
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -25,38 +25,53 @@
   },
   "evidence_links": {
     "c_oracle": {
-      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
-      "status": "draft_or_skipped"
+      "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
+      "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+      "sha256": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+      "status": "passed"
     },
     "rust_draft": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
-      "status": "candidate"
+      "status": "blocked"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
+      "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
+      "sha256": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
+      "status": "passed"
     }
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-  "generated_draft_replay_pass": true,
   "generated_draft_semantic_pass": false,
   "known_gaps": [
-    "Generated Rust replay passed committed fixture cases; C oracle, schema diff, negative diff, unsafe, and final verification gates are still required."
+    "Generated replay draft is not itself the accepted replay implementation.",
+    "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "replay_execution": {
-    "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.exe'",
-    "compile_returncode": 0,
-    "phase": "run",
-    "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.exe' --nocapture",
-    "run_returncode": 0,
-    "status": "passed",
-    "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stderr.log",
-    "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stdout.log"
-  },
-  "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
+  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
   "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_blob_make",
+      "file": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs",
+      "framework": "cargo test",
+      "source": "accepted replay evidence",
+      "test_names": [
+        "accepted_real_fdb_blob_make_replay"
+      ]
+    },
     {
       "cargo_command": "cargo test replay_real_fdb_blob_make_fixture_contract",
       "file": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs",
-      "file_hash": "65743b7e7e6631851b4ab69c486a1f568d1638eeed611ff81b689b4240005383",
       "framework": "cargo test",
+      "status": "generated_draft",
       "test_names": [
         "replay_real_fdb_blob_make_fixture_contract"
       ]
@@ -68,7 +83,7 @@
   "source_test_inputs": {
     "fixtures": [
       {
-        "hash": "real-fdb-blob-make-fixture",
+        "hash": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
         "operation_count": 3,
         "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
         "source_kind": "fixture"
@@ -76,13 +91,19 @@
     ],
     "oracle_reports": [
       {
-        "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
-        "status": "draft_or_skipped"
+        "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
+        "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
+        "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+        "status": "passed"
       }
     ],
-    "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED."
+    "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
   },
-  "status": "passed",
+  "status": "recorded",
   "target_id": "flashdb",
   "test_draft": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs",
   "translation_mappings": [
@@ -92,16 +113,45 @@
         "blob.buf",
         "blob.size"
       ],
-      "coverage_kind": "oracle_replay",
+      "coverage_kind": "main_path",
       "evidence": [
         {
-          "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
-          "status": "not_semantic_pass"
+          "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
+          "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
+          "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
+          "sha256": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
+          "status": "passed"
         }
       ],
-      "rust_test": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs::replay_real_fdb_blob_make_fixture_contract",
+      "rust_test": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-replay-test-draft.rs::accepted_real_fdb_blob_make_replay",
       "source": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-      "status": "passed"
+      "status": "mapped"
+    },
+    {
+      "behavior_fields": [
+        "return_same_blob",
+        "blob.buf",
+        "blob.size"
+      ],
+      "coverage_kind": "negative_case",
+      "evidence": [
+        {
+          "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+          "sha256": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+          "status": "passed"
+        }
+      ],
+      "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_real_fdb_blob_make_negative_diff",
+      "source": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+      "status": "mapped"
     }
   ]
 }

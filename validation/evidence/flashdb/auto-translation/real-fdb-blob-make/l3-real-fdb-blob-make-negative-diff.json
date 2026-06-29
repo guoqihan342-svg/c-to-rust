@@ -1,43 +1,49 @@
 {
+  "accepted_negative_diff": {
+    "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
+    "sha256": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+    "status": "passed"
+  },
   "accepted_negative_diff_required": true,
-  "blocked_by": [
-    "schema_diff"
-  ],
+  "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-    "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
+    "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
     "status": "skipped"
   },
   "expected_failure": true,
-  "mutation_detected": false,
+  "first_mismatch": {
+    "case_id": "null-empty",
+    "field": "blob.size",
+    "mutated_c_value": 1,
+    "rust_value": 0
+  },
+  "mutation_detected": true,
   "negative_diff_gate": "schema_aware_negative_diff",
-  "reason": "Negative diff is not run for draft-only auto-translation candidates.",
-  "reason_code": "missing_passed_schema_diff",
   "required_inputs": {
     "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
     "rust_report_required_status": "passed",
-    "schema_diff_actual_status": "incomplete",
+    "schema_diff_actual_status": "passed",
     "schema_diff_required_first_mismatch": null,
     "schema_diff_required_status": "passed"
   },
-  "root_blocked_by": [
-    "c_oracle",
-    "rust_replay"
-  ],
+  "root_blocked_by": [],
   "route_decision": {
-    "level": "L1",
+    "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-    "sha256": "6d84d1de69d9ca6d6f994d2a9f5acd288bc1ec56653cb14f115f62e6e7c0ec44",
-    "status": "recorded"
+    "sha256": "7fe0b3e7f5c0eb84c3b2c162c764efe1b86747c92bcbcc025ef6eeb9e3b266b2",
+    "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
-  "status": "incomplete",
+  "status": "expected_failed",
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-    "profile": "L1-dev",
-    "sha256": "f014e93a51b40bce8d5ab7ff6464984cf777cf458aa2c08dc2ca538d4035fb13",
-    "status": "incomplete"
+    "profile": "L4-accepted-evidence",
+    "sha256": "aa7c0bd2d5ac5008e9a496820bd4beded5f296742399a932e4daa450ad22c96c",
+    "status": "passed"
   }
 }
