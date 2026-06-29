@@ -401,6 +401,7 @@
         "IntegralCast explicit typed IR cast in direct-call argument contexts",
         "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
         "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
+        "unary plus integer promotion preserves clang-proven IntegralPromotion",
         "LValueToRValue transparent lvalue-read skeleton boundary",
         "NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -417,7 +418,15 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/usual_arithmetic_ast.json"
             },
             {
+              "name": "unary integer conversion no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/unary_integer_conversion_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -434,6 +443,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "expr_skeleton_from_ast_rejects_non_integer_unary_plus",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -444,6 +457,10 @@
           "evidence": [
             {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]

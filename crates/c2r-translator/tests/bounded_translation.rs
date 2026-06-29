@@ -1070,6 +1070,66 @@ fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/unary_integer_conversion_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let promoted = lower_function_and_globals_from_clang_ast_json_value(&ast, "promote_plus")
+        .expect("lower clang-proven unary plus integer promotion fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = promoted.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected unary plus return to preserve IntegralPromotion as an IR cast, got {:?}",
+            promoted.function_ir.body
+        );
+    };
+    assert!(matches!(
+        target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = expr.as_ref() else {
+        panic!("expected promoted unary plus operand to be the original parameter, got {expr:?}");
+    };
+    assert_eq!(name, "value");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 8
+        }
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&promoted.function_ir, &promoted.globals)
+        .expect("emit Rust from clang-proven unary plus integer promotion fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn promote_plus(value: i8) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-unary-plus-integer-promotion",
+        rust,
+        "assert_eq!(promote_plus(-7i8), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/usual_arithmetic_ast.json"

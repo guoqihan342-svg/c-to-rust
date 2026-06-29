@@ -2677,6 +2677,35 @@ fn expr_skeleton_from_ast_with_options(
                     ty: expr_type(expr)?,
                 });
             }
+            if opcode == "+" {
+                let result_ty = expr_type(expr)?;
+                if !matches!(&result_ty.kind, ClangTypeKind::Integer { .. }) {
+                    return Ok(ClangExprSkeleton::Unsupported {
+                        node: "UnaryOperator".to_string(),
+                        reason: format!(
+                            "unary plus result type {} is outside the integer promotion subset",
+                            result_ty.spelled
+                        ),
+                    });
+                }
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_unary_operator".to_string(),
+                    message: "UnaryOperator is missing operand".to_string(),
+                })?;
+                let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+                if let Some(operand_ty) = clang_expr_skeleton_type(&operand) {
+                    if !compound_assignment_types_match(operand_ty, &result_ty) {
+                        return Ok(ClangExprSkeleton::Unsupported {
+                            node: "UnaryOperator".to_string(),
+                            reason: format!(
+                                "unary plus operand type {} must match result type {} after clang-proven integer promotion",
+                                operand_ty.spelled, result_ty.spelled
+                            ),
+                        });
+                    }
+                }
+                return Ok(operand);
+            }
 
             let op = match opcode.as_str() {
                 "-" => ClangUnaryOperator::Neg,
@@ -5977,6 +6006,33 @@ mod tests {
             operand.as_ref(),
             IrExpr::Var { name, .. } if name == "value"
         ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_non_integer_unary_plus() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "+",
+            "type": { "qualType": "float" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "float" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("unary plus skeleton");
+
+        let ClangExprSkeleton::Unsupported { node, reason } = skeleton else {
+            panic!("expected non-integer unary plus to fail closed, got {skeleton:?}");
+        };
+        assert_eq!(node, "UnaryOperator");
+        assert!(
+            reason.contains("unary plus result type float is outside the integer promotion subset"),
+            "{reason}"
+        );
     }
 
     #[test]
