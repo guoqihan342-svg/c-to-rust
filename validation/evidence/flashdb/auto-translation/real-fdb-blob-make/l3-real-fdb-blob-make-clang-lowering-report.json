@@ -7,29 +7,38 @@
     "role": "diagnostic_only"
   },
   "diagnostics": [
-    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable"
+    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+    "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/real_fdb_blob_make_ast.json"
   ],
-  "errors": [
-    {
-      "kind": "missing_clang_path",
-      "message": "clang AST lowering requires CLANG_PATH or a vendored clang binary"
-    }
-  ],
+  "durable_evidence": {
+    "clang_path": "",
+    "clang_version": "not_configured",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "80d9916ad5ec0fdd716109f794d594c7df40d1fd0950e1131dc1b50ecd75e4b0",
+    "typed_ir_sha256": "4611bbf7b482e95eadf4ef1f4a4a132791a3262515ab702bdb3bab1132e6f48d"
+  },
+  "errors": [],
   "fixture_hash": "real-fdb-blob-make-fixture",
   "frontend": "clang",
   "function_name": "fdb_blob_make",
   "lowering_report": {
     "arguments": [
-      "-Xclang",
-      "-ast-dump=json",
-      "-fsyntax-only",
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829\\src/fdb_utils.c"
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/real_fdb_blob_make_ast.json",
+      "src/fdb_utils.c"
     ],
     "clang_path": null,
     "diagnostics": [
-      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable"
+      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+      "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/real_fdb_blob_make_ast.json"
     ],
     "environment": {
       "diagnostics": [
@@ -40,20 +49,530 @@
       "source": null,
       "status": "not_configured"
     },
-    "errors": [
-      {
-        "kind": "missing_clang_path",
-        "message": "clang AST lowering requires CLANG_PATH or a vendored clang binary"
-      }
-    ],
-    "frontend": "clang",
-    "function_ir": null,
+    "errors": [],
+    "frontend": "clang_ast_json_fixture",
+    "function_ir": {
+      "body": [
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Member": {
+                "base": {
+                  "Var": {
+                    "name": "blob",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct fdb_blob *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "struct fdb_blob",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "buf",
+                                    "ty": {
+                                      "canonical": "void *",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Pointer": {
+                                          "pointee": {
+                                            "canonical": "void",
+                                            "is_const": false,
+                                            "kind": "Void",
+                                            "source_span": null,
+                                            "spelled": "void",
+                                            "width_bits": null
+                                          }
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "void *",
+                                      "width_bits": null
+                                    }
+                                  },
+                                  {
+                                    "name": "size",
+                                    "ty": {
+                                      "canonical": "size_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 64
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "size_t",
+                                      "width_bits": 64
+                                    }
+                                  }
+                                ],
+                                "name": "fdb_blob"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct fdb_blob",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct fdb_blob *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "field": "buf",
+                "is_arrow": true,
+                "source_span": null,
+                "ty": {
+                  "canonical": "void *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "void",
+                        "is_const": false,
+                        "kind": "Void",
+                        "source_span": null,
+                        "spelled": "void",
+                        "width_bits": null
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "void *",
+                  "width_bits": null
+                }
+              }
+            },
+            "value": {
+              "Cast": {
+                "expr": {
+                  "Var": {
+                    "name": "value_buf",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "void *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "void",
+                            "is_const": true,
+                            "kind": "Void",
+                            "source_span": null,
+                            "spelled": "const void",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "const void *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "implicit": false,
+                "source_span": null,
+                "target": {
+                  "canonical": "void *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "void",
+                        "is_const": false,
+                        "kind": "Void",
+                        "source_span": null,
+                        "spelled": "void",
+                        "width_bits": null
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "void *",
+                  "width_bits": null
+                }
+              }
+            }
+          }
+        },
+        {
+          "Assign": {
+            "source_span": null,
+            "target": {
+              "Member": {
+                "base": {
+                  "Var": {
+                    "name": "blob",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "struct fdb_blob *",
+                      "is_const": false,
+                      "kind": {
+                        "Pointer": {
+                          "pointee": {
+                            "canonical": "struct fdb_blob",
+                            "is_const": false,
+                            "kind": {
+                              "Record": {
+                                "fields": [
+                                  {
+                                    "name": "buf",
+                                    "ty": {
+                                      "canonical": "void *",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Pointer": {
+                                          "pointee": {
+                                            "canonical": "void",
+                                            "is_const": false,
+                                            "kind": "Void",
+                                            "source_span": null,
+                                            "spelled": "void",
+                                            "width_bits": null
+                                          }
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "void *",
+                                      "width_bits": null
+                                    }
+                                  },
+                                  {
+                                    "name": "size",
+                                    "ty": {
+                                      "canonical": "size_t",
+                                      "is_const": false,
+                                      "kind": {
+                                        "Integer": {
+                                          "signed": false,
+                                          "width": 64
+                                        }
+                                      },
+                                      "source_span": null,
+                                      "spelled": "size_t",
+                                      "width_bits": 64
+                                    }
+                                  }
+                                ],
+                                "name": "fdb_blob"
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "struct fdb_blob",
+                            "width_bits": null
+                          }
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "struct fdb_blob *",
+                      "width_bits": null
+                    }
+                  }
+                },
+                "field": "size",
+                "is_arrow": true,
+                "source_span": null,
+                "ty": {
+                  "canonical": "size_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 64
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "size_t",
+                  "width_bits": 64
+                }
+              }
+            },
+            "value": {
+              "Var": {
+                "name": "buf_len",
+                "source_span": null,
+                "ty": {
+                  "canonical": "size_t",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": false,
+                      "width": 64
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "size_t",
+                  "width_bits": 64
+                }
+              }
+            }
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Var": {
+                "name": "blob",
+                "source_span": null,
+                "ty": {
+                  "canonical": "struct fdb_blob *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "struct fdb_blob",
+                        "is_const": false,
+                        "kind": {
+                          "Record": {
+                            "fields": [
+                              {
+                                "name": "buf",
+                                "ty": {
+                                  "canonical": "void *",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Pointer": {
+                                      "pointee": {
+                                        "canonical": "void",
+                                        "is_const": false,
+                                        "kind": "Void",
+                                        "source_span": null,
+                                        "spelled": "void",
+                                        "width_bits": null
+                                      }
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "void *",
+                                  "width_bits": null
+                                }
+                              },
+                              {
+                                "name": "size",
+                                "ty": {
+                                  "canonical": "size_t",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Integer": {
+                                      "signed": false,
+                                      "width": 64
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "size_t",
+                                  "width_bits": 64
+                                }
+                              }
+                            ],
+                            "name": "fdb_blob"
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "struct fdb_blob",
+                        "width_bits": null
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct fdb_blob *",
+                  "width_bits": null
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "fdb_blob_make",
+      "params": [
+        {
+          "name": "blob",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct fdb_blob *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct fdb_blob",
+                  "is_const": false,
+                  "kind": {
+                    "Record": {
+                      "fields": [
+                        {
+                          "name": "buf",
+                          "ty": {
+                            "canonical": "void *",
+                            "is_const": false,
+                            "kind": {
+                              "Pointer": {
+                                "pointee": {
+                                  "canonical": "void",
+                                  "is_const": false,
+                                  "kind": "Void",
+                                  "source_span": null,
+                                  "spelled": "void",
+                                  "width_bits": null
+                                }
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "void *",
+                            "width_bits": null
+                          }
+                        },
+                        {
+                          "name": "size",
+                          "ty": {
+                            "canonical": "size_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 64
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "size_t",
+                            "width_bits": 64
+                          }
+                        }
+                      ],
+                      "name": "fdb_blob"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct fdb_blob",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "struct fdb_blob *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "value_buf",
+          "source_span": null,
+          "ty": {
+            "canonical": "void *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "void",
+                  "is_const": true,
+                  "kind": "Void",
+                  "source_span": null,
+                  "spelled": "const void",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "const void *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "buf_len",
+          "source_span": null,
+          "ty": {
+            "canonical": "size_t",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": false,
+                "width": 64
+              }
+            },
+            "source_span": null,
+            "spelled": "size_t",
+            "width_bits": 64
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "struct fdb_blob *",
+        "is_const": false,
+        "kind": {
+          "Pointer": {
+            "pointee": {
+              "canonical": "struct fdb_blob",
+              "is_const": false,
+              "kind": {
+                "Record": {
+                  "fields": [
+                    {
+                      "name": "buf",
+                      "ty": {
+                        "canonical": "void *",
+                        "is_const": false,
+                        "kind": {
+                          "Pointer": {
+                            "pointee": {
+                              "canonical": "void",
+                              "is_const": false,
+                              "kind": "Void",
+                              "source_span": null,
+                              "spelled": "void",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "void *",
+                        "width_bits": null
+                      }
+                    },
+                    {
+                      "name": "size",
+                      "ty": {
+                        "canonical": "size_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 64
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "size_t",
+                        "width_bits": 64
+                      }
+                    }
+                  ],
+                  "name": "fdb_blob"
+                }
+              },
+              "source_span": null,
+              "spelled": "struct fdb_blob",
+              "width_bits": null
+            }
+          }
+        },
+        "source_span": null,
+        "spelled": "struct fdb_blob *",
+        "width_bits": null
+      },
+      "source_span": null
+    },
     "function_name": "fdb_blob_make",
     "globals": [],
     "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_utils.c",
-    "status": "unavailable"
+    "status": "lowered"
   },
   "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/real_fdb_blob_make_ast.json",
     "compile_commands": null,
     "function_source_span": {
       "byte_end": 9117,
@@ -73,15 +592,35 @@
   "slice_id": "real-fdb-blob-make",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_utils.c",
-  "status": "unavailable",
+  "status": "lowered",
   "target_id": "flashdb",
   "typed_ir_candidate": {
-    "candidate_route": null,
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
     "readonly_globals": [],
-    "reason": "function_ir_missing",
     "runtime_preconditions": [],
-    "rust_draft_generated": false,
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "80d9916ad5ec0fdd716109f794d594c7df40d1fd0950e1131dc1b50ecd75e4b0",
     "semantic_pass": false,
-    "status": "not_available"
+    "status": "generated",
+    "typed_ir_sha256": "4611bbf7b482e95eadf4ef1f4a4a132791a3262515ab702bdb3bab1132e6f48d"
   }
 }

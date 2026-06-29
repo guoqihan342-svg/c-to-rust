@@ -3224,6 +3224,58 @@ class AutoMigrateTests(unittest.TestCase):
                 capability["verification_commands"],
             )
 
+    def test_real_fdb_blob_make_generates_typed_ir_candidate_without_semantic_claim(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-blob-make-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-blob-make"
+            prefix = "l3-real-fdb-blob-make"
+            plan = json.loads((evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8"))
+            route = json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8"))
+            profile = json.loads((evidence_dir / f"{prefix}-validation-profile.json").read_text(encoding="utf-8"))
+            report = json.loads((evidence_dir / f"{prefix}-clang-lowering-report.json").read_text(encoding="utf-8"))
+            draft = (evidence_dir / f"{prefix}-rust-draft.rs").read_text(encoding="utf-8")
+
+            self.assertEqual(plan["translation_source"]["selected"], "clang-lowered-typed-ir")
+            self.assertEqual(report["status"], "lowered")
+            self.assertEqual(report["typed_ir_candidate"]["status"], "generated")
+            self.assertTrue(report["typed_ir_candidate"]["rust_draft_generated"])
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["status"], "recorded")
+            self.assertTrue(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(
+                route["candidate_generation"]["selected_candidate_id"],
+                "primary:clang-lowered-typed-ir",
+            )
+            self.assertEqual(route["candidate_generation"]["typed_ir"]["status"], "generated")
+            self.assertFalse(route["candidate_generation"]["generated_draft_semantic_pass"])
+            self.assertEqual(profile["status"], "incomplete")
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertIn("pub struct FdbBlob", draft)
+            self.assertIn("pub fn fdb_blob_make", draft)
+
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {
             "target_id": "demo",

@@ -165,6 +165,7 @@
       "long_long_width": 64,
       "pointer_width": 64
     },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/real_fdb_blob_make_ast.json",
     "preprocessing_mode": "manual_flags",
     "tool_versions": {
       "extract_source_slice": "0.1.0"

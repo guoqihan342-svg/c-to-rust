@@ -1511,7 +1511,7 @@
           "status": "covered",
           "evidence": [
             {
-              "name": "real-fdb-blob-make L4 refused route decision",
+              "name": "real-fdb-blob-make L1 candidate route decision",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
               "proof_class": "committed_l4_refused_provenance"
             },
@@ -1523,10 +1523,10 @@
             {
               "name": "real-fdb-blob-make clang lowering report",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-              "proof_class": "committed_missing_clang_path_provenance"
+              "proof_class": "committed_no_clang_fixture_candidate_provenance"
             }
           ],
-          "reason": "committed L4 refused/provenance evidence exists; semantic C/Rust diff remains a separate gap"
+          "reason": "committed L1 candidate_generated provenance evidence exists; semantic C/Rust diff remains a separate gap"
         }
       },
       "positive_cases": [

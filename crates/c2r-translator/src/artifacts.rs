@@ -265,10 +265,12 @@ pub(crate) fn write_clang_lowering_report_artifact(
         Ok(parse_spec) => {
             let source_file = parse_spec.source_root.join(&parse_spec.source_file);
             let environment = std::env::vars().collect::<BTreeMap<_, _>>();
-            let report = clang_frontend::lower_function_from_clang_parse_spec_report(
-                &environment,
-                &parse_spec,
-            );
+            let report =
+                crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture(
+                    &environment,
+                    &parse_spec,
+                    spec.build_profile.clang_ast_fixture.as_deref(),
+                );
             let emit_policy = emit_policy_from_spec(spec);
             let typed_ir_candidate = typed_ir_candidate_evidence(
                 report.function_ir.as_ref(),
@@ -300,6 +302,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
                     "source_root": parse_spec.source_root,
                     "logical_source_file": parse_spec.source_file,
                     "compile_commands": parse_spec.compile_commands,
+                    "clang_ast_fixture": spec.build_profile.clang_ast_fixture,
                     "source_file_hashes": parse_spec.source_file_hashes,
                     "function_source_span": parse_spec.function_source_span,
                 },
@@ -339,6 +342,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
                 "source_root": spec.source_root,
                 "logical_source_file": spec.source_file,
                 "compile_commands": spec.compile_commands,
+                "clang_ast_fixture": spec.build_profile.clang_ast_fixture,
                 "source_file_hashes": spec.source_file_hashes,
                 "function_source_span": spec.function_source_span,
             },
@@ -894,6 +898,7 @@ mod clang_dry_run_artifact_tests {
             include_paths: Vec::new(),
             defines: Vec::new(),
             target: None,
+            clang_ast_fixture: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),
@@ -1012,6 +1017,7 @@ mod clang_lowering_report_artifact_tests {
             include_paths: Vec::new(),
             defines: Vec::new(),
             target: None,
+            clang_ast_fixture: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),

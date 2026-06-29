@@ -6,11 +6,16 @@
 //! the accepted IR as route, CFG, call-expression, type-map, and pointer
 //! evidence for downstream gates and reports.
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::{
-    clang_frontend, record_type_mapping, typed_ir, BuildProfile, CallExpressionEvidence, CfgBlock,
-    CfgFunction, PointerNode, SliceSpec, TranslationPlan, TranslationResult, TranslationSource,
+    clang_frontend, typed_ir, BuildProfile, CallExpressionEvidence, CfgBlock, CfgFunction,
+    PointerNode, SliceSpec, TranslationError, TranslationPlan, TranslationResult,
+    TranslationSource, TypeMapping, TypeUncertainty,
 };
 
 pub(crate) fn try_translate_slice_with_clang_lowered_ir(
@@ -18,8 +23,11 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
 ) -> Option<TranslationResult> {
     let parse_spec = clang_frontend::ClangParseSpec::from_slice_spec(spec).ok()?;
     let environment = std::env::vars().collect::<BTreeMap<_, _>>();
-    let report =
-        clang_frontend::lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+    let report = lower_parse_spec_report_with_optional_ast_fixture(
+        &environment,
+        &parse_spec,
+        spec.build_profile.clang_ast_fixture.as_deref(),
+    );
     let function_ir = report.function_ir.as_ref()?;
     let rust_code = typed_ir::emit_rust_from_ir_with_globals_and_policy(
         function_ir,
@@ -45,6 +53,140 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
     };
     record_clang_lowered_ir_evidence(spec, function_ir, &mut result);
     Some(result)
+}
+
+pub(crate) fn lower_parse_spec_report_with_optional_ast_fixture(
+    environment: &BTreeMap<String, String>,
+    parse_spec: &clang_frontend::ClangParseSpec,
+    ast_fixture: Option<&str>,
+) -> clang_frontend::ClangLoweringReport {
+    let report =
+        clang_frontend::lower_function_from_clang_parse_spec_report(environment, parse_spec);
+    if report.function_ir.is_some() || !clang_report_allows_fixture_fallback(&report) {
+        return report;
+    }
+    let Some(ast_fixture) = ast_fixture.map(str::trim).filter(|value| !value.is_empty()) else {
+        return report;
+    };
+    lower_parse_spec_from_ast_fixture_report(environment, parse_spec, ast_fixture, report)
+}
+
+fn clang_report_allows_fixture_fallback(report: &clang_frontend::ClangLoweringReport) -> bool {
+    report.status == "unavailable"
+        && report.errors.iter().any(|error| {
+            error.kind == "missing_clang_path" || error.kind == "clang_ast_dump_unavailable"
+        })
+}
+
+fn lower_parse_spec_from_ast_fixture_report(
+    environment: &BTreeMap<String, String>,
+    parse_spec: &clang_frontend::ClangParseSpec,
+    ast_fixture: &str,
+    unavailable_report: clang_frontend::ClangLoweringReport,
+) -> clang_frontend::ClangLoweringReport {
+    let fixture_path = resolve_ast_fixture_path(ast_fixture);
+    let logical_source_file = parse_spec.source_root.join(&parse_spec.source_file);
+    let mut diagnostics = unavailable_report.diagnostics.clone();
+    diagnostics.push(format!(
+        "clang AST JSON fixture replay used after clang AST dump was unavailable: {}",
+        normalize_path(&fixture_path)
+    ));
+
+    let result = match fs::read_to_string(&fixture_path) {
+        Ok(raw_json) => match serde_json::from_str::<serde_json::Value>(&raw_json) {
+            Ok(ast) => {
+                clang_frontend::lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+                    &ast,
+                    &parse_spec.function_name,
+                    parse_spec.target_abi.as_ref(),
+                )
+            }
+            Err(error) => Err(clang_frontend::ClangFrontendError {
+                kind: "invalid_ast_fixture_json".to_string(),
+                message: format!(
+                    "failed to parse clang AST JSON fixture {}: {error}",
+                    normalize_path(&fixture_path)
+                ),
+            }),
+        },
+        Err(error) => Err(clang_frontend::ClangFrontendError {
+            kind: "missing_ast_fixture".to_string(),
+            message: format!(
+                "failed to read clang AST JSON fixture {}: {error}",
+                normalize_path(&fixture_path)
+            ),
+        }),
+    };
+
+    match result {
+        Ok(lowered) => clang_frontend::ClangLoweringReport {
+            status: "lowered".to_string(),
+            frontend: "clang_ast_json_fixture".to_string(),
+            source_file: Some(normalize_path(&logical_source_file)),
+            function_name: parse_spec.function_name.clone(),
+            clang_path: None,
+            arguments: ast_fixture_arguments(parse_spec, &fixture_path),
+            environment: clang_frontend::ClangEnvironment::detect_from_env(environment),
+            diagnostics,
+            errors: Vec::new(),
+            function_ir: Some(lowered.function_ir),
+            globals: lowered.globals,
+        },
+        Err(error) => clang_frontend::ClangLoweringReport {
+            status: "blocked".to_string(),
+            frontend: "clang_ast_json_fixture".to_string(),
+            source_file: Some(normalize_path(&logical_source_file)),
+            function_name: parse_spec.function_name.clone(),
+            clang_path: None,
+            arguments: ast_fixture_arguments(parse_spec, &fixture_path),
+            environment: clang_frontend::ClangEnvironment::detect_from_env(environment),
+            diagnostics: diagnostics
+                .into_iter()
+                .chain(std::iter::once(error.message.clone()))
+                .collect(),
+            errors: vec![error],
+            function_ir: None,
+            globals: Vec::new(),
+        },
+    }
+}
+
+fn resolve_ast_fixture_path(ast_fixture: &str) -> PathBuf {
+    let path = PathBuf::from(ast_fixture);
+    if path.is_absolute() || path.exists() {
+        return path;
+    }
+    if let Ok(current_dir) = std::env::current_dir() {
+        let candidate = current_dir.join(&path);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = PathBuf::from(&manifest_dir);
+        if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
+            let candidate = repo_root.join(&path);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+    path
+}
+
+fn ast_fixture_arguments(
+    parse_spec: &clang_frontend::ClangParseSpec,
+    fixture_path: &Path,
+) -> Vec<String> {
+    let mut arguments = parse_spec.clang_arguments();
+    arguments.push("--ast-json-fixture".to_string());
+    arguments.push(normalize_path(fixture_path));
+    arguments.push(parse_spec.source_file.to_string_lossy().replace('\\', "/"));
+    arguments
+}
+
+fn normalize_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
@@ -426,11 +568,120 @@ fn ir_inc_dec_op_source(op: &typed_ir::IrIncDecOp) -> &'static str {
 fn record_ir_type_mapping(
     symbol: &str,
     ty: &typed_ir::IrType,
-    profile: &BuildProfile,
+    _profile: &BuildProfile,
     result: &mut TranslationResult,
 ) {
     let c_type = ir_c_type(ty);
-    record_type_mapping(symbol, &c_type, profile, result);
+    let Some(rust_type) = ir_rust_type(ty) else {
+        let reason = format!(
+            "clang-lowered typed IR type {} is outside the current evidence mapping subset",
+            type_label_for_evidence(ty)
+        );
+        result.type_map.uncertainties.push(TypeUncertainty {
+            symbol: symbol.to_string(),
+            c_type,
+            reason: reason.clone(),
+        });
+        result.errors.push(TranslationError {
+            kind: "type_uncertainty".to_string(),
+            message: format!("{symbol}: {reason}"),
+            source_span: Some(type_label_for_evidence(ty)),
+        });
+        return;
+    };
+
+    result.type_map.mappings.push(TypeMapping {
+        c_type,
+        rust_type,
+        symbol: symbol.to_string(),
+        reason: "clang-lowered typed IR mapping".to_string(),
+    });
+}
+
+fn ir_rust_type(ty: &typed_ir::IrType) -> Option<String> {
+    match &ty.kind {
+        typed_ir::IrTypeKind::Void => Some("()".to_string()),
+        typed_ir::IrTypeKind::Integer { signed, width } => {
+            if is_size_t_ir_type(ty) {
+                return Some("usize".to_string());
+            }
+            match (*signed, *width) {
+                (true, 8) => Some("i8".to_string()),
+                (true, 16) => Some("i16".to_string()),
+                (true, 32) => Some("i32".to_string()),
+                (true, 64) => Some("i64".to_string()),
+                (false, 8) => Some("u8".to_string()),
+                (false, 16) => Some("u16".to_string()),
+                (false, 32) => Some("u32".to_string()),
+                (false, 64) => Some("u64".to_string()),
+                _ => None,
+            }
+        }
+        typed_ir::IrTypeKind::Pointer { pointee } => match &pointee.kind {
+            typed_ir::IrTypeKind::Void => Some(if ty.is_const || pointee.is_const {
+                "*const core::ffi::c_void".to_string()
+            } else {
+                "*mut core::ffi::c_void".to_string()
+            }),
+            typed_ir::IrTypeKind::Record { name, .. } => Some(if ty.is_const || pointee.is_const {
+                format!("&{}", record_type_name_for_evidence(name))
+            } else {
+                format!("&mut {}", record_type_name_for_evidence(name))
+            }),
+            _ => ir_rust_type(pointee).map(|inner| {
+                if ty.is_const || pointee.is_const {
+                    format!("*const {inner}")
+                } else {
+                    format!("*mut {inner}")
+                }
+            }),
+        },
+        typed_ir::IrTypeKind::Array { element, len } => {
+            ir_rust_type(element).map(|inner| match len {
+                Some(len) => format!("[{inner}; {len}]"),
+                None => format!("*const {inner}"),
+            })
+        }
+        typed_ir::IrTypeKind::Record { name, .. } => Some(record_type_name_for_evidence(name)),
+        typed_ir::IrTypeKind::Function | typed_ir::IrTypeKind::Unsupported { .. } => None,
+    }
+}
+
+fn is_size_t_ir_type(ty: &typed_ir::IrType) -> bool {
+    let spelled = ty.spelled.trim();
+    let canonical = ty.canonical.trim();
+    spelled == "size_t" || canonical == "size_t"
+}
+
+fn record_type_name_for_evidence(name: &str) -> String {
+    let raw = name.trim().strip_prefix("struct ").unwrap_or(name.trim());
+    let mut out = String::new();
+    let mut uppercase_next = true;
+    for ch in raw.chars() {
+        if ch == '_' || ch == '-' || ch == ' ' {
+            uppercase_next = true;
+        } else if uppercase_next {
+            out.extend(ch.to_uppercase());
+            uppercase_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    if out.is_empty() {
+        "Record".to_string()
+    } else {
+        out
+    }
+}
+
+fn type_label_for_evidence(ty: &typed_ir::IrType) -> String {
+    if !ty.spelled.trim().is_empty() {
+        ty.spelled.clone()
+    } else if !ty.canonical.trim().is_empty() {
+        ty.canonical.clone()
+    } else {
+        format!("{:?}", ty.kind)
+    }
 }
 
 fn ir_c_type(ty: &typed_ir::IrType) -> String {
@@ -828,6 +1079,7 @@ mod clang_lowered_ir_evidence_tests {
             include_paths: Vec::new(),
             defines: Vec::new(),
             target: None,
+            clang_ast_fixture: None,
             target_triple: None,
             abi: None,
             compiler_command_source: "unit-test".to_string(),

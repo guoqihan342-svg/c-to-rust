@@ -210,8 +210,11 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
             "abi": spec.get("build_profile", {}).get("abi") or target.get("triple_or_abi"),
             "compiler_command_source": build_profile.get("compiler_command_source", "unknown"),
             "clang_available": bool(build_profile.get("clang_available", clang.get("available", False))),
+            "clang_ast_fixture": build_profile.get("clang_ast_fixture"),
         },
     }
+    if translator_spec["build_profile"]["clang_ast_fixture"] is None:
+        del translator_spec["build_profile"]["clang_ast_fixture"]
     if translator_spec["build_profile"]["target"] is None:
         del translator_spec["build_profile"]["target"]
     source_root = spec.get("source", {}).get("source_root")

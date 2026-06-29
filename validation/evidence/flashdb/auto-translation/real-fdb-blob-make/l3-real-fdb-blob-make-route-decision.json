@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+        "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,14 +18,9 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
-        "kind": "legacy-string-translator",
-        "role": "compatibility_rust_draft",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -33,14 +28,14 @@
         "candidate_id": "typed-ir:clang-lowered",
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
-        "rust_draft_generated": false,
+        "rust_draft_generated": true,
         "semantic_pass": false,
-        "status": "not_available"
+        "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+          "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -54,26 +49,15 @@
         "status": "skipped"
       }
     ],
-    "compatibility_sources": [
-      {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
-        "selected": "legacy-string-translator",
-        "semantic_pass": false
-      }
-    ],
+    "compatibility_sources": [],
     "generated_draft_semantic_pass": false,
     "primary_candidate": {
-      "candidate_id": "primary:unknown",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "unknown",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": null,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -81,16 +65,35 @@
       "stage": "post_generation_provenance"
     },
     "typed_ir": {
-      "candidate_route": null,
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
       "readonly_globals": [],
       "readonly_globals_identity": {
         "count": 0,
         "names": [],
         "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
-      "reason": "function_ir_missing",
       "runtime_preconditions": [],
-      "rust_draft_generated": false,
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "80d9916ad5ec0fdd716109f794d594c7df40d1fd0950e1131dc1b50ecd75e4b0",
       "scalar_admission": {
         "contract_status": "recorded",
         "covered": [],
@@ -101,13 +104,14 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-        "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
-        "status": "unavailable"
+        "sha256": "f357646f802687d833f0273230aefc06985bdf89996d9ece5152780a9db0a75c",
+        "status": "lowered"
       },
-      "status": "not_available"
+      "status": "generated",
+      "typed_ir_sha256": "4611bbf7b482e95eadf4ef1f4a4a132791a3262515ab702bdb3bab1132e6f48d"
     }
   },
-  "level": "L4",
+  "level": "L1",
   "misroute": null,
   "policy": {
     "fixed_loop_count_required": false,
@@ -116,14 +120,9 @@
   },
   "rationale": [
     {
-      "feature": "blocked_artifact",
-      "values": {
-        "cfg": "recorded",
-        "plan": "blocked",
-        "translator": "blocked",
-        "type_map": "blocked"
-      },
-      "weight": "hard_refuse"
+      "feature": "typed_ir_candidate_generated",
+      "route": "GenericTypedIr",
+      "weight": "generic_typed_ir"
     }
   ],
   "scalar_ub_contract": {
@@ -155,39 +154,39 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+      "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-cfg.json",
-      "sha256": "313196d333f835abe36dbc7e98b810e71ed7dbef845f48072114bc4d3add66f8",
+      "sha256": "9b2ae4f0f13d29160cf8c2cbcab1ae7fb21aa03f630bdd7d152834d0c8e72f65",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-      "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
-      "status": "unavailable"
+      "sha256": "f357646f802687d833f0273230aefc06985bdf89996d9ece5152780a9db0a75c",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
-      "sha256": "2e2d373b503fbb034ce12a45ef20551c56bfa1bef4007718b937ccb61f8c8a33",
+      "sha256": "7b67f7839cc26811c3fd738cf31441ef881ee9bc0073e5ec250282bd6f044ec0",
       "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-translation-plan.json",
-      "status": "blocked"
+      "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-type-map.json",
-      "sha256": "1b5587d3ec31a7d29880333fccfabba5517e841e938eafe26f205dd2f9df1fe4",
-      "status": "blocked"
+      "sha256": "7dd38d32cd14bb5f05861cbc49f2b920f4b5dd669f193e8fea047a7e081ebf71",
+      "status": "recorded"
     }
   },
-  "status": "refused",
+  "status": "recorded",
   "target_id": "flashdb",
   "translator": {
-    "candidate_generation_allowed": false,
-    "kind": "refuse"
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
   },
-  "verification_profile": "L4-dev"
+  "verification_profile": "L1-dev"
 }

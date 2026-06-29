@@ -1,0 +1,45 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "cap-real-fdb-blob-make-typed_ir_candidate_generated",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "real-fdb-blob-make",
+      "semantic_pass": false
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "gov-real-fdb-blob-make-typed_ir_candidate_generated-evidence",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L1",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

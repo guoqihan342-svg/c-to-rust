@@ -8,6 +8,8 @@ pub struct BuildProfile {
     pub defines: Vec<String>,
     #[serde(default)]
     pub target: Option<TargetAbiProfile>,
+    #[serde(default)]
+    pub clang_ast_fixture: Option<String>,
     pub target_triple: Option<String>,
     pub abi: Option<String>,
     pub compiler_command_source: String,

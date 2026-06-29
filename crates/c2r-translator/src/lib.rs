@@ -20,8 +20,6 @@ pub use model::{
 };
 
 pub use artifacts::write_translation_artifacts;
-#[cfg(feature = "clang-lowering-report")]
-pub(crate) use legacy_translation::record_type_mapping;
 pub use legacy_translation::translate_slice;
 
 #[cfg(all(test, feature = "clang-lowering-report"))]

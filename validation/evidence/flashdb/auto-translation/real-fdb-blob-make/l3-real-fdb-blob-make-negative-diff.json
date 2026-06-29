@@ -5,7 +5,7 @@
   ],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-    "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+    "sha256": "d5af8ba65f6c75bc4bf89645f546298caab10df9a0c98b97c88dad822244409a",
     "status": "skipped"
   },
   "expected_failure": true,
@@ -25,10 +25,10 @@
     "rust_replay"
   ],
   "route_decision": {
-    "level": "L4",
+    "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-    "sha256": "3a19ac20fd06b3263d0e145503ae1085325473b47ca07587f7e183f6e69876bd",
-    "status": "refused"
+    "sha256": "5321bb1ab08521b0689f20e8246658695eff265d5c1c987a3fcbbd65492630ec",
+    "status": "recorded"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
@@ -36,8 +36,8 @@
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "1306d597ae5b421de3b2714d7d95b0a4f8e5680c76141b9e93b7eafa8c1daf73",
-    "status": "blocked"
+    "profile": "L1-dev",
+    "sha256": "ca360b391e5469f31a106511b2a3ca5ecf4eecf7ac534d43dcf64d2fd7d7baf3",
+    "status": "incomplete"
   }
 }
