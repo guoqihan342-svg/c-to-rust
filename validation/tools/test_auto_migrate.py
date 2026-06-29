@@ -1917,7 +1917,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(generation["generated_draft_semantic_pass"])
             self.assertEqual(
                 generation["selection_policy"]["stage"],
-                "post_generation_provenance",
+                "p0_route_governance",
             )
             self.assertFalse(generation["selection_policy"]["semantic_acceptance"])
             self.assertEqual(
@@ -1967,6 +1967,78 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIsNone(candidates["c2rust-baseline"]["output_ref"])
             self.assertFalse(candidates["c2rust-baseline"]["semantic_pass"])
             self.assertEqual(generation["c2rust_baseline"], candidates["c2rust-baseline"])
+
+    def test_route_decision_records_p0_route_governance_summary(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "p0-route-governance",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-p0-route-governance"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {"selected": "clang-lowered-typed-ir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            baseline_manifest = {
+                "schema_version": 1,
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "correctness_role": "candidate_context_only",
+                "output": None,
+            }
+            (evidence_dir / f"{prefix}-c2rust-baseline-manifest.json").write_text(
+                json.dumps(baseline_manifest), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {
+                    "status": "skipped",
+                    "reason": "blocked_by_missing_tools",
+                    "correctness_role": "candidate_context_only",
+                },
+            )
+
+            generation = route["candidate_generation"]
+            self.assertEqual(generation["selection_policy"]["stage"], "p0_route_governance")
+            summary = generation["governance_summary"]
+            self.assertEqual(summary["stage"], "p0_route_governance")
+            self.assertFalse(summary["semantic_acceptance"])
+            self.assertFalse(summary["full_router"])
+            self.assertEqual(summary["route_level"], route["level"])
+            self.assertEqual(summary["route_status"], route["status"])
+            self.assertIn("c_oracle", summary["validation_gate_summary"]["required_acceptance_gates"])
+            self.assertIn("final_verification", summary["validation_gate_summary"]["required_acceptance_gates"])
+            hard_gates = {gate["gate_id"]: gate for gate in summary["hard_gates"]}
+            self.assertEqual(hard_gates["generated_candidate_semantic_acceptance"]["status"], "deferred")
+            self.assertEqual(hard_gates["c2rust_baseline_semantic_source"]["status"], "forbidden")
+            self.assertEqual(summary["fallback_summary"]["legacy_string_translator"]["status"], "not_used")
 
     def test_normalized_artifacts_preserve_translation_fallback_source(self) -> None:
         module = load_auto_migrate_module()

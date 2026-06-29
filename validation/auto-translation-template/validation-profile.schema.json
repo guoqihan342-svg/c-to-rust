@@ -240,6 +240,7 @@
         "primary_candidate": {"$ref": "#/definitions/primaryCandidateEvidence"},
         "typed_ir": {"$ref": "#/definitions/typedIrCandidateEvidence"},
         "c2rust_baseline": {"$ref": "#/definitions/candidateSetItem"},
+        "governance_summary": {"$ref": "#/definitions/routeGovernanceSummary"},
         "generated_draft_semantic_pass": {"const": false}
       }
     },
@@ -248,10 +249,66 @@
       "additionalProperties": true,
       "required": ["stage", "semantic_acceptance", "full_router"],
       "properties": {
-        "stage": {"enum": ["post_generation_provenance"]},
+        "stage": {"enum": ["post_generation_provenance", "p0_route_governance"]},
         "selection_basis": {"type": "string", "minLength": 1},
         "semantic_acceptance": {"const": false},
         "full_router": {"const": false}
+      }
+    },
+    "routeGovernanceSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "stage",
+        "route_level",
+        "route_status",
+        "semantic_acceptance",
+        "full_router",
+        "hard_gates",
+        "fallback_summary",
+        "validation_gate_summary"
+      ],
+      "properties": {
+        "stage": {"const": "p0_route_governance"},
+        "route_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
+        "route_status": {"type": "string", "minLength": 1},
+        "candidate_generation_allowed": {"type": "boolean"},
+        "semantic_acceptance": {"const": false},
+        "full_router": {"const": false},
+        "hard_gates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["gate_id", "status"],
+            "properties": {
+              "gate_id": {"type": "string", "minLength": 1},
+              "status": {"type": "string", "minLength": 1},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "fallback_summary": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "refusal_summary": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "validation_gate_summary": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["generated_draft_semantic_pass", "required_acceptance_gates"],
+          "properties": {
+            "generated_draft_semantic_pass": {"const": false},
+            "required_acceptance_gates": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1}
+            },
+            "semantic_claim_source": {"type": "string", "minLength": 1}
+          }
+        }
       }
     },
     "candidateSetItem": {

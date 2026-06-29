@@ -772,6 +772,30 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
         self.assertIn("selected_candidate_id", str(raised.exception))
 
+    def test_rejects_p0_route_governance_missing_summary(self) -> None:
+        module = load_validator_module()
+        candidate_generation = self._candidate_selection_record()
+        candidate_generation["selection_policy"]["stage"] = "p0_route_governance"
+        route = {"candidate_generation": candidate_generation}
+        profile = {"candidate_generation": candidate_generation}
+
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(Path("unused"), "unused", route, profile)
+
+        self.assertIn("governance_summary", str(raised.exception))
+
+        missing_set = self._candidate_selection_record()
+        missing_set["selection_policy"]["stage"] = "p0_route_governance"
+        missing_set.pop("candidate_set")
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                {"candidate_generation": missing_set},
+                {"candidate_generation": missing_set},
+            )
+        self.assertIn("governance_summary", str(raised.exception))
+
     def test_rejects_legacy_string_translator_as_selected_primary_candidate(self) -> None:
         module = load_validator_module()
         c2rust_candidate = {

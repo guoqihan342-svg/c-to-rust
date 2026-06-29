@@ -1487,6 +1487,8 @@ def validate_typed_ir_candidate_binding(
         route_candidate_generation,
         evidence_dir=evidence_dir,
         prefix=prefix,
+        route_level=route.get("level"),
+        route_status=route.get("status"),
     )
 
     typed_ir = route_candidate_generation.get("typed_ir")
@@ -1678,6 +1680,8 @@ def validate_candidate_selection_record(
     *,
     evidence_dir: Path | None = None,
     prefix: str | None = None,
+    route_level: Any | None = None,
+    route_status: Any | None = None,
 ) -> None:
     """Validate candidate selection provenance without accepting a candidate.
 
@@ -1710,6 +1714,12 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim semantic_acceptance")
         if selection_policy.get("full_router") is not False:
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim full_router")
+        if selection_policy.get("stage") == "p0_route_governance":
+            governance_stage = True
+        else:
+            governance_stage = False
+    else:
+        governance_stage = False
 
     if primary_candidate is not None:
         if not isinstance(primary_candidate, dict):
@@ -1721,6 +1731,13 @@ def validate_candidate_selection_record(
             )
 
     if candidate_set is None:
+        if governance_stage or candidate_generation.get("governance_summary") is not None:
+            validate_p0_route_governance_summary(
+                candidate_generation,
+                {},
+                route_level=route_level,
+                route_status=route_status,
+            )
         if selected_candidate_id is not None or c2rust_baseline is not None:
             raise SystemExit("route_decision.candidate_generation.candidate_set missing for candidate selection record")
         return
@@ -1755,6 +1772,13 @@ def validate_candidate_selection_record(
 
     validate_legacy_string_translator_candidate_binding(candidates_by_id, selected_candidate_id)
     validate_compatibility_sources_binding(compatibility_sources, candidates_by_id)
+    if governance_stage or candidate_generation.get("governance_summary") is not None:
+        validate_p0_route_governance_summary(
+            candidate_generation,
+            candidates_by_id,
+            route_level=route_level,
+            route_status=route_status,
+        )
 
     c2rust_candidate = candidates_by_id.get("c2rust-baseline")
     if c2rust_candidate is not None and c2rust_candidate.get("correctness_role") != "candidate_context_only":
@@ -1776,6 +1800,111 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+P0_ROUTE_REQUIRED_ACCEPTANCE_GATES = {
+    "c_oracle",
+    "rust_replay",
+    "schema_diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+}
+
+P0_ROUTE_REQUIRED_HARD_GATES = {
+    "generated_candidate_semantic_acceptance": "deferred",
+    "legacy_string_translator_primary_selection": "forbidden",
+    "c2rust_baseline_semantic_source": "forbidden",
+}
+
+
+def validate_p0_route_governance_summary(
+    candidate_generation: dict[str, Any],
+    candidates_by_id: dict[str, dict[str, Any]],
+    *,
+    route_level: Any | None,
+    route_status: Any | None,
+) -> None:
+    summary = candidate_generation.get("governance_summary")
+    if not isinstance(summary, dict):
+        raise SystemExit("route_decision.candidate_generation.governance_summary must be an object")
+    if summary.get("stage") != "p0_route_governance":
+        raise SystemExit("route_decision.candidate_generation.governance_summary.stage must be p0_route_governance")
+    if summary.get("semantic_acceptance") is not False:
+        raise SystemExit("route_decision.candidate_generation.governance_summary cannot claim semantic_acceptance")
+    if summary.get("full_router") is not False:
+        raise SystemExit("route_decision.candidate_generation.governance_summary cannot claim full_router")
+    if route_level is not None and summary.get("route_level") != route_level:
+        raise SystemExit("route_decision.candidate_generation.governance_summary route_level drift")
+    if route_status is not None and summary.get("route_status") != route_status:
+        raise SystemExit("route_decision.candidate_generation.governance_summary route_status drift")
+
+    validation_summary = summary.get("validation_gate_summary")
+    if not isinstance(validation_summary, dict):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary must be an object"
+        )
+    if validation_summary.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary "
+            "cannot claim generated_draft_semantic_pass"
+        )
+    required_acceptance_gates = validation_summary.get("required_acceptance_gates")
+    if not isinstance(required_acceptance_gates, list):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary."
+            "required_acceptance_gates must be a list"
+        )
+    missing_gates = P0_ROUTE_REQUIRED_ACCEPTANCE_GATES - {str(gate) for gate in required_acceptance_gates}
+    if missing_gates:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary "
+            f"missing required gates: {', '.join(sorted(missing_gates))}"
+        )
+
+    hard_gates = summary.get("hard_gates")
+    if not isinstance(hard_gates, list):
+        raise SystemExit("route_decision.candidate_generation.governance_summary.hard_gates must be a list")
+    hard_gate_by_id = {
+        gate.get("gate_id"): gate
+        for gate in hard_gates
+        if isinstance(gate, dict) and isinstance(gate.get("gate_id"), str)
+    }
+    missing_hard_gates = set(P0_ROUTE_REQUIRED_HARD_GATES) - set(hard_gate_by_id)
+    if missing_hard_gates:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.hard_gates missing: "
+            f"{', '.join(sorted(missing_hard_gates))}"
+        )
+    for gate_id, expected_status in P0_ROUTE_REQUIRED_HARD_GATES.items():
+        if hard_gate_by_id[gate_id].get("status") != expected_status:
+            raise SystemExit(
+                "route_decision.candidate_generation.governance_summary.hard_gates "
+                f"{gate_id} status drift"
+            )
+
+    fallback_summary = summary.get("fallback_summary")
+    if not isinstance(fallback_summary, dict):
+        raise SystemExit("route_decision.candidate_generation.governance_summary.fallback_summary must be an object")
+    legacy_summary = fallback_summary.get("legacy_string_translator")
+    if not isinstance(legacy_summary, dict):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator must be an object"
+        )
+    if legacy_summary.get("selected_as_primary") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator cannot be selected_as_primary"
+        )
+    expected_legacy_status = (
+        "compatibility_only" if "compat:legacy-string-translator" in candidates_by_id else "not_used"
+    )
+    if legacy_summary.get("status") != expected_legacy_status:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator status drift"
+        )
 
 
 def validate_compatibility_sources_binding(

@@ -4090,6 +4090,13 @@ def emit_route_decision(
     )
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan, candidate_generation)
     translator = route_translator(level)
+    route_status = "refused" if level == "L4" else "recorded"
+    candidate_generation["governance_summary"] = route_governance_summary(
+        candidate_generation,
+        level=level,
+        route_status=route_status,
+        translator=translator,
+    )
     profile = validation_profile_name(level, "dev")
     source_artifacts = {
         "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
@@ -4111,7 +4118,7 @@ def emit_route_decision(
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "status": "refused" if level == "L4" else "recorded",
+        "status": route_status,
         "level": level,
         "translator": translator,
         "rationale": rationale,
@@ -4216,10 +4223,95 @@ def compatibility_source_bindings(plan: dict[str, Any]) -> list[dict[str, Any]]:
 
 def candidate_selection_policy() -> dict[str, Any]:
     return {
-        "stage": "post_generation_provenance",
+        "stage": "p0_route_governance",
         "selection_basis": "translator_artifact_primary_candidate",
         "semantic_acceptance": False,
         "full_router": False,
+    }
+
+
+def route_governance_summary(
+    candidate_generation: dict[str, Any],
+    *,
+    level: str,
+    route_status: str,
+    translator: dict[str, Any],
+) -> dict[str, Any]:
+    compatibility_sources = candidate_generation.get("compatibility_sources", [])
+    legacy_source = next(
+        (
+            source
+            for source in compatibility_sources
+            if isinstance(source, dict) and source.get("selected") == "legacy-string-translator"
+        ),
+        None,
+    )
+    legacy_summary: dict[str, Any] = {
+        "status": "not_used",
+        "selected_as_primary": False,
+    }
+    if legacy_source is not None:
+        legacy_summary = {
+            "status": "compatibility_only",
+            "candidate_id": legacy_source.get("candidate_id", "compat:legacy-string-translator"),
+            "selected_as_primary": False,
+            "fallback": bool(legacy_source.get("fallback")),
+        }
+        if legacy_source.get("fallback_from"):
+            legacy_summary["fallback_from"] = legacy_source["fallback_from"]
+        if legacy_source.get("fallback_reason"):
+            legacy_summary["fallback_reason"] = legacy_source["fallback_reason"]
+
+    return {
+        "schema_version": 1,
+        "stage": "p0_route_governance",
+        "route_level": level,
+        "route_status": route_status,
+        "candidate_generation_allowed": bool(translator.get("candidate_generation_allowed")),
+        "semantic_acceptance": False,
+        "full_router": False,
+        "hard_gates": [
+            {
+                "gate_id": "generated_candidate_semantic_acceptance",
+                "status": "deferred",
+                "reason": "generated candidates require accepted validation evidence",
+            },
+            {
+                "gate_id": "legacy_string_translator_primary_selection",
+                "status": "forbidden",
+                "reason": "legacy string translator is compatibility-only",
+            },
+            {
+                "gate_id": "c2rust_baseline_semantic_source",
+                "status": "forbidden",
+                "reason": "C2Rust baseline remains candidate_context_only",
+            },
+        ],
+        "fallback_summary": {
+            "legacy_string_translator": legacy_summary,
+        },
+        "refusal_summary": {
+            "status": "refused" if level == "L4" else "not_refused",
+            "route_level": level,
+        },
+        "validation_gate_summary": {
+            "generated_draft_semantic_pass": False,
+            "required_acceptance_gates": [
+                "c_oracle",
+                "rust_replay",
+                "schema_diff",
+                "negative_diff",
+                "unsafe_ledger",
+                "final_verification",
+            ],
+            "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline",
+        },
+        "drift_inputs": [
+            "route_decision.candidate_generation",
+            "validation_profile.candidate_generation",
+            "c2rust_baseline_manifest",
+            "auto_cache_metadata.dependent_artifacts",
+        ],
     }
 
 

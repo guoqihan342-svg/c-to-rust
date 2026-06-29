@@ -280,6 +280,17 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
             self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
 
+    def test_route_and_profile_schema_allow_p0_route_governance_summary(self) -> None:
+        for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
+            schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
+            schema = load_json(schema_path)
+            generation_schema = schema["definitions"]["candidateGenerationEvidence"]
+            policy_schema = schema["definitions"]["candidateSelectionPolicy"]
+
+            self.assertIn("governance_summary", generation_schema["properties"])
+            self.assertIn("p0_route_governance", policy_schema["properties"]["stage"]["enum"])
+            self.assertIn("routeGovernanceSummary", schema["definitions"])
+
     def test_route_and_profile_candidate_set_schema_allows_legacy_compatibility_only(self) -> None:
         for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
             schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
