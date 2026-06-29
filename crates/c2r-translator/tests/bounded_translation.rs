@@ -1130,6 +1130,66 @@ fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/implicit_integer_noop_cast_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let identity = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_noop")
+        .expect("lower clang-proven implicit integer NoOp cast fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = identity.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer NoOp return to preserve an IR cast, got {:?}",
+            identity.function_ir.body
+        );
+    };
+    assert!(matches!(
+        target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = expr.as_ref() else {
+        panic!("expected NoOp cast operand to be the original parameter, got {expr:?}");
+    };
+    assert_eq!(name, "value");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&identity.function_ir, &identity.globals)
+        .expect("emit Rust from clang-proven implicit integer NoOp cast fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn identity_noop(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-implicit-integer-noop-cast",
+        rust,
+        "assert_eq!(identity_noop(-7i32), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/usual_arithmetic_ast.json"

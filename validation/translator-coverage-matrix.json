@@ -402,8 +402,9 @@
         "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
         "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
         "unary plus integer promotion preserves clang-proven IntegralPromotion",
+        "integer NoOp explicit typed IR cast in preserved value contexts",
         "LValueToRValue transparent lvalue-read skeleton boundary",
-        "NoOp transparent skeleton boundary",
+        "non-integer or non-preserved NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
         "non-integer implicit castKind fail-closed",
         "missing implicit castKind fail-closed",
@@ -422,11 +423,19 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/unary_integer_conversion_ast.json"
             },
             {
+              "name": "implicit integer NoOp cast no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/implicit_integer_noop_cast_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
               "name": "clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -462,6 +471,10 @@
             {
               "name": "clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -486,6 +499,14 @@
         {
           "name": "expr_skeleton_from_ast_preserves_integer_implicit_casts",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_preserves_integer_noop_cast_in_value_context",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
           "name": "stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast",

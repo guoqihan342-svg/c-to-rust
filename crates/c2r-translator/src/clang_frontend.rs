@@ -3438,10 +3438,28 @@ fn bounded_call_arg_rejection_reason(
 
 #[cfg(feature = "typed-ir")]
 fn is_integral_conversion_cast_expr(expr: &Value) -> bool {
-    matches!(
-        string_field(expr, "castKind").as_deref(),
-        Some("IntegralCast" | "IntegralPromotion")
-    )
+    match string_field(expr, "castKind").as_deref() {
+        Some("IntegralCast" | "IntegralPromotion") => true,
+        Some("NoOp") => is_integer_noop_cast_expr(expr),
+        _ => false,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integer_noop_cast_expr(expr: &Value) -> bool {
+    let Ok(target) = expr_type(expr) else {
+        return false;
+    };
+    if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    let Some(operand) = inner(expr).first() else {
+        return false;
+    };
+    let Ok(operand_ty) = expr_type(operand) else {
+        return false;
+    };
+    matches!(operand_ty.kind, ClangTypeKind::Integer { .. })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7242,6 +7260,66 @@ mod tests {
         assert!(matches!(
             expr.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_integer_noop_cast_in_value_context() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "+",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "NoOp",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("binary add skeleton");
+        let ClangExprSkeleton::Binary { lhs, .. } = skeleton else {
+            panic!("expected binary skeleton, got {skeleton:?}");
+        };
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = lhs.as_ref()
+        else {
+            panic!("expected preserved integer NoOp cast, got {lhs:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
 
