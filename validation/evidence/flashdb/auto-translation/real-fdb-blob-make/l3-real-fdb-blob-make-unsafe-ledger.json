@@ -1,16 +1,22 @@
 {
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json",
+    "sha256": "021277711f266e0547319d18ca2e05cd68f8474e6754e3f50114e164823a92d3",
+    "status": "passed"
+  },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-    "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
+    "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
     "status": "skipped"
   },
   "entries": [],
+  "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
   "route_decision": {
-    "level": "L1",
+    "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-    "sha256": "6d84d1de69d9ca6d6f994d2a9f5acd288bc1ec56653cb14f115f62e6e7c0ec44",
-    "status": "recorded"
+    "sha256": "7fe0b3e7f5c0eb84c3b2c162c764efe1b86747c92bcbcc025ef6eeb9e3b266b2",
+    "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
@@ -18,8 +24,8 @@
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-    "profile": "L1-dev",
-    "sha256": "f014e93a51b40bce8d5ab7ff6464984cf777cf458aa2c08dc2ca538d4035fb13",
-    "status": "incomplete"
+    "profile": "L4-accepted-evidence",
+    "sha256": "aa7c0bd2d5ac5008e9a496820bd4beded5f296742399a932e4daa450ad22c96c",
+    "status": "passed"
   }
 }

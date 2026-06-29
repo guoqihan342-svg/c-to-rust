@@ -3,61 +3,18 @@
   "capability_delta": [
     {
       "blocked_callees": [],
-      "construct_id": "typed_ir_candidate_generated",
-      "delta_id": "cap-real-fdb-blob-make-typed_ir_candidate_generated",
+      "construct_id": "blocked_artifact",
+      "delta_id": "cap-real-fdb-blob-make-blocked_artifact",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
       ],
-      "generated_candidate_status": "candidate",
-      "kind": "candidate_status",
+      "generated_candidate_status": "refused",
+      "kind": "refusal_classification",
       "negative_coverage": [
         {
-          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
-          "kind": "validation_regression"
-        }
-      ],
-      "real_c_slice": "real-fdb-blob-make",
-      "semantic_pass": false
-    },
-    {
-      "blocked_callees": [],
-      "construct_id": "rust_replay_fixture_passed",
-      "delta_id": "cap-real-fdb-blob-make-rust_replay_fixture_passed",
-      "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-test-translation-generated.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"
-      ],
-      "generated_candidate_status": "candidate",
-      "kind": "candidate_verification",
-      "negative_coverage": [
-        {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_blob_make_rust_replay_passes_without_semantic_claim",
-          "kind": "rust_replay_regression"
-        }
-      ],
-      "real_c_slice": "real-fdb-blob-make",
-      "semantic_pass": false
-    },
-    {
-      "blocked_callees": [],
-      "construct_id": "c_oracle_harness_matched_not_oracle",
-      "delta_id": "cap-real-fdb-blob-make-c_oracle_harness_matched_not_oracle",
-      "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c"
-      ],
-      "generated_candidate_status": "candidate",
-      "kind": "candidate_verification",
-      "negative_coverage": [
-        {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim",
-          "kind": "c_oracle_diagnostic_regression"
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+          "kind": "route_refusal_regression"
         }
       ],
       "real_c_slice": "real-fdb-blob-make",
@@ -67,49 +24,22 @@
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "typed_ir_candidate_generated",
-      "delta_id": "gov-real-fdb-blob-make-typed_ir_candidate_generated-evidence",
+      "construct_id": "blocked_artifact",
+      "delta_id": "gov-real-fdb-blob-make-blocked_artifact-evidence",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
       ],
       "kind": "evidence_contract"
-    },
-    {
-      "bound_to": "P0 capability delta; governance records that Rust replay passed without semantic acceptance.",
-      "construct_id": "rust_replay_fixture_passed",
-      "delta_id": "gov-real-fdb-blob-make-rust_replay_fixture_passed-evidence",
-      "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-test-translation-generated.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"
-      ],
-      "kind": "evidence_contract"
-    },
-    {
-      "bound_to": "P0 capability delta; governance records that the C harness executed and matched fixture markers without semantic acceptance.",
-      "construct_id": "c_oracle_harness_matched_not_oracle",
-      "delta_id": "gov-real-fdb-blob-make-c_oracle_harness_matched_not_oracle-evidence",
-      "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c"
-      ],
-      "kind": "evidence_contract"
     }
   ],
-  "route_level": "L1",
-  "route_status": "recorded",
+  "route_level": "L4",
+  "route_status": "refused",
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [
-    "python -B validation/tools/validate_auto_translation_evidence.py",
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_blob_make_rust_replay_passes_without_semantic_claim",
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim"
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
   ]
 }

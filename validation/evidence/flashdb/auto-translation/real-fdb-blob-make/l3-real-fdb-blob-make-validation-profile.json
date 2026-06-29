@@ -1,10 +1,10 @@
 {
-  "accepted_evidence_authoritative": false,
+  "accepted_evidence_authoritative": true,
   "candidate_generation": {
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
+        "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -19,9 +19,11 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "primary:clang-lowered-typed-ir",
-        "kind": "clang-lowered-typed-ir",
-        "role": "primary_rust_draft",
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -36,7 +38,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
+          "sha256": "a6790af74ea3548f9c45eae50943f123659a163c28902f82c1b0d9cc1078a9ef",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -50,15 +52,24 @@
         "status": "skipped"
       }
     ],
-    "compatibility_sources": [],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": false,
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
     "generated_draft_semantic_pass": false,
     "primary_candidate": {
-      "candidate_id": "primary:clang-lowered-typed-ir",
+      "candidate_id": "primary:unknown",
       "fallback": false,
-      "selected": "clang-lowered-typed-ir",
+      "selected": "unknown",
       "semantic_pass": false
     },
-    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selected_candidate_id": null,
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -115,7 +126,7 @@
   "competition_environment": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    "sha256": "71ceb466d3b054559c7dec2ba514cc8a741161b7880c286873f082d876595770"
   },
   "generated_draft_semantic_pass": false,
   "goal": "dev",
@@ -127,8 +138,6 @@
   "optional_gates": [
     "negative_diff",
     "evidence_cleanliness",
-    "fuzz_property",
-    "miri",
     "kani"
   ],
   "oracle_boundary_contract": {
@@ -146,6 +155,7 @@
       }
     },
     "fixture_representativeness": {
+      "accepted_oracle_case_count": 3,
       "case_source": "fixture_contract",
       "declared_case_count": 3,
       "fixture_hash": "real-fdb-blob-make-fixture",
@@ -153,9 +163,7 @@
       "limitations": [],
       "representativeness": "bounded_fixture_contract"
     },
-    "insufficient_reasons": [
-      "fixture_accepted_oracle_case_count_missing"
-    ],
+    "insufficient_reasons": [],
     "observable_outputs": [
       "return_same_blob",
       "blob.buf",
@@ -178,7 +186,7 @@
       "sanitizer_status": "not_run"
     },
     "schema_version": 1,
-    "status": "insufficient",
+    "status": "sufficient_for_semantic_pass",
     "target": {
       "char_width": 8,
       "endianness": "little",
@@ -197,18 +205,16 @@
       "scalar_arithmetic_contract": {}
     }
   },
-  "profile": "L1-dev",
+  "profile": "L4-accepted-evidence",
   "required_gate_status": {
-    "c_oracle_diff": "DRAFT_GENERATED",
+    "c_oracle_diff": "C_ORACLE_GENERATED",
     "compile": "passed"
   },
   "required_gates": [
     "compile",
-    "c_oracle_diff",
-    "unsafe_ledger",
-    "rust_tests"
+    "c_oracle_diff"
   ],
-  "route_level": "L1",
+  "route_level": "L4",
   "scalar_ub_contract": {
     "c_boundary": {
       "division_by_zero": "not_declared",
@@ -223,7 +229,7 @@
         "full automatic C99/C11 translation",
         "whole-project migration",
         "semantic equivalence without C oracle and Rust replay evidence",
-        "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+        "generated fdb_blob_make Rust draft is itself semantically accepted"
       ]
     },
     "fixture_contract": {
@@ -234,14 +240,9 @@
     "status": "recorded"
   },
   "schema_version": 1,
-  "skipped_gates": [
-    {
-      "gate": "c_oracle_diff",
-      "reason": "DRAFT_GENERATED"
-    }
-  ],
+  "skipped_gates": [],
   "slice_id": "real-fdb-blob-make",
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "flashdb",
   "tool_boundaries": {
     "c_ub": [

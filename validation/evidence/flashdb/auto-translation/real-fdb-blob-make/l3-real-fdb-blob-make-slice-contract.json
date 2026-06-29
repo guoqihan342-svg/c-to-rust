@@ -124,12 +124,13 @@
     ]
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "must_not_claim": [
       "full automatic C99/C11 translation",
       "whole-project migration",
       "semantic equivalence without C oracle and Rust replay evidence",
-      "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+      "generated fdb_blob_make Rust draft is itself semantically accepted"
     ],
     "non_goals": [
       "No full project migration claim.",

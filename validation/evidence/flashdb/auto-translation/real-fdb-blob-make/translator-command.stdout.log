@@ -1,7 +1,7 @@
 {
   "target_id": "flashdb",
   "slice_id": "real-fdb-blob-make",
-  "status": "generated",
+  "status": "blocked",
   "artifact_paths": [
     "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-translation-plan.json",
     "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-translation-events.jsonl",
@@ -10,8 +10,6 @@
     "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
     "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-ai-candidate-manifest.json",
     "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-blocked-repairs.json",
-    "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
-    "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-dry-run.json",
-    "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json"
+    "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs"
   ]
 }

@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -13,21 +13,37 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [],
-          "lvalue_kinds": [],
+          "lvalue_decisions": [
+            {
+              "decision": "safe_wrapper",
+              "lvalue_kind": "pointer_field",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "blob->buf = (void *)value_buf",
+              "statement_index": 0,
+              "translation_rule_id": "pointer-field-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "pointer_field",
+            "none"
+          ],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
             "line_start": 1
           },
           "statement_kinds": [
-            "assignment",
+            "pointer_write",
             "return"
           ],
           "statements": [
-            "assign member buf",
-            "assign member size",
-            "return"
+            "blob->buf = (void *)value_buf",
+            "blob->size = buf_len",
+            "return blob"
           ],
           "terminator": "return"
         }
@@ -53,7 +69,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "",
+          "expression": "blob",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -81,12 +97,12 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
+  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "sha256": "30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
+    "sha256": "5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
     "status": "ready"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
