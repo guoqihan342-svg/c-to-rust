@@ -352,6 +352,7 @@ struct EmitContext {
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
+    opaque_record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
@@ -490,6 +491,12 @@ impl EmitContext {
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params)?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
+        let opaque_record_pointer_field_value_params =
+            collect_opaque_record_pointer_field_value_params(
+                &function.body,
+                &function.params,
+                &mutable_record_pointer_write_params,
+            )?;
         let mut readonly_globals = HashMap::new();
         for global in globals {
             if readonly_globals
@@ -511,6 +518,7 @@ impl EmitContext {
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
             mutable_record_pointer_write_params,
+            opaque_record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
             readonly_globals,
         })
@@ -542,6 +550,10 @@ impl EmitContext {
 
     fn is_mutable_record_pointer_write_param(&self, name: &str) -> bool {
         self.mutable_record_pointer_write_params.contains(name)
+    }
+
+    fn is_opaque_record_pointer_field_value_param(&self, name: &str) -> bool {
+        self.opaque_record_pointer_field_value_params.contains(name)
     }
 
     fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {
@@ -703,6 +715,9 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
+    } else if context.is_opaque_record_pointer_field_value_param(&param.name) {
+        emit_opaque_void_pointer_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if readonly_pointer_slice_element_type(&param.ty).is_some()
         && !context.is_readonly_pointer_read_param(&param.name)
         && !context.is_readonly_pointer_mentioned_param(&param.name)
@@ -752,6 +767,33 @@ fn emit_value_type(ty: &IrType) -> Result<String, String> {
         return emit_record_type_name(name);
     }
     emit_scalar_type(ty)
+}
+
+fn emit_opaque_void_pointer_param_type(ty: &IrType) -> Result<String, String> {
+    emit_opaque_void_pointer_type(ty).ok_or_else(|| {
+        format!(
+            "opaque record pointer field value param type {} is unsupported",
+            type_label(ty)
+        )
+    })
+}
+
+fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
+    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+        return Ok(pointer_ty);
+    }
+    emit_scalar_type(ty)
+}
+
+fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    if !matches!(pointee.kind, IrTypeKind::Void) {
+        return None;
+    }
+    let mutability = if pointee.is_const { "const" } else { "mut" };
+    Some(format!("*{mutability} core::ffi::c_void"))
 }
 
 fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
@@ -880,7 +922,7 @@ fn emit_record_definition(name: &str, fields: &[RecordFieldUse<'_>]) -> Result<S
     definition.push_str(&format!("pub struct {rust_name} {{\n"));
     for field in fields {
         let field_name = emit_identifier(field.name, "record field")?;
-        let field_ty = emit_scalar_type(field.ty)
+        let field_ty = emit_record_field_type(field.ty)
             .map_err(|detail| format!("record {name} field {} has {detail}", field.name))?;
         definition.push_str(&format!("    pub {field_name}: {field_ty},\n"));
     }
@@ -1293,7 +1335,6 @@ fn emit_stmt(
                     "assign value multiple post-increment byte reads are unsupported".to_string(),
                 );
             }
-            validate_expr_matches_type(value, target_ty, "assign value")?;
             if let Some(compound_value) =
                 emit_mutable_record_pointer_member_compound_assignment_value(
                     target,
@@ -1305,6 +1346,20 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{target_name} = {compound_value};\n"));
             }
+            if let Some(emitted) = emit_opaque_record_pointer_field_assignment_value(
+                target,
+                value,
+                target_ty,
+                symbols,
+                context,
+                "assign value",
+            )? {
+                return Ok(format!(
+                    "{}{indent}{target_name} = {};\n",
+                    emitted.prelude, emitted.expr
+                ));
+            }
+            validate_expr_matches_type(value, target_ty, "assign value")?;
             let emitted =
                 emit_expr_with_prelude(value, symbols, context, indent_level, "assign value")?;
             Ok(format!(
@@ -1743,7 +1798,7 @@ fn emit_mutable_record_pointer_member_assignment_target(
             type_label(base_ty)
         )
     })?;
-    emit_scalar_type(ty)
+    emit_record_field_type(ty)
         .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
     let base_name = emit_identifier(base_name, "arrow member assignment base")?;
     let field = emit_identifier(field, "arrow member assignment field")?;
@@ -1784,6 +1839,129 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     )))
 }
 
+fn emit_opaque_record_pointer_field_assignment_value(
+    target: &IrExpr,
+    value: &IrExpr,
+    target_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
+    let Some(target_pointer_ty) = emit_opaque_void_pointer_type(target_ty) else {
+        return Ok(None);
+    };
+    let Some((base_name, _, _, _)) =
+        direct_mutable_record_pointer_opaque_member_parts(target, context)?
+    else {
+        return Err(format!(
+            "{path} opaque pointer field target requires direct mutable record pointer ownership evidence"
+        ));
+    };
+    if !context.is_mutable_record_pointer_write_param(base_name) {
+        return Err(format!(
+            "{path} opaque pointer field target {base_name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    let expr = match value {
+        IrExpr::Var { .. } => emit_opaque_record_pointer_field_value_var(
+            value,
+            &target_pointer_ty,
+            symbols,
+            context,
+            path,
+        )?,
+        IrExpr::Cast {
+            target: cast_target,
+            expr,
+            ..
+        } => {
+            let cast_target_ty = emit_opaque_void_pointer_type(cast_target).ok_or_else(|| {
+                format!(
+                    "{path} opaque pointer cast target {} is unsupported",
+                    type_label(cast_target)
+                )
+            })?;
+            if cast_target_ty != target_pointer_ty {
+                return Err(format!(
+                    "{path} opaque pointer cast target {cast_target_ty} does not match field type {target_pointer_ty}"
+                ));
+            }
+            let source_ty = expr_type(expr)
+                .ok_or_else(|| format!("{path} opaque pointer cast source type is unsupported"))?;
+            let source_pointer_ty = emit_opaque_void_pointer_type(source_ty).ok_or_else(|| {
+                format!(
+                    "{path} opaque pointer cast source {} is unsupported",
+                    type_label(source_ty)
+                )
+            })?;
+            let expr = emit_opaque_record_pointer_field_value_var(
+                expr,
+                &source_pointer_ty,
+                symbols,
+                context,
+                &format!("{path} opaque pointer cast source"),
+            )?;
+            format!("({expr} as {target_pointer_ty})")
+        }
+        _ => {
+            return Err(format!(
+                "{path} opaque pointer field write requires an opaque pointer param value or opaque pointer cast"
+            ))
+        }
+    };
+    Ok(Some(EmittedExpr {
+        prelude: String::new(),
+        expr,
+    }))
+}
+
+fn emit_opaque_record_pointer_field_value_var(
+    expr: &IrExpr,
+    expected_pointer_ty: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<String, String> {
+    let IrExpr::Var { name, ty, .. } = expr else {
+        let source_ty = expr_type(expr).ok_or_else(|| format!("{path} type is unsupported"))?;
+        return Err(format!("{path} {} is unsupported", type_label(source_ty)));
+    };
+    if !symbols.contains(name) {
+        return Err(format!("{path} {name} is not declared"));
+    }
+    if !context.is_opaque_record_pointer_field_value_param(name) {
+        return Err(format!(
+            "{path} {name} requires opaque record pointer field value evidence"
+        ));
+    }
+    let source_pointer_ty = emit_opaque_void_pointer_type(ty)
+        .ok_or_else(|| format!("{path} {} is unsupported", type_label(ty)))?;
+    if source_pointer_ty != expected_pointer_ty {
+        return Err(format!(
+            "{path} type {source_pointer_ty} does not match expected type {expected_pointer_ty}"
+        ));
+    }
+    emit_identifier(name, "opaque pointer field value")
+}
+
+fn direct_mutable_record_pointer_opaque_member_parts<'a>(
+    expr: &'a IrExpr,
+    context: &EmitContext,
+) -> Result<Option<(&'a str, &'a IrType, &'a str, &'a IrType)>, String> {
+    let Some((base, base_ty, field, ty)) =
+        direct_mutable_record_pointer_member_parts_any_field(expr, context)?
+    else {
+        return Ok(None);
+    };
+    emit_opaque_void_pointer_type(ty).ok_or_else(|| {
+        format!(
+            "mutable record pointer opaque field {base}.{field} has unsupported type {}",
+            type_label(ty)
+        )
+    })?;
+    Ok(Some((base, base_ty, field, ty)))
+}
+
 fn same_direct_mutable_record_pointer_member(
     lhs: &IrExpr,
     target: &IrExpr,
@@ -1806,6 +1984,21 @@ fn same_direct_mutable_record_pointer_member(
 }
 
 fn direct_mutable_record_pointer_member_parts<'a>(
+    expr: &'a IrExpr,
+    context: &EmitContext,
+) -> Result<Option<(&'a str, &'a IrType, &'a str, &'a IrType)>, String> {
+    let Some((base, base_ty, field, ty)) =
+        direct_mutable_record_pointer_member_parts_any_field(expr, context)?
+    else {
+        return Ok(None);
+    };
+    emit_scalar_type(ty).map_err(|detail| {
+        format!("mutable record pointer field compound assignment field {field} has {detail}")
+    })?;
+    Ok(Some((base, base_ty, field, ty)))
+}
+
+fn direct_mutable_record_pointer_member_parts_any_field<'a>(
     expr: &'a IrExpr,
     context: &EmitContext,
 ) -> Result<Option<(&'a str, &'a IrType, &'a str, &'a IrType)>, String> {
@@ -1833,9 +2026,6 @@ fn direct_mutable_record_pointer_member_parts<'a>(
             "mutable record pointer field compound assignment base {name} has unsupported type {}",
             type_label(base_ty)
         )
-    })?;
-    emit_scalar_type(ty).map_err(|detail| {
-        format!("mutable record pointer field compound assignment field {field} has {detail}")
     })?;
     Ok(Some((name.as_str(), base_ty, field.as_str(), ty)))
 }
@@ -4505,7 +4695,7 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
             type_label(base_ty)
         )
     })?;
-    emit_scalar_type(ty)
+    emit_record_field_type(ty)
         .map_err(|detail| format!("mutable record pointer field {name}.{field} has {detail}"))?;
     Ok(Some(MutableRecordPointerFieldKey {
         base: name.clone(),
@@ -5249,7 +5439,10 @@ fn collect_mutable_record_pointer_write_params(
 ) -> Result<HashSet<String>, String> {
     let pointer_param_count = params
         .iter()
-        .filter(|param| matches!(param.ty.kind, IrTypeKind::Pointer { .. }))
+        .filter(|param| {
+            matches!(param.ty.kind, IrTypeKind::Pointer { .. })
+                && emit_opaque_void_pointer_type(&param.ty).is_none()
+        })
         .count();
     let mutable_record_pointer_params = params
         .iter()
@@ -5269,6 +5462,155 @@ fn collect_mutable_record_pointer_write_params(
         );
     }
     Ok(write_params)
+}
+
+fn collect_opaque_record_pointer_field_value_params(
+    body: &[IrStmt],
+    params: &[IrParam],
+    mutable_record_pointer_write_params: &HashSet<String>,
+) -> Result<HashSet<String>, String> {
+    let param_types: HashMap<&str, &IrType> = params
+        .iter()
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect();
+    let mut value_params = HashSet::new();
+    collect_opaque_record_pointer_field_value_params_from_body(
+        body,
+        &param_types,
+        mutable_record_pointer_write_params,
+        &mut value_params,
+    )?;
+    Ok(value_params)
+}
+
+fn collect_opaque_record_pointer_field_value_params_from_body(
+    body: &[IrStmt],
+    param_types: &HashMap<&str, &IrType>,
+    mutable_record_pointer_write_params: &HashSet<String>,
+    value_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Assign { target, value, .. } => {
+                collect_opaque_record_pointer_field_value_param_from_assignment(
+                    target,
+                    value,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_opaque_record_pointer_field_value_params_from_body(
+                    then_body,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+                collect_opaque_record_pointer_field_value_params_from_body(
+                    else_body,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_opaque_record_pointer_field_value_params_from_body(
+                    body,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_opaque_record_pointer_field_value_params_from_body(
+                    init,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+                if let Some(step) = step {
+                    collect_opaque_record_pointer_field_value_params_from_body(
+                        std::slice::from_ref(step.as_ref()),
+                        param_types,
+                        mutable_record_pointer_write_params,
+                        value_params,
+                    )?;
+                }
+                collect_opaque_record_pointer_field_value_params_from_body(
+                    body,
+                    param_types,
+                    mutable_record_pointer_write_params,
+                    value_params,
+                )?;
+            }
+            IrStmt::Decl { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_opaque_record_pointer_field_value_param_from_assignment(
+    target: &IrExpr,
+    value: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    mutable_record_pointer_write_params: &HashSet<String>,
+    value_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Member {
+        base,
+        ty,
+        is_arrow: true,
+        ..
+    } = target
+    else {
+        return Ok(());
+    };
+    let IrExpr::Var {
+        name: base_name, ..
+    } = base.as_ref()
+    else {
+        return Ok(());
+    };
+    if !mutable_record_pointer_write_params.contains(base_name) {
+        return Ok(());
+    }
+    if emit_opaque_void_pointer_type(ty).is_none() {
+        return Ok(());
+    }
+    collect_opaque_record_pointer_value_param_from_expr(value, param_types, value_params)
+}
+
+fn collect_opaque_record_pointer_value_param_from_expr(
+    value: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    value_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    match value {
+        IrExpr::Var { name, ty, .. } => {
+            if param_types.get(name.as_str()).is_some_and(|param_ty| {
+                *param_ty == ty && emit_opaque_void_pointer_type(ty).is_some()
+            }) {
+                value_params.insert(name.clone());
+            }
+            Ok(())
+        }
+        IrExpr::Cast { expr, .. } => {
+            collect_opaque_record_pointer_value_param_from_expr(expr, param_types, value_params)
+        }
+        _ => Ok(()),
+    }
 }
 
 fn validate_mutable_pointer_write_alias_boundary(
@@ -5834,7 +6176,7 @@ fn collect_mutable_record_pointer_write_param_from_target(
     {
         return Ok(());
     }
-    emit_scalar_type(ty)
+    emit_record_field_type(ty)
         .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
     write_params.insert(name.clone());
     Ok(())

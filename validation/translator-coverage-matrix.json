@@ -1047,6 +1047,8 @@
         "record field assignment",
         "readonly record pointer field read",
         "mutable record pointer field write",
+        "mutable record pointer opaque void pointer field write",
+        "opaque void pointer field assignment cast",
         "mutable record pointer identity return after field write"
       ],
       "dimension_status": {
@@ -1073,6 +1075,14 @@
             {
               "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1086,6 +1096,14 @@
             {
               "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_mutable_record_pointer_opaque_pointer_field_read",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1098,6 +1116,14 @@
             },
             {
               "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1131,6 +1157,14 @@
         {
           "name": "typed_ir_emits_mutable_record_pointer_identity_return_after_field_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1148,6 +1182,16 @@
           "name": "typed_ir_rejects_mutable_record_pointer_identity_return_without_field_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "mutable record pointer identity return requires prior mutable record field-write ownership evidence"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_record_pointer_opaque_pointer_field_read",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "opaque void pointer record fields are stored as raw pointer values only; reading the field still needs pointer provenance and alias/lifetime proof"
+        },
+        {
+          "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "integer-to-pointer casts are not admitted for opaque pointer field writes"
         }
       ]
     },
