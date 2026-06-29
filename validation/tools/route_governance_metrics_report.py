@@ -61,6 +61,8 @@ def build_report(
     require(evidence_report.get("status") == "passed", "evidence governance report status must be passed")
     inventory = require_dict(evidence_report, "inventory")
     candidate_inventory = require_dict(inventory, "candidate_generation")
+    evidence_dir = evidence_root if evidence_root.is_absolute() else repo_root / evidence_root
+    slice_gate_contexts = build_slice_gate_contexts(repo_root, evidence_dir)
 
     return {
         "schema_version": 1,
@@ -88,10 +90,13 @@ def build_report(
                 "candidate_generation.route_decision_artifact_count",
             ),
             "candidate_generation_inventory": candidate_inventory,
+            "tracked_slice_gate_contexts": len(slice_gate_contexts),
+            "slice_gate_contexts": slice_gate_contexts,
         },
         "denominators": {
             "capability_delta_ledger": "capability delta ledger artifacts under validation/evidence/**/l3-*-capability-delta.json",
             "candidate_generation_inventory": "route decision artifacts under validation/evidence/**/*-route-decision.json",
+            "slice_gate_contexts": "one row per validation/evidence/<target>/auto-translation/<slice> directory with route/profile/final gate evidence",
             "translation_coverage_numerator": "translator-generated Rust drafts with semantic-pass status backed by L3 accepted/passed route evidence",
             "accepted_evidence_semantic_pass_count": "accepted external evidence contexts reported separately and excluded from translation_coverage_numerator",
         },
@@ -101,6 +106,174 @@ def build_report(
             "the shared validation gates prove semantic_pass for translator-generated Rust drafts."
         ),
     }
+
+
+def build_slice_gate_contexts(repo_root: Path, evidence_dir: Path) -> list[dict[str, Any]]:
+    if not evidence_dir.exists():
+        return []
+    contexts = []
+    for target_dir in sorted(path for path in evidence_dir.iterdir() if path.is_dir()):
+        auto_dir = target_dir / "auto-translation"
+        if not auto_dir.is_dir():
+            continue
+        for slice_dir in sorted(path for path in auto_dir.iterdir() if path.is_dir()):
+            contexts.append(build_slice_gate_context(repo_root, target_dir.name, slice_dir))
+    return contexts
+
+
+def build_slice_gate_context(repo_root: Path, fallback_target_id: str, slice_dir: Path) -> dict[str, Any]:
+    manifest = load_optional_json(find_artifact(slice_dir, "-evidence-manifest.json"))
+    route = load_optional_json(find_artifact(slice_dir, "-route-decision.json"))
+    final = load_optional_json(find_artifact(slice_dir, "-final-verification.json"))
+    repairs = load_optional_json(find_artifact(slice_dir, "-self-healing-blocked-repairs.json"))
+    unsafe_scan = load_optional_json(find_artifact(slice_dir, "-unsafe-scan.json"))
+    negative_diff = load_optional_json(find_artifact(slice_dir, "-negative-diff.json"))
+    performance_smoke = load_optional_json(find_artifact(slice_dir, "-performance-smoke.json"))
+
+    target_id = first_string(
+        manifest.get("target_id"),
+        final.get("target_id"),
+        route.get("target_id"),
+        fallback_target_id,
+    )
+    slice_id = first_string(
+        manifest.get("slice_id"),
+        final.get("slice_id"),
+        route.get("slice_id"),
+        slice_dir.name,
+    )
+    route_summary = route_governance_summary(route)
+    return {
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "pipeline_id": rel(repo_root, slice_dir),
+        "route": {
+            "level": route_summary.get("route_level") or route.get("level") or route.get("route_level"),
+            "status": route_summary.get("route_status") or route.get("route_status") or route.get("status"),
+            "artifact_status": route.get("status"),
+        },
+        "final_verification": {
+            "status": final.get("status"),
+            "semantic_pass": final.get("semantic_pass"),
+            "c_oracle_status": final.get("c_oracle_status"),
+            "validation_profile_status": final.get("validation_profile_status"),
+            "skipped_gates": list_or_empty(final.get("skipped_gates")),
+        },
+        "failure_reasons": failure_reasons(final, negative_diff),
+        "human_intervention_points": human_intervention_points(repairs),
+        "blocked_callees": blocked_callees(repairs),
+        "fixture": {
+            "case_count": fixture_case_count(manifest),
+        },
+        "unsafe": {
+            "status": unsafe_scan.get("status"),
+            "first_party_non_test_unsafe_count": unsafe_scan.get("first_party_non_test_unsafe_count"),
+            "first_party_non_test_unsafe_ratio": unsafe_scan.get("first_party_non_test_unsafe_ratio"),
+        },
+        "negative_diff": {
+            "status": negative_diff.get("status"),
+            "expected_failure": negative_diff.get("expected_failure"),
+            "mutation_detected": negative_diff.get("mutation_detected"),
+            "reason_code": negative_diff.get("reason_code"),
+            "blocked_by": list_or_empty(negative_diff.get("blocked_by")),
+            "root_blocked_by": list_or_empty(negative_diff.get("root_blocked_by")),
+        },
+        "performance_smoke": {
+            "status": performance_smoke.get("status"),
+            "secondary_only": performance_smoke.get("secondary_only"),
+            "semantic_pass": performance_smoke.get("semantic_pass"),
+        },
+        "claim_boundary": (
+            "Slice gate context summarizes existing route/profile/final evidence; it is not a semantic pass claim."
+        ),
+    }
+
+
+def route_governance_summary(route: dict[str, Any]) -> dict[str, Any]:
+    generation = route.get("candidate_generation")
+    if not isinstance(generation, dict):
+        return {}
+    summary = generation.get("governance_summary")
+    return summary if isinstance(summary, dict) else {}
+
+
+def find_artifact(slice_dir: Path, suffix: str) -> Path | None:
+    matches = sorted(slice_dir.glob(f"*{suffix}"))
+    return matches[0] if matches else None
+
+
+def load_optional_json(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def first_string(*values: Any) -> str:
+    for value in values:
+        if isinstance(value, str) and value:
+            return value
+    return "unknown"
+
+
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def failure_reasons(final: dict[str, Any], negative_diff: dict[str, Any]) -> list[str]:
+    reasons = []
+    for gate in list_or_empty(final.get("skipped_gates")):
+        if isinstance(gate, dict):
+            append_unique(reasons, gate.get("reason"))
+    append_unique(reasons, negative_diff.get("reason_code"))
+    append_unique(reasons, negative_diff.get("reason"))
+    return reasons
+
+
+def human_intervention_points(repairs: dict[str, Any]) -> list[str]:
+    points = []
+    for repair in list_or_empty(repairs.get("blocked_repairs")):
+        if isinstance(repair, dict):
+            append_unique(points, repair.get("human_intervention_point"))
+    return points
+
+
+def blocked_callees(repairs: dict[str, Any]) -> list[str]:
+    callees = []
+    for repair in list_or_empty(repairs.get("blocked_repairs")):
+        if not isinstance(repair, dict):
+            continue
+        gap = repair.get("ir_feature_gap")
+        if not isinstance(gap, dict):
+            continue
+        for callee in list_or_empty(gap.get("blocked_callees")):
+            append_unique(callees, callee)
+    return callees
+
+
+def fixture_case_count(manifest: dict[str, Any]) -> int | None:
+    fixture = manifest.get("fixture")
+    if isinstance(fixture, dict) and isinstance(fixture.get("operation_count"), int):
+        return fixture["operation_count"]
+    oracle = manifest.get("oracle")
+    if isinstance(oracle, dict) and isinstance(oracle.get("case_count"), int):
+        return oracle["case_count"]
+    binding = oracle.get("fixture_binding") if isinstance(oracle, dict) else None
+    if isinstance(binding, dict) and isinstance(binding.get("case_count"), int):
+        return binding["case_count"]
+    return None
+
+
+def append_unique(items: list[str], value: Any) -> None:
+    if isinstance(value, str) and value and value not in items:
+        items.append(value)
+
+
+def rel(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def coverage_metrics_from(coverage_report: dict[str, Any]) -> dict[str, Any]:
