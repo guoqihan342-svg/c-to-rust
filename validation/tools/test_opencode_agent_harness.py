@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -160,6 +161,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 merge_plan["worker_summaries"],
                 [repo_rel(summary_path)],
             )
+            self.assertEqual(merge_plan["argv"][0], sys.executable)
             self.assertIn("--worker-summary", merge_plan["argv"])
             self.assertIn("--run-id", merge_plan["argv"])
             run_id_idx = merge_plan["argv"].index("--run-id")
@@ -275,6 +277,130 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             event_rows = fetch_rows(db_path, "select event_type from events order by event_id")
             self.assertIn(("worker_executed",), event_rows)
+
+    def test_run_worker_fails_when_recorded_summary_final_gate_fails(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                summary_path.parent.mkdir(parents=True, exist_ok=True)
+                summary_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "run_id": request["run_id"],
+                            "proof_class": "local-simulation",
+                            "profile_id": "huawei-competition-ubuntu-24.04",
+                            "profile_sha256": "0" * 64,
+                            "clang_source": "missing",
+                            "cargo_mirror_activation": {
+                                "method": "CARGO_HOME",
+                                "path": "config/competition-env/cargo",
+                                "config_file": "config/competition-env/cargo/config.toml",
+                            },
+                            "elapsed_seconds": 0,
+                            "translator_version": "test",
+                            "slices": {
+                                "attempted": 1,
+                                "typed_ir_generated": 1,
+                                "compiled": 0,
+                                "semantic_pass": 0,
+                                "refused": 0,
+                                "blocked": 0,
+                                "failed": 1,
+                            },
+                            "unsafe_budget": {
+                                "status": "passed",
+                                "total_first_party_non_test_unsafe": 0,
+                                "ratio": 0,
+                            },
+                            "artifact_roots": [
+                                "target/competition-out/evidence",
+                                "target/competition-out/summary",
+                                "target/competition-out/logs",
+                            ],
+                            "final_gate": {
+                                "status": "failed",
+                                "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                            },
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="worker reported success\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            self.assertTrue(result["recorded"])
+            self.assertEqual(result["summary_status"], "failed")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["exit_code"], 1)
+
+    def test_run_worker_rejects_missing_out_root(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            request_path = harness.assignment_file_path(db_path, "worker-a").with_name("worker-a-request.json")
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            del request["out_root"]
+            request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "worker out_root is required"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    repo_root=REPO_ROOT,
+                )
 
     def test_rejects_absolute_or_escaping_paths(self) -> None:
         with temp_repo_dir() as tmp:

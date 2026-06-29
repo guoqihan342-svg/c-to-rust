@@ -494,6 +494,8 @@ def run_worker(
     if not request_path.exists():
         raise SystemExit(f"worker request does not exist: {repo_relative(request_path, repo_root=repo_root)}")
     request = load_json(request_path)
+    if not request.get("out_root"):
+        raise SystemExit("worker out_root is required in request")
     worker_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
     summary_path = worker_out_root / "summary" / "competition-run-summary.json"
     logs_dir = worker_out_root / "logs"
@@ -555,7 +557,7 @@ def run_worker(
         summary_status = str(summary.get("final_gate", {}).get("status", "failed"))
 
     effective_exit_code = int(completed.returncode)
-    if recorded is None and effective_exit_code == 0:
+    if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
         effective_exit_code = 1
     status = "recorded" if recorded is not None else "failed"
     report = {
@@ -676,7 +678,7 @@ def write_merge_plan(
             (run_id,),
         ).fetchall()
     summaries = [row[0] for row in rows]
-    argv = ["python", "validation/tools/run_competition.py"]
+    argv = [sys.executable, "validation/tools/run_competition.py"]
     for summary in summaries:
         argv.extend(["--worker-summary", summary])
     argv.extend(["--out-root", repo_relative(out_root, repo_root=repo_root), "--proof-class", proof_class, "--run-id", run_id])
