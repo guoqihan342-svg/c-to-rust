@@ -28711,7 +28711,12 @@ fn writes_translation_artifacts_for_l3_manifest_binding() {
         assert!(out_dir.join(path).exists(), "{path}");
     }
     let plan = fs::read_to_string(out_dir.join("l3-add-one-auto-translation-plan.json")).unwrap();
-    assert!(plan.contains("\"status\": \"generated\""));
+    assert!(plan.contains("\"status\": \"blocked\""));
+    assert!(plan.contains("\"kind\": \"legacy_"));
+    assert!(plan.contains("_retired\""));
+    let events =
+        fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[cfg(not(feature = "clang-frontend"))]
@@ -28881,7 +28886,7 @@ fn clang_frontend_feature_does_not_emit_lowering_report_without_opt_in() {
 
 #[cfg(feature = "clang-lowering-report")]
 #[test]
-fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status() {
+fn clang_lowering_report_feature_blocks_retired_legacy_fallback_when_unavailable() {
     let source_root = unique_out_dir("clang-lowering-source");
     fs::create_dir_all(&source_root).unwrap();
     fs::write(
@@ -28925,7 +28930,17 @@ fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifes
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
     let report = json_file(out_dir.join("l3-add-one-clang-lowering-report.json"));
 
-    assert_eq!(manifest.status, "generated");
+    if report["typed_ir_candidate"]["status"] == "generated" {
+        assert_eq!(manifest.status, "generated");
+    } else {
+        assert_eq!(manifest.status, "blocked");
+        let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
+        assert_eq!(plan["errors"][0]["kind"], "legacy_fallback_retired");
+        let events =
+            fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
+        assert!(events.contains("\"event\":\"translation_fallback\""));
+        assert!(!events.contains("\"event\":\"translation_generated\""));
+    }
     assert!(manifest
         .artifact_paths
         .iter()
@@ -29121,7 +29136,7 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
 
 #[cfg(feature = "clang-frontend")]
 #[test]
-fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation() {
+fn clang_frontend_dry_run_artifact_records_metadata_errors_and_legacy_retired_status() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
         slice_id: "add-one".to_string(),
@@ -29137,7 +29152,7 @@ fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_tran
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
     let dry_run = json_file(out_dir.join("l3-add-one-clang-dry-run.json"));
 
-    assert_eq!(manifest.status, "generated");
+    assert_eq!(manifest.status, "blocked");
     assert_eq!(dry_run["status"], "blocked");
     assert_eq!(dry_run["errors"][0]["kind"], "missing_source_root");
     assert_eq!(
@@ -29145,4 +29160,9 @@ fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_tran
         "clang frontend dry-run requires source_root"
     );
     assert!(out_dir.join("l3-add-one-rust-draft.rs").exists());
+    let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
+    assert!(plan["errors"][0]["kind"]
+        .as_str()
+        .unwrap()
+        .starts_with("legacy_"));
 }

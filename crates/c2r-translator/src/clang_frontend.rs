@@ -2705,7 +2705,7 @@ fn expr_skeleton_from_ast_with_options(
             }
             if !matches!(
                 string_field(expr, "castKind").as_deref(),
-                Some("BitCast" | "IntegralCast" | "IntegralPromotion")
+                Some("BitCast" | "IntegralCast" | "IntegralPromotion" | "NoOp")
             ) {
                 return Ok(ClangExprSkeleton::Unsupported {
                     node: "CStyleCastExpr".to_string(),
@@ -5446,6 +5446,45 @@ mod tests {
         let skeleton = expr_skeleton_from_ast(&expr).expect("NoOp cast should preserve operand");
         assert!(matches!(
             skeleton,
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+        ));
+    }
+
+    #[test]
+    fn c_style_noop_integer_cast_preserves_explicit_cast_node() {
+        let expr = serde_json::json!({
+            "kind": "CStyleCastExpr",
+            "castKind": "NoOp",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "uint32_t" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("C-style NoOp cast skeleton");
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = &skeleton
+        else {
+            panic!("expected explicit C-style NoOp cast, got {skeleton:?}");
+        };
+
+        assert!(!implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
             ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
