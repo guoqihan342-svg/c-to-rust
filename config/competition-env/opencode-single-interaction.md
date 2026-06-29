@@ -56,6 +56,50 @@
 
 **多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。
 
+## OpenCode Harness 多 Agent + SQLite 流程
+
+P0 默认使用 `target/competition-out/state/opencode-agent-harness.sqlite3` 作为 OpenCode run ledger、worker assignment、lease 和 artifact index。SQLite 只做恢复、去重、锁租约和审计索引；语义通过仍只看落盘 evidence 和 validator。
+
+典型流程：
+
+```bash
+python -m validation.tools.opencode_agent_harness init-run \
+  --run-id <run-id> \
+  --proof-class <proof-class> \
+  --out-root target/competition-out
+
+python -m validation.tools.opencode_agent_harness assign-slice \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --target-id <target> \
+  --slice-id <slice> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --function <function> \
+  --source-commit <commit> \
+  --compiler-command-source compile_commands.json \
+  --include-path include \
+  --define DEMO=1 \
+  --out-root target/competition-out/workers/worker-a
+
+python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+
+python -m validation.tools.opencode_agent_harness record-worker-summary \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+
+python -m validation.tools.opencode_agent_harness write-merge-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --proof-class <proof-class> \
+  --out-root target/competition-out
+```
+
+`write-merge-plan` 生成的 `target/competition-out/harness/merge-plan.json` 只是把 worker summary 汇总为 `run_competition.py --worker-summary ...` 命令。最终仍必须运行 merge plan 中的 runner，并由 `validate_competition_run_summary.py` 校验总 summary。
+
 ## OpenCode 单次交互 Prompt 模板
 
 ```
@@ -88,6 +132,8 @@
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
+9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger，再用 `assign-slice` 给每个 worker 生成 assignment。worker 只写自己的 `target/competition-out/workers/<worker-id>/`，完成后用 `record-worker-summary` 入库，最后用 `write-merge-plan` 生成统一汇总命令。
+
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。
 遇到失败就记录原因，不进入修复循环。
@@ -99,6 +145,7 @@
 - **不生成手写 `c_source` 字符串**（必须从真实 C 源文件通过 `extract_source_slice.py` 抽取）。
 - **不启动 LLM code generation**（本项目翻译只走 clang-lowered typed IR + generic emitter，不走 AI/LLM 候选生成）。
 - **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。
+- **SQLite 只是 harness ledger**，用于 assignment、lease、artifact index 和 merge plan；不能用 SQLite 中的状态替代 evidence validator。
 - **优先使用 `run_competition.py` 直接 source 参数或 `--extract-spec` 做真实 C slice 抽取、迁移和汇总**；`--slice-spec` 仍可用于已经抽取好的 spec，多个隔离 worker 的结果通过重复 `--worker-summary` 进入同一 summary validator。
 - **C2Rust baseline 如果生成失败/不存在，记录 `skipped` 或 `blocked`**，不伪造 `generated`。
 - **所有 evidence 文件必须落盘**，不可在内存中构造后说 passes——validator 直接读磁盘文件。
@@ -121,6 +168,16 @@
 
 ```
 target/competition-out/
+├── state/
+│   └── opencode-agent-harness.sqlite3
+├── harness/
+│   ├── assignments/<worker-id>.json
+│   ├── assignments/<worker-id>-request.json
+│   └── merge-plan.json
+├── workers/<worker-id>/
+│   ├── evidence/
+│   ├── summary/competition-run-summary.json
+│   └── logs/commands.jsonl
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs

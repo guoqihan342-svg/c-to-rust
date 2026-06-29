@@ -54,6 +54,50 @@ For FlashDB crc32 (the proven case): typed IR candidate generation to validation
 
 **Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence.
 
+## OpenCode Harness Multi-Agent + SQLite Flow
+
+P0 uses `target/competition-out/state/opencode-agent-harness.sqlite3` as the OpenCode run ledger, worker assignment store, lease store, and artifact index. SQLite is only for recovery, deduplication, leases, and audit indexing. Semantic acceptance still comes only from on-disk evidence and validators.
+
+Typical flow:
+
+```bash
+python -m validation.tools.opencode_agent_harness init-run \
+  --run-id <run-id> \
+  --proof-class <proof-class> \
+  --out-root target/competition-out
+
+python -m validation.tools.opencode_agent_harness assign-slice \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --target-id <target> \
+  --slice-id <slice> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --function <function> \
+  --source-commit <commit> \
+  --compiler-command-source compile_commands.json \
+  --include-path include \
+  --define DEMO=1 \
+  --out-root target/competition-out/workers/worker-a
+
+python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+
+python -m validation.tools.opencode_agent_harness record-worker-summary \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+
+python -m validation.tools.opencode_agent_harness write-merge-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --proof-class <proof-class> \
+  --out-root target/competition-out
+```
+
+`write-merge-plan` writes `target/competition-out/harness/merge-plan.json`, which is only a `run_competition.py --worker-summary ...` command plan. The final runner command from that merge plan must still run, and the aggregate summary must still pass `validate_competition_run_summary.py`.
+
 ## OpenCode Single-Interaction Prompt Template
 
 ```
@@ -86,6 +130,8 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
+9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`, then use `assign-slice` to generate assignments for each worker. Each worker writes only to `target/competition-out/workers/<worker-id>/`; after completion, record the summary with `record-worker-summary`, then generate the aggregate command with `write-merge-plan`.
+
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
 If a command fails, record the reason and do not enter a repair loop.
@@ -97,6 +143,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
 - **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
+- **SQLite is only a harness ledger** for assignment, lease, artifact index, and merge plans; SQLite state cannot replace evidence validation.
 - **Prefer `run_competition.py` direct source arguments or `--extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and isolated worker results enter the same summary validator through repeated `--worker-summary`.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.
 - **All evidence files must be written to disk**; the validator reads disk files directly, not in-memory constructs.
@@ -119,6 +166,16 @@ Under `target/competition-out/`:
 
 ```
 target/competition-out/
+├── state/
+│   └── opencode-agent-harness.sqlite3
+├── harness/
+│   ├── assignments/<worker-id>.json
+│   ├── assignments/<worker-id>-request.json
+│   └── merge-plan.json
+├── workers/<worker-id>/
+│   ├── evidence/
+│   ├── summary/competition-run-summary.json
+│   └── logs/commands.jsonl
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs

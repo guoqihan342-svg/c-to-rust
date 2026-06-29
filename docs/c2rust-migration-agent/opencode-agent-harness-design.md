@@ -1,0 +1,152 @@
+英文镜像见 `opencode-agent-harness-design.en.md`。
+
+# OpenCode Agent Harness 设计
+
+本文定义比赛主路径使用的 OpenCode-only Agent Harness。它不是新的翻译器，也不是通用 Agent 平台；它是现有 `run_competition.py`、`auto_migrate.py`、evidence validator 和 OpenCode 多 agent 工作流之间的控制层。
+
+## 目标
+
+P0 采用 **SQLite 调度队列级持久化**：SQLite 记录 run、agent、task、slice、artifact、gate、event、lease 和 merge plan；长期知识库能力只保留接口，不作为当前语义证明来源。
+
+语义通过仍只由落盘 evidence 和 validator 裁决：
+
+- `validate_auto_translation_evidence.py --require-semantic-pass`
+- `validate_competition_run_summary.py`
+- `unsafe_budget.py`
+- `openspec validate --all --strict`
+
+SQLite 中任何 `passed` 字段都只能索引这些证据，不能替代证据。
+
+## 多 Agent 角色
+
+```mermaid
+flowchart TD
+    Lead["lead/orchestrator"] --> Router["router/planner"]
+    Router --> WorkerA["slice worker A"]
+    Router --> WorkerB["slice worker B"]
+    WorkerA --> SummaryA["worker summary"]
+    WorkerB --> SummaryB["worker summary"]
+    SummaryA --> Validator["validator"]
+    SummaryB --> Validator
+    Validator --> Auditor["auditor"]
+    Auditor --> Reporter["reporter"]
+    Validator --> Evidence["on-disk evidence"]
+    Evidence --> Final["final competition-run-summary.json"]
+```
+
+- `lead/orchestrator`：读取 `CONTEXT.md`、competition profile 和 SQLite run 状态，创建 run、assignment、lease 和 merge plan。
+- `router/planner`：只把互不依赖的真实 C slice 分给 worker；共享 API、schema、unsafe ledger、golden fixture 和 Cargo metadata 不并发写。
+- `slice worker`：每个 worker 只处理一个或一组独立 slice，写入自己的 `target/competition-out/workers/<worker-id>/`。
+- `validator`：只读 worker summary，用 `--worker-summary` 汇总；最终裁决唯一有效。
+- `auditor`：检查 proof class、artifact root、path/hash、refused/blocked/failed 分类和 unsafe/cache/version 边界。
+- `reporter`：生成面向人的摘要，但不得扩大能力声明。
+
+## SQLite 状态库
+
+默认位置：
+
+```text
+target/competition-out/state/opencode-agent-harness.sqlite3
+```
+
+生命周期：
+
+- 运行产物，默认不提交仓库。
+- 可提交 schema/migration 或文档，不提交 `.sqlite3`。
+- 如需审计，导出 `target/competition-out/summary/harness-db-manifest.json`，只作为 diagnostic artifact。
+
+核心表：
+
+| 表 | 作用 |
+|---|---|
+| `runs` | 记录 run id、out-root、proof class、profile hash、final gate 和 summary hash。 |
+| `agents` | 记录 OpenCode lead/worker/validator 等角色和隔离输出目录。 |
+| `agent_tasks` | 记录 worker 任务、phase、attempt、status、allowed paths 和错误键。 |
+| `slices` | 记录 target/slice/source/function/source commit/slice spec hash。 |
+| `candidates` | 记录 typed IR、C2Rust、legacy compatibility 等候选；候选本身不等于 semantic pass。 |
+| `gates` | 记录 environment、auto_migrate、semantic validator、unsafe、OpenSpec、summary validator 等 gate。 |
+| `artifacts` | 索引落盘 artifact 的 repo-relative path、sha256、kind、semantic role。 |
+| `artifact_links` | 记录 manifest/cache/final verification 引用关系。 |
+| `events` | 镜像 `commands.jsonl`、auto-translation events 和 harness events。 |
+| `leases` | 记录 slice/out-root/shared-resource lease、owner、heartbeat、fencing token。 |
+| `context_packs` | 索引 ContextPack 输入、hash、schema/profile/source commit。 |
+| `repair_hints` | 保存 blocked/refused 的诊断建议，不作为 evidence。 |
+| `metrics` | 保存可重算统计，不作为事实源。 |
+
+## 目录和隔离
+
+```text
+target/competition-out/
+  state/opencode-agent-harness.sqlite3
+  harness/
+    assignments/<worker-id>.json
+    assignments/<worker-id>-request.json
+    merge-plan.json
+  workers/<worker-id>/
+    evidence/
+    slice-specs/
+    summary/competition-run-summary.json
+    logs/commands.jsonl
+  summary/competition-run-summary.json
+  logs/commands.jsonl
+```
+
+worker 必须使用独立 `--out-root`。最终汇总只读 worker summary：
+
+```bash
+python validation/tools/run_competition.py \
+  --worker-summary target/competition-out/workers/worker-a/summary/competition-run-summary.json \
+  --worker-summary target/competition-out/workers/worker-b/summary/competition-run-summary.json \
+  --out-root target/competition-out \
+  --proof-class local-simulation
+```
+
+## OpenCode 入口
+
+OpenCode 可以直接调用 repo-local wrapper：
+
+```bash
+python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+```
+
+`request.json` 可包含直接 slice 输入：
+
+```json
+{
+  "source_repo_root": "external/demo",
+  "source_file": "src/demo.c",
+  "function": "add_one",
+  "target_id": "demo",
+  "slice_id": "demo-add-one",
+  "source_commit": "abc123",
+  "compiler_command_source": "compile_commands.json",
+  "include_paths": ["include"],
+  "defines": ["DEMO=1"],
+  "proof_class": "local-simulation",
+  "out_root": "target/competition-out/workers/worker-a",
+  "run_id": "run-demo-worker-a"
+}
+```
+
+也可包含 worker summary 汇总输入：
+
+```json
+{
+  "worker_summaries": [
+    "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+    "target/competition-out/workers/worker-b/summary/competition-run-summary.json"
+  ],
+  "proof_class": "local-simulation",
+  "out_root": "target/competition-out",
+  "run_id": "run-demo"
+}
+```
+
+## 不变量
+
+- 输入必须来自真实 C source slice；禁止手写 `c_source`。
+- worker 口头结论无效；只认磁盘 evidence 和 validator。
+- SQLite 是 ledger/cache/index，不是证据数据库。
+- C2Rust baseline 是 candidate context；`skipped`/`blocked` 不计入 generated/accepted/semantic pass。
+- LLM candidate 不进 P0 默认路径；未来 P2 接入时必须记录 provider/model/prompt/input/output hash，并走同一 validation。
+- MCP、Cron、daemon、通用 Harness 框架都不是 P0。

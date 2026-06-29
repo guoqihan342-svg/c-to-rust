@@ -1,61 +1,113 @@
 # c2rust-migrator
 
-Purpose: OpenCode-facing Agent wrapper for OpenSpec-governed C-to-Rust migration.
+Purpose: OpenCode-facing Agent wrapper for the C-to-Rust migration harness.
 
-中文说明：此 Agent 用于把 C 项目按 OpenSpec 分阶段迁移到 Rust。FlashDB 的输出目录固定为 `flashDB_rust`。C2Rust 只作为 baseline/oracle，不作为最终代码。
+中文说明：此 Agent 面向比赛单次交互。OpenCode 可以使用多 worker 并行处理互不依赖的真实 C slice，但每个 worker 必须写入独立 out-root，最终只能由统一 validator 和 `competition-run-summary.json` 裁决。
 
-## Invocation
+## Primary Entrypoints
+
+Initialize the SQLite harness ledger:
 
 ```bash
-c2rust-migrator --phase <phase> --change design-c2rust-migration-agent --input request.json
+python -m validation.tools.opencode_agent_harness init-run \
+  --run-id <run-id> \
+  --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation> \
+  --out-root target/competition-out
 ```
 
-Valid phases:
+Assign a slice to a worker:
 
-- `propose`
-- `plan`
-- `index`
-- `skeleton`
-- `migrate`
-- `repair`
-- `verify`
-- `audit`
-- `archive`
+```bash
+python -m validation.tools.opencode_agent_harness assign-slice \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --target-id <target> \
+  --slice-id <slice> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --function <function> \
+  --source-commit <commit> \
+  --compiler-command-source compile_commands.json \
+  --include-path include \
+  --define DEMO=1 \
+  --out-root target/competition-out/workers/worker-a
+```
+
+Run one worker request:
+
+```bash
+python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+```
+
+Record a worker summary:
+
+```bash
+python -m validation.tools.opencode_agent_harness record-worker-summary \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+```
+
+Write a merge plan:
+
+```bash
+python -m validation.tools.opencode_agent_harness write-merge-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --proof-class <proof-class> \
+  --out-root target/competition-out
+```
+
+The merge plan still calls the existing runner:
+
+```bash
+python validation/tools/run_competition.py \
+  --worker-summary target/competition-out/workers/worker-a/summary/competition-run-summary.json \
+  --out-root target/competition-out \
+  --proof-class <proof-class>
+```
 
 ## Required Preflight
 
 ```bash
+source config/competition-env/env.sh
+bash config/competition-env/toolchain-check.sh
 openspec status --change "design-c2rust-migration-agent" --json
 openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
 
-Do not implement before reading the current OpenSpec proposal, design, specs, and tasks.
+## Roles
+
+- `lead/orchestrator`: creates run, assignments, leases, and final merge plan.
+- `router/planner`: selects independent real C slices and prevents shared write conflicts.
+- `slice worker`: runs one isolated worker request and writes only under its own out-root.
+- `validator`: aggregates worker summaries and runs final validators.
+- `auditor`: checks proof class, artifact paths, hashes, unsafe/cache/version boundaries, and refused/blocked/failed classification.
+- `reporter`: summarizes results without expanding capability claims.
 
 ## Guardrails
 
-- Keep edits scoped to the selected phase and approved paths.
-- Build or update `ContextPack` before any AI call.
-- Use deterministic rules before AI.
-- Treat AI output as a candidate patch only.
-- Apply changes through a PatchPlan with rollback id.
-- Run compile, tests, differential checks, unsafe audit, and cache gates before acceptance.
-- Do not expose raw pointers in Rust-native public APIs.
-- Keep first-party non-test unsafe below 10%.
-- Do not use runtime async, multithreaded storage ordering, or write-back cache in the first milestone without a separate OpenSpec change and equivalence evidence.
-
-## Subagents
-
-Use multiple subagents for independent read-only work and verification. Use disjoint-write subagents only with explicit file ownership, rollback id, and merge order. Never concurrently edit shared APIs, `Cargo.toml`, context schema, unsafe ledger, or golden fixtures.
+- Use deterministic translator routes first.
+- Treat AI output as candidate only; P0 default path does not use LLM candidate generation.
+- Do not hand-write `c_source`; slice input must come from real source files.
+- Do not modify project source code during competition single-run mode.
+- Workers may only write under their assigned `target/competition-out/workers/<worker-id>/`.
+- SQLite is a ledger/cache/index. It is not semantic evidence.
+- Final acceptance requires on-disk evidence plus validators; worker chat output is never evidence.
+- C2Rust baseline is context only unless it produces an output with status/path/sha256 and passes the same gates.
+- Do not restore legacy string translator as a primary route.
 
 ## Output
 
 Return structured JSON containing:
 
 - `status`
-- `artifacts`
-- `patch_plan`
-- `verification`
-- `unsafe_budget`
-- `cache_keys`
-- `rollback_id`
-- `next_phase`
+- `run_id`
+- `db_path`
+- `worker_summaries`
+- `merge_plan`
+- `final_summary`
+- `final_gate`
+- `next_step`
