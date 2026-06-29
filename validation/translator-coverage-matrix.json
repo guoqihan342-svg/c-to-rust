@@ -1166,6 +1166,11 @@
             {
               "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "proof_class": "optional_real_clang_smoke"
             }
           ]
         },
@@ -1241,6 +1246,11 @@
             {
               "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "proof_class": "optional_real_clang_smoke"
             }
           ]
         },
@@ -1269,6 +1279,11 @@
         {
           "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "proof_class": "optional_real_clang_smoke"
         },
         {
           "name": "typed_ir_emits_record_value_field_read",

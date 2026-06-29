@@ -24013,6 +24013,112 @@ fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enab
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let out_dir = unique_out_dir("clang-real-typedef-record-pointer-opaque-field-write");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("typedef_record_pointer_opaque_field_write.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\n\
+typedef struct fdb_blob { void *buf; size_t size; } *fdb_blob_t;\n\
+fdb_blob_t make_blob_typedef(fdb_blob_t blob, const void *value, size_t len) {\n\
+    blob->buf = (void *)value;\n\
+    blob->size = len;\n\
+    return blob;\n\
+}\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "make_blob_typedef");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Assign {
+        target: buf_target,
+        value: buf_value,
+        ..
+    }, IrStmt::Assign {
+        target: size_target,
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Var {
+            name: return_name, ..
+        }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected typedef record pointer field writes and identity return, got {:?}",
+            function.body
+        );
+    };
+    assert!(
+        matches!(buf_target, IrExpr::Member { field, is_arrow: true, .. } if field == "buf"),
+        "expected blob->buf assignment target, got {buf_target:?}"
+    );
+    assert!(
+        matches!(size_target, IrExpr::Member { field, is_arrow: true, .. } if field == "size"),
+        "expected blob->size assignment target, got {size_target:?}"
+    );
+    match buf_value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert_eq!(target.canonical, "void *");
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+        }
+        other => panic!("expected explicit opaque pointer cast RHS, got {other:?}"),
+    }
+    assert_eq!(return_name, "blob");
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit typedef-backed record pointer field writes from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut core::ffi::c_void"), "{rust}");
+    assert!(rust.contains("pub size: usize"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn make_blob_typedef(mut blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> &mut FdbBlob"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("blob.buf = (value as *mut core::ffi::c_void);"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob.size = len;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-typedef-record-pointer-opaque-field-write",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
