@@ -4051,7 +4051,15 @@ fn validate_comparison_cast_operand(expr: &IrExpr, side: &str) -> Result<(), Str
 }
 
 fn ends_with_return_value(body: &[IrStmt]) -> bool {
-    matches!(body.last(), Some(IrStmt::Return { value: Some(_), .. }))
+    match body.last() {
+        Some(IrStmt::Return { value: Some(_), .. }) => true,
+        Some(IrStmt::If {
+            then_body,
+            else_body,
+            ..
+        }) => ends_with_return_value(then_body) && ends_with_return_value(else_body),
+        _ => false,
+    }
 }
 
 fn validate_definite_assignment(

@@ -13669,6 +13669,68 @@ fn typed_ir_rejects_non_void_function_without_return_value_in_generic_emitter() 
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_accepts_final_if_when_both_branches_return_values() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "return_from_if_else".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "flag".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::If {
+            condition: ir_var("flag", i32_ty.clone()),
+            then_body: vec![IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![ir_var("value", i32_ty.clone())],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            }],
+            else_body: vec![IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "other".to_string(),
+                    args: vec![ir_var("value", i32_ty.clone())],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            }],
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("final if with returning branches should satisfy return gate");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn return_from_if_else(flag: i32, value: i32) -> i32"));
+    assert!(rust.contains("if flag != 0i32 {"));
+    assert!(rust.contains("return helper(value);"));
+    assert!(rust.contains("} else {"));
+    assert!(rust.contains("return other(value);"));
+    assert_rust_snippet_compiles(
+        "typed-ir-final-if-both-branches-return",
+        &format!(
+            "fn helper(value: i32) -> i32 {{ value + 1 }}\nfn other(value: i32) -> i32 {{ value - 1 }}\n{rust}"
+        ),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_uninitialized_local_decl_assigned_before_read() {
     let u32_ty = ir_u32();
     let ir = IrFunction {

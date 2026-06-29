@@ -1502,6 +1502,7 @@
         "IrStmt::Continue",
         "IrStmt::DoWhile",
         "IrStmt::For",
+        "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
         "relooper_refusal evidence for goto/switch",
@@ -1528,6 +1529,10 @@
             {
               "name": "typed IR structured loop control-flow tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1545,6 +1550,10 @@
           "evidence": [
             {
               "name": "typed IR while/do-while/for control-flow emitted Rust tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1593,6 +1602,10 @@
         },
         {
           "name": "typed_ir_for_nested_while_continue_does_not_emit_outer_step",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_accepts_final_if_when_both_branches_return_values",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
