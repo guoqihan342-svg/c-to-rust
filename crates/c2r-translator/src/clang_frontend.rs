@@ -1661,7 +1661,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("ForStmt") => for_stmt_skeleton_from_ast(stmt),
         Some("UnaryOperator") => inc_dec_stmt_skeleton_from_ast(stmt, "statement"),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
-            expr: expr_skeleton_from_ast(stmt)?,
+            expr: call_stmt_expr_skeleton_from_ast(stmt)?,
         }),
         Some("ReturnStmt") => {
             let value = inner(stmt)
@@ -3073,6 +3073,19 @@ fn inc_dec_expr_skeleton_from_ast(
 
 #[cfg(feature = "typed-ir")]
 fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    call_expr_skeleton_from_ast_with_memory_statement_args(expr, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn call_stmt_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    call_expr_skeleton_from_ast_with_memory_statement_args(expr, true)
+}
+
+#[cfg(feature = "typed-ir")]
+fn call_expr_skeleton_from_ast_with_memory_statement_args(
+    expr: &Value,
+    allow_memory_statement_args: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
     let children = inner(expr);
     let Some((callee_node, arg_nodes)) = children.split_first() else {
         return Err(ClangFrontendError {
@@ -3091,10 +3104,11 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
     };
     let mut args = Vec::with_capacity(arg_nodes.len());
     for (index, arg_node) in arg_nodes.iter().enumerate() {
-        let arg = if callee == "memset" && index == 0 {
-            memset_destination_arg_skeleton_from_ast(arg_node)?
-        } else {
-            expr_skeleton_from_ast_with_options(arg_node, true)?
+        let arg = match (allow_memory_statement_args, callee.as_str(), index) {
+            (true, "memset", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memset")?,
+            (true, "memcpy", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memcpy")?,
+            (true, "memcpy", 1) => memcpy_source_arg_skeleton_from_ast(arg_node)?,
+            _ => expr_skeleton_from_ast_with_options(arg_node, true)?,
         };
         args.push(arg);
     }
@@ -3112,8 +3126,9 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
 }
 
 #[cfg(feature = "typed-ir")]
-fn memset_destination_arg_skeleton_from_ast(
+fn memory_destination_arg_skeleton_from_ast(
     arg: &Value,
+    callee: &str,
 ) -> Result<ClangExprSkeleton, ClangFrontendError> {
     if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
         || string_field(arg, "castKind").as_deref() != Some("BitCast")
@@ -3126,7 +3141,7 @@ fn memset_destination_arg_skeleton_from_ast(
         return Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
             reason: format!(
-                "memset destination BitCast target {} is not mutable void *",
+                "{callee} destination BitCast target {} is not mutable void *",
                 target.spelled
             ),
         });
@@ -3146,7 +3161,7 @@ fn memset_destination_arg_skeleton_from_ast(
         ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
             reason: format!(
-                "memset destination BitCast operand {} is not mutable unsigned 8-bit pointer",
+                "{callee} destination BitCast operand {} is not mutable unsigned 8-bit pointer",
                 ty.spelled
             ),
         }),
@@ -3156,8 +3171,59 @@ fn memset_destination_arg_skeleton_from_ast(
         }),
         _ => Ok(ClangExprSkeleton::Unsupported {
             node: "ImplicitCastExpr".to_string(),
-            reason: "memset destination BitCast operand must be a direct pointer parameter"
-                .to_string(),
+            reason: format!(
+                "{callee} destination BitCast operand must be a direct pointer parameter"
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn memcpy_source_arg_skeleton_from_ast(
+    arg: &Value,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_const_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memcpy source BitCast target {} is not const void *",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_readonly_unsigned_8_bit_pointer(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memcpy source BitCast operand {} is not readonly unsigned 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: "memcpy source BitCast operand must be a direct pointer parameter".to_string(),
         }),
     }
 }
@@ -3172,11 +3238,30 @@ fn clang_type_is_mutable_void_pointer(ty: &ClangTypeSkeleton) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
+fn clang_type_is_const_void_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee) && matches!(&pointee.kind, ClangTypeKind::Void)
+    )
+}
+
+#[cfg(feature = "typed-ir")]
 fn clang_type_is_mutable_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
     matches!(
         &ty.kind,
         ClangTypeKind::Pointer { pointee, .. }
             if !clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 })
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_readonly_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee)
                 && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 })
     )
 }

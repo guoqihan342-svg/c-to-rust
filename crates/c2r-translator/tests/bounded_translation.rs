@@ -527,6 +527,190 @@ fn clang_ast_fixture_replays_memset_statement_void_pointer_return_without_clang(
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_memcpy_statement_void_pointer_return_without_clang() {
+    let ast: Value = serde_json::from_str(
+        r#"
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "copy_prefix",
+      "type": { "qualType": "void (const uint8_t *restrict, uint8_t *restrict, size_t)" },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "src",
+          "type": { "qualType": "const uint8_t *restrict" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "out",
+          "type": { "qualType": "uint8_t *restrict" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": { "qualType": "size_t" }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "void *" },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": { "qualType": "void *(*)(void *, const void *, size_t)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "void *(void *, const void *, size_t)" },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "memcpy"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "uint8_t *restrict" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "uint8_t *restrict" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "out"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "const void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "const uint8_t *restrict" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "const uint8_t *restrict" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "src"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": { "qualType": "size_t" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "size_t" },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "count"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+    )
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "copy_prefix",
+        Some(&target_abi),
+    )
+    .expect("lower clang memcpy statement fixture without invoking clang");
+    let [IrStmt::Expr {
+        expr: IrExpr::Call {
+            callee, args, ty, ..
+        },
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected memcpy expression statement, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "memcpy");
+    assert_eq!(args.len(), 3);
+    assert_eq!(ty.canonical, "void *");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled memcpy statement from clang fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(!rust.contains("memcpy(out, src, count)"), "{rust}");
+    assert!(
+        rust.contains("pub fn copy_prefix(src: &[u8], mut out: &mut [u8], count: usize)"),
+        "{rust}"
+    );
+    assert!(rust.contains("copy_from_slice"), "{rust}");
+    assert!(
+        rust.contains("C memcpy source precondition violated"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("C memcpy destination precondition violated"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-memcpy-void-pointer",
+        rust,
+        r#"
+    let src = [1u8, 2, 3, 4];
+    let mut out = [0u8; 4];
+    copy_prefix(&src, &mut out, 3);
+    assert_eq!(out, [1u8, 2, 3, 0]);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_record_field_subset_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/record_field_ast.json"))
@@ -9300,6 +9484,138 @@ fn typed_ir_emits_memcpy_for_restrict_byte_slices_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let void_pointer_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *restrict",
+        "const unsigned char *restrict",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer(
+        "uint8_t *restrict",
+        "unsigned char *restrict",
+        ir_u8(),
+        false,
+    );
+    let ir = IrFunction {
+        name: "copy_bytes_discarding_result".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_pointer_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit modeled C memcpy statement with discarded void *");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("copy_from_slice"), "{rust}");
+    assert!(!rust.contains("memcpy(out, src, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memcpy-discarded-void-pointer-result-model",
+        rust,
+        r#"
+    let src = [1u8, 2, 3, 4];
+    let mut out = [0u8; 4];
+    copy_bytes_discarding_result(&src, &mut out, 3);
+    assert_eq!(out, [1, 2, 3, 0]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_memcpy_discarded_void_pointer_without_noalias_proof() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let void_pointer_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let ir = IrFunction {
+        name: "copy_bytes_without_noalias_discarding_result".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_pointer_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("memcpy void * requires noalias proof");
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_memcpy_without_noalias_proof() {
     let usize_ty = ir_usize();
     let void_ty = ir_void();
@@ -9351,6 +9667,43 @@ fn typed_ir_rejects_memcpy_without_noalias_proof() {
         error
             .reason
             .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_memcpy_value_expression_outside_statement_model() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "observe_memcpy_result".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_lit(0, "0", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                ],
+                ty: i32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("expression-position memcpy must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("reserved C macro/stdlib/extern surface")
+            && error
+                .reason
+                .contains("requires explicit lowering or extern binding"),
         "{:?}",
         error.reason
     );

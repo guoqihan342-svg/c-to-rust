@@ -1630,7 +1630,7 @@
         "modeled C strnlen(const char *, size_t) direct call with bounded NUL-search precondition",
         "modeled C strnlen(const char *, size_t) as a one-level nested direct-call argument",
         "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
-        "modeled C memcpy(void *, const void *, size_t) statement with restrict/noalias precondition",
+        "modeled C memcpy(void *, const void *, size_t) statement with discarded void* return and restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1680,6 +1680,10 @@
             },
             {
               "name": "memset statement discarded void pointer return no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "memcpy statement discarded void pointer return no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1734,6 +1738,10 @@
             {
               "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1782,6 +1790,14 @@
             },
             {
               "name": "typed_ir_rejects_memcpy_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_memcpy_discarded_void_pointer_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_memcpy_value_expression_outside_statement_model",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1835,6 +1851,10 @@
             },
             {
               "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1944,6 +1964,14 @@
         {
           "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_memcpy_statement_void_pointer_return_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -2016,6 +2044,16 @@
           "name": "typed_ir_rejects_memcpy_without_noalias_proof",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "memcpy reads a readonly source and writes a mutable destination, so safe Rust slice lowering requires restrict/noalias proof"
+        },
+        {
+          "name": "typed_ir_rejects_memcpy_discarded_void_pointer_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "discarded void pointer memcpy still reads a readonly source and writes a mutable destination, so safe Rust slice lowering requires restrict/noalias proof"
+        },
+        {
+          "name": "typed_ir_rejects_memcpy_value_expression_outside_statement_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "memcpy return values are not modeled in expression position; only statement-position discarded-result calls may lower"
         }
       ]
     },

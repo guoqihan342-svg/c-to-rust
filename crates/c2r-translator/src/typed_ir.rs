@@ -3303,9 +3303,9 @@ fn validate_c_memcpy_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
 ) -> Result<(&'a str, &'a str, &'a IrExpr), String> {
-    if !is_void_type(ty) {
+    if !is_c_memcpy_discarded_result_type(ty) {
         return Err(format!(
-            "C memcpy statement model requires void result type, got {}",
+            "C memcpy statement model requires void or discarded void * result type, got {}",
             type_label(ty)
         ));
     }
@@ -7506,6 +7506,10 @@ fn is_void_type(ty: &IrType) -> bool {
 }
 
 fn is_c_memset_discarded_result_type(ty: &IrType) -> bool {
+    is_void_type(ty) || is_mutable_void_pointer(ty)
+}
+
+fn is_c_memcpy_discarded_result_type(ty: &IrType) -> bool {
     is_void_type(ty) || is_mutable_void_pointer(ty)
 }
 
