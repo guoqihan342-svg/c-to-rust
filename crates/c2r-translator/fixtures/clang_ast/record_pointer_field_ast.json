@@ -1,0 +1,164 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "blob",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "buf",
+          "type": {
+            "qualType": "void *"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "size",
+          "type": {
+            "qualType": "size_t"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "make_blob",
+      "type": {
+        "qualType": "struct blob *(struct blob *, const void *, size_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "blob",
+          "type": {
+            "qualType": "struct blob *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "const void *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "len",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "void *"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "buf",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "void *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct blob *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "blob"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CStyleCastExpr",
+                  "castKind": "BitCast",
+                  "type": {
+                    "qualType": "void *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "const void *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "size",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "struct blob *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "blob"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "len"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "struct blob *"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "blob"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

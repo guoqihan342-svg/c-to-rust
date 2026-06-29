@@ -486,6 +486,100 @@ fn clang_ast_fixture_replays_record_field_subset_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang()
+{
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/record_pointer_field_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "make_blob",
+        Some(&target_abi),
+    )
+    .expect("lower opaque pointer record field fixture without invoking clang");
+
+    let [IrStmt::Assign {
+        target: buf_target,
+        value: buf_value,
+        ..
+    }, IrStmt::Assign {
+        target: size_target,
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Var {
+            name: return_name, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected two field assignments and identity return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(
+        matches!(buf_target, IrExpr::Member { field, is_arrow: true, .. } if field == "buf"),
+        "expected blob->buf assignment target, got {buf_target:?}"
+    );
+    assert!(
+        matches!(size_target, IrExpr::Member { field, is_arrow: true, .. } if field == "size"),
+        "expected blob->size assignment target, got {size_target:?}"
+    );
+    match buf_value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert!(matches!(target.kind, IrTypeKind::Pointer { .. }));
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+        }
+        other => panic!("expected opaque pointer cast RHS, got {other:?}"),
+    }
+    assert_eq!(return_name, "blob");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from opaque pointer record field fixture");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Blob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut core::ffi::c_void"), "{rust}");
+    assert!(rust.contains("pub size: usize"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn make_blob(mut blob: &mut Blob, value: *const core::ffi::c_void, len: usize) -> &mut Blob"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("blob.buf = (value as *mut core::ffi::c_void);"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob.size = len;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-record-opaque-pointer-field-cast",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/usual_arithmetic_ast.json"

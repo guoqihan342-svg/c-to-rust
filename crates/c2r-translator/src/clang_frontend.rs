@@ -648,7 +648,7 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     function_name: &str,
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
-    let record_inventory = record_inventory_from_ast(&ast);
+    let record_inventory = record_inventory_from_ast_with_target_abi(&ast, target_abi);
     let enum_constant_inventory = enum_constant_inventory_from_ast(&ast);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
@@ -3829,9 +3829,12 @@ fn inner(node: &Value) -> &[Value] {
 }
 
 #[cfg(feature = "typed-ir")]
-fn record_inventory_from_ast(ast: &Value) -> BTreeMap<String, Vec<IrRecordField>> {
+fn record_inventory_from_ast_with_target_abi(
+    ast: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> BTreeMap<String, Vec<IrRecordField>> {
     let mut records = BTreeMap::new();
-    collect_record_inventory_from_ast(ast, &mut records);
+    collect_record_inventory_from_ast(ast, target_abi, &mut records);
     records
         .into_iter()
         .filter_map(|(name, fields)| fields.map(|fields| (name, fields)))
@@ -3841,9 +3844,10 @@ fn record_inventory_from_ast(ast: &Value) -> BTreeMap<String, Vec<IrRecordField>
 #[cfg(feature = "typed-ir")]
 fn collect_record_inventory_from_ast(
     node: &Value,
+    target_abi: Option<&TargetAbiProfile>,
     records: &mut BTreeMap<String, Option<Vec<IrRecordField>>>,
 ) {
-    if let Some((name, fields)) = record_inventory_entry_from_record_decl(node) {
+    if let Some((name, fields)) = record_inventory_entry_from_record_decl(node, target_abi) {
         match records.entry(name) {
             std::collections::btree_map::Entry::Vacant(entry) => {
                 entry.insert(fields);
@@ -3854,13 +3858,14 @@ fn collect_record_inventory_from_ast(
         }
     }
     for child in inner(node) {
-        collect_record_inventory_from_ast(child, records);
+        collect_record_inventory_from_ast(child, target_abi, records);
     }
 }
 
 #[cfg(feature = "typed-ir")]
 fn record_inventory_entry_from_record_decl(
     node: &Value,
+    target_abi: Option<&TargetAbiProfile>,
 ) -> Option<(String, Option<Vec<IrRecordField>>)> {
     if string_field(node, "kind").as_deref() != Some("RecordDecl")
         || string_field(node, "tagUsed").as_deref() != Some("struct")
@@ -3884,7 +3889,7 @@ fn record_inventory_entry_from_record_decl(
     for child in inner(node) {
         match string_field(child, "kind").as_deref() {
             Some("FieldDecl") => {
-                let Some(field) = record_field_from_field_decl(child) else {
+                let Some(field) = record_field_from_field_decl(child, target_abi) else {
                     return Some((name, None));
                 };
                 fields.push(field);
@@ -3900,7 +3905,10 @@ fn record_inventory_entry_from_record_decl(
 }
 
 #[cfg(feature = "typed-ir")]
-fn record_field_from_field_decl(field: &Value) -> Option<IrRecordField> {
+fn record_field_from_field_decl(
+    field: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Option<IrRecordField> {
     if field.get("isBitfield").and_then(Value::as_bool) == Some(true) {
         return None;
     }
@@ -3920,12 +3928,20 @@ fn record_field_from_field_decl(field: &Value) -> Option<IrRecordField> {
     if qual_type.split_whitespace().any(|part| part == "volatile") {
         return None;
     }
-    let clang_ty = type_from_qual_type(&qual_type).ok()?;
+    let clang_ty = type_from_qual_type_with_target_abi(&qual_type, target_abi).ok()?;
     let ty = lower_type(&clang_ty).ok()?;
-    if !matches!(ty.kind, IrTypeKind::Integer { .. }) {
+    if !matches!(ty.kind, IrTypeKind::Integer { .. }) && !is_opaque_void_pointer_ir_type(&ty) {
         return None;
     }
     Some(IrRecordField { name, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_opaque_void_pointer_ir_type(ty: &IrType) -> bool {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return false;
+    };
+    matches!(pointee.kind, IrTypeKind::Void)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7856,5 +7872,63 @@ mod tests {
             global.init,
             IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
         );
+    }
+
+    #[test]
+    fn record_inventory_from_ast_maps_opaque_void_pointer_fields() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "blob",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "buf",
+                            "type": { "qualType": "void *" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "readonly",
+                            "type": { "qualType": "const void *" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "size",
+                            "type": { "qualType": "size_t" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+        };
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
+        let fields = inventory.get("blob").expect("blob record inventory");
+
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[0].name, "buf");
+        assert!(matches!(fields[0].ty.kind, IrTypeKind::Pointer { .. }));
+        assert_eq!(fields[1].name, "readonly");
+        let IrTypeKind::Pointer { pointee } = &fields[1].ty.kind else {
+            panic!("expected const void pointer field, got {:?}", fields[1].ty);
+        };
+        assert!(pointee.is_const);
+        assert_eq!(fields[2].name, "size");
+        assert_eq!(fields[2].ty.spelled, "size_t");
+        assert_eq!(fields[2].ty.width_bits, Some(64));
     }
 }
