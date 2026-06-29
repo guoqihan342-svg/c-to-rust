@@ -1,0 +1,174 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "RecordDecl",
+      "tagUsed": "struct",
+      "name": "fdb_blob",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "kind": "FieldDecl",
+          "name": "buf",
+          "type": {
+            "qualType": "void *"
+          }
+        },
+        {
+          "kind": "FieldDecl",
+          "name": "size",
+          "type": {
+            "qualType": "size_t"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "make_blob_typedef",
+      "type": {
+        "qualType": "fdb_blob_t (fdb_blob_t, const void *, size_t)",
+        "desugaredQualType": "struct fdb_blob *(struct fdb_blob *, const void *, size_t)",
+        "canonicalQualType": "struct fdb_blob *(struct fdb_blob *, const void *, size_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "blob",
+          "type": {
+            "qualType": "fdb_blob_t",
+            "desugaredQualType": "struct fdb_blob *",
+            "canonicalQualType": "struct fdb_blob *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "const void *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "len",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "void *"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "buf",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "void *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "fdb_blob_t",
+                        "desugaredQualType": "struct fdb_blob *",
+                        "canonicalQualType": "struct fdb_blob *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "blob"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CStyleCastExpr",
+                  "castKind": "BitCast",
+                  "type": {
+                    "qualType": "void *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "const void *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "size_t"
+              },
+              "inner": [
+                {
+                  "kind": "MemberExpr",
+                  "name": "size",
+                  "isArrow": true,
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "fdb_blob_t",
+                        "desugaredQualType": "struct fdb_blob *",
+                        "canonicalQualType": "struct fdb_blob *"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "blob"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "len"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "fdb_blob_t",
+                    "desugaredQualType": "struct fdb_blob *",
+                    "canonicalQualType": "struct fdb_blob *"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "blob"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -918,10 +918,7 @@ fn readonly_global_from_toplevel_var_decl(
     }
 
     let name = string_field(var_decl, "name")?;
-    let qual_type = var_decl
-        .get("type")
-        .and_then(|value| string_field(value, "qualType"))?;
-    let clang_ty = type_from_qual_type(&qual_type).ok()?;
+    let clang_ty = type_from_ast_type_object(var_decl.get("type")?, None).ok()?;
     let ClangTypeKind::Array { element, len } = &clang_ty.kind else {
         return None;
     };
@@ -1034,11 +1031,10 @@ fn collect_enum_constant_inventory_from_ast(node: &Value, inventory: &mut EnumCo
 fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLiteral, String> {
     let name = enum_constant_decl_name(node)
         .ok_or_else(|| "EnumConstantDecl is missing name".to_string())?;
-    let qual_type = node
+    let type_object = node
         .get("type")
-        .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| format!("EnumConstantDecl {name} is missing type.qualType"))?;
-    let ty = type_from_qual_type(&qual_type).map_err(|error| {
+    let ty = type_from_ast_type_object(type_object, None).map_err(|error| {
         format!(
             "EnumConstantDecl {name} has unsupported type: {}",
             error.message
@@ -1200,14 +1196,11 @@ fn function_skeleton_from_ast(
         kind: "invalid_function_decl".to_string(),
         message: "FunctionDecl is missing name".to_string(),
     })?;
-    let function_type = function
-        .get("type")
-        .and_then(|value| string_field(value, "qualType"))
-        .ok_or_else(|| ClangFrontendError {
-            kind: "invalid_function_decl".to_string(),
-            message: format!("FunctionDecl {name} is missing qualType"),
-        })?;
-    let return_type = function_return_type(&function_type)?;
+    let function_type = function.get("type").ok_or_else(|| ClangFrontendError {
+        kind: "invalid_function_decl".to_string(),
+        message: format!("FunctionDecl {name} is missing qualType"),
+    })?;
+    let return_type = function_return_type_from_type_object(function_type)?;
     let children = inner(function);
     let params = children
         .iter()
@@ -1239,12 +1232,11 @@ fn param_skeleton_from_ast(param: &Value) -> Result<ClangParamSkeleton, ClangFro
     })?;
     let ty = param
         .get("type")
-        .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| ClangFrontendError {
             kind: "invalid_param_decl".to_string(),
             message: format!("ParmVarDecl {name} is missing qualType"),
         })
-        .and_then(|qual_type| type_from_qual_type(&qual_type))?;
+        .and_then(|type_object| type_from_ast_type_object(type_object, None))?;
 
     Ok(ClangParamSkeleton { name, ty })
 }
@@ -1762,12 +1754,11 @@ fn compound_assignment_type_field(
     field: &str,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     stmt.get(field)
-        .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| ClangFrontendError {
             kind: "invalid_compound_assignment_operator".to_string(),
             message: format!("CompoundAssignOperator is missing {field}.qualType"),
         })
-        .and_then(|qual_type| type_from_qual_type(&qual_type))
+        .and_then(|type_object| type_from_ast_type_object(type_object, None))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1922,12 +1913,11 @@ fn var_decl_skeleton_from_ast(var_decl: &Value) -> Result<ClangStmtSkeleton, Cla
     })?;
     let ty = var_decl
         .get("type")
-        .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| ClangFrontendError {
             kind: "invalid_var_decl".to_string(),
             message: format!("VarDecl {name} is missing qualType"),
         })
-        .and_then(|qual_type| type_from_qual_type(&qual_type))?;
+        .and_then(|type_object| type_from_ast_type_object(type_object, None))?;
     let initializer_children = inner(var_decl);
     let init = match initializer_children {
         [] if var_decl.get("init").is_none() => None,
@@ -2291,23 +2281,20 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             reason: format!("{name} requires explicit alignment/lowering support"),
         });
     }
-    let arg_qual_type = expr
-        .get("argType")
-        .and_then(|value| string_field(value, "qualType"))
-        .ok_or_else(|| ClangFrontendError {
-            kind: if expr.get("inner").is_some() {
-                "unsupported_sizeof_operand".to_string()
-            } else {
-                "invalid_unary_expr_or_type_trait_expr".to_string()
-            },
-            message: if expr.get("inner").is_some() {
-                "sizeof expression operand requires clang argType.qualType before typed IR lowering"
-                    .to_string()
-            } else {
-                "sizeof type operand is missing argType.qualType".to_string()
-            },
-        })?;
-    let arg_type = type_from_qual_type(&arg_qual_type)?;
+    let arg_type_object = expr.get("argType").ok_or_else(|| ClangFrontendError {
+        kind: if expr.get("inner").is_some() {
+            "unsupported_sizeof_operand".to_string()
+        } else {
+            "invalid_unary_expr_or_type_trait_expr".to_string()
+        },
+        message: if expr.get("inner").is_some() {
+            "sizeof expression operand requires clang argType.qualType before typed IR lowering"
+                .to_string()
+        } else {
+            "sizeof type operand is missing argType.qualType".to_string()
+        },
+    })?;
+    let arg_type = type_from_ast_type_object(arg_type_object, None)?;
     if !matches!(
         arg_type.kind,
         ClangTypeKind::Integer { .. }
@@ -2318,7 +2305,8 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         return Err(ClangFrontendError {
             kind: "unsupported_sizeof_type".to_string(),
             message: format!(
-                "sizeof({arg_qual_type}) requires explicit C layout/ABI provenance before typed IR lowering"
+                "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                arg_type.spelled
             ),
         });
     }
@@ -2698,12 +2686,11 @@ fn preserves_integral_operand_casts(op: &ClangBinaryOperator) -> bool {
 #[cfg(feature = "typed-ir")]
 fn expr_type(expr: &Value) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     expr.get("type")
-        .and_then(|value| string_field(value, "qualType"))
         .ok_or_else(|| ClangFrontendError {
             kind: "invalid_clang_expr".to_string(),
             message: "clang expression node is missing qualType".to_string(),
         })
-        .and_then(|qual_type| type_from_qual_type(&qual_type))
+        .and_then(|type_object| type_from_ast_type_object(type_object, None))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -2753,6 +2740,87 @@ fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFront
         });
     };
     type_from_qual_type(return_type.trim())
+}
+
+#[cfg(feature = "typed-ir")]
+fn function_return_type_from_type_object(
+    type_object: &Value,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    type_from_ast_type_object_with_parser(
+        type_object,
+        function_return_type,
+        "invalid_function_decl",
+        "FunctionDecl is missing qualType",
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn type_from_ast_type_object(
+    type_object: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    type_from_ast_type_object_with_parser(
+        type_object,
+        |qual_type| type_from_qual_type_with_target_abi(qual_type, target_abi),
+        "invalid_clang_type",
+        "clang type object is missing qualType",
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn type_from_ast_type_object_with_parser<F>(
+    type_object: &Value,
+    mut parse: F,
+    missing_kind: &str,
+    missing_message: &str,
+) -> Result<ClangTypeSkeleton, ClangFrontendError>
+where
+    F: FnMut(&str) -> Result<ClangTypeSkeleton, ClangFrontendError>,
+{
+    let candidates = clang_type_candidate_spellings(type_object);
+    if candidates.is_empty() {
+        return Err(ClangFrontendError {
+            kind: missing_kind.to_string(),
+            message: missing_message.to_string(),
+        });
+    }
+
+    let mut first_unsupported = None;
+    let mut first_error = None;
+    for candidate in candidates {
+        match parse(&candidate) {
+            Ok(ty) if !matches!(ty.kind, ClangTypeKind::Unsupported { .. }) => return Ok(ty),
+            Ok(ty) => {
+                if first_unsupported.is_none() {
+                    first_unsupported = Some(ty);
+                }
+            }
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+
+    if let Some(ty) = first_unsupported {
+        Ok(ty)
+    } else if let Some(error) = first_error {
+        Err(error)
+    } else {
+        Err(ClangFrontendError {
+            kind: missing_kind.to_string(),
+            message: missing_message.to_string(),
+        })
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_candidate_spellings(type_object: &Value) -> Vec<String> {
+    ["qualType", "desugaredQualType", "canonicalQualType"]
+        .into_iter()
+        .filter_map(|field| string_field(type_object, field))
+        .collect()
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3958,13 +4026,15 @@ fn record_field_from_field_decl(
     if !is_simple_c_identifier(&name) {
         return None;
     }
-    let qual_type = field
-        .get("type")
-        .and_then(|value| string_field(value, "qualType"))?;
-    if qual_type.split_whitespace().any(|part| part == "volatile") {
+    let type_object = field.get("type")?;
+    let spellings = clang_type_candidate_spellings(type_object);
+    if spellings
+        .iter()
+        .any(|qual_type| qual_type.split_whitespace().any(|part| part == "volatile"))
+    {
         return None;
     }
-    let clang_ty = type_from_qual_type_with_target_abi(&qual_type, target_abi).ok()?;
+    let clang_ty = type_from_ast_type_object(type_object, target_abi).ok()?;
     let ty = lower_type(&clang_ty).ok()?;
     if !matches!(ty.kind, IrTypeKind::Integer { .. }) && !is_opaque_void_pointer_ir_type(&ty) {
         return None;
@@ -7175,6 +7245,56 @@ mod tests {
                     if *signed == expected_signed && *width == expected_width
             ));
         }
+    }
+
+    #[test]
+    fn type_from_ast_type_object_keeps_supported_qual_type_before_fallbacks() {
+        let type_object = serde_json::json!({
+            "qualType": "uint32_t",
+            "desugaredQualType": "unsigned int",
+            "canonicalQualType": "unsigned int"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None).expect("type skeleton");
+
+        assert_eq!(ty.spelled, "uint32_t");
+        assert_eq!(ty.canonical, "uint32_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_falls_back_to_desugared_qual_type() {
+        let type_object = serde_json::json!({
+            "qualType": "fdb_blob_t",
+            "desugaredQualType": "struct fdb_blob *",
+            "canonicalQualType": "struct fdb_blob *"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None).expect("type skeleton");
+
+        assert_eq!(ty.spelled, "struct fdb_blob *");
+        assert_eq!(ty.canonical, "struct fdb_blob *");
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+    }
+
+    #[test]
+    fn function_return_type_from_type_object_falls_back_to_desugared_signature() {
+        let type_object = serde_json::json!({
+            "qualType": "fdb_blob_t (fdb_blob_t)",
+            "desugaredQualType": "struct fdb_blob *(struct fdb_blob *)",
+            "canonicalQualType": "struct fdb_blob *(struct fdb_blob *)"
+        });
+
+        let ty = function_return_type_from_type_object(&type_object).expect("return type");
+
+        assert_eq!(ty.spelled, "struct fdb_blob *");
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
     }
 
     #[test]

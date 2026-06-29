@@ -1136,7 +1136,8 @@
         "mutable record pointer field write",
         "mutable record pointer opaque void pointer field write",
         "opaque void pointer field assignment cast",
-        "mutable record pointer identity return after field write"
+        "mutable record pointer identity return after field write",
+        "typedef-backed mutable record pointer via desugared/canonical clang type fallback"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1151,11 +1152,19 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/record_pointer_field_ast.json"
             },
             {
+              "name": "record pointer field typedef no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/record_pointer_field_typedef_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_record_field_subset_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
               "name": "clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1181,6 +1190,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1224,6 +1237,10 @@
             {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1247,6 +1264,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
