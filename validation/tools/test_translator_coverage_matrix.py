@@ -90,6 +90,146 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         self.assertGreaterEqual(report["dimensions"]["legacy_fallback"]["covered"], 1)
         self.assertGreaterEqual(report["dimensions"]["route_evidence"]["covered"], 1)
         self.assertIn("translator coverage matrix", report["claim_boundary"])
+        ledger = report["capability_delta_ledger"]
+        self.assertGreaterEqual(ledger["ledger_count"], 1)
+        self.assertGreaterEqual(
+            ledger["by_construct"]["external_direct_callee_context"]["refused"],
+            1,
+        )
+        self.assertEqual(ledger["semantic_pass_count"], 0)
+        self.assertIn("not semantic acceptance evidence", ledger["claim_boundary"])
+
+    def test_capability_delta_ledger_keeps_refusal_separate_from_semantic_pass(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="translator-coverage-matrix-") as tmp:
+            root = Path(tmp)
+            self._write(root / "crates/c2r-translator/tests/bounded_translation.rs", "// tests\n")
+            self._write_json(
+                root / "validation/evidence/demo/auto-translation/refused/l3-refused-capability-delta.json",
+                {
+                    "schema_version": 1,
+                    "status": "recorded",
+                    "target_id": "demo",
+                    "slice_id": "refused",
+                    "route_level": "L4",
+                    "route_status": "refused",
+                    "boundary": "unit test capability ledger; not semantic acceptance evidence",
+                    "capability_delta": [
+                        {
+                            "delta_id": "cap-refused-external-callee",
+                            "kind": "refusal_classification",
+                            "construct_id": "external_direct_callee_context",
+                            "real_c_slice": "refused",
+                            "generated_candidate_status": "refused",
+                            "semantic_pass": False,
+                            "blocked_callees": ["helper"],
+                            "evidence_refs": [
+                                "validation/evidence/demo/auto-translation/refused/l3-refused-auto-translation-plan.json"
+                            ],
+                            "negative_coverage": [{"kind": "regression"}],
+                        }
+                    ],
+                    "governance_delta": [
+                        {
+                            "delta_id": "gov-refused-external-callee",
+                            "construct_id": "external_direct_callee_context",
+                            "kind": "evidence_contract",
+                            "evidence_refs": [
+                                "validation/evidence/demo/auto-translation/refused/l3-refused-auto-translation-plan.json"
+                            ],
+                            "bound_to": "unit test",
+                        }
+                    ],
+                    "verification_commands": ["python -B -m unittest demo"],
+                },
+            )
+            path = root / "matrix.json"
+            path.write_text(
+                json.dumps(self._minimal_matrix([self._capability(capability_id="scalar-add")])),
+                encoding="utf-8",
+            )
+
+            report = translator_coverage_matrix.build_report(root, matrix_path=path)
+
+            ledger = report["capability_delta_ledger"]
+            self.assertEqual(ledger["ledger_count"], 1)
+            self.assertEqual(ledger["delta_count"], 1)
+            self.assertEqual(ledger["semantic_pass_count"], 0)
+            self.assertEqual(ledger["generated_candidate_status"]["refused"], 1)
+            self.assertEqual(ledger["route_levels"]["L4"], 1)
+            self.assertEqual(ledger["route_statuses"]["refused"], 1)
+            self.assertEqual(ledger["blocked_callee_count"], 1)
+            self.assertEqual(ledger["by_construct"]["external_direct_callee_context"]["refused"], 1)
+
+    def test_rejects_invalid_capability_delta_ledger_contract(self) -> None:
+        cases = [
+            (
+                "missing-boundary",
+                {"boundary": None},
+                "boundary",
+            ),
+            (
+                "empty-capability-delta",
+                {"capability_delta": []},
+                "capability_delta is empty",
+            ),
+            (
+                "missing-slice-id",
+                {"slice_id": None},
+                "slice_id",
+            ),
+            (
+                "missing-governance-binding",
+                {"governance_delta": [{"construct_id": None}]},
+                "governance_delta item must reference",
+            ),
+            (
+                "missing-governance-evidence",
+                {"governance_delta": [{"evidence_refs": []}]},
+                "governance_delta evidence_refs",
+            ),
+            (
+                "missing-negative-coverage",
+                {"capability_delta": [{"negative_coverage": []}]},
+                "negative_coverage",
+            ),
+            (
+                "missing-evidence-refs",
+                {"capability_delta": [{"evidence_refs": []}]},
+                "evidence_refs",
+            ),
+            (
+                "l4-refused-semantic-pass",
+                {"capability_delta": [{"semantic_pass": True}]},
+                "L4/refused capability delta cannot set semantic_pass=true",
+            ),
+        ]
+        for name, override, expected in cases:
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory(prefix="translator-coverage-matrix-") as tmp:
+                    root = Path(tmp)
+                    self._write(root / "crates/c2r-translator/tests/bounded_translation.rs", "// tests\n")
+                    ledger = self._refused_capability_ledger()
+                    for key, value in override.items():
+                        if key == "capability_delta" and value and isinstance(value[0], dict):
+                            ledger["capability_delta"][0].update(value[0])
+                        elif key == "governance_delta" and value and isinstance(value[0], dict):
+                            ledger["governance_delta"][0].update(value[0])
+                        else:
+                            ledger[key] = value
+                    self._write_json(
+                        root / "validation/evidence/demo/auto-translation/refused/l3-refused-capability-delta.json",
+                        ledger,
+                    )
+                    path = root / "matrix.json"
+                    path.write_text(
+                        json.dumps(self._minimal_matrix([self._capability(capability_id="scalar-add")])),
+                        encoding="utf-8",
+                    )
+
+                    with self.assertRaises(SystemExit) as raised:
+                        translator_coverage_matrix.build_report(root, matrix_path=path)
+
+                    self.assertIn(expected, str(raised.exception))
 
     def test_current_repository_matrix_links_existing_evidence_and_tests(self) -> None:
         report = translator_coverage_matrix.build_report(Path("."))
@@ -146,9 +286,50 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             ],
         }
 
+    def _refused_capability_ledger(self) -> dict:
+        return {
+            "schema_version": 1,
+            "status": "recorded",
+            "target_id": "demo",
+            "slice_id": "refused",
+            "route_level": "L4",
+            "route_status": "refused",
+            "boundary": "unit test capability ledger; not semantic acceptance evidence",
+            "capability_delta": [
+                {
+                    "delta_id": "cap-refused-external-callee",
+                    "kind": "refusal_classification",
+                    "construct_id": "external_direct_callee_context",
+                    "real_c_slice": "refused",
+                    "generated_candidate_status": "refused",
+                    "semantic_pass": False,
+                    "blocked_callees": ["helper"],
+                    "evidence_refs": [
+                        "validation/evidence/demo/auto-translation/refused/l3-refused-auto-translation-plan.json"
+                    ],
+                    "negative_coverage": [{"kind": "regression"}],
+                }
+            ],
+            "governance_delta": [
+                {
+                    "delta_id": "gov-refused-external-callee",
+                    "construct_id": "external_direct_callee_context",
+                    "kind": "evidence_contract",
+                    "evidence_refs": [
+                        "validation/evidence/demo/auto-translation/refused/l3-refused-auto-translation-plan.json"
+                    ],
+                    "bound_to": "unit test",
+                }
+            ],
+            "verification_commands": ["python -B -m unittest demo"],
+        }
+
     def _write(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+    def _write_json(self, path: Path, payload: dict) -> None:
+        self._write(path, json.dumps(payload))
 
 
 if __name__ == "__main__":

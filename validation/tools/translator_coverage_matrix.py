@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import sys
 from pathlib import Path
@@ -12,6 +13,14 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MATRIX = Path("validation/translator-coverage-matrix.json")
+DEFAULT_EVIDENCE_ROOT = Path("validation/evidence")
+GOVERNANCE_BINDING_KEYS = [
+    "construct_id",
+    "lowering_rule_id",
+    "cfg_construct_id",
+    "validation_false_positive_id",
+    "competition_reproduction_blocker",
+]
 REQUIRED_DIMENSIONS = [
     "clang_fixture_replay",
     "handwritten_ir",
@@ -90,7 +99,116 @@ def build_report(repo_root: Path, *, matrix_path: Path | None = None) -> dict[st
         "capability_count": len(capabilities),
         "dimensions": dimension_summary,
         "capabilities": capability_reports,
+        "capability_delta_ledger": build_capability_delta_ledger(repo_root, evidence_root=DEFAULT_EVIDENCE_ROOT),
         "claim_boundary": claim_boundary,
+    }
+
+
+def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> dict[str, Any]:
+    evidence_dir = evidence_root if evidence_root.is_absolute() else repo_root / evidence_root
+    ledger_files = sorted(evidence_dir.rglob("l3-*-capability-delta.json")) if evidence_dir.exists() else []
+    generated_status = Counter()
+    route_levels = Counter()
+    route_statuses = Counter()
+    by_construct: dict[str, Counter[str]] = {}
+    ledger_summaries = []
+    semantic_pass_count = 0
+    delta_count = 0
+    governance_delta_count = 0
+    verification_command_count = 0
+    blocked_callee_count = 0
+
+    for path in ledger_files:
+        payload = load_json(path)
+        ledger_path = rel(repo_root, path)
+        require(payload.get("schema_version") == 1, f"{rel(repo_root, path)} schema_version must be 1")
+        require(payload.get("status") == "recorded", f"{rel(repo_root, path)} status must be recorded")
+        target_id = require_string(payload, "target_id", f"{ledger_path} target_id is required")
+        slice_id = require_string(payload, "slice_id", f"{ledger_path} slice_id is required")
+        boundary = payload.get("boundary")
+        require(isinstance(boundary, str) and boundary, f"{ledger_path} boundary is required")
+        deltas = payload.get("capability_delta")
+        require(isinstance(deltas, list) and deltas, f"{ledger_path} capability_delta is empty")
+        governance = payload.get("governance_delta", [])
+        require(isinstance(governance, list) and governance, f"{ledger_path} governance_delta is empty")
+        for item in governance:
+            require(isinstance(item, dict), f"{ledger_path} governance_delta item must be an object")
+            require_string(item, "delta_id", f"{ledger_path} governance_delta delta_id is required")
+            require_string(item, "kind", f"{ledger_path} governance_delta kind is required")
+            refs = item.get("evidence_refs")
+            require(isinstance(refs, list) and refs, f"{ledger_path} governance_delta evidence_refs are required")
+            require(
+                any(isinstance(item.get(key), str) and item.get(key) for key in GOVERNANCE_BINDING_KEYS),
+                f"{ledger_path} governance_delta item must reference a construct, lowering rule, CFG construct, validation false positive, or competition reproduction blocker",
+            )
+        commands = payload.get("verification_commands", [])
+        require(isinstance(commands, list) and commands, f"{ledger_path} verification_commands is empty")
+        route_level = str(payload.get("route_level", "unknown"))
+        route_status = str(payload.get("route_status", "unknown"))
+        route_levels[route_level] += 1
+        route_statuses[route_status] += 1
+        governance_delta_count += len(governance)
+        verification_command_count += len(commands)
+        ledger_summaries.append(
+            {
+                "path": rel(repo_root, path),
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "route_level": route_level,
+                "route_status": route_status,
+                "delta_count": len(deltas),
+            }
+        )
+        for delta in deltas:
+            require(isinstance(delta, dict), f"{ledger_path} capability_delta item must be an object")
+            require_string(delta, "delta_id", f"{ledger_path} delta_id is required")
+            require_string(delta, "kind", f"{ledger_path} delta kind is required")
+            construct_id = require_string(delta, "construct_id", f"{ledger_path} construct_id is required")
+            require_string(delta, "real_c_slice", f"{ledger_path} real_c_slice is required")
+            status = str(delta.get("generated_candidate_status", "unknown"))
+            require(status != "unknown", f"{ledger_path} generated_candidate_status is required")
+            semantic_pass = delta.get("semantic_pass")
+            require(isinstance(semantic_pass, bool), f"{ledger_path} semantic_pass must be boolean")
+            require(
+                not (route_level == "L4" and route_status == "refused" and semantic_pass is True),
+                f"{ledger_path} L4/refused capability delta cannot set semantic_pass=true",
+            )
+            evidence_refs = delta.get("evidence_refs")
+            require(isinstance(evidence_refs, list) and evidence_refs, f"{ledger_path} evidence_refs are required")
+            negative_coverage = delta.get("negative_coverage")
+            require(
+                isinstance(negative_coverage, list) and negative_coverage,
+                f"{ledger_path} negative_coverage is required",
+            )
+            generated_status[status] += 1
+            by_construct.setdefault(construct_id, Counter())[status] += 1
+            delta_count += 1
+            if semantic_pass is True:
+                semantic_pass_count += 1
+            blocked_callees = delta.get("blocked_callees", [])
+            if isinstance(blocked_callees, list):
+                blocked_callee_count += len(blocked_callees)
+
+    return {
+        "schema_version": 1,
+        "status": "recorded",
+        "ledger_count": len(ledger_files),
+        "delta_count": delta_count,
+        "governance_delta_count": governance_delta_count,
+        "verification_command_count": verification_command_count,
+        "semantic_pass_count": semantic_pass_count,
+        "blocked_callee_count": blocked_callee_count,
+        "generated_candidate_status": {
+            status: generated_status[status] for status in sorted(generated_status)
+        },
+        "route_levels": {level: route_levels[level] for level in sorted(route_levels)},
+        "route_statuses": {status: route_statuses[status] for status in sorted(route_statuses)},
+        "by_construct": {
+            construct: {status: counters[status] for status in sorted(counters)}
+            for construct, counters in sorted(by_construct.items())
+        },
+        "ledgers": ledger_summaries,
+        "claim_boundary": "Capability-delta ledger entries are not semantic acceptance evidence; use semantic_pass_count and validation gates for acceptance claims.",
     }
 
 
