@@ -59,6 +59,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(any("verify_vendored_clang.py" in text for text in command_texts))
             self.assertTrue(any("evidence_governance.py" in text for text in command_texts))
             self.assertTrue(any("translator_coverage_matrix.py" in text for text in command_texts))
+            self.assertTrue(any("milestone_release_report.py" in text for text in command_texts))
             self.assertTrue(any("-m unittest" in text for text in command_texts))
 
             summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
@@ -73,6 +74,12 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 summary["vendored_clang_verification"]["path"],
                 "summary/vendored-clang-verification.json",
             )
+            self.assertEqual(
+                summary["milestone_release_report"]["path"],
+                "reports/milestone-release-report.json",
+            )
+            self.assertFalse(summary["milestone_release_report"]["semantic_acceptance_claim"])
+            self.assertNotIn("slices", summary)
 
     def test_smoke_runner_requires_explicit_confirmation_for_competition_exact(self) -> None:
         module = load_smoke_module()

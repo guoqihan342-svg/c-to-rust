@@ -25,6 +25,7 @@ PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
 EVIDENCE_GOVERNANCE = REPO_ROOT / "validation" / "tools" / "evidence_governance.py"
 TRANSLATOR_COVERAGE_MATRIX = REPO_ROOT / "validation" / "tools" / "translator_coverage_matrix.py"
+MILESTONE_RELEASE_REPORT = REPO_ROOT / "validation" / "tools" / "milestone_release_report.py"
 VERIFY_VENDORED_CLANG = REPO_ROOT / "validation" / "tools" / "verify_vendored_clang.py"
 DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
 
@@ -160,6 +161,7 @@ def run_competition_smoke(
                 "core-auto-evidence-validator",
                 "evidence-governance",
                 "translator-coverage-matrix",
+                "milestone-release-report",
                 "lightweight-unittest",
             ],
             "semantic_acceptance_boundary": "does_not_translate_new_slices",
@@ -177,6 +179,15 @@ def run_competition_smoke(
                 out_root=out_root,
             ),
             "required_for_proof_class": proof_class == "competition-exact",
+        },
+        "milestone_release_report": {
+            "path": summary_path(
+                out_root / "reports" / "milestone-release-report.json",
+                repo_root=repo_root,
+                out_root=out_root,
+            ),
+            "semantic_acceptance_claim": False,
+            "boundary": "report-only milestone metrics; does not translate new slices",
         },
         "steps": steps,
         "final_gate": {
@@ -250,6 +261,17 @@ def smoke_commands(
                 rel_path(TRANSLATOR_COVERAGE_MATRIX, repo_root),
                 "--output",
                 rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
+            ],
+        ),
+        (
+            "milestone-release-report",
+            [
+                sys.executable,
+                rel_path(MILESTONE_RELEASE_REPORT, repo_root),
+                "--coverage-report",
+                rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
+                "--output",
+                rel_path(out_root / "reports" / "milestone-release-report.json", repo_root),
             ],
         ),
         (

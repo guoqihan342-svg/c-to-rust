@@ -79,6 +79,7 @@ jobs:
           python -m unittest validation.tools.test_unsafe_budget
           python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix
+          python -m unittest validation.tools.test_milestone_release_report
 
       - name: Run competition CI smoke gate
         run: python validation/tools/run_competition_smoke.py --proof-class ci-approximation --run-id core-ci-smoke --out-root target/competition-smoke
@@ -88,6 +89,9 @@ jobs:
 
       - name: Run translator coverage matrix gate
         run: python validation/tools/translator_coverage_matrix.py
+
+      - name: Run milestone release report gate
+        run: python validation/tools/milestone_release_report.py
 
       - name: Check diff whitespace
         run: git diff --check
