@@ -1,0 +1,169 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_same_blob",
+      "blob.buf",
+      "blob.size"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_semantic_pass": false,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics.",
+      "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration.",
+      "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
+      "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+      "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
+      "sha256": "7bb1feffc08e973e150e3a1f54255ad11c725b379965b42ff51bd7bb4b7493e1",
+      "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-cache-metadata.json",
+      "sha256": "fa99c6a43ea7d72215e52192a3a826fb00c431374e66f1df09f5b2aeaf18f260",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
+      "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-config-profile.json",
+      "profile_id": "flashdb-real-fdb-blob-make-real-source",
+      "sha256": "c07be9d538ff05bcff15d9c3b8459ab808a97fde07dfaaa1c12bd501f3331e00",
+      "status": "incomplete"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-context-pack.json",
+      "sha256": "36239ea849c2f1e094942a6aeec6d71c63551d255a61a2b2f1631ad2ce531f6e",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+      "sha256": "f0f3f3a0d4e4a19eea4219da408f434eafbd4c4f8f803d068d418814e0d2e3cc",
+      "status": "incomplete"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": false,
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-negative-diff.json",
+      "sha256": "820444d5ce3ddca69775e4fb31189d6939de57d299ef85b33a706009b8e24ae8",
+      "status": "incomplete"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "2b02dead95b9538dc6471094cef622136901822a3f2bd997b8c6600f18a8c94f",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
+      "sha256": "2e2d373b503fbb034ce12a45ef20551c56bfa1bef4007718b937ccb61f8c8a33",
+      "status": "recorded"
+    },
+    "route_decision": {
+      "level": "L4",
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+      "sha256": "3a19ac20fd06b3263d0e145503ae1085325473b47ca07587f7e183f6e69876bd",
+      "status": "refused"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
+      "sha256": "7c4a59d029ed7d4dcb6c95c292b51a0597b2c15e8dfd71014a8bb91d56a4777f",
+      "status": "skipped"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-report.json",
+      "sha256": "62ab536f893503bcd20111b6e500cc05ca503b10c1e262d0a30f3eaa2201ab3a",
+      "status": "incomplete"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-diff.json",
+      "sha256": "b68dd99ab0807ccb78174c5a181240d013a223616c2c9b603768f2bf4cd1171f",
+      "status": "incomplete"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-slice-contract.json",
+      "sha256": "b9b3f4f6af0c00e788f4c0ff60ade84b247679e85095b63a0107dd0ba9576057",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-summary.json",
+      "sha256": "d8af0ec66631157f8b874c6006b4cdd0175677b98b5f9fe183a31cc98a7bfd2c",
+      "status": "incomplete"
+    },
+    "test_translation": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-test-translation-generated.json",
+      "sha256": "1dbdd18fe3c743a389f9530e6465c02c1638919c3040554e2b3af8759a24983e",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json",
+      "sha256": "5f71ab8526eb39c179bfe278e56707c3d5a79e3e9964588365b77ace2aab0627",
+      "status": "incomplete"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-scan.json",
+      "sha256": "e8d975ad4e3104cdbd940ea62d798146ed2338e82dde39e54f86f73918a7d800",
+      "status": "incomplete"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
+      "profile": "L4-dev",
+      "sha256": "1306d597ae5b421de3b2714d7d95b0a4f8e5680c76141b9e93b7eafa8c1daf73",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-version-manifest.json",
+      "sha256": "e91ccd415ed28880a28f33c646ca5be06f5e09f21dc107f7115268c575c40d52",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "real-fdb-blob-make-fixture",
+    "operation_count": 0,
+    "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json"
+  },
+  "level": "L3",
+  "repo_commit": "6bffcaa69bc039e5384726f808082b819ca4b995",
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "incomplete",
+  "target_id": "flashdb"
+}

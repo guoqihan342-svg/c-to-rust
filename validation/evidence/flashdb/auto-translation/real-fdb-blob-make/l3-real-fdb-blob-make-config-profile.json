@@ -1,0 +1,63 @@
+{
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
+    "slice_spec_sha256=e9cd4596f014617aa1486a72ce4a56ed75010c0ecc2cf25c059d485503ecb475",
+    "fixture_hash=real-fdb-blob-make-fixture",
+    "build_profile_hash=9b9b2ce887fa549df8b0c9782d54c4dd80b7204b5cddb66e320ea9372b9146e5",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "CMakeLists.txt"
+    ],
+    "config_header_included": true,
+    "include_paths": [
+      "inc",
+      "tests"
+    ]
+  },
+  "config_header": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "e9cd4596f014617aa1486a72ce4a56ed75010c0ecc2cf25c059d485503ecb475"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "real-fdb-blob-make-fixture",
+    "operation_count": 0,
+    "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics.",
+    "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
+  ],
+  "profile_id": "flashdb-real-fdb-blob-make-real-source",
+  "repo_commit": "6bffcaa69bc039e5384726f808082b819ca4b995",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

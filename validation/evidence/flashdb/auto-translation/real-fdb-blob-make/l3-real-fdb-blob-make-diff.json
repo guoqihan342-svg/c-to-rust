@@ -1,0 +1,48 @@
+{
+  "accepted_diff_required": true,
+  "blocked_by": [
+    "c_oracle",
+    "rust_replay"
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+    "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_same_blob",
+    "blob.buf",
+    "blob.size"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "generated_candidate_diff_pass": false,
+  "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
+  "reason_code": "missing_accepted_c_oracle_and_rust_replay",
+  "required_inputs": {
+    "c_oracle_actual_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "c_oracle_actual_toolchain_status": "DRAFT_NOT_EXECUTED",
+    "c_oracle_output_gate_actual_status": "missing",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "incomplete",
+    "rust_report_required_status": "passed"
+  },
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+    "sha256": "3a19ac20fd06b3263d0e145503ae1085325473b47ca07587f7e183f6e69876bd",
+    "status": "refused"
+  },
+  "schema_version": 1,
+  "semantic_pass": false,
+  "slice_id": "real-fdb-blob-make",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
+    "profile": "L4-dev",
+    "sha256": "1306d597ae5b421de3b2714d7d95b0a4f8e5680c76141b9e93b7eafa8c1daf73",
+    "status": "blocked"
+  }
+}

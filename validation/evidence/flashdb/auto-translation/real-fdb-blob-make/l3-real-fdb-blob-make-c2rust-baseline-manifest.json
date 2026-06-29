@@ -1,0 +1,46 @@
+{
+  "build_profile_hash": "9b9b2ce887fa549df8b0c9782d54c4dd80b7204b5cddb66e320ea9372b9146e5",
+  "commands": [
+    {
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
+      "name": "c2rust",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    }
+  ],
+  "correctness_role": "candidate_context_only",
+  "diagnostics": [
+    "no executable c2rust-transpile or c2rust command found on PATH"
+  ],
+  "fallback_oracle": "original_c_oracle_required",
+  "must_not_claim": [
+    "C2Rust output proves semantic equivalence",
+    "C2Rust baseline was generated"
+  ],
+  "output": null,
+  "reason": "blocked_by_missing_tools",
+  "reference_tree": {
+    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
+    "path": "F:\\agent\\c2rust-master",
+    "status": "present"
+  },
+  "schema_version": 1,
+  "selected_command": null,
+  "slice_id": "real-fdb-blob-make",
+  "slice_spec": {
+    "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+    "sha256": "5ea73cf9432320f416483184e739702e98157b1ffb61dfb5ca23449924b1ed97"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "skipped",
+  "target_id": "flashdb",
+  "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
+}

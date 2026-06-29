@@ -1263,8 +1263,25 @@
           "reason": "record field subset is typed IR only"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "record field subset does not yet have committed route-decision evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "real-fdb-blob-make L4 refused route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+              "proof_class": "committed_l4_refused_provenance"
+            },
+            {
+              "name": "real-fdb-blob-make validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
+              "proof_class": "committed_l4_refused_provenance"
+            },
+            {
+              "name": "real-fdb-blob-make clang lowering report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
+              "proof_class": "committed_missing_clang_path_provenance"
+            }
+          ],
+          "reason": "committed L4 refused/provenance evidence exists; semantic C/Rust diff remains a separate gap"
         }
       },
       "positive_cases": [

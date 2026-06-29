@@ -1,0 +1,18 @@
+{
+  "blocked": [
+    {
+      "kind": "type_uncertainty",
+      "reason": "return: clang-backed type extraction is unavailable for this unknown C type",
+      "source_span": "fdb_blob_t"
+    },
+    {
+      "kind": "type_uncertainty",
+      "reason": "blob: clang-backed type extraction is unavailable for this unknown C type",
+      "source_span": "fdb_blob_t"
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "status": "blocked",
+  "target_id": "flashdb"
+}

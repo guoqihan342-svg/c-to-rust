@@ -1,0 +1,259 @@
+{
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+        "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "not_available"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+          "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "primary_candidate": {
+      "candidate_id": "primary:unknown",
+      "fallback": false,
+      "selected": "unknown",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": null,
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "post_generation_provenance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "reason": "function_ir_missing",
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
+        "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
+        "status": "unavailable"
+      },
+      "status": "not_available"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+  },
+  "generated_draft_semantic_pass": false,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "kani"
+  ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "CMakeLists.txt",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "inc",
+        "tests"
+      ],
+      "tool_versions": {
+        "extract_source_slice": "0.1.0"
+      }
+    },
+    "fixture_representativeness": {
+      "case_source": "fixture_contract",
+      "declared_case_count": 0,
+      "fixture_hash": "real-fdb-blob-make-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [
+      "fixture_declared_case_count_missing",
+      "fixture_accepted_oracle_case_count_missing"
+    ],
+    "observable_outputs": [
+      "return_same_blob",
+      "blob.buf",
+      "blob.size"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "insufficient",
+    "target": {
+      "char_width": 8,
+      "endianness": "little",
+      "int_width": 32,
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_width": 64,
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
+  "profile": "L4-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "compile": "skipped"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff"
+  ],
+  "route_level": "L4",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-project migration",
+        "semantic equivalence without C oracle and Rust replay evidence",
+        "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_gates": [
+    {
+      "gate": "candidate_generation",
+      "reason": "route_refused"
+    },
+    {
+      "gate": "compile",
+      "reason": "skipped"
+    },
+    {
+      "gate": "c_oracle_diff",
+      "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+    }
+  ],
+  "slice_id": "real-fdb-blob-make",
+  "status": "blocked",
+  "target_id": "flashdb",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

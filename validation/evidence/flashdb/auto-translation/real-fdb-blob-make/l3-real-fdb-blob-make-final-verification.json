@@ -1,0 +1,58 @@
+{
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "not_applicable",
+    "preconditions": [],
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+    "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+    "status": "skipped"
+  },
+  "c_oracle_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "required_before_acceptance": [
+    "C_ORACLE_GENERATED",
+    "Rust replay",
+    "schema-aware diff",
+    "negative diff",
+    "unsafe scan",
+    "version/config binding",
+    "OpenSpec validation"
+  ],
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
+    "sha256": "3a19ac20fd06b3263d0e145503ae1085325473b47ca07587f7e183f6e69876bd",
+    "status": "refused"
+  },
+  "rust_check_status": "skipped",
+  "schema_version": 1,
+  "semantic_pass": false,
+  "skipped_gates": [
+    {
+      "gate": "candidate_generation",
+      "reason": "route_refused"
+    },
+    {
+      "gate": "compile",
+      "reason": "skipped"
+    },
+    {
+      "gate": "c_oracle_diff",
+      "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+    }
+  ],
+  "slice_id": "real-fdb-blob-make",
+  "status": "incomplete",
+  "target_id": "flashdb",
+  "validation_profile": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
+    "profile": "L4-dev",
+    "sha256": "1306d597ae5b421de3b2714d7d95b0a4f8e5680c76141b9e93b7eafa8c1daf73",
+    "status": "blocked"
+  },
+  "validation_profile_status": "blocked"
+}

@@ -1,0 +1,193 @@
+{
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+        "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "not_available"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+          "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "primary_candidate": {
+      "candidate_id": "primary:unknown",
+      "fallback": false,
+      "selected": "unknown",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": null,
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "post_generation_provenance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "reason": "function_ir_missing",
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
+        "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
+        "status": "unavailable"
+      },
+      "status": "not_available"
+    }
+  },
+  "level": "L4",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "blocked"
+      },
+      "weight": "hard_refuse"
+    }
+  ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-project migration",
+        "semantic equivalence without C oracle and Rust replay evidence",
+        "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+      "sha256": "c1fe1807a497ac009964c19c0ca9b53650fef7b34326b58239bd41682f9312d6",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-cfg.json",
+      "sha256": "313196d333f835abe36dbc7e98b810e71ed7dbef845f48072114bc4d3add66f8",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
+      "sha256": "372e19f6d6ebfe63c6cda548d639175df6224bcd8c9268943d883ad010fedfed",
+      "status": "unavailable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
+      "sha256": "2e2d373b503fbb034ce12a45ef20551c56bfa1bef4007718b937ccb61f8c8a33",
+      "status": "recorded"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-translation-plan.json",
+      "status": "blocked"
+    },
+    "type_map": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-type-map.json",
+      "sha256": "1b5587d3ec31a7d29880333fccfabba5517e841e938eafe26f205dd2f9df1fe4",
+      "status": "blocked"
+    }
+  },
+  "status": "refused",
+  "target_id": "flashdb",
+  "translator": {
+    "candidate_generation_allowed": false,
+    "kind": "refuse"
+  },
+  "verification_profile": "L4-dev"
+}

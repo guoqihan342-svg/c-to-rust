@@ -1,0 +1,50 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_available": false,
+    "compiler_command_source": "CMakeLists.txt",
+    "defines": [],
+    "include_paths": [
+      "inc",
+      "tests"
+    ],
+    "target": {
+      "char_width": 8,
+      "endianness": "little",
+      "int_width": 32,
+      "long_long_width": 64,
+      "long_width": 64,
+      "plain_char_signed": true,
+      "pointer_width": 64,
+      "short_width": 16,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{\n    blob->buf = (void *)value_buf;\n    blob->size = buf_len;\n\n    return blob;\n}",
+  "fixture_hash": "real-fdb-blob-make-fixture",
+  "function_name": "fdb_blob_make",
+  "function_source_span": {
+    "byte_end": 9117,
+    "byte_start": 8954,
+    "file": "src/fdb_utils.c",
+    "line_end": 227,
+    "line_start": 221,
+    "sha256": "42934484da8b00d932a4d7a18d59f9656b7da8686cc3423f74745d15836e963e"
+  },
+  "slice_id": "real-fdb-blob-make",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_file": "src/fdb_utils.c",
+  "source_file_hashes": {
+    "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+  },
+  "source_files": [
+    {
+      "path": "src/fdb_utils.c",
+      "role": "source",
+      "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    }
+  ],
+  "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+  "target_id": "flashdb"
+}

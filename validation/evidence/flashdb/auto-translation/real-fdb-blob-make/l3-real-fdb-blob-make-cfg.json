@@ -1,0 +1,111 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
+    "slice_spec_sha256=5ea73cf9432320f416483184e739702e98157b1ffb61dfb5ca23449924b1ed97",
+    "fixture_hash=real-fdb-blob-make-fixture",
+    "build_profile_hash=9b9b2ce887fa549df8b0c9782d54c4dd80b7204b5cddb66e320ea9372b9146e5",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [
+            {
+              "decision": "safe_wrapper",
+              "lvalue_kind": "pointer_field",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "blob->buf = (void *)value_buf",
+              "statement_index": 0,
+              "translation_rule_id": "pointer-field-write"
+            }
+          ],
+          "lvalue_kinds": [
+            "pointer_field",
+            "none"
+          ],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "pointer_write",
+            "return"
+          ],
+          "statements": [
+            "blob->buf = (void *)value_buf",
+            "blob->size = buf_len",
+            "return blob"
+          ]
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "fdb_blob_make",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "blob",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void* value_buf, size_t buf_len)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "6bffcaa69bc039e5384726f808082b819ca4b995",
+  "schema_version": 1,
+  "slice_id": "real-fdb-blob-make",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+    "sha256": "5ea73cf9432320f416483184e739702e98157b1ffb61dfb5ca23449924b1ed97",
+    "status": "ready"
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "unsupported_control_flow": []
+}
