@@ -120,7 +120,7 @@ This document honestly lists C language constructs that are "currently supported
 | Global array subscript write | Unsupported | Readonly global |
 | Variable-length array (VLA) | Unsupported | |
 | Incomplete array (no initializer) | Unsupported | |
-| Array-to-pointer decay | Skeleton-identified, semantically unmodeled | Preserved as an explicit clang skeleton boundary in ordinary expression position, but typed IR/Rust lowering still fails closed; decay in an `ArraySubscriptExpr` base is consumed only by the existing narrow index-access path |
+| Array-to-pointer decay | Narrow | Decay in an `ArraySubscriptExpr` base is consumed by the existing narrow index-access path; `*(local_fixed_array)` as unary deref of a direct complete fixed array DeclRef lowers to `local_fixed_array[0]` and uses the fixed-array index emitter; pointer arithmetic, call arguments, non-direct `DeclRef`, incomplete/VLA/multi-dimensional arrays, complex expressions, and general pointer values still fail closed |
 | Multi-dimensional array | Unsupported | |
 | Array as function parameter | Unsupported | Partially covered indirectly by pointer lowering |
 

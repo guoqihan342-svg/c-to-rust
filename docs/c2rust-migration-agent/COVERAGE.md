@@ -122,7 +122,7 @@
 | 全局数组下标写 | 不支持 | readonly global |
 | 变长数组 (VLA) | 不支持 | |
 | 不完整数组 (无 initializer) | 不支持 | |
-| array-to-pointer decay | 骨架识别，语义未建模 | 普通表达式位置保留为显式 clang skeleton 边界，但 typed IR/Rust lowering 仍 fail-closed；`ArraySubscriptExpr` base 中的 decay 仅在既有下标访问窄路径里被消费 |
+| array-to-pointer decay | 窄支持 | `ArraySubscriptExpr` base 中的 decay 在既有下标访问窄路径里被消费；`*(local_fixed_array)` 这类 unary deref of direct complete fixed array DeclRef 会降为 `local_fixed_array[0]` 并走 fixed-array index emitter；pointer arithmetic、call argument、非 direct DeclRef、incomplete/VLA/multi-dimensional array、复杂表达式和一般 pointer value 仍 fail-closed |
 | 多维数组 | 不支持 | |
 | 数组作为函数参数 | 不支持 | 由 pointer lowering 间接覆盖部分场景 |
 

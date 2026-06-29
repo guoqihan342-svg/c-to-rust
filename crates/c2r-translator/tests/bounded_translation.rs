@@ -1413,19 +1413,30 @@ fn clang_ast_fixture_replays_scalar_ub_refusals_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_array_decay_outside_subscript_without_clang() {
+fn clang_ast_fixture_lowers_array_decay_deref_of_local_fixed_array_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/array_decay_ast.json"))
             .expect("fixture JSON");
 
-    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "first_local_table")
-        .expect_err("array decay through unary deref must fail closed");
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "first_local_table")
+        .expect("array decay through unary deref of local fixed array should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array decay through unary deref of local fixed array should emit");
+    let rust = &emitted.rust;
 
-    assert_eq!(error.kind, "unsupported_clang_expr");
-    assert!(error.message.contains("ArrayToPointerDecay"));
-    assert!(error
-        .message
-        .contains("consumed only during ArraySubscriptExpr skeleton construction"));
+    assert!(rust.contains("pub fn first_local_table() -> i32"), "{rust}");
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[0i32 as usize];"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-array-decay-deref-local-fixed-array",
+        rust,
+        r#"
+    assert_eq!(first_local_table(), 1);
+"#,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
