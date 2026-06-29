@@ -3023,7 +3023,7 @@ fn emit_c_memset_statement(
     if callee != "memset" {
         return Ok(None);
     }
-    let (dest, count) = validate_c_memset_statement_shape(args, ty)?;
+    let (dest, byte, count) = validate_c_memset_statement_shape(args, ty)?;
     let dest = emit_identifier(dest, "C memset destination")?;
     if !symbols.contains(&dest) {
         return Err(format!(
@@ -3033,7 +3033,7 @@ fn emit_c_memset_statement(
     let count =
         emit_expr(count, symbols, context).map_err(|detail| format!("C memset size {detail}"))?;
     Ok(Some(format!(
-        "{dest}.get_mut(..({count} as usize)).expect(\"C memset precondition violated\").fill(0u8);"
+        "{dest}.get_mut(..({count} as usize)).expect(\"C memset precondition violated\").fill({byte}u8);"
     )))
 }
 
@@ -3074,7 +3074,7 @@ fn emit_c_memcpy_statement(
 fn validate_c_memset_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
-) -> Result<(&'a str, &'a IrExpr), String> {
+) -> Result<(&'a str, u8, &'a IrExpr), String> {
     if !is_void_type(ty) {
         return Err(format!(
             "C memset statement model requires void result type, got {}",
@@ -3088,7 +3088,7 @@ fn validate_c_memset_statement_shape<'a>(
         ));
     };
     let dest = validate_direct_mutable_unsigned_8_bit_pointer_arg(dest, "C memset destination")?;
-    validate_c_memset_zero_value(value)?;
+    let byte = validate_c_memset_byte_value(value)?;
     let count_ty =
         expr_type(count).ok_or_else(|| "C memset size argument type is unsupported".to_string())?;
     if !is_c_size_argument_type(count_ty) {
@@ -3098,7 +3098,7 @@ fn validate_c_memset_statement_shape<'a>(
         ));
     }
     validate_bounded_call_arg(count, false).map_err(|detail| format!("C memset size {detail}"))?;
-    Ok((dest, count))
+    Ok((dest, byte, count))
 }
 
 fn validate_c_memcpy_statement_shape<'a>(
@@ -3158,14 +3158,14 @@ fn validate_direct_mutable_unsigned_8_bit_pointer_arg<'a>(
     Ok(name)
 }
 
-fn validate_c_memset_zero_value(value: &IrExpr) -> Result<(), String> {
+fn validate_c_memset_byte_value(value: &IrExpr) -> Result<u8, String> {
     let IrExpr::LitInt { value: raw, .. } = value else {
-        return Err("C memset byte value currently supports only literal zero".to_string());
+        return Err("C memset byte value currently supports only literal byte values".to_string());
     };
-    if *raw != 0 {
-        return Err("C memset byte value currently supports only literal zero".to_string());
+    if *raw > u8::MAX as u64 {
+        return Err("C memset byte value literal must fit in unsigned char".to_string());
     }
-    Ok(())
+    Ok(*raw as u8)
 }
 
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {

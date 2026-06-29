@@ -7919,6 +7919,61 @@ fn typed_ir_emits_memset_zero_for_mutable_byte_slice_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let i32_ty = ir_i32();
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let ir = IrFunction {
+        name: "fill_prefix".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memset".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_lit(255, "255", i32_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit modeled C memset byte literal statement");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains(".fill(255u8);"), "{rust}");
+    assert!(!rust.contains("memset(out, 255, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memset-byte-literal-model",
+        rust,
+        r#"
+    let mut out = [1u8, 2, 3, 4];
+    fill_prefix(&mut out, 2);
+    assert_eq!(out, [255u8, 255, 3, 4]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
     let void_ty = ir_void();
     let i32_ty = ir_i32();
@@ -7960,10 +8015,10 @@ fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
             "requires void result type",
         ),
         (
-            "memset_nonzero_value",
+            "memset_truncating_value",
             vec![
                 ir_var("out", mutable_u8_ptr_ty.clone()),
-                ir_lit(255, "255", i32_ty.clone()),
+                ir_lit(256, "256", i32_ty.clone()),
                 ir_var("count", usize_ty.clone()),
             ],
             void_ty.clone(),
@@ -7971,7 +8026,22 @@ fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
                 ("out", mutable_u8_ptr_ty.clone()),
                 ("count", usize_ty.clone()),
             ],
-            "supports only literal zero",
+            "byte value literal must fit in unsigned char",
+        ),
+        (
+            "memset_non_literal_value",
+            vec![
+                ir_var("out", mutable_u8_ptr_ty.clone()),
+                ir_var("value", i32_ty.clone()),
+                ir_var("count", usize_ty.clone()),
+            ],
+            void_ty.clone(),
+            vec![
+                ("out", mutable_u8_ptr_ty.clone()),
+                ("value", i32_ty.clone()),
+                ("count", usize_ty.clone()),
+            ],
+            "supports only literal byte values",
         ),
         (
             "memset_const_destination",

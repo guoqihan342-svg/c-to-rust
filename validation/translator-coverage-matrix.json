@@ -1364,6 +1364,7 @@
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
         "modeled C strlen(const char *) as a one-level nested direct-call argument",
+        "modeled C memset(void *, int, size_t) statement with 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
@@ -1442,6 +1443,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_memset_zero_for_mutable_byte_slice_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -1468,6 +1477,10 @@
             },
             {
               "name": "typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_memset_calls_outside_minimal_statement_model",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1509,6 +1522,14 @@
             },
             {
               "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memset_zero_for_mutable_byte_slice_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1596,6 +1617,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_memset_zero_for_mutable_byte_slice_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
@@ -1650,6 +1679,11 @@
           "name": "clang_ast_fixture_rejects_function_decay_value_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "function-to-pointer decay outside direct callee position creates a function pointer value and requires explicit function-pointer lowering"
+        },
+        {
+          "name": "typed_ir_rejects_memset_calls_outside_minimal_statement_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "memset only accepts statement-position direct mutable unsigned byte destinations, literal byte values in 0..=255, and size_t/usize counts"
         },
         {
           "name": "typed_ir_rejects_memcpy_without_noalias_proof",
