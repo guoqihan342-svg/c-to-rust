@@ -32,7 +32,7 @@
 | `long long` / `unsigned long long` | 不支持 | 如不是 typedef alias，拒绝 |
 | `float` / `double` / `long double` | 不支持 | 浮点类型完全未支持 |
 | `_Bool` | 不支持 | 未建模 |
-| `enum` 类型 | 不支持 | enum 参数、返回值、局部变量、字段类型和底层 ABI 仍未建模；当前只在表达式层窄支持显式整数 enum 常量引用，见下方“enum 常量引用” |
+| `enum` 其他类型面 | 不支持 | enum pointer/array/field、底层 ABI/layout 和 Rust enum 生成仍未建模；参数、返回值和局部标量值仅限上方 target-ABI-bound i32 子集，显式整数 enum 常量引用见下方“enum 常量引用” |
 | `union` | 不支持 | 未建模 |
 | `struct` (按值传递) | 窄支持 | dot-field read、简单 dot-field assignment、按值 dot-field compound assignment、statement 位置 dot-field inc/dec、本地 by-value copy、唯一具名 tag 的完整直接标量字段清单下的 whole-record return；record-field 子集已有 no-clang AST fixture replay 覆盖按值 dot 读/写、readonly arrow 读、single-pointer mutable arrow 写，以及 `fdb_blob_t` 这类 typedef spelling 通过 clang `desugaredQualType`/`canonicalQualType` fallback 到 `struct fdb_blob *` 的 reduced 形状和 opt-in real-clang smoke；`real-fdb-blob-make` 也已有 committed L4 refused/provenance evidence，但这不是 C/Rust diff、layout/ABI proof 或语义通过证明；dot-field 路径仍是 minimal field candidate；whole-record inventory 拒绝同名 tag、bitfield、volatile/packed field、self-pointer/non-scalar field；pointer member access 只限 readonly 和 single-pointer mutable 窄子集，不是通用 `->`；value-position field update、多 pointer alias-sensitive field write、嵌套、匿名仍不支持 |
 
@@ -41,6 +41,7 @@
 | 构造 | 状态 | 说明 |
 |------|------|------|
 | 单变量标量声明 + 初始化 | 已支持 | `int x = 1;` |
+| 本地 `enum T` 标量声明 + 初始化 | 窄支持 | `enum mode current = MODE_A;` 仅在上方 target-ABI-bound i32 enum 子集内降为 `i32` 局部变量；已用 no-clang AST fixture 覆盖声明、`if` 条件比较、赋值和返回；隐式/负值/计算 enum 常量、非 i32 ABI、enum pointer/array/field 仍 fail-closed |
 | 单变量无初始化 | 窄支持 | 仅在读取前有赋值证明时支持，包括会继续执行的路径都赋值的 direct if-return 分支 |
 | 本地 record 声明 + copy 初始化 | 窄支持 | `struct point q = p;`，仅在后续访问已建模标量字段时作为候选 |
 | 多声明 `int a = 1, b = 2;` | 已支持 | compound body 和 for-init |

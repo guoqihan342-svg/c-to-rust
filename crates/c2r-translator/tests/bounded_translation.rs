@@ -1069,6 +1069,118 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "choose_mode",
+        Some(&target_abi),
+    )
+    .expect("lower explicit i32 enum local variable fixture without invoking clang");
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lowered.function_ir.params.as_slice(),
+        [IrParam {
+            name,
+            ty:
+                IrType {
+                    kind:
+                        IrTypeKind::Integer {
+                            signed: true,
+                            width: 32
+                        },
+                    ..
+                },
+            ..
+        }] if name == "value"
+    ));
+    let [IrStmt::Decl {
+        name: decl_name,
+        ty: decl_ty,
+        init: Some(IrExpr::LitInt { value: 1, .. }),
+        ..
+    }, IrStmt::If {
+        condition,
+        then_body,
+        else_body,
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Var {
+            name: return_name, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected enum local declaration, branch assignment, and return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(decl_name, "current");
+    assert!(matches!(
+        decl_ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        condition,
+        IrExpr::Binary {
+            op: IrBinOp::Eq,
+            lhs,
+            rhs,
+            ..
+        } if matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "value")
+            && matches!(rhs.as_ref(), IrExpr::LitInt { value: 2, .. })
+    ));
+    assert!(else_body.is_empty());
+    assert!(matches!(
+        then_body.as_slice(),
+        [IrStmt::Assign {
+            target: IrExpr::Var { name: target_name, .. },
+            value: IrExpr::LitInt { value: 2, .. },
+            ..
+        }] if target_name == "current"
+    ));
+    assert_eq!(return_name, "current");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from explicit i32 enum local variable fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn choose_mode(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("let mut current: i32 = 1i32;"), "{rust}");
+    assert!(rust.contains("if (value == 2i32)"), "{rust}");
+    assert!(rust.contains("current = 2i32;"), "{rust}");
+    assert!(rust.contains("return current;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-local-variable", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))

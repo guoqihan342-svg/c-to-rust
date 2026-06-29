@@ -493,6 +493,156 @@
     },
     {
       "kind": "FunctionDecl",
+      "name": "choose_mode",
+      "type": {
+        "qualType": "enum mode (enum mode)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "enum mode"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "current",
+                  "type": {
+                    "qualType": "enum mode"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "referencedDecl": {
+                        "id": "0x1004",
+                        "kind": "EnumConstantDecl",
+                        "name": "MODE_A"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "IfStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "==",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "enum mode"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "enum mode"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "referencedDecl": {
+                        "id": "0x1005",
+                        "kind": "EnumConstantDecl",
+                        "name": "MODE_B"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "=",
+                      "type": {
+                        "qualType": "enum mode"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "enum mode"
+                          },
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "current"
+                          }
+                        },
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "id": "0x1005",
+                            "kind": "EnumConstantDecl",
+                            "name": "MODE_B"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "enum mode"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "enum mode"
+                      },
+                      "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "current"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
       "name": "sizeof_mode_bytes",
       "type": {
         "qualType": "size_t (void)"

@@ -30,7 +30,7 @@ This document honestly lists C language constructs that are "currently supported
 | `long long` / `unsigned long long` | Unsupported | Rejected unless a typedef alias |
 | `float` / `double` / `long double` | Unsupported | Floating-point entirely unsupported |
 | `_Bool` | Unsupported | Not modeled |
-| `enum` types | Unsupported | Enum parameters, return values, local variables, field types, and underlying ABI remain unmodeled; the only current support is the narrow expression-level explicit integer enum constant reference listed below |
+| Other `enum` type surfaces | Unsupported | Enum pointers, arrays, fields, underlying ABI/layout, and Rust enum generation remain unmodeled; parameters, returns, and local scalar values are limited to the target-ABI-bound i32 subset above, and explicit integer enum constants are listed below |
 | `union` | Unsupported | Not modeled |
 | `struct` (by-value) | Narrow | Dot-field read, simple dot-field assignment, by-value dot-field compound assignment, statement-position dot-field inc/dec, local by-value copy, and whole-record return with a unique named-tag complete direct scalar field inventory; the record-field subset now has no-clang AST fixture replay for by-value dot read/write, readonly arrow read, single-pointer mutable arrow write, and the reduced `fdb_blob_t`-style typedef spelling fallback from clang `desugaredQualType`/`canonicalQualType` to `struct fdb_blob *` plus opt-in real-clang smoke coverage; `real-fdb-blob-make` also has committed L4 refused/provenance evidence, but this is not a C/Rust diff, layout/ABI proof, or semantic-pass proof; dot-field paths remain minimal-field candidates; whole-record inventory rejects duplicate tags, bitfields, volatile/packed fields, self-pointer/non-scalar fields; pointer member access is limited to the readonly and single-pointer mutable subsets, not general `->`; value-position field updates, multi-pointer alias-sensitive field writes, nesting, anonymous remain unsupported |
 
@@ -39,6 +39,7 @@ This document honestly lists C language constructs that are "currently supported
 | Construct | Status | Notes |
 |-----------|--------|-------|
 | Single scalar decl + init | Supported | `int x = 1;` |
+| Local `enum T` scalar decl + init | Narrow | `enum mode current = MODE_A;` lowers to an `i32` local only inside the target-ABI-bound i32 enum subset above; no-clang AST fixture replay covers declaration, `if` comparison, assignment, and return; implicit/negative/computed enum constants, non-i32 ABI, enum pointers/arrays/fields still fail closed |
 | Single scalar decl without init | Narrow | Only with assignment-before-read proof, including direct if-return branches where every fallthrough path assigns |
 | Local record decl + copy init | Narrow | `struct point q = p;`, candidate-only when later scalar field uses are modeled |
 | Multi-decl `int a = 1, b = 2;` | Supported | Compound body and for-init |
