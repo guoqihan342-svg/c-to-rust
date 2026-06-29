@@ -30,6 +30,22 @@ class TemplateSchemaContractTests(unittest.TestCase):
         self.assertIn("Default repair retry limit is five repair rounds.", text)
         self.assertNotIn("Default repair retry limit is three rounds.", text)
 
+    def test_patch_event_schema_allows_five_repair_rounds(self) -> None:
+        template_dir = REPO_ROOT / "validation" / "auto-translation-template"
+        schema = load_json(template_dir / "patch-event.schema.json")
+        example = load_json(template_dir / "patch-event.example.json")
+
+        self.assertEqual(5, schema["properties"]["round"]["maximum"])
+
+        fifth_round = json.loads(json.dumps(example))
+        fifth_round["round"] = 5
+        jsonschema.validate(fifth_round, schema)
+
+        sixth_round = json.loads(json.dumps(example))
+        sixth_round["round"] = 6
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(sixth_round, schema)
+
     def test_pointer_graph_template_exposes_alias_and_effect_contract(self) -> None:
         schema_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.schema.json"
         example_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.example.json"
