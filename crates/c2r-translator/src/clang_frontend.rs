@@ -3363,6 +3363,14 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
                 .ok_or_else(|| "callee is missing referenced function name".to_string())?;
             match string_field(referenced_decl, "kind").as_deref() {
                 Some("FunctionDecl") => Ok(name),
+                Some("ParmVarDecl") => {
+                    let ty = expr_type(callee).map_err(|error| error.message)?;
+                    if clang_type_is_function_pointer(&ty) {
+                        Ok(name)
+                    } else {
+                        Err("callee is not a direct function identifier".to_string())
+                    }
+                }
                 _ => Err("callee is not a direct function identifier".to_string()),
             }
         }
@@ -3371,6 +3379,14 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
         )),
         None => Err("callee node without kind is not a direct function identifier".to_string()),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_function_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. } if matches!(pointee.kind, ClangTypeKind::Function)
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -7015,7 +7031,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_function_pointer_call_expr() {
+    fn expr_skeleton_from_ast_lowers_function_pointer_direct_call_expr() {
         let expr = serde_json::json!({
             "kind": "CallExpr",
             "type": { "qualType": "int" },
@@ -7029,7 +7045,7 @@ mod tests {
                             "kind": "DeclRefExpr",
                             "type": { "qualType": "int (*)(int)" },
                             "referencedDecl": {
-                                "kind": "VarDecl",
+                                "kind": "ParmVarDecl",
                                 "name": "fp"
                             }
                         }
@@ -7051,12 +7067,19 @@ mod tests {
         });
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("function pointer call skeleton");
-        let error = lower_expr(&skeleton).expect_err("function pointer call must fail closed");
+        let lowered =
+            lower_expr(&skeleton).expect("function pointer direct call should lower to IR call");
 
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error
-            .message
-            .contains("callee is not a direct function identifier"));
+        let IrExpr::Call {
+            callee, args, ty, ..
+        } = lowered
+        else {
+            panic!("expected function pointer direct call IR, got {lowered:?}");
+        };
+        assert_eq!(callee, "fp");
+        assert_eq!(ty.spelled, "int");
+        assert_eq!(args.len(), 1);
+        assert!(matches!(args[0], IrExpr::LValueToRValue { .. }));
     }
 
     #[test]

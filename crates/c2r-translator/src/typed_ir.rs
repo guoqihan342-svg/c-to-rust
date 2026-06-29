@@ -774,6 +774,9 @@ fn emit_assigned_param_type(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_param_type(ty: &IrType) -> Result<String, String> {
+    if let Some(function_pointer_ty) = emit_function_pointer_param_type(ty)? {
+        return Ok(function_pointer_ty);
+    }
     if let Some(element_ty) = readonly_pointer_slice_element_type(ty) {
         let element_ty = emit_scalar_type(element_ty)?;
         return Ok(format!("&[{element_ty}]"));
@@ -782,6 +785,76 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         return emit_value_type(pointee).map(|ty| format!("&{ty}"));
     }
     emit_value_type(ty)
+}
+
+fn emit_function_pointer_param_type(ty: &IrType) -> Result<Option<String>, String> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return Ok(None);
+    };
+    if !matches!(pointee.kind, IrTypeKind::Function) {
+        return Ok(None);
+    }
+    emit_function_pointer_signature_type(&pointee.spelled)
+        .map(Some)
+        .map_err(|detail| {
+            format!(
+                "function pointer type {} is unsupported: {detail}",
+                type_label(ty)
+            )
+        })
+}
+
+fn emit_function_pointer_signature_type(spelling: &str) -> Result<String, String> {
+    let trimmed = spelling.trim();
+    let Some(open) = trimmed.find('(') else {
+        return Err("missing parameter list".to_string());
+    };
+    if !trimmed.ends_with(')') {
+        return Err("missing closing parameter list".to_string());
+    }
+    let return_type = trimmed[..open].trim();
+    let params = trimmed[open + 1..trimmed.len() - 1].trim();
+    let rust_return = emit_function_pointer_signature_scalar(return_type, true)?;
+    let rust_params = if params.is_empty() || params == "void" {
+        Vec::new()
+    } else {
+        params
+            .split(',')
+            .map(|param| emit_function_pointer_signature_scalar(param.trim(), false))
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let params = rust_params.join(", ");
+    if rust_return == "()" {
+        Ok(format!("fn({params})"))
+    } else {
+        Ok(format!("fn({params}) -> {rust_return}"))
+    }
+}
+
+fn emit_function_pointer_signature_scalar(
+    spelling: &str,
+    allow_void: bool,
+) -> Result<String, String> {
+    if spelling.contains('(') || spelling.contains(')') || spelling.contains('*') {
+        return Err(format!(
+            "{spelling} is outside the simple scalar signature subset"
+        ));
+    }
+    match spelling {
+        "void" if allow_void => Ok("()".to_string()),
+        "int" => Ok("i32".to_string()),
+        "signed char" | "int8_t" => Ok("i8".to_string()),
+        "unsigned char" | "uint8_t" => Ok("u8".to_string()),
+        "int16_t" => Ok("i16".to_string()),
+        "uint16_t" => Ok("u16".to_string()),
+        "unsigned int" | "uint32_t" => Ok("u32".to_string()),
+        "int64_t" => Ok("i64".to_string()),
+        "uint64_t" => Ok("u64".to_string()),
+        "size_t" => Ok("usize".to_string()),
+        _ => Err(format!(
+            "{spelling} is outside the simple scalar signature subset"
+        )),
+    }
 }
 
 fn emit_value_type(ty: &IrType) -> Result<String, String> {

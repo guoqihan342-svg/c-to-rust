@@ -1817,6 +1817,31 @@ fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
     );
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_function_pointer_parameter_call_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/function_pointer_call_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "call_fn")
+        .expect("lower function pointer parameter call fixture without invoking clang");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust for bounded function pointer parameter call");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn call_fn(fp: fn(i32) -> i32, value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return fp(value);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-function-pointer-param-call",
+        rust,
+        "fn inc(value: i32) -> i32 { value + 1 }\nassert_eq!(call_fn(inc, 41i32), 42i32);",
+    );
+}
+
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence() {
