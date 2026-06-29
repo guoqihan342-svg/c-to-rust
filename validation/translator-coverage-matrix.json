@@ -591,12 +591,14 @@
       "status": "partial",
       "scope_limitations": [
         "pointer-width evidence only proves sizeof(pointer) byte size under the target ABI profile",
-        "does not prove pointer provenance, aliasing, FFI ABI, dereference validity, object representation beyond byte size, struct layout, packing, or alignment"
+        "does not prove pointer provenance, aliasing, FFI ABI, dereference validity, object representation beyond explicit scalar width/alignment fields, struct layout, packing, or record/object alignment"
       ],
       "ir_constructs": [
         "target ABI integer width provenance",
+        "target ABI scalar alignment provenance",
         "fixed-width integer spelling acceptance",
         "profile-bound int/unsigned int width binding",
+        "profile-bound int/unsigned int alignment binding",
         "plain char/short/long/long long/size_t width binding",
         "plain char signedness provenance",
         "explicit-width-field refusal",
@@ -605,7 +607,8 @@
         "profile-bound sizeof complete fixed-size integer array type lowering",
         "profile-bound sizeof expression argType lowering",
         "profile-bound sizeof pointer type lowering",
-        "alignment trait fail-closed without alignment/layout profile",
+        "profile-bound _Alignof integer type lowering",
+        "alignment trait fail-closed without explicit alignment/layout profile",
         "fail_closed_without_abi_profile",
         "translator input target ABI profile preservation"
       ],
@@ -634,7 +637,7 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
             },
             {
-              "name": "_Alignof(int) no-clang AST refusal fixture",
+              "name": "_Alignof(int) no-clang AST refusal and profile-bound fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
             },
             {
@@ -659,7 +662,7 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
-              "name": "_Alignof fail-closed lowering tests",
+              "name": "_Alignof fail-closed and profile-bound lowering tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
@@ -694,6 +697,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_sizeof_pointer_with_target_abi_profile",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_alignof_int_with_target_alignment_profile",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -753,7 +760,11 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
-          "name": "clang_parse_spec_preserves_target_abi_width_profile",
+          "name": "alignof_type_trait_lowers_only_with_alignment_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "clang_parse_spec_preserves_target_abi_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -781,7 +792,11 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
-          "name": "test_translator_input_preserves_target_abi_width_profile",
+          "name": "clang_ast_fixture_replays_alignof_int_with_target_alignment_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "test_translator_input_preserves_target_abi_profile",
           "path": "validation/tools/test_auto_migrate.py"
         }
       ],
@@ -859,7 +874,7 @@
         {
           "name": "clang_ast_fixture_rejects_alignof_int_without_alignment_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "_Alignof no-clang fixture replay must fail closed until an alignment/layout profile exists"
+          "fail_closed_reason": "_Alignof no-clang fixture replay must fail closed unless the target ABI profile supplies explicit alignment evidence"
         },
         {
           "name": "clang_ast_fixture_rejects_size_t_without_target_abi_profile",

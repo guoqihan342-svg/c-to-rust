@@ -23,15 +23,27 @@ pub struct TargetAbiProfile {
     pub endianness: Option<String>,
     pub int_width: u16,
     #[serde(default)]
+    pub int_align: u16,
+    #[serde(default)]
     pub char_width: u16,
+    #[serde(default)]
+    pub char_align: u16,
     #[serde(default)]
     pub plain_char_signed: Option<bool>,
     #[serde(default)]
     pub short_width: u16,
+    #[serde(default)]
+    pub short_align: u16,
     pub long_width: u16,
     #[serde(default)]
+    pub long_align: u16,
+    #[serde(default)]
     pub long_long_width: u16,
+    #[serde(default)]
+    pub long_long_align: u16,
     pub pointer_width: u16,
+    #[serde(default)]
+    pub pointer_align: u16,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

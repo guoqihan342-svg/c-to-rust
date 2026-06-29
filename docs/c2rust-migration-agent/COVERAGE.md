@@ -89,7 +89,7 @@
 | `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
 | `&x` (address-of) | 不支持 | |
 | `sizeof` | 窄支持 | 支持 clang `UnaryExprOrTypeTraitExpr` 的 ABI-bound integer type operand、完整定长整数数组 type operand、带 `argType.qualType` 的 expression operand，以及带 target `pointer_width` 的 pointer type operand，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`、`sizeof(int[3])`、`sizeof(value)`、`sizeof(const int *)`；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度；缺少 `argType` 的 expression operand、缺少 pointer width profile 的 pointer operand、incomplete/VLA array、enum/record/struct layout、需要布局证据的 object operand、packing/alignment 仍 fail-closed |
-| `_Alignof` | 不支持 | clang `_Alignof(type)` 会显式 fail-closed；当前 target profile 只有宽度证据，没有 alignment/layout profile，不能猜 alignment |
+| `_Alignof` | 窄支持 | 支持 clang `_Alignof(int)`，但必须由 `build_profile.target.int_align` 提供显式 target alignment 证据；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度。缺少 alignment profile、非 byte-addressable alignment、非整数类型、record/struct layout、packing 和 object alignment 仍 fail-closed；alignment 绝不从 width-only evidence 推导 |
 | `(type){init}` compound literal | 不支持 | |
 | 函数指针 | 不支持 | 普通 `FunctionToPointerDecay` 仅显式进入 typed IR 以保留 C 语义边界；函数指针调用、传递、ABI 和 Rust lowering 仍需 explicit function-pointer lowering evidence |
 | 逗号表达式 | 不支持 | |

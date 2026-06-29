@@ -2512,7 +2512,17 @@ def validate_semantic_oracle_boundary_contract(
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} missing")
         if not positive_int_like(target.get(key)):
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
-    for key in ["char_width", "short_width", "long_long_width"]:
+    for key in [
+        "char_width",
+        "short_width",
+        "long_long_width",
+        "int_align",
+        "char_align",
+        "short_align",
+        "long_align",
+        "long_long_align",
+        "pointer_align",
+    ]:
         if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
     if (

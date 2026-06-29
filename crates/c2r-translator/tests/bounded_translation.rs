@@ -330,6 +330,7 @@ fn clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -479,6 +480,7 @@ fn clang_ast_fixture_replays_memset_statement_void_pointer_return_without_clang(
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -655,6 +657,7 @@ fn clang_ast_fixture_replays_memcpy_statement_void_pointer_return_without_clang(
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -841,6 +844,7 @@ fn clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_wr
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -934,6 +938,7 @@ fn clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang() 
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1410,6 +1415,7 @@ fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1465,6 +1471,7 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1542,6 +1549,7 @@ fn clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_targe
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1654,6 +1662,7 @@ fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1829,6 +1838,7 @@ fn clang_ast_fixture_binds_size_t_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1866,6 +1876,7 @@ fn clang_ast_fixture_replays_sizeof_int_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1903,6 +1914,7 @@ fn clang_ast_fixture_replays_sizeof_expression_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1940,6 +1952,7 @@ fn clang_ast_fixture_replays_sizeof_pointer_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1977,6 +1990,7 @@ fn clang_ast_fixture_replays_sizeof_int_array_with_target_abi_profile() {
         long_width: 32,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -2036,6 +2050,7 @@ fn clang_ast_fixture_rejects_alignof_int_without_alignment_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -2045,12 +2060,51 @@ fn clang_ast_fixture_rejects_alignof_int_without_alignment_profile() {
     )
     .expect_err("_Alignof must fail closed without target alignment profile");
 
-    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert_eq!(error.kind, "unsupported_alignof_type");
     assert!(
         error.message.contains("_Alignof") && error.message.contains("alignment"),
         "{}",
         error.message
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_alignof_int_with_target_alignment_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        int_align: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "alignof_int_bytes",
+        Some(&target_abi),
+    )
+    .expect("lower _Alignof(int) fixture with target alignment profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from _Alignof(int) fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn alignof_int_bytes() -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 4usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-alignof-int", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -2091,6 +2145,7 @@ fn clang_ast_fixture_binds_extended_target_abi_integer_widths() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     for (function, signature) in [
@@ -17433,7 +17488,7 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
 
 #[cfg(feature = "clang-frontend")]
 #[test]
-fn clang_parse_spec_preserves_target_abi_width_profile() {
+fn clang_parse_spec_preserves_target_abi_profile() {
     let spec: SliceSpec = serde_json::from_value(serde_json::json!({
         "target_id": "demo",
         "slice_id": "target-abi-width",
@@ -17461,12 +17516,18 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
                 "triple_or_abi": "x86_64-unknown-linux-gnu",
                 "endianness": "little",
                 "int_width": 32,
+                "int_align": 32,
                 "char_width": 8,
+                "char_align": 8,
                 "plain_char_signed": true,
                 "short_width": 16,
+                "short_align": 16,
                 "long_width": 64,
+                "long_align": 64,
                 "long_long_width": 64,
-                "pointer_width": 64
+                "long_long_align": 64,
+                "pointer_width": 64,
+                "pointer_align": 64
             },
             "target_triple": "x86_64-unknown-linux-gnu",
             "abi": "x86_64-unknown-linux-gnu",
@@ -17481,12 +17542,18 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
 
     assert_eq!(target_abi.triple_or_abi, "x86_64-unknown-linux-gnu");
     assert_eq!(target_abi.int_width, 32);
+    assert_eq!(target_abi.int_align, 32);
     assert_eq!(target_abi.char_width, 8);
+    assert_eq!(target_abi.char_align, 8);
     assert_eq!(target_abi.plain_char_signed, Some(true));
     assert_eq!(target_abi.short_width, 16);
+    assert_eq!(target_abi.short_align, 16);
     assert_eq!(target_abi.long_width, 64);
+    assert_eq!(target_abi.long_align, 64);
     assert_eq!(target_abi.long_long_width, 64);
+    assert_eq!(target_abi.long_long_align, 64);
     assert_eq!(target_abi.pointer_width, 64);
+    assert_eq!(target_abi.pointer_align, 64);
 }
 
 #[cfg(feature = "clang-frontend")]

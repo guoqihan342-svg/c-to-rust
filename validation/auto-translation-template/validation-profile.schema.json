@@ -147,12 +147,18 @@
         "triple_or_abi": {"type": "string", "minLength": 1},
         "endianness": {"type": "string", "minLength": 1},
         "int_width": {"type": ["integer", "string"]},
+        "int_align": {"type": ["integer", "string"]},
         "char_width": {"type": ["integer", "string"]},
+        "char_align": {"type": ["integer", "string"]},
         "plain_char_signed": {"type": ["boolean", "string"]},
         "short_width": {"type": ["integer", "string"]},
+        "short_align": {"type": ["integer", "string"]},
         "long_width": {"type": ["integer", "string"]},
+        "long_align": {"type": ["integer", "string"]},
         "long_long_width": {"type": ["integer", "string"]},
+        "long_long_align": {"type": ["integer", "string"]},
         "pointer_width": {"type": ["integer", "string"]},
+        "pointer_align": {"type": ["integer", "string"]},
         "word_size_bits": {"type": ["integer", "string"]}
       }
     },

@@ -2956,6 +2956,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             ("char_width", 0, "target.char_width invalid"),
             ("short_width", "not-a-width", "target.short_width invalid"),
             ("long_long_width", -64, "target.long_long_width invalid"),
+            ("int_align", 0, "target.int_align invalid"),
+            ("pointer_align", "not-an-align", "target.pointer_align invalid"),
             ("plain_char_signed", "signed", "target.plain_char_signed invalid"),
         ]:
             with self.subTest(key=key):
@@ -3574,6 +3576,14 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             evidence_dir / f"{prefix}-negative-diff.json",
             "expected_failed",
         )
+        self._bind_manifest_ref(
+            evidence_dir,
+            prefix,
+            "rust_report",
+            evidence_dir / f"{prefix}-rust-report.json",
+            "passed",
+        )
+        self._refresh_manifest_evidence_ref_hashes(evidence_dir, prefix)
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
 
@@ -4067,6 +4077,17 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             ref["expected_failure"] = bool(payload.get("expected_failure"))
             ref["mutation_detected"] = bool(payload.get("mutation_detected") or payload.get("detected"))
         manifest["evidence"][evidence_key] = ref
+        self._write_json(manifest_path, manifest)
+
+    def _refresh_manifest_evidence_ref_hashes(self, evidence_dir: Path, prefix: str) -> None:
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for ref in manifest.get("evidence", {}).values():
+            if not isinstance(ref, dict) or not isinstance(ref.get("path"), str):
+                continue
+            resolved = self._repo_path(ref["path"])
+            if resolved.exists():
+                ref["sha256"] = self._sha256(resolved)
         self._write_json(manifest_path, manifest)
 
     def _global_dependency_spec(self) -> dict:

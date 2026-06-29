@@ -6299,12 +6299,18 @@ def oracle_boundary_contract(
             "triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or build.get("abi") or "unknown",
             "endianness": target.get("endianness", build.get("endianness", "unknown")),
             "int_width": target.get("int_width", build.get("int_width", "unknown")),
+            "int_align": target.get("int_align", build.get("int_align", "unknown")),
             "char_width": target.get("char_width", build.get("char_width", "unknown")),
+            "char_align": target.get("char_align", build.get("char_align", "unknown")),
             "plain_char_signed": target.get("plain_char_signed", build.get("plain_char_signed", "unknown")),
             "short_width": target.get("short_width", build.get("short_width", "unknown")),
+            "short_align": target.get("short_align", build.get("short_align", "unknown")),
             "long_width": target.get("long_width", build.get("long_width", "unknown")),
+            "long_align": target.get("long_align", build.get("long_align", "unknown")),
             "long_long_width": target.get("long_long_width", build.get("long_long_width", "unknown")),
+            "long_long_align": target.get("long_long_align", build.get("long_long_align", "unknown")),
             "pointer_width": pointer_width,
+            "pointer_align": target.get("pointer_align", build.get("pointer_align", "unknown")),
             "word_size_bits": pointer_width,
         },
         "sanitizer_diagnostics": {
@@ -6381,7 +6387,17 @@ def oracle_boundary_insufficient_reasons(contract: dict[str, Any]) -> list[str]:
             reasons.append(f"target_{key}_missing")
         elif not positive_int_like(target.get(key)):
             reasons.append(f"target_{key}_invalid")
-    for key in ["char_width", "short_width", "long_long_width"]:
+    for key in [
+        "char_width",
+        "short_width",
+        "long_long_width",
+        "int_align",
+        "char_align",
+        "short_align",
+        "long_align",
+        "long_long_align",
+        "pointer_align",
+    ]:
         if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
             reasons.append(f"target_{key}_invalid")
     if (

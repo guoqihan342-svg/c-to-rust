@@ -5483,7 +5483,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(translator_input["source_file"], "src/target_fn.c")
 
-    def test_translator_input_preserves_target_abi_width_profile(self) -> None:
+    def test_translator_input_preserves_target_abi_profile(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             evidence_dir = Path(tmp) / "evidence"
@@ -5492,12 +5492,18 @@ class AutoMigrateTests(unittest.TestCase):
                 "triple_or_abi": "x86_64-unknown-linux-gnu",
                 "endianness": "little",
                 "int_width": 32,
+                "int_align": 32,
                 "char_width": 8,
+                "char_align": 8,
                 "plain_char_signed": True,
                 "short_width": 16,
+                "short_align": 16,
                 "long_width": 64,
+                "long_align": 64,
                 "long_long_width": 64,
+                "long_long_align": 64,
                 "pointer_width": 64,
+                "pointer_align": 64,
             }
             spec = {
                 "target_id": "demo",

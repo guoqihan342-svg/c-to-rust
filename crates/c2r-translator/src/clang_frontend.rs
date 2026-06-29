@@ -348,6 +348,11 @@ pub enum ClangExprSkeleton {
         arg_type: ClangTypeSkeleton,
         ty: ClangTypeSkeleton,
     },
+    AlignOfType {
+        arg_type: ClangTypeSkeleton,
+        ty: ClangTypeSkeleton,
+        alignment_bits: Option<u16>,
+    },
     NullPtr {
         ty: ClangTypeSkeleton,
     },
@@ -1492,7 +1497,7 @@ fn rewrite_supported_enum_types_in_expr(
         | ClangExprSkeleton::NullPtr { ty } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
-        ClangExprSkeleton::SizeOfType { ty, .. } => {
+        ClangExprSkeleton::SizeOfType { ty, .. } | ClangExprSkeleton::AlignOfType { ty, .. } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
         ClangExprSkeleton::Binary { lhs, rhs, ty, .. } => {
@@ -2789,7 +2794,7 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
         message: "UnaryExprOrTypeTraitExpr is missing name".to_string(),
     })?;
-    if name != "sizeof" {
+    if name != "sizeof" && name != "_Alignof" {
         return Ok(ClangExprSkeleton::Unsupported {
             node: "UnaryExprOrTypeTraitExpr".to_string(),
             reason: format!("{name} requires explicit alignment/lowering support"),
@@ -2797,15 +2802,14 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
     }
     let arg_type_object = expr.get("argType").ok_or_else(|| ClangFrontendError {
         kind: if expr.get("inner").is_some() {
-            "unsupported_sizeof_operand".to_string()
+            format!("unsupported_{name}_operand")
         } else {
             "invalid_unary_expr_or_type_trait_expr".to_string()
         },
         message: if expr.get("inner").is_some() {
-            "sizeof expression operand requires clang argType.qualType before typed IR lowering"
-                .to_string()
+            format!("{name} expression operand requires clang argType.qualType before typed IR lowering")
         } else {
-            "sizeof type operand is missing argType.qualType".to_string()
+            format!("{name} type operand is missing argType.qualType")
         },
     })?;
     if clang_type_candidate_spellings(arg_type_object)
@@ -2817,9 +2821,9 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             .or_else(|| string_field(arg_type_object, "canonicalQualType"))
             .unwrap_or_else(|| "enum".to_string());
         return Err(ClangFrontendError {
-            kind: "unsupported_sizeof_type".to_string(),
+            kind: format!("unsupported_{name}_type"),
             message: format!(
-                "sizeof({spelled}) requires explicit C layout/ABI provenance before typed IR lowering"
+                "{name}({spelled}) requires explicit C layout/ABI provenance before typed IR lowering"
             ),
         });
     }
@@ -2832,17 +2836,23 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             | ClangTypeKind::Unsupported { .. }
     ) {
         return Err(ClangFrontendError {
-            kind: "unsupported_sizeof_type".to_string(),
+            kind: format!("unsupported_{name}_type"),
             message: format!(
-                "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                "{name}({}) requires explicit C layout/ABI provenance before typed IR lowering",
                 arg_type.spelled
             ),
         });
     }
-    Ok(ClangExprSkeleton::SizeOfType {
-        arg_type,
-        ty: expr_type(expr)?,
-    })
+    let ty = expr_type(expr)?;
+    if name == "_Alignof" {
+        Ok(ClangExprSkeleton::AlignOfType {
+            arg_type,
+            ty,
+            alignment_bits: None,
+        })
+    } else {
+        Ok(ClangExprSkeleton::SizeOfType { arg_type, ty })
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3379,7 +3389,8 @@ fn bounded_call_arg_rejection_reason(
     match expr {
         ClangExprSkeleton::DeclRef { .. }
         | ClangExprSkeleton::IntegerLiteral { .. }
-        | ClangExprSkeleton::SizeOfType { .. } => None,
+        | ClangExprSkeleton::SizeOfType { .. }
+        | ClangExprSkeleton::AlignOfType { .. } => None,
         ClangExprSkeleton::NullPtr { .. } => {
             Some("call arguments cannot use null pointer value semantics".to_string())
         }
@@ -3897,6 +3908,36 @@ fn target_dependent_integer_width(
 }
 
 #[cfg(feature = "typed-ir")]
+fn target_dependent_integer_alignment(
+    spelling: &str,
+    target_abi: &TargetAbiProfile,
+) -> Option<u16> {
+    match spelling {
+        "char" | "signed char" | "unsigned char" => nonzero_width(target_abi.char_align),
+        "short" | "unsigned short" => nonzero_width(target_abi.short_align),
+        "int" | "unsigned int" => nonzero_width(target_abi.int_align),
+        "long" | "unsigned long" => nonzero_width(target_abi.long_align),
+        "long long" | "unsigned long long" => nonzero_width(target_abi.long_long_align),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_abi_alignment_bits_for_type(
+    ty: &ClangTypeSkeleton,
+    target_abi: &TargetAbiProfile,
+) -> Option<u16> {
+    match &ty.kind {
+        ClangTypeKind::Integer { .. } => {
+            target_dependent_integer_alignment(&ty.canonical, target_abi)
+                .or_else(|| target_dependent_integer_alignment(&ty.spelled, target_abi))
+        }
+        ClangTypeKind::Pointer { .. } => nonzero_width(target_abi.pointer_align),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn nonzero_width(width: u16) -> Option<u16> {
     if width == 0 {
         None
@@ -4003,6 +4044,7 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
         | ClangExprSkeleton::SizeOfType { ty, .. }
+        | ClangExprSkeleton::AlignOfType { ty, .. }
         | ClangExprSkeleton::NullPtr { ty }
         | ClangExprSkeleton::Binary { ty, .. }
         | ClangExprSkeleton::Unary { ty, .. }
@@ -4058,6 +4100,14 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         }
         ClangExprSkeleton::SizeOfType { arg_type, .. } => {
             bind_target_abi_to_type(arg_type, target_abi);
+        }
+        ClangExprSkeleton::AlignOfType {
+            arg_type,
+            alignment_bits,
+            ..
+        } => {
+            bind_target_abi_to_type(arg_type, target_abi);
+            *alignment_bits = target_abi_alignment_bits_for_type(arg_type, target_abi);
         }
         ClangExprSkeleton::Index { base, index, .. } => {
             bind_target_abi_to_expr(base, target_abi);
@@ -4480,6 +4530,20 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
                 source_span: None,
             })
         }
+        ClangExprSkeleton::AlignOfType {
+            arg_type,
+            ty,
+            alignment_bits,
+        } => {
+            let value = alignof_type_bytes(arg_type, *alignment_bits)?;
+            validate_alignof_result_fits_type(value, ty)?;
+            Ok(IrExpr::LitInt {
+                value,
+                spelling: value.to_string(),
+                ty: lower_type(ty)?,
+                source_span: None,
+            })
+        }
         ClangExprSkeleton::NullPtr { ty } => Ok(IrExpr::NullPtr {
             ty: lower_type(ty)?,
             source_span: None,
@@ -4679,6 +4743,7 @@ fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkelet
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
         | ClangExprSkeleton::SizeOfType { ty, .. }
+        | ClangExprSkeleton::AlignOfType { ty, .. }
         | ClangExprSkeleton::NullPtr { ty }
         | ClangExprSkeleton::Binary { ty, .. }
         | ClangExprSkeleton::Unary { ty, .. }
@@ -4801,6 +4866,37 @@ fn validate_sizeof_result_fits_type(
 }
 
 #[cfg(feature = "typed-ir")]
+fn validate_alignof_result_fits_type(
+    value: u64,
+    ty: &ClangTypeSkeleton,
+) -> Result<(), ClangFrontendError> {
+    let ClangTypeKind::Integer {
+        signed: false,
+        width,
+    } = ty.kind
+    else {
+        return Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof result type {} must be an ABI-bound unsigned integer before typed IR lowering",
+                ty.spelled
+            ),
+        });
+    };
+    if width >= 64 || value < (1u64 << width) {
+        Ok(())
+    } else {
+        Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof result {value} does not fit target result type {} width {width}",
+                ty.spelled
+            ),
+        })
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> {
     match &ty.kind {
         ClangTypeKind::Integer { width, .. } if *width > 0 && *width % 8 == 0 => {
@@ -4869,6 +4965,30 @@ fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> 
             kind: "unsupported_sizeof_type".to_string(),
             message: format!(
                 "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                ty.spelled
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn alignof_type_bytes(
+    ty: &ClangTypeSkeleton,
+    alignment_bits: Option<u16>,
+) -> Result<u64, ClangFrontendError> {
+    match alignment_bits {
+        Some(bits) if bits > 0 && bits % 8 == 0 => Ok(u64::from(bits / 8)),
+        Some(bits) => Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof({}) has non-byte-addressable alignment {bits}; typed IR lowering requires explicit target alignment provenance",
+                ty.spelled
+            ),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof({}) requires target ABI alignment profile before typed IR lowering",
                 ty.spelled
             ),
         }),
@@ -8664,6 +8784,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for (spelling, expected_signed, expected_width) in [
@@ -8700,6 +8821,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for (spelling, expected_signed) in [("int", true), ("unsigned int", false)] {
@@ -8727,6 +8849,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         let ty = type_from_qual_type_with_target_abi("const int *", Some(&abi))
@@ -8765,6 +8888,7 @@ mod tests {
             long_width: 64,
             long_long_width: 0,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for spelling in [
@@ -8808,6 +8932,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8848,6 +8973,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8880,6 +9006,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8913,6 +9040,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8970,6 +9098,7 @@ mod tests {
                 long_width,
                 long_long_width: 64,
                 pointer_width: 64,
+                ..TargetAbiProfile::default()
             };
             let expr = serde_json::json!({
                 "kind": "UnaryExprOrTypeTraitExpr",
@@ -9004,6 +9133,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -9076,6 +9206,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 16,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -9160,6 +9291,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -9210,7 +9342,7 @@ mod tests {
     }
 
     #[test]
-    fn alignof_type_trait_stays_fail_closed_without_alignment_profile() {
+    fn alignof_type_trait_lowers_only_with_alignment_profile() {
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
             "type": {"qualType": "size_t"},
@@ -9220,21 +9352,48 @@ mod tests {
         });
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("_Alignof skeleton should parse");
-        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
-            panic!("expected _Alignof to remain unsupported, got {skeleton:?}");
+        let ClangExprSkeleton::AlignOfType {
+            arg_type,
+            alignment_bits,
+            ..
+        } = &skeleton
+        else {
+            panic!("expected _Alignof type skeleton, got {skeleton:?}");
         };
-        assert_eq!(node, "UnaryExprOrTypeTraitExpr");
-        assert!(
-            reason.contains("_Alignof") && reason.contains("alignment/lowering support"),
-            "unexpected reason: {reason}"
-        );
+        assert_eq!(arg_type.spelled, "int");
+        assert_eq!(*alignment_bits, None);
 
         let error = lower_expr(&skeleton).expect_err("_Alignof must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert_eq!(error.kind, "unsupported_alignof_type");
         assert!(
             error.message.contains("_Alignof") && error.message.contains("alignment"),
             "unexpected error: {error:?}"
         );
+
+        let mut bound = skeleton.clone();
+        let target_abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            int_align: 32,
+            long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        bind_target_abi_to_expr(&mut bound, &target_abi);
+
+        let ir = lower_expr(&bound).expect("_Alignof(int) lowers with target alignment profile");
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected literal _Alignof result, got {ir:?}");
+        };
+        assert_eq!(value, 4);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
     }
 
     #[test]
@@ -9707,6 +9866,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
         let fields = inventory.get("blob").expect("blob record inventory");
