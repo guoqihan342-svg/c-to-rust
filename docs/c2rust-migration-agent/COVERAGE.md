@@ -20,6 +20,7 @@
 | `uint16_t` | 已支持 | 映射为 `u16` |
 | `int64_t` / `uint64_t` | 已支持 | 映射为 `i64` / `u64` |
 | `size_t` | 窄支持 | 仅在 `build_profile.target` 提供明确 target ABI 宽度证据时映射为 `usize`；无 profile 的 clang frontend 仍 fail-closed，禁止猜成固定 64-bit |
+| `enum T` | 窄支持 | 仅完整 `EnumDecl`、唯一命名、所有 enum 常量都有显式非负 `int` `ConstantExpr.value`、值可放入 `i32`，且 `build_profile.target.int_width=32` 时，标量参数/返回值/局部值位置可按 `i32` 降入 typed IR；无 target ABI、隐式/负值/计算 enum 常量、非 i32 ABI、enum pointer/array/field 和 Rust enum 生成仍 fail-closed |
 | `void` | 已支持 | return type 和 pointer pointee |
 | `const void *` (byte cursor) | 窄支持 | 仅在 proven byte cursor 场景映射为 `&[u8]` |
 | `const T *` (readonly integer pointer) | 窄支持 | 仅在有 `*p` / `p[i]` / `*(p+i)` / `*p++` 等只读访问证据、未写入、不 escape 且长度/索引边界可推断时映射为 `&[T]`；未使用或仅声明的 readonly pointer 参数 fail-closed，不自动映射 |
@@ -55,7 +56,7 @@
 |------|------|------|
 | 整数字面量 | 已支持 | 含 unsigned suffix |
 | 变量引用 | 已支持 | 局部变量和参数 |
-| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；隐式枚举值、负值、计算表达式、enum 类型变量/参数/返回值、底层 ABI 和 enum 类型数组元素仍 fail-closed |
+| enum 常量引用 | 窄支持 | 仅 clang AST 中 `DeclRefExpr -> EnumConstantDecl` 且声明处有显式非负整数 `ConstantExpr.value` 和匹配的直接 `IntegerLiteral` child 时，会在 skeleton 边界重写为 typed IR 整数字面量；同一受证明常量也可出现在顶层 readonly `static const` 固定长度整数全局数组的 literal-like initializer 中；隐式枚举值、负值、计算表达式仍 fail-closed；`enum T` 类型本身只有上方 target-ABI-bound i32 标量子集 |
 | `+` `-` `*` `/` `%` | 窄支持 | 标量整数，要求 operand 同型；clang-proven usual arithmetic `IntegralCast`/`IntegralPromotion` 会以显式 IR cast 参与运算，缺少该 cast 的混合宽度/符号 operand 会 fail-closed，不由 emitter 猜转换；无符号结果的 `+` / `-` / `*` 发射显式 `wrapping_add` / `wrapping_sub` / `wrapping_mul`；有符号结果的 `+` / `-` / `*` 发射 `checked_add` / `checked_sub` / `checked_mul` + `expect(...)`，将 no signed overflow 作为 runtime precondition；literal `/ 0` 和 `% 0` fail closed |
 | `&` `\|` `^` `<<` `>>` | 窄支持 | 标量整数，shift 的 lhs/result 同型；literal 负数 shift count、`shift_count >= width` 和无 contract 的 signed right shift fail closed |
 | `~` (bitwise not) | 已支持 | |

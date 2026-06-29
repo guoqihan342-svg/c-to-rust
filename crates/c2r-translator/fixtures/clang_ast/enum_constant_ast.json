@@ -394,6 +394,102 @@
           ]
         }
       ]
+    },
+    {
+      "id": "0x1003",
+      "kind": "EnumDecl",
+      "name": "mode",
+      "completeDefinition": true,
+      "inner": [
+        {
+          "id": "0x1004",
+          "kind": "EnumConstantDecl",
+          "name": "MODE_A",
+          "type": {
+            "qualType": "int"
+          },
+          "inner": [
+            {
+              "kind": "ConstantExpr",
+              "type": {
+                "qualType": "int"
+              },
+              "value": "1",
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "0x1005",
+          "kind": "EnumConstantDecl",
+          "name": "MODE_B",
+          "type": {
+            "qualType": "int"
+          },
+          "inner": [
+            {
+              "kind": "ConstantExpr",
+              "type": {
+                "qualType": "int"
+              },
+              "value": "2",
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "2"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "identity_mode",
+      "type": {
+        "qualType": "enum mode (enum mode)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "enum mode"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "enum mode"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "value"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

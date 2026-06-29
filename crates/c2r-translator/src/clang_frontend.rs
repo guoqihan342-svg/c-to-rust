@@ -30,7 +30,9 @@
 //!   spellings fail closed unless an explicit target ABI profile provides the required evidence;
 //!   the current profile-bound path lowers `char`, `short`, `long`,
 //!   `long long`, and `size_t` only when the target profile provides the
-//!   required width and signedness evidence.
+//!   required width and signedness evidence. A narrow enum path rewrites only complete
+//!   `enum T` declarations whose constants are all explicit non-negative `int` literals
+//!   fitting `i32`; it is not a general C enum ABI model.
 //!
 //! # Coverage
 //!
@@ -650,6 +652,7 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
 ) -> Result<LoweredFunctionWithGlobals, ClangFrontendError> {
     let record_inventory = record_inventory_from_ast_with_target_abi(&ast, target_abi);
     let enum_constant_inventory = enum_constant_inventory_from_ast(&ast);
+    let enum_type_inventory = enum_type_inventory_from_ast(&ast, target_abi);
     let function = find_function_decl(&ast, function_name).ok_or_else(|| ClangFrontendError {
         kind: "missing_function_decl".to_string(),
         message: format!("clang AST JSON does not contain FunctionDecl named {function_name}"),
@@ -657,6 +660,7 @@ pub fn lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
     let mut function = function.clone();
     rewrite_enum_constant_decl_refs_to_integer_literals(&mut function, &enum_constant_inventory)?;
     let mut skeleton = function_skeleton_from_ast(&function)?;
+    rewrite_supported_enum_types_in_function_skeleton(&mut skeleton, &enum_type_inventory)?;
     if let Some(target_abi) = target_abi {
         bind_target_abi_to_function_skeleton(&mut skeleton, target_abi);
     }
@@ -1050,10 +1054,132 @@ struct EnumConstantInventory {
 }
 
 #[cfg(feature = "typed-ir")]
+#[derive(Clone, Debug, Default)]
+struct EnumTypeInventory {
+    by_name: BTreeMap<String, Result<ClangTypeSkeleton, String>>,
+}
+
+#[cfg(feature = "typed-ir")]
 fn enum_constant_inventory_from_ast(ast: &Value) -> EnumConstantInventory {
     let mut inventory = EnumConstantInventory::default();
     collect_enum_constant_inventory_from_ast(ast, &mut inventory);
     inventory
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_inventory_from_ast(
+    ast: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> EnumTypeInventory {
+    let mut inventory = EnumTypeInventory::default();
+    collect_enum_type_inventory_from_ast(ast, target_abi, &mut inventory);
+    inventory
+}
+
+#[cfg(feature = "typed-ir")]
+fn collect_enum_type_inventory_from_ast(
+    node: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+    inventory: &mut EnumTypeInventory,
+) {
+    if string_field(node, "kind").as_deref() == Some("EnumDecl") {
+        if let Some(name) = enum_decl_name(node) {
+            let entry = enum_type_from_decl(node, &name, target_abi);
+            match inventory.by_name.entry(name) {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    slot.insert(entry);
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    let _previous = slot.insert(Err(
+                        "duplicate EnumDecl name in clang AST; enum type lowering requires unique declaration provenance"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    for child in inner(node) {
+        collect_enum_type_inventory_from_ast(child, target_abi, inventory);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_decl_name(node: &Value) -> Option<String> {
+    let name = string_field(node, "name")?;
+    if is_simple_c_identifier(&name) {
+        Some(name)
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_from_decl(
+    node: &Value,
+    name: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangTypeSkeleton, String> {
+    let Some(target_abi) = target_abi else {
+        return Err(format!(
+            "EnumDecl {name} requires target ABI profile evidence before enum-typed scalar lowering"
+        ));
+    };
+    if nonzero_width(target_abi.int_width) != Some(32) {
+        return Err(format!(
+            "EnumDecl {name} requires target ABI int_width=32 for the current enum-typed scalar subset"
+        ));
+    }
+    if node.get("completeDefinition").and_then(Value::as_bool) != Some(true) {
+        return Err(format!(
+            "EnumDecl {name} is not a complete definition; enum type lowering requires all constants"
+        ));
+    }
+    if node.get("isImplicit").and_then(Value::as_bool) == Some(true) {
+        return Err(format!(
+            "EnumDecl {name} is implicit; enum type lowering requires explicit source provenance"
+        ));
+    }
+
+    let constants = inner(node)
+        .iter()
+        .filter(|child| string_field(child, "kind").as_deref() == Some("EnumConstantDecl"))
+        .collect::<Vec<_>>();
+    if constants.is_empty() {
+        return Err(format!(
+            "EnumDecl {name} has no constants; enum type lowering requires an explicit i32 value domain"
+        ));
+    }
+
+    for constant in constants {
+        let literal = enum_constant_literal_from_decl(constant)?;
+        if !matches!(
+            literal.ty.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ) {
+            return Err(format!(
+                "EnumDecl {name} constant {} has type {}; only explicit int-backed enums are currently supported",
+                literal.name, literal.ty.spelled
+            ));
+        }
+        if literal.value > i32::MAX as u64 {
+            return Err(format!(
+                "EnumDecl {name} constant {} value {} does not fit the current i32 enum subset",
+                literal.name, literal.spelling
+            ));
+        }
+    }
+
+    Ok(ClangTypeSkeleton {
+        spelled: format!("enum {name}"),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1247,6 +1373,225 @@ fn enum_constant_inventory_entry_result(
             kind: "unsupported_clang_expr".to_string(),
             message: format!("EnumConstantDecl {name}: {reason}"),
         }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_supported_enum_types_in_function_skeleton(
+    function: &mut ClangFunctionSkeleton,
+    inventory: &EnumTypeInventory,
+) -> Result<(), ClangFrontendError> {
+    rewrite_supported_enum_type(&mut function.return_type, inventory)?;
+    for param in &mut function.params {
+        rewrite_supported_enum_type(&mut param.ty, inventory)?;
+    }
+    rewrite_supported_enum_types_in_stmts(&mut function.body, inventory)
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_supported_enum_types_in_stmts(
+    statements: &mut [ClangStmtSkeleton],
+    inventory: &EnumTypeInventory,
+) -> Result<(), ClangFrontendError> {
+    for statement in statements {
+        rewrite_supported_enum_types_in_stmt(statement, inventory)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_supported_enum_types_in_stmt(
+    statement: &mut ClangStmtSkeleton,
+    inventory: &EnumTypeInventory,
+) -> Result<(), ClangFrontendError> {
+    match statement {
+        ClangStmtSkeleton::Decl { ty, init, .. } => {
+            rewrite_supported_enum_type(ty, inventory)?;
+            if let Some(init) = init {
+                rewrite_supported_enum_types_in_expr(init, inventory)?;
+            }
+        }
+        ClangStmtSkeleton::Assign { target, value } => {
+            rewrite_supported_enum_types_in_expr(target, inventory)?;
+            rewrite_supported_enum_types_in_expr(value, inventory)?;
+        }
+        ClangStmtSkeleton::CompoundAssign {
+            target,
+            value,
+            result_ty,
+            compute_lhs_ty,
+            compute_result_ty,
+            ..
+        } => {
+            rewrite_supported_enum_types_in_expr(target, inventory)?;
+            rewrite_supported_enum_types_in_expr(value, inventory)?;
+            rewrite_supported_enum_type(result_ty, inventory)?;
+            rewrite_supported_enum_type(compute_lhs_ty, inventory)?;
+            rewrite_supported_enum_type(compute_result_ty, inventory)?;
+        }
+        ClangStmtSkeleton::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            rewrite_supported_enum_types_in_expr(condition, inventory)?;
+            rewrite_supported_enum_types_in_stmts(then_body, inventory)?;
+            rewrite_supported_enum_types_in_stmts(else_body, inventory)?;
+        }
+        ClangStmtSkeleton::While { condition, body } => {
+            rewrite_supported_enum_types_in_expr(condition, inventory)?;
+            rewrite_supported_enum_types_in_stmts(body, inventory)?;
+        }
+        ClangStmtSkeleton::DoWhile { body, condition } => {
+            rewrite_supported_enum_types_in_stmts(body, inventory)?;
+            rewrite_supported_enum_types_in_expr(condition, inventory)?;
+        }
+        ClangStmtSkeleton::For {
+            init,
+            condition,
+            step,
+            body,
+        } => {
+            rewrite_supported_enum_types_in_stmts(init, inventory)?;
+            if let Some(condition) = condition {
+                rewrite_supported_enum_types_in_expr(condition, inventory)?;
+            }
+            if let Some(step) = step {
+                rewrite_supported_enum_types_in_stmt(step, inventory)?;
+            }
+            rewrite_supported_enum_types_in_stmts(body, inventory)?;
+        }
+        ClangStmtSkeleton::Return { value } => {
+            if let Some(value) = value {
+                rewrite_supported_enum_types_in_expr(value, inventory)?;
+            }
+        }
+        ClangStmtSkeleton::Expr { expr } => {
+            rewrite_supported_enum_types_in_expr(expr, inventory)?;
+        }
+        ClangStmtSkeleton::Break
+        | ClangStmtSkeleton::Continue
+        | ClangStmtSkeleton::Unsupported { .. } => {}
+    }
+    Ok(())
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_supported_enum_types_in_expr(
+    expr: &mut ClangExprSkeleton,
+    inventory: &EnumTypeInventory,
+) -> Result<(), ClangFrontendError> {
+    match expr {
+        ClangExprSkeleton::DeclRef { ty, .. }
+        | ClangExprSkeleton::IntegerLiteral { ty, .. }
+        | ClangExprSkeleton::NullPtr { ty } => {
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::SizeOfType { arg_type, ty } => {
+            rewrite_supported_enum_type(arg_type, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Binary { lhs, rhs, ty, .. } => {
+            rewrite_supported_enum_types_in_expr(lhs, inventory)?;
+            rewrite_supported_enum_types_in_expr(rhs, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Unary { operand, ty, .. } => {
+            rewrite_supported_enum_types_in_expr(operand, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ty,
+        } => {
+            rewrite_supported_enum_types_in_expr(condition, inventory)?;
+            rewrite_supported_enum_types_in_expr(then_expr, inventory)?;
+            rewrite_supported_enum_types_in_expr(else_expr, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Cast { expr, target, .. } => {
+            rewrite_supported_enum_types_in_expr(expr, inventory)?;
+            rewrite_supported_enum_type(target, inventory)?;
+        }
+        ClangExprSkeleton::Call { args, ty, .. } => {
+            for arg in args {
+                rewrite_supported_enum_types_in_expr(arg, inventory)?;
+            }
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::IncDec { target, ty, .. } => {
+            rewrite_supported_enum_types_in_expr(target, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Deref { ptr, ty } => {
+            rewrite_supported_enum_types_in_expr(ptr, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::ArrayToPointerDecay { expr, target } => {
+            rewrite_supported_enum_types_in_expr(expr, inventory)?;
+            rewrite_supported_enum_type(target, inventory)?;
+        }
+        ClangExprSkeleton::Index { base, index, ty } => {
+            rewrite_supported_enum_types_in_expr(base, inventory)?;
+            rewrite_supported_enum_types_in_expr(index, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::ArrayLiteral { elements, ty } => {
+            for element in elements {
+                rewrite_supported_enum_types_in_expr(element, inventory)?;
+            }
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Member { base, ty, .. } => {
+            rewrite_supported_enum_types_in_expr(base, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
+        ClangExprSkeleton::Unsupported { .. } => {}
+    }
+    Ok(())
+}
+
+#[cfg(feature = "typed-ir")]
+fn rewrite_supported_enum_type(
+    ty: &mut ClangTypeSkeleton,
+    inventory: &EnumTypeInventory,
+) -> Result<(), ClangFrontendError> {
+    let Some(name) = direct_enum_type_name(ty) else {
+        return Ok(());
+    };
+    let entry = inventory.by_name.get(&name).ok_or_else(|| ClangFrontendError {
+        kind: "unsupported_clang_type".to_string(),
+        message: format!(
+            "enum {name} is not present in the clang enum type inventory; enum type lowering requires a complete EnumDecl"
+        ),
+    })?;
+    match entry {
+        Ok(mapped) => {
+            *ty = mapped.clone();
+            Ok(())
+        }
+        Err(reason) => Err(ClangFrontendError {
+            kind: "unsupported_clang_type".to_string(),
+            message: format!("enum {name}: {reason}"),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_enum_type_name(ty: &ClangTypeSkeleton) -> Option<String> {
+    direct_enum_name_from_spelling(&ty.spelled)
+        .or_else(|| direct_enum_name_from_spelling(&ty.canonical))
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_enum_name_from_spelling(spelling: &str) -> Option<String> {
+    let name = spelling.trim().strip_prefix("enum ")?.trim();
+    if is_simple_c_identifier(name) {
+        Some(name.to_string())
+    } else {
+        None
     }
 }
 
