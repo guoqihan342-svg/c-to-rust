@@ -2528,6 +2528,9 @@ fn emit_call_expr(
     if callee == "abs" {
         return emit_c_abs_call_expr(args, ty, symbols, context);
     }
+    if callee == "strlen" {
+        return emit_c_strlen_call_expr(args, ty, symbols, context);
+    }
     if reserved_c_macro_or_stdlib_callee(&callee) {
         return Err(format!(
             "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
@@ -2609,6 +2612,53 @@ fn emit_c_abs_call_expr(
         emit_expr(arg, symbols, context).map_err(|detail| format!("C abs argument {detail}"))?;
     Ok(format!(
         "{arg}.checked_abs().expect(\"C abs(int) precondition violated\")"
+    ))
+}
+
+fn emit_c_strlen_call_expr(
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    _context: &EmitContext,
+) -> Result<String, String> {
+    if !is_c_strlen_result_type(ty) {
+        return Err(format!(
+            "C strlen model requires size_t/usize result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [arg] = args else {
+        return Err(format!(
+            "C strlen model requires exactly one string pointer argument, got {}",
+            args.len()
+        ));
+    };
+    let IrExpr::Var {
+        name, ty: arg_ty, ..
+    } = arg
+    else {
+        return Err("C strlen argument must be a direct readonly pointer parameter".to_string());
+    };
+    let pointee = readonly_pointer_slice_element_type(arg_ty).ok_or_else(|| {
+        format!(
+            "C strlen argument must be a readonly 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        )
+    })?;
+    if !is_8_bit_integer_type(pointee) {
+        return Err(format!(
+            "C strlen argument must be a readonly 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        ));
+    }
+    let name = emit_identifier(name, "C strlen argument")?;
+    if !symbols.contains(&name) {
+        return Err(format!(
+            "C strlen argument {name} is not a function parameter or local binding"
+        ));
+    }
+    Ok(format!(
+        "{name}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
     ))
 }
 
@@ -5555,7 +5605,14 @@ fn collect_readonly_pointer_read_params_from_expr(
                 )?;
             }
         }
-        IrExpr::Call { args, .. } => {
+        IrExpr::Call { callee, args, .. } => {
+            if callee == "strlen" && args.len() == 1 {
+                collect_direct_readonly_pointer_read_param(
+                    &args[0],
+                    readonly_pointer_params,
+                    uses,
+                )?;
+            }
             for arg in args {
                 collect_readonly_pointer_read_params_from_expr(arg, readonly_pointer_params, uses)?;
             }
@@ -6564,6 +6621,10 @@ fn is_u8(ty: &IrType) -> bool {
     )
 }
 
+fn is_8_bit_integer_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Integer { width: 8, .. })
+}
+
 fn is_usize(ty: &IrType) -> bool {
     ty.spelled == "size_t"
         || ty.canonical == "size_t"
@@ -6574,6 +6635,13 @@ fn is_usize(ty: &IrType) -> bool {
                 width: 64
             }
         )
+}
+
+fn is_c_strlen_result_type(ty: &IrType) -> bool {
+    ty.spelled == "size_t"
+        || ty.canonical == "size_t"
+        || ty.spelled == "usize"
+        || ty.canonical == "usize"
 }
 
 fn is_u8_pointer(ty: &IrType) -> bool {

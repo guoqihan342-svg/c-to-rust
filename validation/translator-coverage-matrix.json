@@ -1137,6 +1137,7 @@
         "bounded external callee context",
         "modeled C assert(int) direct call",
         "modeled C abs(int) direct call with checked runtime precondition",
+        "modeled C strlen(const char *) direct call with NUL-termination precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1171,6 +1172,14 @@
             {
               "name": "abs(int) no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "strlen no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/strlen_call_ast.json"
+            },
+            {
+              "name": "strlen no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1192,6 +1201,10 @@
             {
               "name": "typed_ir_emits_abs_int_direct_call_with_checked_precondition",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1208,6 +1221,14 @@
             },
             {
               "name": "typed_ir_rejects_abs_calls_outside_minimal_model",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_strlen_calls_outside_minimal_model",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1237,6 +1258,10 @@
             },
             {
               "name": "typed_ir_emits_abs_int_direct_call_with_checked_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1300,6 +1325,14 @@
         {
           "name": "clang_ast_fixture_replays_abs_int_model_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_strlen_direct_call_with_nul_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1322,6 +1355,16 @@
           "name": "typed_ir_rejects_abs_calls_outside_minimal_model",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "modeled C abs(int) only accepts i32 result and exactly one i32 argument; INT_MIN is encoded as a checked_abs runtime precondition"
+        },
+        {
+          "name": "typed_ir_rejects_strlen_calls_outside_minimal_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "modeled C strlen requires size_t/usize result and exactly one direct readonly 8-bit string pointer argument; NULL, non-byte pointers, complex arguments, and non-size_t returns fail closed"
+        },
+        {
+          "name": "typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "strlen reads from a readonly pointer and must participate in the mutable-pointer noalias gate"
         },
         {
           "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",

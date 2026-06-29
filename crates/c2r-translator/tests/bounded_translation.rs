@@ -315,6 +315,63 @@ fn clang_ast_fixture_replays_abs_int_model_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/strlen_call_ast.json"))
+            .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "name_len",
+        Some(&target_abi),
+    )
+    .expect("lower strlen fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Call {
+            callee, args, ty, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected strlen return call, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "strlen");
+    assert_eq!(args.len(), 1);
+    assert_eq!(ty.spelled, "size_t");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled strlen from fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn name_len(name: &[i8]) -> usize"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return name.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\");"
+        ),
+        "{rust}"
+    );
+    assert!(!rust.contains("strlen(name)"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-strlen", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_record_field_subset_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/record_field_ast.json"))
@@ -6555,6 +6612,228 @@ fn typed_ir_rejects_abs_calls_outside_minimal_model() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_strlen_direct_call_with_nul_precondition() {
+    let usize_ty = ir_usize();
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let ir = IrFunction {
+        name: "name_len".to_string(),
+        return_type: usize_ty.clone(),
+        params: vec![IrParam {
+            name: "name".to_string(),
+            ty: const_u8_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "strlen".to_string(),
+                args: vec![ir_var("name", const_u8_ptr_ty)],
+                ty: usize_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit modeled C strlen");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn name_len(name: &[u8]) -> usize"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return name.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\");"
+        ),
+        "{rust}"
+    );
+    assert!(!rust.contains("strlen(name)"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-strlen-model", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_strlen_calls_outside_minimal_model() {
+    let usize_ty = ir_usize();
+    let i32_ty = ir_i32();
+    let u64_ty = ir_integer("uint64_t", "uint64_t", false, 64);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let const_i32_ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let cases = [
+        (
+            "strlen_no_args",
+            vec![],
+            usize_ty.clone(),
+            const_u8_ptr_ty.clone(),
+            usize_ty.clone(),
+            "requires exactly one string pointer argument",
+        ),
+        (
+            "strlen_two_args",
+            vec![
+                ir_var("name", const_u8_ptr_ty.clone()),
+                ir_var("name", const_u8_ptr_ty.clone()),
+            ],
+            usize_ty.clone(),
+            const_u8_ptr_ty.clone(),
+            usize_ty.clone(),
+            "requires exactly one string pointer argument",
+        ),
+        (
+            "strlen_non_size_result",
+            vec![ir_var("name", const_u8_ptr_ty.clone())],
+            i32_ty.clone(),
+            const_u8_ptr_ty.clone(),
+            i32_ty.clone(),
+            "requires size_t/usize result type",
+        ),
+        (
+            "strlen_uint64_result",
+            vec![ir_var("name", const_u8_ptr_ty.clone())],
+            u64_ty.clone(),
+            const_u8_ptr_ty.clone(),
+            u64_ty,
+            "requires size_t/usize result type",
+        ),
+        (
+            "strlen_non_byte_pointer",
+            vec![ir_var("name", const_i32_ptr_ty.clone())],
+            usize_ty.clone(),
+            const_i32_ptr_ty,
+            usize_ty.clone(),
+            "argument must be a readonly 8-bit integer pointer",
+        ),
+        (
+            "strlen_null_pointer",
+            vec![IrExpr::NullPtr {
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            }],
+            usize_ty.clone(),
+            const_u8_ptr_ty.clone(),
+            usize_ty,
+            "argument must be a direct readonly pointer parameter",
+        ),
+    ];
+
+    for (name, args, call_ty, param_ty, return_ty, expected_reason) in cases {
+        let params = if name == "strlen_no_args" || name == "strlen_null_pointer" {
+            vec![]
+        } else {
+            vec![IrParam {
+                name: "name".to_string(),
+                ty: param_ty,
+                source_span: None,
+            }]
+        };
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: return_ty,
+            params,
+            body: vec![IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "strlen".to_string(),
+                    args,
+                    ty: call_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).expect_err("unsupported strlen shape must fail closed");
+        assert!(
+            error.reason.contains(expected_reason),
+            "{name}: {:?}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof() {
+    let i32_ty = ir_i32();
+    let usize_ty = ir_usize();
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        false,
+    );
+    let mutable_i32_ptr = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_name_len".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "name".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_i32_ptr.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("out", mutable_i32_ptr)),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: IrExpr::Cast {
+                    expr: Box::new(IrExpr::Call {
+                        callee: "strlen".to_string(),
+                        args: vec![ir_var("name", const_u8_ptr_ty)],
+                        ty: usize_ty,
+                        source_span: None,
+                    }),
+                    target: i32_ty,
+                    implicit: false,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("strlen read plus mutable output needs noalias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_assert_calls_outside_minimal_model() {
     let i32_ty = ir_i32();
     let void_ty = ir_void();
@@ -6665,7 +6944,6 @@ fn typed_ir_rejects_unmodeled_reserved_c_macro_direct_call() {
         "memmove",
         "memset",
         "memcmp",
-        "strlen",
         "printf",
         "fprintf",
         "sprintf",

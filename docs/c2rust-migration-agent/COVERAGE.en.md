@@ -63,7 +63,7 @@ This document honestly lists C language constructs that are "currently supported
 | `&&` `\|\|` (short-circuit) | Narrow | Condition and value-position C int 0/1 |
 | `?:` (conditional) | Narrow | Pure integer value-position only; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
 | Integer cast (explicit/implicit) | Narrow | Clang-proven `IntegralCast` / `IntegralPromotion`, source/target both supported integers; integral `ImplicitCastExpr` nodes in ordinary value contexts, binary usual-arithmetic contexts, direct-call argument contexts, `?:` condition contexts, and `if`/`while`/`do-while`/`for` condition contexts are preserved as explicit IR casts; no-clang AST fixture replay now covers the clang-proven RHS cast in `uint32_t + uint8_t` and the fail-closed boundary when that cast is missing; `FloatingToIntegral`, `IntegralToFloating`, and unknown/missing `ImplicitCastExpr.castKind` in ordinary expressions, argument positions, or conditions fail closed, and only modeled integer casts plus the `LValueToRValue`/`NoOp` skeleton boundary continue |
-| Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, and clang-proven integer `ImplicitCastExpr` in argument position is preserved as an explicit cast; `assert(int)` and `abs(int)` have minimal models, while other reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
+| Function call (direct call) | Narrow | Direct identifier callees only; user functions such as `helper`/`observe` have no-clang AST fixture replay for bounded direct calls, and clang-proven integer `ImplicitCastExpr` in argument position is preserved as an explicit cast; `assert(int)`, `abs(int)`, and target-ABI-bound `strlen(const char *)` have minimal models, while other reserved C macro/stdlib/extern surfaces still require an explicit model or extern binding and otherwise fail closed |
 | Nested direct call | Narrow | One-level single nested arg only |
 | `*p` (deref read) | Narrow | Readonly integer pointer, no side effects |
 | `*(p+i)` / `*(i+p)` (offset deref) | Narrow | Readonly integer pointer, integer offset |
@@ -72,6 +72,7 @@ This document honestly lists C language constructs that are "currently supported
 | `p.field` (dot member access) | Narrow | By-value record dot-field read, simple `p.field = value`, statement-position `p.field += value` (RHS limited to a simple integer variable, literal, or integer cast), standalone statement-position `p.field++` / `++p.field` / `p.field--` / `--p.field` (base must be a direct by-value record variable and the field must be a supported integer), and field access after local copy only; value-position `p.field++`, complex RHS/base forms, and pointer/alias-sensitive field writes remain unsupported |
 | `assert(int)` | Narrow | Direct modeled C assert macro calls only; result type must be `void`, with exactly one bounded integer/condition argument; pointer, record, nested call, inc/dec, deref/member, and similar arguments still fail closed |
 | `abs(int)` | Narrow | Direct modeled C `int abs(int)` calls only; argument and result types must both be `i32`; emits `checked_abs().expect(...)` so `INT_MIN` is explicit as a runtime precondition; `labs`, `llabs`, `fabs`, errno/locale behavior, and other stdlib variants still fail closed |
+| `strlen(const char *)` | Narrow | Direct modeled C `size_t strlen(const char *)` calls only; requires a target ABI profile for `size_t`/`char`/pointer widths, and the argument must be a direct readonly 8-bit char/byte pointer parameter; the Rust candidate scans `&[u8]`/`&[i8]` for the first NUL byte and uses `expect("C strlen precondition violated")` to expose the NUL-termination precondition; NULL, non-8-bit pointers, complex expressions, non-`size_t` results, `strnlen`, and other string functions still fail closed |
 | `++` / `--` (value-position) | Unsupported | Statement value-discarded only |
 | `p++` / `p--` (statement) | Narrow | Simple integer variable target only |
 | `++p` / `--p` (statement) | Narrow | Simple integer variable target only |
@@ -157,7 +158,7 @@ This document honestly lists C language constructs that are "currently supported
 
 | Function/Header | Status | Notes |
 |-----------------|--------|-------|
-| Other standard library functions | Unsupported | No stub / extern callee proof; `assert(int)` and `abs(int)` are the separately listed minimal-model exceptions above |
+| Other standard library functions | Unsupported | No stub / extern callee proof; `assert(int)`, `abs(int)`, and `strlen(const char *)` are the separately listed minimal-model exceptions above |
 
 ## Key Boundary Notes
 
