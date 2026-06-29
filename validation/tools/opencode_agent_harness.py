@@ -48,9 +48,12 @@ def main() -> int:
     assign_parser.add_argument("--target-id", required=True)
     assign_parser.add_argument("--slice-id", required=True)
     assign_parser.add_argument("--source-repo-root", type=Path, required=True)
+    assign_parser.add_argument("--source-repository")
+    assign_parser.add_argument("--source-branch")
     assign_parser.add_argument("--source-file", required=True)
     assign_parser.add_argument("--function", required=True)
     assign_parser.add_argument("--source-commit", required=True)
+    assign_parser.add_argument("--require-source-commit")
     assign_parser.add_argument("--compiler-command-source")
     assign_parser.add_argument("--include-path", action="append", default=[])
     assign_parser.add_argument("--define", action="append", default=[])
@@ -117,9 +120,12 @@ def main() -> int:
             target_id=args.target_id,
             slice_id=args.slice_id,
             source_repo_root=args.source_repo_root,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
             source_file=args.source_file,
             function=args.function,
             source_commit=args.source_commit,
+            require_source_commit=args.require_source_commit,
             compiler_command_source=args.compiler_command_source,
             include_paths=args.include_path,
             defines=args.define,
@@ -250,9 +256,12 @@ def assign_slice(
     target_id: str,
     slice_id: str,
     source_repo_root: Path,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
     source_file: str,
     function: str,
     source_commit: str,
+    require_source_commit: str | None = None,
     compiler_command_source: str | None = None,
     include_paths: list[str] | None = None,
     defines: list[str] | None = None,
@@ -306,6 +315,12 @@ def assign_slice(
     }
     if compiler_command_source_rel:
         assignment["slice"]["compiler_command_source"] = compiler_command_source_rel
+    if source_repository:
+        assignment["slice"]["source_repository"] = source_repository
+    if source_branch:
+        assignment["slice"]["source_branch"] = source_branch
+    if require_source_commit:
+        assignment["slice"]["require_source_commit"] = require_source_commit
     if include_path_values:
         assignment["slice"]["include_paths"] = include_path_values
     if define_values:
@@ -326,6 +341,12 @@ def assign_slice(
         "out_root": repo_relative(out_root, repo_root=repo_root),
         "run_id": f"{run_id}-{worker_id}",
     }
+    if source_repository:
+        request["source_repository"] = source_repository
+    if source_branch:
+        request["source_branch"] = source_branch
+    if require_source_commit:
+        request["require_source_commit"] = require_source_commit
     if compiler_command_source_rel:
         request["compiler_command_source"] = compiler_command_source_rel
     if include_path_values:

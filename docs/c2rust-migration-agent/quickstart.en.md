@@ -108,11 +108,14 @@ Use the unified runner `run_competition.py` for end-to-end slice translation:
 ```bash
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
@@ -134,11 +137,14 @@ The runner automatically performs:
 # Step 1: Extract the slice
 python validation/tools/extract_source_slice.py \
   --repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --out target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json
 
@@ -169,11 +175,14 @@ bash config/competition-env/toolchain-check.sh
 
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
@@ -203,9 +212,12 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --include-path tests \
@@ -422,10 +434,13 @@ python validation/tools/run_competition_smoke.py --proof-class local-simulation
 # Translate a single slice
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --include-path inc \
   --out-root target/competition-out \
   --proof-class local-simulation

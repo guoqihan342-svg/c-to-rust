@@ -9,7 +9,7 @@
 - OpenSpec change：`design-c2rust-migration-agent`
 - 第一目标：FlashDB
 - 源码克隆：`sources/FlashDB`
-- 源码 commit：`93d175549da579b8abac07bd175ce4c3f9dde829`
+- 源码 commit：`f9d0421315c564fb890a1b14eee77b290e0d7bbe`
 - Rust 输出项目名：`flashDB_rust`
 - 当前 harness 分支：`codex/agent-harness-flashdb-mvp`
 - OpenCode harness：`opencode_agent_harness.py run-worker` 已支持 `--mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，也支持 `--mode opencode --opencode-variant max` 包装同一 request；`competition-run-summary.json` 存在时自动入 SQLite ledger。

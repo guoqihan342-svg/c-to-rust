@@ -66,6 +66,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 source_file="src/demo.c",
                 function="add_one",
                 source_commit="abc123",
+                source_repository="https://gitcode.com/example/demo.git",
+                source_branch="competition",
+                require_source_commit="abc123",
                 compiler_command_source="compile_commands.json",
                 include_paths=["include", "src/include"],
                 defines=["DEMO=1", "USE_FAST"],
@@ -80,12 +83,18 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(assignment["worker_id"], "worker-a")
             self.assertEqual(assignment["run_id"], "run-test")
             self.assertEqual(assignment["slice"]["slice_id"], "demo-add-one")
+            self.assertEqual(assignment["slice"]["source_repository"], "https://gitcode.com/example/demo.git")
+            self.assertEqual(assignment["slice"]["source_branch"], "competition")
+            self.assertEqual(assignment["slice"]["require_source_commit"], "abc123")
             self.assertEqual(assignment["out_root"], repo_rel(out_root / "workers" / "worker-a"))
             self.assertTrue((out_root / "harness" / "assignments" / "worker-a.json").exists())
             request_path = out_root / "harness" / "assignments" / "worker-a-request.json"
             self.assertTrue(request_path.exists())
             request = json.loads(request_path.read_text(encoding="utf-8"))
             self.assertEqual(request["source_repo_root"], "external/demo")
+            self.assertEqual(request["source_repository"], "https://gitcode.com/example/demo.git")
+            self.assertEqual(request["source_branch"], "competition")
+            self.assertEqual(request["require_source_commit"], "abc123")
             self.assertEqual(request["source_file"], "src/demo.c")
             self.assertEqual(request["out_root"], repo_rel(out_root / "workers" / "worker-a"))
             self.assertEqual(request["compiler_command_source"], "compile_commands.json")
@@ -117,6 +126,53 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
             self.assertIn("active lease already exists", str(raised.exception))
+
+    def test_assign_slice_cli_dispatches_source_pin_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "assign-slice",
+            "--db",
+            "target/competition-out/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-test",
+            "--worker-id",
+            "worker-a",
+            "--target-id",
+            "flashdb",
+            "--slice-id",
+            "real-fdb-calc-crc32",
+            "--source-repo-root",
+            "sources/FlashDB",
+            "--source-repository",
+            "https://gitcode.com/xwxf/FlashDB.git",
+            "--source-branch",
+            "competition",
+            "--source-file",
+            "src/fdb_utils.c",
+            "--function",
+            "fdb_calc_crc32",
+            "--source-commit",
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "--require-source-commit",
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "--out-root",
+            "target/competition-out/workers/worker-a",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()), patch.object(
+            harness,
+            "assign_slice",
+            return_value={"status": "assigned"},
+        ) as assign:
+            self.assertEqual(harness.main(), 0)
+
+        assign.assert_called_once()
+        self.assertEqual(assign.call_args.kwargs["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+        self.assertEqual(assign.call_args.kwargs["source_branch"], "competition")
+        self.assertEqual(
+            assign.call_args.kwargs["require_source_commit"],
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        )
 
     def test_record_worker_summary_indexes_artifact_and_merge_plan(self) -> None:
         with temp_repo_dir() as tmp:

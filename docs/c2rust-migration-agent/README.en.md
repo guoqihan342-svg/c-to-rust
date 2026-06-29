@@ -7,7 +7,7 @@
 - OpenSpec change: `design-c2rust-migration-agent`
 - First target: FlashDB
 - Source clone: `sources/FlashDB`
-- Source commit: `93d175549da579b8abac07bd175ce4c3f9dde829`
+- Source commit: `f9d0421315c564fb890a1b14eee77b290e0d7bbe`
 - Rust output project name: `flashDB_rust`
 - Current harness branch: `codex/agent-harness-flashdb-mvp`
 - OpenCode harness: `opencode_agent_harness.py run-worker` supports `--mode deterministic`, which calls the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`, and `--mode opencode --opencode-variant max`, which wraps the same request through OpenCode. When `competition-run-summary.json` exists, the worker summary is recorded into the SQLite ledger automatically.

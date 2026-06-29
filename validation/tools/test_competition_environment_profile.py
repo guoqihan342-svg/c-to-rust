@@ -12,6 +12,7 @@ COMPAT_PROFILE_DIR = (
     / "environment-profiles"
     / "huawei-competition-ubuntu-24.04"
 )
+OLD_FLASHDB_SOURCE_COMMIT = "93d175549da579b8abac07bd175ce4c3f9dde829"
 RUST_MANIFESTS = [
     REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml",
     REPO_ROOT / "validation" / "l2_slices" / "Cargo.toml",
@@ -128,6 +129,36 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("--source-repository", flashdb["runner_required_flags"])
         self.assertIn("--source-branch", flashdb["runner_required_flags"])
         self.assertIn("--require-source-commit", flashdb["runner_required_flags"])
+
+    def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        commit = flashdb["commit"]
+
+        quickstarts = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+        ]
+        for quickstart in quickstarts:
+            text = quickstart.read_text(encoding="utf-8")
+            with self.subTest(quickstart=quickstart.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
+                self.assertIn(f"--source-commit {commit}", text)
+                self.assertIn(f"--source-repository {flashdb['repository']}", text)
+                self.assertIn(f"--source-branch {flashdb['branch']}", text)
+                self.assertIn(f"--require-source-commit {commit}", text)
+                for required_flag in flashdb["runner_required_flags"]:
+                    self.assertIn(required_flag, text)
+
+        readmes = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "README.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "README.en.md",
+        ]
+        for readme in readmes:
+            text = readme.read_text(encoding="utf-8")
+            with self.subTest(readme=readme.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
+                self.assertIn(commit, text)
 
     def test_competition_shell_entrypoints_use_repo_root_and_activate_cargo_mirror(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
