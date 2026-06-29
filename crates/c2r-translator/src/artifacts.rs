@@ -412,7 +412,10 @@ fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
     } else {
         typed_ir::SignedRightShiftPolicy::FailClosed
     };
-    typed_ir::EmitPolicy { signed_right_shift }
+    typed_ir::EmitPolicy {
+        signed_right_shift,
+        ..Default::default()
+    }
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -1178,6 +1181,7 @@ mod clang_lowering_report_artifact_tests {
         };
         let policy = EmitPolicy {
             signed_right_shift: SignedRightShiftPolicy::ImplementationDefinedArithmetic,
+            ..Default::default()
         };
 
         let evidence = typed_ir_candidate_evidence(Some(&function), &[], policy);

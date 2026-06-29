@@ -58,7 +58,10 @@ fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
     } else {
         typed_ir::SignedRightShiftPolicy::FailClosed
     };
-    typed_ir::EmitPolicy { signed_right_shift }
+    typed_ir::EmitPolicy {
+        signed_right_shift,
+        ..Default::default()
+    }
 }
 
 /// Mirrors an already-emitted typed IR function into translator evidence.

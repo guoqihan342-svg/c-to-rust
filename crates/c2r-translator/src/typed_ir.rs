@@ -337,9 +337,16 @@ impl Default for SignedRightShiftPolicy {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct EmitPolicy {
     pub signed_right_shift: SignedRightShiftPolicy,
+    pub noalias_param_pairs: Vec<NoAliasParamPair>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NoAliasParamPair {
+    pub readonly_param: String,
+    pub mutable_param: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -488,7 +495,7 @@ impl EmitContext {
             &readonly_pointer_uses.read_params,
             &readonly_pointer_uses.mentioned_params,
         )?;
-        validate_mutable_pointer_write_alias_boundary(&function.body, &function.params)?;
+        validate_mutable_pointer_write_alias_boundary(&function.body, &function.params, &policy)?;
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let opaque_record_pointer_field_value_params =
@@ -5616,6 +5623,7 @@ fn collect_opaque_record_pointer_value_param_from_expr(
 fn validate_mutable_pointer_write_alias_boundary(
     body: &[IrStmt],
     params: &[IrParam],
+    policy: &EmitPolicy,
 ) -> Result<(), String> {
     let mutable_pointer_params = params
         .iter()
@@ -5639,7 +5647,7 @@ fn validate_mutable_pointer_write_alias_boundary(
         );
     }
     // Safe Rust cannot express a potentially aliased `&[T]` read beside an
-    // `&mut [T]` write without a stronger noalias fact.
+    // `&mut [T]` write without an explicit noalias fact.
     if !write_params.is_empty() {
         let mut readonly_pointer_uses = ReadonlyPointerParamUses::default();
         collect_readonly_pointer_read_params_from_body(
@@ -5647,7 +5655,14 @@ fn validate_mutable_pointer_write_alias_boundary(
             &readonly_pointer_params,
             &mut readonly_pointer_uses,
         )?;
-        if !readonly_pointer_uses.read_params.is_empty() {
+        if !readonly_pointer_uses.read_params.is_empty()
+            && !readonly_mutable_pointer_noalias_proven(
+                &readonly_pointer_uses.read_params,
+                &write_params,
+                params,
+                policy,
+            )
+        {
             return Err(
                 "mutable pointer write with readonly pointer read requires noalias proof"
                     .to_string(),
@@ -5655,6 +5670,60 @@ fn validate_mutable_pointer_write_alias_boundary(
         }
     }
     Ok(())
+}
+
+fn readonly_mutable_pointer_noalias_proven(
+    readonly_params: &HashSet<String>,
+    mutable_params: &HashSet<String>,
+    params: &[IrParam],
+    policy: &EmitPolicy,
+) -> bool {
+    let Some(mutable_param) = mutable_params.iter().next() else {
+        return false;
+    };
+    let params_by_name = params
+        .iter()
+        .map(|param| (param.name.as_str(), param))
+        .collect::<HashMap<_, _>>();
+
+    readonly_params.iter().all(|readonly_param| {
+        explicit_noalias_pair(policy, readonly_param, mutable_param)
+            || params_have_restrict_noalias(&params_by_name, readonly_param, mutable_param)
+    })
+}
+
+fn explicit_noalias_pair(policy: &EmitPolicy, readonly_param: &str, mutable_param: &str) -> bool {
+    policy
+        .noalias_param_pairs
+        .iter()
+        .any(|pair| pair.readonly_param == readonly_param && pair.mutable_param == mutable_param)
+}
+
+fn params_have_restrict_noalias(
+    params_by_name: &HashMap<&str, &IrParam>,
+    readonly_param: &str,
+    mutable_param: &str,
+) -> bool {
+    params_by_name
+        .get(readonly_param)
+        .is_some_and(|param| type_has_restrict_qualifier(&param.ty))
+        && params_by_name
+            .get(mutable_param)
+            .is_some_and(|param| type_has_restrict_qualifier(&param.ty))
+}
+
+fn type_has_restrict_qualifier(ty: &IrType) -> bool {
+    [ty.spelled.as_str(), ty.canonical.as_str()]
+        .iter()
+        .any(|spelling| spelling_has_restrict_qualifier(spelling))
+}
+
+fn spelling_has_restrict_qualifier(spelling: &str) -> bool {
+    spelling
+        .split(|ch: char| {
+            ch.is_whitespace() || matches!(ch, '*' | '(' | ')' | '[' | ']' | ',' | ';')
+        })
+        .any(|token| matches!(token, "restrict" | "__restrict" | "__restrict__"))
 }
 
 fn collect_readonly_pointer_param_uses(

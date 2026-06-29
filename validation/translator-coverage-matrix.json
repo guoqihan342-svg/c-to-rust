@@ -826,6 +826,7 @@
         "ArrayToPointerDecay explicit clang skeleton outside ArraySubscriptExpr with typed-IR lowering fail-closed",
         "ArrayToPointerDecay in pointer arithmetic fail-closed before typed IR lowering",
         "readonly pointer parameter without read-access evidence fail-closed",
+        "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
         "slice boundary"
       ],
       "dimension_status": {
@@ -848,6 +849,18 @@
             {
               "name": "typed IR pointer slice tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_restrict_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_policy_noalias_pair",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_deref_and_mutable_output_assignment_with_restrict_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -861,6 +874,14 @@
             {
               "name": "unused readonly pointer param remains fail-closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_readonly_input_and_mutable_output_index_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -869,6 +890,14 @@
           "evidence": [
             {
               "name": "pointer slice emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "readonly input plus mutable output restrict/noalias emitted Rust compile checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "readonly input plus mutable output policy noalias emitted Rust compile check",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -916,6 +945,18 @@
         {
           "name": "expr_skeleton_from_ast_preserves_array_to_pointer_decay_as_explicit_skeleton",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_restrict_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_policy_noalias_pair",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_readonly_deref_and_mutable_output_assignment_with_restrict_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -943,6 +984,16 @@
           "name": "typed_ir_rejects_unused_readonly_pointer_param_without_slice_evidence",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "readonly pointer params require pointer-to-slice lowering evidence before lowering const T * to &[T]"
+        },
+        {
+          "name": "typed_ir_rejects_readonly_input_and_mutable_output_index_assignment_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly input plus mutable output requires explicit restrict/noalias proof before lowering to safe Rust slices"
+        },
+        {
+          "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly pointer deref plus mutable output write requires explicit restrict/noalias proof"
         }
       ]
     },
