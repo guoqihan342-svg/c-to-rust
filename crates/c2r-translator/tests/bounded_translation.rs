@@ -1400,6 +1400,46 @@ fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
     assert_rust_snippet_compiles("typed-ir-clang-ast-restrict-pointer-copy-one", rust);
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/readonly_mutable_noalias_missing_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "copy_one")
+        .expect("plain readonly input plus mutable output should lower before alias gate");
+    let values_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "values")
+        .expect("values param");
+    let out_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "out")
+        .expect("out param");
+    assert!(!values_param.ty.spelled.contains("restrict"));
+    assert!(!values_param.ty.canonical.contains("restrict"));
+    assert!(!out_param.ty.spelled.contains("restrict"));
+    assert!(!out_param.ty.canonical.contains("restrict"));
+
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("plain readonly input plus mutable output needs noalias proof");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "unexpected reason: {}",
+        error.reason
+    );
+}
+
 #[cfg(feature = "typed-ir")]
 fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
     IrType {

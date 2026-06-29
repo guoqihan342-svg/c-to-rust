@@ -829,6 +829,7 @@
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
         "readonly input plus mutable output noalias lowering reachable from clang AST replay",
+        "readonly input plus mutable output without restrict/noalias from clang AST replay fail-closed",
         "slice boundary"
       ],
       "dimension_status": {
@@ -849,6 +850,14 @@
             },
             {
               "name": "clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "readonly mutable without restrict/noalias no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/readonly_mutable_noalias_missing_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -891,6 +900,10 @@
             },
             {
               "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1012,6 +1025,11 @@
           "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "readonly pointer deref plus mutable output write requires explicit restrict/noalias proof"
+        },
+        {
+          "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly input plus mutable output from clang AST replay still requires explicit restrict/noalias proof before safe Rust slice lowering"
         }
       ]
     },
