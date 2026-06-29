@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-blob-make",
+  "level": "L3",
+  "status": "draft",
+  "function_name": "fdb_blob_make",
+  "c_source": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{\n    blob->buf = (void *)value_buf;\n    blob->size = buf_len;\n\n    return blob;\n}",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "fixture_hash": "real-fdb-blob-make-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/flashdb/l1-native-build.json",
+    "status": "required",
+    "accepted": false
+  },
+  "source": {
+    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_file_hashes": {
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "src/fdb_utils.c",
+        "role": "source",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      }
+    ],
+    "functions": [
+      "fdb_blob_make"
+    ],
+    "signatures": [
+      {
+        "function": "fdb_blob_make",
+        "return_type": "fdb_blob_t",
+        "parameters": [
+          {
+            "name": "blob",
+            "c_type": "fdb_blob_t",
+            "direction": "inout"
+          },
+          {
+            "name": "value_buf",
+            "c_type": "const void*",
+            "direction": "input"
+          },
+          {
+            "name": "buf_len",
+            "c_type": "size_t",
+            "direction": "input"
+          }
+        ],
+        "c_source": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{\n    blob->buf = (void *)value_buf;\n    blob->size = buf_len;\n\n    return blob;\n}",
+        "source_span": {
+          "file": "src/fdb_utils.c",
+          "line_start": 221,
+          "line_end": 227,
+          "byte_start": 8954,
+          "byte_end": 9117,
+          "sha256": "42934484da8b00d932a4d7a18d59f9656b7da8686cc3423f74745d15836e963e"
+        },
+        "definition_status": "real_source_bound"
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "fdb_blob_t",
+        "source": "inc/fdb_def.h#typedef struct fdb_blob *fdb_blob_t",
+        "definition_status": "real_source_bound",
+        "source_span": {
+          "file": "inc/fdb_def.h",
+          "line_start": 316,
+          "line_end": 325,
+          "byte_start": 13431,
+          "byte_end": 13916,
+          "sha256": "29c75265bf6ea2ab688a4202d0a1ad380438fc7a0cb28c9381a7ce3917596d81"
+        }
+      },
+      {
+        "kind": "type",
+        "name": "void",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "size_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "config",
+        "name": "fdb_blob_make prototype",
+        "source": "inc/flashdb.h#fdb_blob_make",
+        "definition_status": "real_source_bound",
+        "source_span": {
+          "file": "inc/flashdb.h",
+          "line_start": 41,
+          "line_end": 41,
+          "byte_start": 945,
+          "byte_end": 1032,
+          "sha256": "c1bdd805f3ae4f716bd04e7feda62e64f7edc6f58cda1d114c108768648faa7e"
+        }
+      }
+    ],
+    "pointer_contract": {
+      "input_buffers": [
+        {
+          "name": "value_buf",
+          "c_type": "const void*",
+          "length_companion": "buf_len",
+          "read_effects": [],
+          "write_effects": [],
+          "nullability": "nullable",
+          "ownership_role": "observer",
+          "mutability": "read_only",
+          "translation_rule_id": "opaque_pointer_field_value"
+        }
+      ],
+      "inout_pointers": [
+        {
+          "name": "blob",
+          "c_type": "fdb_blob_t",
+          "write_effects": [
+            "blob->buf",
+            "blob->size"
+          ],
+          "read_effects": [],
+          "nullability": "unknown",
+          "ownership_role": "inout_param",
+          "mutability": "read_write",
+          "translation_rule_id": "mutable_record_pointer_field_write_identity_return"
+        }
+      ],
+      "aliasing_proven": false,
+      "noalias_required": []
+    },
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    }
+  },
+  "build_profile": {
+    "profile_id": "flashdb-real-fdb-blob-make-real-source",
+    "compiler_command_source": "CMakeLists.txt",
+    "include_paths": [
+      "inc",
+      "tests"
+    ],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "char_width": 8,
+      "plain_char_signed": true,
+      "short_width": 16,
+      "long_width": 64,
+      "long_long_width": 64,
+      "pointer_width": 64
+    },
+    "preprocessing_mode": "manual_flags",
+    "tool_versions": {
+      "extract_source_slice": "0.1.0"
+    },
+    "clang_type_extraction": {
+      "available": false,
+      "diagnostics": [
+        "syntax-indexed real source slice; CLANG_PATH-driven clang AST dump JSON or compile_commands semantic evidence required for accepted translation"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "real-fdb-blob-make-fixture",
+    "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
+    "hash": "real-fdb-blob-make-fixture",
+    "cases": [],
+    "observable_outputs": [
+      "return_same_blob",
+      "blob.buf",
+      "blob.size"
+    ],
+    "behavior_fields": [
+      "return_same_blob",
+      "blob.buf",
+      "blob.size"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/fdb_blob_make.rs",
+    "public_api": [
+      {
+        "name": "fdb_blob_make",
+        "visibility": "public",
+        "boundary_kind": "internal_ffi"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    }
+  },
+  "memory_model": {
+    "alias_contract": {
+      "decision": "candidate_only",
+      "proven": false,
+      "requires_noalias": false,
+      "complete_alias_safety": false,
+      "source": "real-source slice spec only; no C/Rust diff or pointer-provenance proof yet",
+      "evidence_refs": [
+        "crates/c2r-translator/fixtures/clang_ast/record_pointer_field_ast.json"
+      ]
+    },
+    "ownership_contract": {
+      "inputs": [
+        "value_buf",
+        "buf_len"
+      ],
+      "outputs": [
+        "blob->buf",
+        "blob->size",
+        "return blob"
+      ],
+      "borrow_model": "candidate-only mutable record pointer borrow plus opaque raw pointer value; semantic pass requires oracle/replay/diff evidence",
+      "unsafe_boundary": "opaque pointer field stores raw pointer value without dereferencing it"
+    },
+    "length_companions": [
+      {
+        "pointer": "value_buf",
+        "companion": "buf_len",
+        "contract": "length is stored into blob->size; value_buf is not dereferenced by this function"
+      }
+    ],
+    "effect_graph": {
+      "effects": [
+        {
+          "id": "write-blob-buf",
+          "pointer_node": "blob",
+          "kind": "write",
+          "expression": "blob->buf = (void *)value_buf",
+          "source": "src/fdb_utils.c:223"
+        },
+        {
+          "id": "write-blob-size",
+          "pointer_node": "blob",
+          "kind": "write",
+          "expression": "blob->size = buf_len",
+          "source": "src/fdb_utils.c:224"
+        },
+        {
+          "id": "return-blob",
+          "pointer_node": "blob",
+          "kind": "compute",
+          "expression": "return blob",
+          "source": "src/fdb_utils.c:226"
+        }
+      ],
+      "edges": [
+        {
+          "from_effect": "write-blob-buf",
+          "to_effect": "return-blob",
+          "relationship": "data_influences",
+          "evidence": "returned blob observes assigned buf field"
+        },
+        {
+          "from_effect": "write-blob-size",
+          "to_effect": "return-blob",
+          "relationship": "data_influences",
+          "evidence": "returned blob observes assigned size field"
+        }
+      ],
+      "summary": {
+        "reads": [],
+        "writes": [
+          "blob->buf",
+          "blob->size"
+        ],
+        "external_state": [],
+        "alias_sensitive": true
+      }
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+      "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics.",
+      "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-project migration",
+      "semantic equivalence without C oracle and Rust replay evidence",
+      "fdb_blob_make semantic pass before committed route/profile/final verification evidence exists"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
+    "No claim that syntax-only extraction proves typedef, macro, ABI, layout, alias, or lifetime semantics.",
+    "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.source_file_hashes",
+    "c_boundary.signatures[0].source_span.sha256",
+    "c_boundary.direct_dependencies",
+    "build_profile.profile_id",
+    "build_profile.target",
+    "memory_model.alias_contract",
+    "translator_version"
+  ]
+}
