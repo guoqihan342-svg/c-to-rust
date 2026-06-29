@@ -2525,6 +2525,9 @@ fn emit_call_expr(
     if callee == "assert" {
         return emit_c_assert_call_expr(args, ty, symbols, context);
     }
+    if callee == "abs" {
+        return emit_c_abs_call_expr(args, ty, symbols, context);
+    }
     if reserved_c_macro_or_stdlib_callee(&callee) {
         return Err(format!(
             "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
@@ -2576,12 +2579,51 @@ fn emit_c_assert_call_expr(
     Ok(format!("assert!({condition})"))
 }
 
+fn emit_c_abs_call_expr(
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !is_c_int_type(ty) {
+        return Err(format!(
+            "C abs(int) model requires i32 result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [arg] = args else {
+        return Err(format!(
+            "C abs(int) model requires exactly one i32 argument, got {}",
+            args.len()
+        ));
+    };
+    validate_bounded_call_arg(arg, false).map_err(|detail| format!("C abs argument {detail}"))?;
+    let arg_ty = expr_type(arg).ok_or_else(|| "C abs argument type is unsupported".to_string())?;
+    if !is_c_int_type(arg_ty) {
+        return Err(format!(
+            "C abs(int) argument must be i32, got {}",
+            type_label(arg_ty)
+        ));
+    }
+    let arg =
+        emit_expr(arg, symbols, context).map_err(|detail| format!("C abs argument {detail}"))?;
+    Ok(format!(
+        "{arg}.checked_abs().expect(\"C abs(int) precondition violated\")"
+    ))
+}
+
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
     matches!(
         callee,
         // Keep modeled macro names here as a fail-closed backstop; modeled
         // forms must be intercepted before this reserved-surface guard.
         "assert"
+            | "abs"
+            | "labs"
+            | "llabs"
+            | "fabs"
+            | "fabsf"
+            | "fabsl"
             | "static_assert"
             | "_Static_assert"
             | "sizeof"

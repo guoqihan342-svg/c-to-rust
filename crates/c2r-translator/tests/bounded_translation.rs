@@ -270,6 +270,51 @@ fn clang_ast_fixture_replays_direct_call_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_abs_int_model_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!("../fixtures/clang_ast/abs_call_ast.json"))
+        .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "abs_value")
+        .expect("lower abs(int) fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Call {
+            callee, args, ty, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected abs return call, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "abs");
+    assert_eq!(args.len(), 1);
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled abs(int) from fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn abs_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return value.checked_abs().expect(\"C abs(int) precondition violated\");"),
+        "{rust}"
+    );
+    assert!(!rust.contains("abs(value)"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-abs-int", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_record_field_subset_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/record_field_ast.json"))
@@ -6395,6 +6440,121 @@ fn typed_ir_emits_assert_int_direct_call_as_rust_assert_macro() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_abs_int_direct_call_with_checked_precondition() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "abs_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "abs".to_string(),
+                args: vec![ir_var("value", i32_ty.clone())],
+                ty: i32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit modeled C abs(int)");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn abs_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return value.checked_abs().expect(\"C abs(int) precondition violated\");"),
+        "{rust}"
+    );
+    assert!(!rust.contains("abs(value)"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-abs-int-model", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_abs_calls_outside_minimal_model() {
+    let i32_ty = ir_i32();
+    let u32_ty = ir_u32();
+    let cases = [
+        (
+            "abs_no_args",
+            vec![],
+            i32_ty.clone(),
+            "requires exactly one i32 argument",
+        ),
+        (
+            "abs_two_args",
+            vec![
+                ir_var("value", i32_ty.clone()),
+                ir_lit(1, "1", i32_ty.clone()),
+            ],
+            i32_ty.clone(),
+            "requires exactly one i32 argument",
+        ),
+        (
+            "abs_unsigned_arg",
+            vec![ir_var("value", u32_ty.clone())],
+            i32_ty.clone(),
+            "argument must be i32",
+        ),
+        (
+            "abs_unsigned_result",
+            vec![ir_var("value", i32_ty.clone())],
+            u32_ty.clone(),
+            "requires i32 result type",
+        ),
+    ];
+
+    for (name, args, call_ty, expected_reason) in cases {
+        let param_ty = if name == "abs_unsigned_arg" {
+            u32_ty.clone()
+        } else {
+            i32_ty.clone()
+        };
+        let return_ty = if name == "abs_unsigned_result" {
+            u32_ty.clone()
+        } else {
+            i32_ty.clone()
+        };
+        let ir = IrFunction {
+            name: name.to_string(),
+            return_type: return_ty,
+            params: vec![IrParam {
+                name: "value".to_string(),
+                ty: param_ty,
+                source_span: None,
+            }],
+            body: vec![IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "abs".to_string(),
+                    args,
+                    ty: call_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+
+        let error = emit_rust_from_ir(&ir).expect_err("unsupported abs shape must fail closed");
+        assert!(
+            error.reason.contains(expected_reason),
+            "{name}: {:?}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_assert_calls_outside_minimal_model() {
     let i32_ty = ir_i32();
     let void_ty = ir_void();
@@ -6492,6 +6652,11 @@ fn typed_ir_rejects_unmodeled_reserved_c_macro_direct_call() {
         "_Static_assert",
         "sizeof",
         "offsetof",
+        "labs",
+        "llabs",
+        "fabs",
+        "fabsf",
+        "fabsl",
         "malloc",
         "calloc",
         "realloc",

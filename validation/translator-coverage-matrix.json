@@ -1136,6 +1136,7 @@
         "direct CallExpr",
         "bounded external callee context",
         "modeled C assert(int) direct call",
+        "modeled C abs(int) direct call with checked runtime precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1162,6 +1163,14 @@
             {
               "name": "function-to-pointer decay value no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/function_decay_boundary_ast.json"
+            },
+            {
+              "name": "abs(int) no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/abs_call_ast.json"
+            },
+            {
+              "name": "abs(int) no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1179,6 +1188,10 @@
             {
               "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_abs_int_direct_call_with_checked_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1191,6 +1204,10 @@
             },
             {
               "name": "typed_ir_rejects_assert_calls_outside_minimal_model",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_abs_calls_outside_minimal_model",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1216,6 +1233,10 @@
             },
             {
               "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_abs_int_direct_call_with_checked_precondition",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1271,6 +1292,14 @@
         {
           "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_abs_int_direct_call_with_checked_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_abs_int_model_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1288,6 +1317,11 @@
           "name": "typed_ir_rejects_assert_calls_outside_minimal_model",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "modeled C assert requires a void result and exactly one bounded integer/condition argument"
+        },
+        {
+          "name": "typed_ir_rejects_abs_calls_outside_minimal_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "modeled C abs(int) only accepts i32 result and exactly one i32 argument; INT_MIN is encoded as a checked_abs runtime precondition"
         },
         {
           "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",
