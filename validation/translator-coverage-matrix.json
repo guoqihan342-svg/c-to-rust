@@ -817,6 +817,88 @@
       ]
     },
     {
+      "id": "fixed-integer-array-designated-initializer",
+      "status": "partial",
+      "ir_constructs": [
+        "fixed-size integer array initializer",
+        "clang InitListExpr array_filler zero-fill",
+        "index-designated sparse initializer after clang semantic expansion",
+        "ImplicitValueInitExpr integer zero initialization",
+        "unexpanded DesignatedInitExpr fail-closed"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "designated array initializer no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/designated_array_initializer_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "not_applicable",
+          "reason": "the capability is a clang AST array_filler lowering rule that produces the existing IrExpr::ArrayLiteral shape"
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "fail_closed_reason": "unexpanded DesignatedInitExpr remains outside the bounded fixed-array initializer subset"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "gap",
+          "reason": "no named real-source slice C oracle / Rust replay / diff gate is claimed for this initializer fixture"
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "this capability is exercised through no-clang typed IR fixture replay, not the legacy string translator"
+        },
+        "route_evidence": {
+          "status": "gap",
+          "reason": "unit fixture replay does not produce route-decision evidence"
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "decl_stmt_skeleton_from_ast_maps_sparse_array_filler_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "unexpanded DesignatedInitExpr must stay fail-closed until a full designated-initializer model exists"
+        }
+      ]
+    },
+    {
       "id": "readonly-and-mutable-pointer-slice-lowering",
       "status": "covered",
       "ir_constructs": [

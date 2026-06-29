@@ -1,0 +1,172 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "lookup_sparse_designated_table",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "table",
+                  "type": {
+                    "qualType": "int[3]"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "InitListExpr",
+                      "type": {
+                        "qualType": "int[3]"
+                      },
+                      "array_filler": [
+                        {
+                          "kind": "ImplicitValueInitExpr",
+                          "type": {
+                            "qualType": "int"
+                          }
+                        },
+                        {
+                          "kind": "ImplicitValueInitExpr",
+                          "type": {
+                            "qualType": "int"
+                          }
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "7"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ArraySubscriptExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "ArrayToPointerDecay",
+                          "type": {
+                            "qualType": "int *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "int[3]"
+                              },
+                              "referencedDecl": {
+                                "name": "table"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "reject_unexpanded_designated_table",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "table",
+                  "type": {
+                    "qualType": "int[3]"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "InitListExpr",
+                      "type": {
+                        "qualType": "int[3]"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DesignatedInitExpr",
+                          "type": {
+                            "qualType": "void"
+                          },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "type": {
+                                "qualType": "int"
+                              },
+                              "value": "7"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "0"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

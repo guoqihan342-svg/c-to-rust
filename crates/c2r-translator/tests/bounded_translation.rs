@@ -1521,6 +1521,61 @@ fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/designated_array_initializer_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "lookup_sparse_designated_table",
+    )
+    .expect("sparse designated fixed array initializer should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("sparse designated fixed array initializer should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn lookup_sparse_designated_table() -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let table: [i32; 3] = [0i32, 7i32, 0i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[1i32 as usize];"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-sparse-designated-array-initializer",
+        rust,
+        r#"
+    assert_eq!(lookup_sparse_designated_table(), 7);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/designated_array_initializer_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "reject_unexpanded_designated_table",
+    )
+    .expect_err("unexpanded DesignatedInitExpr must stay fail-closed");
+
+    assert!(
+        error.message.contains("DesignatedInitExpr"),
+        "unexpected error: {error}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/restrict_pointer_params_ast.json"

@@ -47,7 +47,7 @@
 | `static` 局部变量 | 不支持 | 需要静态存储模型 |
 | `extern` 声明 | 不支持 | 需要跨文件模型 |
 | compound literal | 不支持 | `(struct point){1, 2}` |
-| designated initializer | 不支持 | `.x = 1, .y = 2` |
+| designated initializer | 窄支持 | 仅支持固定长度整数数组的 clang 已语义化 index-designated / sparse initializer，例如 `int table[3] = { [1] = 7 };`；未指定元素按 C 零初始化补齐；struct/union 字段 designator、嵌套 initializer、GNU range designator、VLA/不完整数组、未展开 `DesignatedInitExpr` 和非整数字段仍 fail-closed |
 
 ## 表达式
 
@@ -115,7 +115,7 @@
 
 | 构造 | 状态 | 说明 |
 |------|------|------|
-| 局部固定长度整数数组声明 | 窄支持 | `uint32_t table[3] = {1, 2, 3};` |
+| 局部固定长度整数数组声明 | 窄支持 | `uint32_t table[3] = {1, 2, 3};`；包括连续 initializer 和受限 index-designated sparse initializer；未指定元素按声明长度补零，initializer 长度/下标必须与固定数组长度一致并可验证 |
 | 局部数组下标读 | 窄支持 | `table[i]` |
 | 局部数组下标写 | 窄支持 | `table[i] = value;` |
 | 全局 const 整数数组 | 窄支持 | `static const uint32_t table[] = {...};` |

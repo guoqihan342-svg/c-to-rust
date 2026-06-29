@@ -2198,6 +2198,7 @@ fn expr_skeleton_from_ast_with_options(
             })
         }
         Some("InitListExpr") => init_list_expr_skeleton_from_ast(expr),
+        Some("ImplicitValueInitExpr") => implicit_value_init_expr_skeleton_from_ast(expr),
         Some("CallExpr") => call_expr_skeleton_from_ast(expr),
         Some("UnaryOperator") => {
             let opcode = string_field(expr, "opcode").ok_or_else(|| ClangFrontendError {
@@ -2417,19 +2418,42 @@ fn init_list_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, C
         });
     }
     let init_children = inner(expr);
-    if init_children.len() != *len {
+    if init_children
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("DesignatedInitExpr"))
+    {
         return Ok(ClangExprSkeleton::Unsupported {
             node: "InitListExpr".to_string(),
-            reason: format!(
-                "initializer element count {} does not match array length {len}",
-                init_children.len()
-            ),
+            reason: "unexpanded DesignatedInitExpr is outside the bounded fixed-array initializer subset".to_string(),
         });
     }
-    let elements = init_children
-        .iter()
-        .map(|element| expr_skeleton_from_ast_with_options(element, true))
-        .collect::<Result<Vec<_>, ClangFrontendError>>()?;
+    let elements = if init_children.is_empty() {
+        match materialized_array_filler_elements(expr, *len)? {
+            Some(elements) => elements,
+            None => {
+                return Ok(ClangExprSkeleton::Unsupported {
+                    node: "InitListExpr".to_string(),
+                    reason: format!(
+                        "initializer element count 0 does not match array length {len}"
+                    ),
+                });
+            }
+        }
+    } else {
+        if init_children.len() != *len {
+            return Ok(ClangExprSkeleton::Unsupported {
+                node: "InitListExpr".to_string(),
+                reason: format!(
+                    "initializer element count {} does not match array length {len}",
+                    init_children.len()
+                ),
+            });
+        }
+        init_children
+            .iter()
+            .map(|element| expr_skeleton_from_ast_with_options(element, true))
+            .collect::<Result<Vec<_>, ClangFrontendError>>()?
+    };
     for (index, element) in elements.iter().enumerate() {
         if let Some(reason) = array_literal_element_rejection_reason(element) {
             return Ok(ClangExprSkeleton::Unsupported {
@@ -2440,6 +2464,67 @@ fn init_list_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, C
     }
 
     Ok(ClangExprSkeleton::ArrayLiteral { elements, ty })
+}
+
+#[cfg(feature = "typed-ir")]
+fn materialized_array_filler_elements(
+    expr: &Value,
+    len: usize,
+) -> Result<Option<Vec<ClangExprSkeleton>>, ClangFrontendError> {
+    let Some(filler_entries) = array_filler(expr) else {
+        return Ok(None);
+    };
+    let Some(filler) = filler_entries.first() else {
+        return Ok(Some(vec![ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: "array_filler is empty".to_string(),
+        }]));
+    };
+    if string_field(filler, "kind").as_deref() != Some("ImplicitValueInitExpr") {
+        return Ok(Some(vec![ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: "array_filler first entry is not ImplicitValueInitExpr".to_string(),
+        }]));
+    }
+    if filler_entries.len().saturating_sub(1) > len {
+        return Ok(Some(vec![ClangExprSkeleton::Unsupported {
+            node: "InitListExpr".to_string(),
+            reason: format!(
+                "array_filler materializes {} elements for array length {len}",
+                filler_entries.len().saturating_sub(1)
+            ),
+        }]));
+    }
+
+    let mut elements = filler_entries[1..]
+        .iter()
+        .map(|element| expr_skeleton_from_ast_with_options(element, true))
+        .collect::<Result<Vec<_>, ClangFrontendError>>()?;
+    while elements.len() < len {
+        elements.push(expr_skeleton_from_ast_with_options(filler, true)?);
+    }
+    Ok(Some(elements))
+}
+
+#[cfg(feature = "typed-ir")]
+fn implicit_value_init_expr_skeleton_from_ast(
+    expr: &Value,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    let ty = expr_type(expr)?;
+    if !matches!(ty.kind, ClangTypeKind::Integer { .. }) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitValueInitExpr".to_string(),
+            reason: format!(
+                "zero initializer type {} is outside the bounded integer array subset",
+                ty.spelled
+            ),
+        });
+    }
+    Ok(ClangExprSkeleton::IntegerLiteral {
+        value: 0,
+        spelling: "0".to_string(),
+        ty,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4134,6 +4219,13 @@ fn inner(node: &Value) -> &[Value] {
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or(&[])
+}
+
+#[cfg(feature = "typed-ir")]
+fn array_filler(node: &Value) -> Option<&[Value]> {
+    node.get("array_filler")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -6724,6 +6816,66 @@ mod tests {
                 expr.as_ref(),
                 IrExpr::LitInt { value: 1, .. }
             )
+        ));
+    }
+
+    #[test]
+    fn decl_stmt_skeleton_from_ast_maps_sparse_array_filler_initializer() {
+        let stmt = serde_json::json!({
+            "kind": "DeclStmt",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "type": { "qualType": "int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "int" }
+                                },
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "int" }
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "7"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = decl_stmt_skeleton_from_ast(&stmt).expect("decl skeleton");
+        let ClangStmtSkeleton::Decl {
+            name,
+            init: Some(ClangExprSkeleton::ArrayLiteral { elements, ty }),
+            ..
+        } = skeleton
+        else {
+            panic!("expected sparse array literal initializer, got {skeleton:?}");
+        };
+        assert_eq!(name, "table");
+        assert!(matches!(ty.kind, ClangTypeKind::Array { len: Some(3), .. }));
+        assert!(matches!(
+            &elements[0],
+            ClangExprSkeleton::IntegerLiteral { value: 0, .. }
+        ));
+        assert!(matches!(
+            &elements[1],
+            ClangExprSkeleton::IntegerLiteral { value: 7, .. }
+        ));
+        assert!(matches!(
+            &elements[2],
+            ClangExprSkeleton::IntegerLiteral { value: 0, .. }
         ));
     }
 
