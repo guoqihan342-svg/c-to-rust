@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "capability_delta": [
+    {
+      "blocked_callees": [
+        "fdb_blob_make",
+        "fdb_kv_del",
+        "fdb_kv_set_blob",
+        "strlen"
+      ],
+      "construct_id": "external_direct_callee_context",
+      "delta_id": "cap-real-fdb-kv-set-external_direct_callee_context",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
+      ],
+      "generated_candidate_status": "refused",
+      "kind": "refusal_classification",
+      "negative_coverage": [
+        {
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
+          "kind": "external_callee_context_regression"
+        }
+      ],
+      "real_c_slice": "real-fdb-kv-set",
+      "semantic_pass": false
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "external_direct_callee_context",
+      "delta_id": "gov-real-fdb-kv-set-external_direct_callee_context-evidence",
+      "evidence_refs": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
+        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L4",
+  "route_status": "refused",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "status": "recorded",
+  "target_id": "flashdb",
+  "verification_commands": [
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim"
+  ]
+}

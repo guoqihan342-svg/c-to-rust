@@ -3156,6 +3156,9 @@ class AutoMigrateTests(unittest.TestCase):
             blocked = json.loads(
                 (evidence_dir / "l3-real-fdb-kv-set-self-healing-blocked-repairs.json").read_text(encoding="utf-8")
             )
+            capability = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-capability-delta.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(translator_input["function_source_span"]["file"], "src/fdb_kvdb.c")
             self.assertEqual(translator_input["function_source_span"]["line_start"], 1369)
@@ -3195,6 +3198,30 @@ class AutoMigrateTests(unittest.TestCase):
                 sorted(blocked_callees),
             )
             self.assertEqual(repair["smallest_next_test"]["kind"], "external_callee_context_regression")
+            self.assertEqual(capability["status"], "recorded")
+            self.assertEqual(capability["slice_id"], "real-fdb-kv-set")
+            self.assertEqual(capability["capability_delta"][0]["construct_id"], "external_direct_callee_context")
+            self.assertEqual(capability["capability_delta"][0]["generated_candidate_status"], "refused")
+            self.assertFalse(capability["capability_delta"][0]["semantic_pass"])
+            self.assertEqual(
+                set(capability["capability_delta"][0]["blocked_callees"]),
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertTrue(capability["capability_delta"][0]["negative_coverage"])
+            governance = capability["governance_delta"][0]
+            self.assertEqual(governance["construct_id"], "external_direct_callee_context")
+            self.assertTrue(
+                any(
+                    ref.endswith(
+                        "flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json"
+                    )
+                    for ref in governance["evidence_refs"]
+                )
+            )
+            self.assertIn(
+                "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
+                capability["verification_commands"],
+            )
 
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {

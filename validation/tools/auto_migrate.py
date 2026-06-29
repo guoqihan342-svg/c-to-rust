@@ -147,6 +147,7 @@ def main() -> int:
     emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
+    emit_capability_delta_ledger(spec, evidence_dir, route_decision, validation_profile)
     cache = emit_cache_metadata(
         spec,
         args.slice_spec,
@@ -3185,6 +3186,80 @@ def route_refused_ir_feature_gap(
         "source": "route_decision.rationale",
         "evidence_refs": [rel(evidence_dir / f"{prefix}-route-decision.json")],
     }
+
+
+def emit_capability_delta_ledger(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    target_id = required_str(spec, "target_id")
+    prefix = f"l3-{slice_id}"
+    route_ref = rel(evidence_dir / f"{prefix}-route-decision.json")
+    profile_ref = rel(evidence_dir / f"{prefix}-validation-profile.json")
+    gap = route_refused_ir_feature_gap(spec, evidence_dir, route_decision)
+    construct_id = str(gap.get("kind", "route_status"))
+    evidence_refs = list(dict.fromkeys([*gap.get("evidence_refs", []), route_ref, profile_ref]))
+    repair = route_refused_repair_summary(evidence_dir, slice_id)
+    verification_commands = []
+    if repair.get("smallest_next_test", {}).get("command"):
+        verification_commands.append(str(repair["smallest_next_test"]["command"]))
+    if not verification_commands:
+        verification_commands.append("python -B validation/tools/validate_auto_translation_evidence.py")
+    generated_status = "refused" if route_refuses_candidate_generation(route_decision) else generated_rust_draft_status(route_decision)
+    semantic_pass = bool(validation_profile.get("generated_draft_semantic_pass") is True)
+    payload = {
+        "schema_version": 1,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "status": "recorded",
+        "route_level": route_decision.get("level"),
+        "route_status": route_decision.get("status"),
+        "capability_delta": [
+            {
+                "delta_id": f"cap-{slice_id}-{construct_id}",
+                "kind": "refusal_classification" if generated_status == "refused" else "candidate_status",
+                "construct_id": construct_id,
+                "real_c_slice": slice_id,
+                "generated_candidate_status": generated_status,
+                "semantic_pass": semantic_pass,
+                "blocked_callees": gap.get("blocked_callees", []),
+                "evidence_refs": evidence_refs,
+                "negative_coverage": [
+                    {
+                        "kind": repair.get("smallest_next_test", {}).get("kind", "validation_regression"),
+                        "command": command,
+                    }
+                    for command in verification_commands
+                ],
+            }
+        ],
+        "governance_delta": [
+            {
+                "delta_id": f"gov-{slice_id}-{construct_id}-evidence",
+                "kind": "evidence_contract",
+                "construct_id": construct_id,
+                "evidence_refs": evidence_refs,
+                "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+            }
+        ],
+        "verification_commands": verification_commands,
+        "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+    }
+    write_json(evidence_dir / f"{prefix}-capability-delta.json", payload)
+    return payload
+
+
+def route_refused_repair_summary(evidence_dir: Path, slice_id: str) -> dict[str, Any]:
+    path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    if not path.exists():
+        return {}
+    repairs = read_json(path).get("blocked_repairs", [])
+    if not repairs or not isinstance(repairs[0], dict):
+        return {}
+    return repairs[0]
 
 
 def compile_blocked_repair_playbook(
