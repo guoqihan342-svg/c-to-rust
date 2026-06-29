@@ -1446,6 +1446,11 @@ fn emit_stmt(
             }
         },
         IrStmt::Expr { expr, .. } => {
+            if let Some(line) = emit_c_memset_statement(expr, symbols, context)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -2997,6 +3002,101 @@ fn validate_direct_readonly_8_bit_pointer_arg<'a>(
         ));
     }
     Ok(name)
+}
+
+fn emit_c_memset_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if callee != "memset" {
+        return Ok(None);
+    }
+    let (dest, count) = validate_c_memset_statement_shape(args, ty)?;
+    let dest = emit_identifier(dest, "C memset destination")?;
+    if !symbols.contains(&dest) {
+        return Err(format!(
+            "C memset destination {dest} is not a function parameter or local binding"
+        ));
+    }
+    let count =
+        emit_expr(count, symbols, context).map_err(|detail| format!("C memset size {detail}"))?;
+    Ok(Some(format!(
+        "{dest}.get_mut(..({count} as usize)).expect(\"C memset precondition violated\").fill(0u8);"
+    )))
+}
+
+fn validate_c_memset_statement_shape<'a>(
+    args: &'a [IrExpr],
+    ty: &IrType,
+) -> Result<(&'a str, &'a IrExpr), String> {
+    if !is_void_type(ty) {
+        return Err(format!(
+            "C memset statement model requires void result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [dest, value, count] = args else {
+        return Err(format!(
+            "C memset statement model requires destination, byte value, and size arguments, got {}",
+            args.len()
+        ));
+    };
+    let dest = validate_direct_mutable_unsigned_8_bit_pointer_arg(dest, "C memset destination")?;
+    validate_c_memset_zero_value(value)?;
+    let count_ty =
+        expr_type(count).ok_or_else(|| "C memset size argument type is unsupported".to_string())?;
+    if !is_c_size_argument_type(count_ty) {
+        return Err(format!(
+            "C memset size argument must be size_t/usize, got {}",
+            type_label(count_ty)
+        ));
+    }
+    validate_bounded_call_arg(count, false).map_err(|detail| format!("C memset size {detail}"))?;
+    Ok((dest, count))
+}
+
+fn validate_direct_mutable_unsigned_8_bit_pointer_arg<'a>(
+    arg: &'a IrExpr,
+    context: &str,
+) -> Result<&'a str, String> {
+    let IrExpr::Var {
+        name, ty: arg_ty, ..
+    } = arg
+    else {
+        return Err(format!(
+            "{context} argument must be a direct mutable pointer parameter"
+        ));
+    };
+    let pointee = mutable_pointer_slice_element_type(arg_ty).ok_or_else(|| {
+        format!(
+            "{context} argument must be a mutable unsigned 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        )
+    })?;
+    if !is_unsigned_8_bit_integer_type(pointee) {
+        return Err(format!(
+            "{context} argument must be a mutable unsigned 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        ));
+    }
+    Ok(name)
+}
+
+fn validate_c_memset_zero_value(value: &IrExpr) -> Result<(), String> {
+    let IrExpr::LitInt { value: raw, .. } = value else {
+        return Err("C memset byte value currently supports only literal zero".to_string());
+    };
+    if *raw != 0 {
+        return Err("C memset byte value currently supports only literal zero".to_string());
+    }
+    Ok(())
 }
 
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
@@ -5911,13 +6011,33 @@ fn collect_mutable_pointer_write_params_from_body(
                     write_params,
                 )?;
             }
+            IrStmt::Expr { expr, .. } => {
+                collect_c_memset_mutable_pointer_write_param(
+                    expr,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
+            }
             IrStmt::Decl { .. }
             | IrStmt::Return { .. }
             | IrStmt::Break { .. }
             | IrStmt::Continue { .. }
-            | IrStmt::Expr { .. }
             | IrStmt::Unsupported { .. } => {}
         }
+    }
+    Ok(())
+}
+
+fn collect_c_memset_mutable_pointer_write_param(
+    expr: &IrExpr,
+    mutable_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Call { callee, args, .. } = expr else {
+        return Ok(());
+    };
+    if callee == "memset" && args.len() == 3 {
+        collect_direct_mutable_pointer_write_param(&args[0], mutable_pointer_params, write_params)?;
     }
     Ok(())
 }
@@ -6806,8 +6926,26 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 }
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
+            IrStmt::Expr { expr, .. } => {
+                if let Some(name) = c_memset_assigned_var_name(expr) {
+                    assigned_vars.insert(name.clone());
+                }
+            }
             _ => {}
         }
+    }
+}
+
+fn c_memset_assigned_var_name(expr: &IrExpr) -> Option<&String> {
+    let IrExpr::Call { callee, args, .. } = expr else {
+        return None;
+    };
+    if callee != "memset" || args.len() != 3 {
+        return None;
+    }
+    match &args[0] {
+        IrExpr::Var { name, .. } => Some(name),
+        _ => None,
     }
 }
 
@@ -6902,6 +7040,16 @@ fn is_integer_type(ty: &IrType) -> bool {
 
 fn is_unsigned_integer_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Integer { signed: false, .. })
+}
+
+fn is_unsigned_8_bit_integer_type(ty: &IrType) -> bool {
+    matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    )
 }
 
 fn is_signed_integer_type(ty: &IrType) -> bool {
