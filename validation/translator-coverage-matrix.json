@@ -825,7 +825,8 @@
         "pointer add index deref",
         "ArrayToPointerDecay in ArraySubscriptExpr base",
         "ArrayToPointerDecay unary deref of direct fixed array DeclRef lowers to index zero",
-        "ArrayToPointerDecay in pointer arithmetic fail-closed before typed IR lowering",
+        "ArrayToPointerDecay pointer-add deref of direct fixed array DeclRef lowers to indexed read",
+        "general ArrayToPointerDecay pointer arithmetic remains fail-closed before typed IR lowering",
         "readonly pointer parameter without read-access evidence fail-closed",
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
@@ -843,6 +844,14 @@
             },
             {
               "name": "array decay fixture replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "array decay pointer-add no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/array_decay_pointer_add_ast.json"
+            },
+            {
+              "name": "array decay pointer-add fixture replay tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -931,6 +940,10 @@
             {
               "name": "clang_ast_fixture_lowers_array_decay_deref_of_local_fixed_array_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -979,6 +992,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "expr_skeleton_from_ast_preserves_array_to_pointer_decay_as_explicit_skeleton",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -1013,7 +1030,12 @@
         {
           "name": "expr_skeleton_from_ast_rejects_array_to_pointer_decay_in_pointer_arithmetic",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "ArrayToPointerDecay in pointer arithmetic is visible in the clang skeleton, but only unary deref of a direct complete fixed array DeclRef and ArraySubscriptExpr base decay are modeled"
+          "fail_closed_reason": "ArrayToPointerDecay in ordinary pointer arithmetic is visible in the clang skeleton, but only ArraySubscriptExpr base decay, unary deref of a direct complete fixed array DeclRef, and bounded pointer-add deref of a direct complete fixed array DeclRef are modeled"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "ArrayToPointerDecay pointer-sub deref is not modeled as a safe fixed-array index read"
         },
         {
           "name": "typed_ir_rejects_unused_readonly_pointer_param_without_slice_evidence",

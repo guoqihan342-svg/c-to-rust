@@ -1466,6 +1466,61 @@ fn clang_ast_fixture_allows_array_decay_inside_subscript_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/array_decay_pointer_add_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table_add")
+            .expect("array decay through pointer-add deref of local fixed array should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array decay through pointer-add deref should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn lookup_local_table_add(i: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[i as usize];"), "{rust}");
+    assert!(
+        !rust.contains("return table[0i32 as usize];"),
+        "pointer-add deref must not collapse to *table: {rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-array-decay-pointer-add-deref",
+        rust,
+        r#"
+    assert_eq!(lookup_local_table_add(2), 3);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/array_decay_pointer_add_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table_sub")
+            .expect_err("array decay through pointer-sub deref must stay fail-closed");
+
+    assert!(
+        error.message.contains("ArrayToPointerDecay"),
+        "unexpected error: {error}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/restrict_pointer_params_ast.json"

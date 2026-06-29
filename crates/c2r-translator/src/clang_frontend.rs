@@ -3713,9 +3713,106 @@ fn lower_array_decay_deref_expr(
     ptr: &ClangExprSkeleton,
     ty: &ClangTypeSkeleton,
 ) -> Result<Option<IrExpr>, ClangFrontendError> {
-    let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = ptr else {
+    if let ClangExprSkeleton::ArrayToPointerDecay { target, expr } = ptr {
+        return lower_array_decay_deref_to_index(expr, target, ty, int_zero_literal_expr());
+    }
+
+    let ClangExprSkeleton::Binary {
+        op: ClangBinaryOperator::Add,
+        lhs,
+        rhs,
+        ty: binary_ty,
+    } = ptr
+    else {
         return Ok(None);
     };
+
+    let Some((target, expr, index)) = array_decay_pointer_add_parts(lhs, rhs) else {
+        return Ok(None);
+    };
+    let index_ty = clang_expr_skeleton_type(index).ok_or_else(|| ClangFrontendError {
+        kind: "unsupported_clang_expr".to_string(),
+        message: "ArrayToPointerDecay pointer-add deref requires a typed integer index expression"
+            .to_string(),
+    })?;
+    if !matches!(index_ty.kind, ClangTypeKind::Integer { .. }) {
+        return Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!(
+                "ArrayToPointerDecay pointer-add deref requires integer index, got {}",
+                index_ty.spelled
+            ),
+        });
+    }
+
+    let ClangTypeKind::Pointer { pointee, .. } = &binary_ty.kind else {
+        return Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: format!(
+                "ArrayToPointerDecay pointer-add result {} is not a pointer type",
+                binary_ty.spelled
+            ),
+        });
+    };
+    let result_ty = lower_type(ty)?;
+    let pointee_ty = lower_type(pointee)?;
+    if result_ty != pointee_ty {
+        return Err(ClangFrontendError {
+            kind: "unsupported_clang_expr".to_string(),
+            message: "ArrayToPointerDecay pointer-add deref requires matching pointer pointee and result types".to_string(),
+        });
+    }
+
+    lower_array_decay_deref_to_index(expr, target, ty, lower_expr(index)?)
+}
+
+#[cfg(feature = "typed-ir")]
+fn array_decay_pointer_add_parts<'a>(
+    lhs: &'a ClangExprSkeleton,
+    rhs: &'a ClangExprSkeleton,
+) -> Option<(
+    &'a ClangTypeSkeleton,
+    &'a ClangExprSkeleton,
+    &'a ClangExprSkeleton,
+)> {
+    match (lhs, rhs) {
+        (ClangExprSkeleton::ArrayToPointerDecay { target, expr }, index)
+        | (index, ClangExprSkeleton::ArrayToPointerDecay { target, expr }) => {
+            Some((target, expr, index))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkeleton> {
+    match expr {
+        ClangExprSkeleton::DeclRef { ty, .. }
+        | ClangExprSkeleton::IntegerLiteral { ty, .. }
+        | ClangExprSkeleton::SizeOfType { ty, .. }
+        | ClangExprSkeleton::NullPtr { ty }
+        | ClangExprSkeleton::Binary { ty, .. }
+        | ClangExprSkeleton::Unary { ty, .. }
+        | ClangExprSkeleton::Conditional { ty, .. }
+        | ClangExprSkeleton::IncDec { ty, .. }
+        | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::Index { ty, .. }
+        | ClangExprSkeleton::ArrayLiteral { ty, .. }
+        | ClangExprSkeleton::Call { ty, .. }
+        | ClangExprSkeleton::Member { ty, .. } => Some(ty),
+        ClangExprSkeleton::Cast { target, .. }
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => Some(target),
+        ClangExprSkeleton::Unsupported { .. } => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn lower_array_decay_deref_to_index(
+    expr: &ClangExprSkeleton,
+    target: &ClangTypeSkeleton,
+    ty: &ClangTypeSkeleton,
+    index: IrExpr,
+) -> Result<Option<IrExpr>, ClangFrontendError> {
     let ClangTypeKind::Pointer { pointee, .. } = &target.kind else {
         return Err(ClangFrontendError {
             kind: "unsupported_clang_expr".to_string(),
@@ -3725,7 +3822,7 @@ fn lower_array_decay_deref_expr(
             ),
         });
     };
-    let ClangExprSkeleton::DeclRef { ty: array_ty, .. } = expr.as_ref() else {
+    let ClangExprSkeleton::DeclRef { ty: array_ty, .. } = expr else {
         return Err(ClangFrontendError {
             kind: "unsupported_clang_expr".to_string(),
             message: "ArrayToPointerDecay deref currently requires a direct fixed array DeclRef"
@@ -3756,7 +3853,7 @@ fn lower_array_decay_deref_expr(
     }
     Ok(Some(IrExpr::Index {
         base: Box::new(lower_expr(expr)?),
-        index: Box::new(int_zero_literal_expr()),
+        index: Box::new(index),
         ty: result_ty,
         source_span: None,
     }))
