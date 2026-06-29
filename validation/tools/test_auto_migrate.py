@@ -37,6 +37,15 @@ class AutoMigrateTests(unittest.TestCase):
         environment["CLANG_PATH"] = str(default_clang)
         return environment
 
+    def test_write_text_preserves_lf_bytes_for_hash_stable_evidence(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            output_path = Path(tmp) / "evidence.json"
+
+            module.write_text(output_path, "{\n  \"status\": \"recorded\"\n}\n")
+
+            self.assertEqual(output_path.read_bytes(), b'{\n  "status": "recorded"\n}\n')
+
     def test_real_fdb_crc32_fixture_includes_non_empty_check_vector(self) -> None:
         fixture_path = REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json"
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))

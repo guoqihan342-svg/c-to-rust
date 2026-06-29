@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+        "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -40,7 +40,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+          "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -67,6 +67,64 @@
       }
     ],
     "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": false,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "candidate_id": "compat:legacy-string-translator",
+          "fallback": true,
+          "fallback_from": "clang-lowered-typed-ir",
+          "fallback_reason": "clang_lowered_typed_ir_unavailable",
+          "selected_as_primary": false,
+          "status": "compatibility_only"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L4",
+        "status": "refused"
+      },
+      "route_level": "L4",
+      "route_status": "refused",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
     "primary_candidate": {
       "candidate_id": "primary:unknown",
       "fallback": false,
@@ -78,7 +136,7 @@
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
       "semantic_acceptance": false,
-      "stage": "post_generation_provenance"
+      "stage": "p0_route_governance"
     },
     "typed_ir": {
       "candidate_route": null,
@@ -155,12 +213,12 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+      "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
-      "sha256": "105d6b4ab23ee97543ace1fe16e482f84dc0de4ac1bcc541615e6fcf98acd2c5",
+      "sha256": "5f005e88052dc2ea2978791a38735e5c87ae7e8560468594fdce578595973e80",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -170,7 +228,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "sha256": "d23a1ceda4e5ceb2f8c48da037dddd863956d698de1a20d371389f858cddb267",
+      "sha256": "19116db89f9f62d0b9bef6d9e1802621c34b1d690768be07f978b41e01758b58",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -179,7 +237,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
-      "sha256": "12f642afd1591df8ccd36625b3b3e375870b43d22411f915065735d3dc8b98b5",
+      "sha256": "248392c6626b3087e929a67aa698cddf73d548218ce426b78c6469ee8621808a",
       "status": "recorded"
     }
   },

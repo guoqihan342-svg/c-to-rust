@@ -1,28 +1,13 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+    "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
     "status": "skipped"
   },
   "command": null,
   "errors": [],
   "external_callee_context": {
     "blocked_callees": [
-      {
-        "definition_status": "real_source_bound",
-        "name": "fdb_blob_make",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-fdb-blob-make",
-        "source_ref": "src/fdb_utils.c#fdb_blob_make",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:blob",
-          "unsupported_parameter_type:buf_len",
-          "unsupported_parameter_type:value_buf",
-          "unsupported_return_type"
-        ]
-      },
       {
         "definition_status": "real_source_bound",
         "name": "fdb_kv_del",
@@ -51,24 +36,24 @@
           "unsupported_parameter_type:key",
           "unsupported_return_type"
         ]
-      },
-      {
-        "definition_status": "stdlib_model_pending_named_slice_evidence",
-        "name": "strlen",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-stdlib-strlen",
-        "source_ref": "stdlib:string.h#strlen",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:s",
-          "unsupported_return_type"
-        ]
       }
     ],
-    "blocked_count": 4,
-    "declared_callees": [],
-    "declared_count": 0,
+    "blocked_count": 2,
+    "declared_callees": [
+      {
+        "name": "fdb_blob_make",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-blob-make",
+        "stub_kind": "accepted_named_slice_evidence"
+      },
+      {
+        "name": "strlen",
+        "semantics_verified": false,
+        "signature_ref": "sig-stdlib-strlen",
+        "stub_kind": "compile_only"
+      }
+    ],
+    "declared_count": 2,
     "declared_spec_count": 4,
     "declared_spec_names": [
       "fdb_blob_make",
@@ -81,7 +66,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "43a7b1244f82203904123051a7bd774ffce26b68978052b5c3ed3109eb2fa944",
+    "sha256": "2d553a55fdc5be1e22f983e7724c624ccd2c968ec0cd32b7017d3480955138a2",
     "status": "refused"
   },
   "schema_version": 1,
@@ -89,7 +74,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "31bf3e629f217eb7ae6245c82163c07fdb3fc42ca385d72dfe181fcc360dd950",
+    "sha256": "7dd8f31eb14809d064a4a81ebfe45a0e87f6e1a1aa96e9cc973521843dcab423",
     "status": "blocked"
   }
 }

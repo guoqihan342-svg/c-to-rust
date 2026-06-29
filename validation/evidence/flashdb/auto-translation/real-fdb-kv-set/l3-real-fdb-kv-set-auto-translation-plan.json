@@ -1,12 +1,12 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+    "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=4ea6e3666c4a0a8e1b5c0bd8f124cba20229e27df62257c96c760dc241665c64",
+    "slice_spec_sha256=0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
     "fixture_hash=real-fdb-kv-set-fixture",
     "build_profile_hash=c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
     "translator_version=0.1.0",
@@ -92,8 +92,8 @@
       "status": "recorded"
     },
     "external_callee_context": {
-      "blocked_count": 4,
-      "declared_count": 0,
+      "blocked_count": 2,
+      "declared_count": 2,
       "declared_spec_count": 4,
       "declared_spec_names": [
         "fdb_blob_make",
@@ -110,7 +110,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "sha256": "4ea6e3666c4a0a8e1b5c0bd8f124cba20229e27df62257c96c760dc241665c64",
+      "sha256": "0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
       "status": "ready"
     },
     "type_map": {
@@ -119,11 +119,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
+  "repo_commit": "cc889df14412f0513873a90d8450079ed18d7362",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "43a7b1244f82203904123051a7bd774ffce26b68978052b5c3ed3109eb2fa944",
+    "sha256": "2d553a55fdc5be1e22f983e7724c624ccd2c968ec0cd32b7017d3480955138a2",
     "status": "refused"
   },
   "schema_version": 1,
@@ -146,21 +146,6 @@
     },
     "call_expressions": [],
     "external_direct_callee_blocks": [
-      {
-        "definition_status": "real_source_bound",
-        "name": "fdb_blob_make",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-fdb-blob-make",
-        "source_ref": "src/fdb_utils.c#fdb_blob_make",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:blob",
-          "unsupported_parameter_type:buf_len",
-          "unsupported_parameter_type:value_buf",
-          "unsupported_return_type"
-        ]
-      },
       {
         "definition_status": "real_source_bound",
         "name": "fdb_kv_del",
@@ -189,25 +174,24 @@
           "unsupported_parameter_type:key",
           "unsupported_return_type"
         ]
-      },
-      {
-        "definition_status": "stdlib_model_pending_named_slice_evidence",
-        "name": "strlen",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-stdlib-strlen",
-        "source_ref": "stdlib:string.h#strlen",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:s",
-          "unsupported_return_type"
-        ]
       }
     ],
     "external_direct_callee_declarations": [
       {
+        "accepted_named_slice_evidence": {
+          "accepted_evidence_authoritative": true,
+          "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+          "generated_draft_semantic_pass": false,
+          "kind": "accepted_named_slice_evidence",
+          "semantic_pass": true,
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
         "definition_status": "real_source_bound",
         "header_files": [],
+        "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
         "name": "fdb_blob_make",
         "parameters": [
           {
@@ -233,19 +217,16 @@
           }
         ],
         "source_ref": "src/fdb_utils.c#fdb_blob_make",
-        "stub_boundary": "blocked_until_callee_semantics_verified",
-        "stub_kind": "compile_only",
-        "supported": false,
-        "unsupported_reasons": [
-          "unsupported_parameter_type:blob",
-          "unsupported_parameter_type:buf_len",
-          "unsupported_parameter_type:value_buf",
-          "unsupported_return_type"
-        ]
+        "stub_boundary": "accepted_named_slice_context_only",
+        "stub_generation": "not_emitted_named_slice_evidence",
+        "stub_kind": "accepted_named_slice_evidence",
+        "supported": true,
+        "unsupported_reasons": []
       },
       {
         "definition_status": "real_source_bound",
         "header_files": [],
+        "model_contract": "",
         "name": "fdb_kv_del",
         "parameters": [
           {
@@ -268,6 +249,7 @@
         ],
         "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
         "stub_boundary": "blocked_until_callee_semantics_verified",
+        "stub_generation": "generated_compile_only",
         "stub_kind": "compile_only",
         "supported": false,
         "unsupported_reasons": [
@@ -279,6 +261,7 @@
       {
         "definition_status": "real_source_bound",
         "header_files": [],
+        "model_contract": "",
         "name": "fdb_kv_set_blob",
         "parameters": [
           {
@@ -305,6 +288,7 @@
         ],
         "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
         "stub_boundary": "blocked_until_callee_semantics_verified",
+        "stub_generation": "generated_compile_only",
         "stub_kind": "compile_only",
         "supported": false,
         "unsupported_reasons": [
@@ -317,6 +301,7 @@
       {
         "definition_status": "stdlib_model_pending_named_slice_evidence",
         "header_files": [],
+        "model_contract": "strlen_readonly_nul_terminated",
         "name": "strlen",
         "parameters": [
           {
@@ -334,16 +319,88 @@
           }
         ],
         "source_ref": "stdlib:string.h#strlen",
-        "stub_boundary": "blocked_until_readonly_string_contract",
+        "stub_boundary": "stdlib_readonly_string_model",
+        "stub_generation": "not_emitted_modeled_stdlib",
         "stub_kind": "compile_only",
-        "supported": false,
-        "unsupported_reasons": [
-          "unsupported_parameter_type:s",
-          "unsupported_return_type"
-        ]
+        "supported": true,
+        "unsupported_reasons": []
       }
     ],
-    "external_direct_callees": [],
+    "external_direct_callees": [
+      {
+        "accepted_named_slice_evidence": {
+          "accepted_evidence_authoritative": true,
+          "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+          "generated_draft_semantic_pass": false,
+          "kind": "accepted_named_slice_evidence",
+          "semantic_pass": true,
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
+        "name": "fdb_blob_make",
+        "parameters": [
+          {
+            "c_type": "fdb_blob_t",
+            "name": "blob"
+          },
+          {
+            "c_type": "const void*",
+            "name": "value_buf"
+          },
+          {
+            "c_type": "size_t",
+            "name": "buf_len"
+          }
+        ],
+        "return_type": "fdb_blob_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-blob-make",
+        "source_files": [
+          {
+            "path": "src/fdb_utils.c",
+            "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+          }
+        ],
+        "source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "stub_boundary": "accepted_named_slice_context_only",
+        "stub_generation": "not_emitted_named_slice_evidence",
+        "stub_kind": "accepted_named_slice_evidence",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "header_files": [],
+        "model_contract": "strlen_readonly_nul_terminated",
+        "name": "strlen",
+        "parameters": [
+          {
+            "c_type": "const char*",
+            "name": "s"
+          }
+        ],
+        "return_type": "size_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-stdlib-strlen",
+        "source_files": [
+          {
+            "path": "stdlib/string.h",
+            "sha256": "stdlib-symbolic-source"
+          }
+        ],
+        "source_ref": "stdlib:string.h#strlen",
+        "stub_boundary": "stdlib_readonly_string_model",
+        "stub_generation": "not_emitted_modeled_stdlib",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
     "lvalue_decision_counts": {},
     "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
@@ -355,7 +412,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "31bf3e629f217eb7ae6245c82163c07fdb3fc42ca385d72dfe181fcc360dd950",
+    "sha256": "7dd8f31eb14809d064a4a81ebfe45a0e87f6e1a1aa96e9cc973521843dcab423",
     "status": "blocked"
   },
   "verification_plan": [

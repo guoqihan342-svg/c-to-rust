@@ -96,7 +96,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-    "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+    "sha256": "91087903a896311661cc590e3140919b5bc0a19d37f6bd33186f76b61d3e39d9",
     "status": "draft"
   },
   "required_final_status": "C_ORACLE_GENERATED",

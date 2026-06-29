@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+    "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
     "status": "skipped"
   },
   "cache": {
@@ -17,12 +17,12 @@
     },
     "build_profile_hash": "c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
     "c2rust_baseline_identity": {
-      "sha256": "1441899e2fa260d55b6597e14f5e66011911a33408c4b0363e08ba181d66915e",
+      "sha256": "4ef3c47208b34927ec0ea5f0ea48f0b1dcde7533dd36dc62a1f3e57104f0e41d",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+      "sha256": "91087903a896311661cc590e3140919b5bc0a19d37f6bd33186f76b61d3e39d9",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -82,24 +82,24 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
+        "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "43a7b1244f82203904123051a7bd774ffce26b68978052b5c3ed3109eb2fa944",
+        "sha256": "2d553a55fdc5be1e22f983e7724c624ccd2c968ec0cd32b7017d3480955138a2",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "31bf3e629f217eb7ae6245c82163c07fdb3fc42ca385d72dfe181fcc360dd950",
+        "sha256": "7dd8f31eb14809d064a4a81ebfe45a0e87f6e1a1aa96e9cc973521843dcab423",
         "status": "blocked"
       }
     },
@@ -144,7 +144,7 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "eb9eb6695a8bacecdcfe853f7be845dbf703b0d9aedb983d1a2f6cb390062425",
+      "sha256": "1cfbeb83374f27ea670b2ead4c6ea2c62e6cd0d23448da38d9447766ca5e2cd6",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -161,7 +161,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "4ea6e3666c4a0a8e1b5c0bd8f124cba20229e27df62257c96c760dc241665c64",
+    "slice_spec_sha256": "0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
     "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -177,10 +177,10 @@
       "clang-frontend",
       "clang-lowering-report"
     ],
-    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+    "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "1f0d6373b69c62948db36078622e148b231a0f2d296f548eac41e8cd74f34c45",
+      "sha256": "cf8d37e980670ee679f570502147626f9c2b7578bd56a0cef0aedd5a528d150e",
       "status": "blocked"
     }
   },
@@ -195,8 +195,8 @@
       "risk_level": "none"
     },
     "external_callee_scope": {
-      "blocked_count": 4,
-      "declared_count": 0,
+      "blocked_count": 2,
+      "declared_count": 2,
       "declared_spec_count": 4,
       "declared_spec_names": [
         "fdb_blob_make",
@@ -206,7 +206,7 @@
       ],
       "semantics_verified": false,
       "status": "blocked",
-      "stub_kind": "none"
+      "stub_kind": "mixed_context"
     },
     "generated_draft_semantic_pass": false,
     "must_still_pass": [
@@ -334,7 +334,7 @@
     "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+      "sha256": "91087903a896311661cc590e3140919b5bc0a19d37f6bd33186f76b61d3e39d9",
       "status": "draft"
     },
     "required_final_status": "C_ORACLE_GENERATED",
@@ -378,10 +378,8 @@
         "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
         "ir_feature_gap": {
           "blocked_callees": [
-            "fdb_blob_make",
             "fdb_kv_del",
-            "fdb_kv_set_blob",
-            "strlen"
+            "fdb_kv_set_blob"
           ],
           "evidence_refs": [
             "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
@@ -419,7 +417,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec_sha256=4ea6e3666c4a0a8e1b5c0bd8f124cba20229e27df62257c96c760dc241665c64",
+      "slice_spec_sha256=0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
       "fixture_hash=real-fdb-kv-set-fixture",
       "build_profile_hash=c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
       "translator_version=0.1.0",
@@ -450,12 +448,12 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
+    "repo_commit": "cc889df14412f0513873a90d8450079ed18d7362",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
         "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-replay-test-draft.rs",
-        "file_hash": "e163b281eb5c669ab1623ad71927fafdc67def4922130c7e10aa3292197b8778",
+        "file_hash": "1f46a655e7be9a6c23f76d667872db1597d1f962188b5863e0da4d22f2490d0e",
         "framework": "cargo test",
         "test_names": [
           "replay_real_fdb_kv_set_fixture_contract"
@@ -506,7 +504,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "43a7b1244f82203904123051a7bd774ffce26b68978052b5c3ed3109eb2fa944",
+    "sha256": "2d553a55fdc5be1e22f983e7724c624ccd2c968ec0cd32b7017d3480955138a2",
     "status": "refused"
   },
   "rust_check": {
@@ -514,21 +512,6 @@
     "errors": [],
     "external_callee_context": {
       "blocked_callees": [
-        {
-          "definition_status": "real_source_bound",
-          "name": "fdb_blob_make",
-          "reason": "unsupported_external_direct_callee_signature",
-          "semantics_verified": false,
-          "signature_ref": "sig-fdb-blob-make",
-          "source_ref": "src/fdb_utils.c#fdb_blob_make",
-          "stub_kind": "none",
-          "unsupported_reasons": [
-            "unsupported_parameter_type:blob",
-            "unsupported_parameter_type:buf_len",
-            "unsupported_parameter_type:value_buf",
-            "unsupported_return_type"
-          ]
-        },
         {
           "definition_status": "real_source_bound",
           "name": "fdb_kv_del",
@@ -557,24 +540,24 @@
             "unsupported_parameter_type:key",
             "unsupported_return_type"
           ]
-        },
-        {
-          "definition_status": "stdlib_model_pending_named_slice_evidence",
-          "name": "strlen",
-          "reason": "unsupported_external_direct_callee_signature",
-          "semantics_verified": false,
-          "signature_ref": "sig-stdlib-strlen",
-          "source_ref": "stdlib:string.h#strlen",
-          "stub_kind": "none",
-          "unsupported_reasons": [
-            "unsupported_parameter_type:s",
-            "unsupported_return_type"
-          ]
         }
       ],
-      "blocked_count": 4,
-      "declared_callees": [],
-      "declared_count": 0,
+      "blocked_count": 2,
+      "declared_callees": [
+        {
+          "name": "fdb_blob_make",
+          "semantics_verified": false,
+          "signature_ref": "sig-fdb-blob-make",
+          "stub_kind": "accepted_named_slice_evidence"
+        },
+        {
+          "name": "strlen",
+          "semantics_verified": false,
+          "signature_ref": "sig-stdlib-strlen",
+          "stub_kind": "compile_only"
+        }
+      ],
+      "declared_count": 2,
       "declared_spec_count": 4,
       "declared_spec_names": [
         "fdb_blob_make",
@@ -613,7 +596,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "31bf3e629f217eb7ae6245c82163c07fdb3fc42ca385d72dfe181fcc360dd950",
+    "sha256": "7dd8f31eb14809d064a4a81ebfe45a0e87f6e1a1aa96e9cc973521843dcab423",
     "status": "blocked"
   }
 }

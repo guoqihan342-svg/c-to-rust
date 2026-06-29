@@ -30,10 +30,8 @@
       "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
       "ir_feature_gap": {
         "blocked_callees": [
-          "fdb_blob_make",
           "fdb_kv_del",
-          "fdb_kv_set_blob",
-          "strlen"
+          "fdb_kv_set_blob"
         ],
         "evidence_refs": [
           "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",

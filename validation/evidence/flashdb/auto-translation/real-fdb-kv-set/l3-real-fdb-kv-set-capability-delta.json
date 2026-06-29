@@ -3,10 +3,8 @@
   "capability_delta": [
     {
       "blocked_callees": [
-        "fdb_blob_make",
         "fdb_kv_del",
-        "fdb_kv_set_blob",
-        "strlen"
+        "fdb_kv_set_blob"
       ],
       "construct_id": "external_direct_callee_context",
       "delta_id": "cap-real-fdb-kv-set-external_direct_callee_context",
