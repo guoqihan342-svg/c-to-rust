@@ -6670,6 +6670,12 @@ fn typed_ir_rejects_strlen_calls_outside_minimal_model() {
         ir_const(ir_u8()),
         true,
     );
+    let mutable_u8_ptr_ty = ir_pointer(
+        "char *",
+        "char *",
+        ir_integer("char", "char", true, 8),
+        false,
+    );
     let const_i32_ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
     let cases = [
         (
@@ -6714,6 +6720,14 @@ fn typed_ir_rejects_strlen_calls_outside_minimal_model() {
             const_i32_ptr_ty,
             usize_ty.clone(),
             "argument must be a readonly 8-bit integer pointer",
+        ),
+        (
+            "strlen_mutable_byte_pointer",
+            vec![ir_var("name", mutable_u8_ptr_ty.clone())],
+            usize_ty.clone(),
+            mutable_u8_ptr_ty,
+            usize_ty.clone(),
+            "param name has pointer type char * is unsupported",
         ),
         (
             "strlen_null_pointer",
@@ -24312,6 +24326,109 @@ fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
         "typed-ir-real-clang-initialized-direct-call",
         &format!("fn helper() -> i32 {{ 0 }}\n{rust}"),
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_dump_lowers_strlen_model_with_target_abi_when_enabled() {
+    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
+        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
+        return;
+    }
+    let clang_path = std::env::var("CLANG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
+    assert!(
+        clang_path.exists(),
+        "clang path does not exist: {}",
+        clang_path.display()
+    );
+    let source_root = unique_out_dir("clang-real-strlen-target-abi-lower");
+    let source_dir = source_root.join("src");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_file = source_dir.join("name_len.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned long size_t;\nsize_t strlen(const char *);\nsize_t name_len(const char *name) { return strlen(name); }\n",
+    )
+    .unwrap();
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "strlen-target-abi",
+        "source_commit": "source-sha",
+        "function_name": "name_len",
+        "c_source": "size_t name_len(const char *name) { return strlen(name); }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root.to_string_lossy().replace('\\', "/"),
+        "source_file": "src/name_len.c",
+        "source_file_hashes": {
+            "src/name_len.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/name_len.c",
+            "line_start": 3,
+            "line_end": 3,
+            "byte_start": 63,
+            "byte_end": 119,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target": {
+                "triple_or_abi": "x86_64-unknown-linux-gnu",
+                "endianness": "little",
+                "int_width": 32,
+                "char_width": 8,
+                "plain_char_signed": true,
+                "short_width": 16,
+                "long_width": 64,
+                "long_long_width": 64,
+                "pointer_width": 64
+            },
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "x86_64-unknown-linux-gnu",
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_parse_spec_report(&environment, &parse_spec);
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Call {
+            callee, args, ty, ..
+        }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!("expected strlen return call, got {:?}", function.body);
+    };
+    assert_eq!(callee, "strlen");
+    assert_eq!(args.len(), 1);
+    assert_eq!(ty.spelled, "size_t");
+
+    let emitted = emit_rust_from_ir(function).expect("emit strlen model from real clang AST");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn name_len(name: &[i8]) -> usize"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return name.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\");"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-real-clang-strlen-model", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

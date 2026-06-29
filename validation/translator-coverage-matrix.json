@@ -1180,6 +1180,10 @@
             {
               "name": "strlen no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "optional real clang strlen target ABI smoke test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1268,6 +1272,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
+          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. It does not yet claim strlen-specific L3 semantic evidence.",
           "evidence": [
             {
               "name": "call expression diff evidence",
@@ -1285,6 +1290,7 @@
         },
         "route_evidence": {
           "status": "covered",
+          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. A strlen-specific named-slice route decision is still pending.",
           "evidence": [
             {
               "name": "call expression route decision",
@@ -1332,6 +1338,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_dump_lowers_strlen_model_with_target_abi_when_enabled",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],

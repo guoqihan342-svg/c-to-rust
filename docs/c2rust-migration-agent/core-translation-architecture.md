@@ -165,6 +165,7 @@ generic typed IR emission 现在覆盖：
 - 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
 - assignment RHS prelude，覆盖 `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`；
 - bounded direct identifier call：只支持 clang `referencedDecl.kind=FunctionDecl` 的直接函数名 callee，覆盖 call statement、decl init、assignment RHS 和 return value，并把 callee、arguments、source expression、statement context 写入 `call_expressions` 证据；如果 slice spec 声明 external direct callee，validator 还要求 plan/context/binding 的每个 call site 和 signature 逐条一致；实参子集允许一个“一层、整个实参就是 direct call、返回 supported integer scalar”的 nested direct call，例如 `outer(inner(value))`；更深嵌套、多个 sibling nested call、藏在 binary/index/cast 里的 nested call、函数指针 callee、缺少 `FunctionDecl` 证明的 callee、condition 表达式全树中的 call、inc/dec 或 deref 参数继续 fail closed；
+- C macro / stdlib / extern direct call：`assert(int)`、`abs(int)` 和 target-ABI-bound `strlen(const char *)` 是当前仅有的显式最小模型；`strlen` 要求 `size_t`/`usize` 返回、直接 readonly 8-bit string pointer 参数和 NUL 终止前置条件，mutable `char *` 目前会在 pointer gate fail-closed。其它 reserved surface 仍需单独模型或 external callee 证据绑定；当前 `strlen` 覆盖停留在 unit/fixture/可选 real-clang smoke 和 Rust compile，不代表 `strlen` 专属 L3 semantic evidence 已完成；
 - 窄化的 `size_t` postfix-decrement while condition，把 `while (size--)` lowering 成保留 postfix side effect 的 Rust `loop`。
 
 仍未完成：
