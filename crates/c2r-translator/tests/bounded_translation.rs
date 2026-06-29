@@ -1360,6 +1360,46 @@ fn clang_ast_fixture_allows_array_decay_inside_subscript_without_clang() {
     assert_rust_snippet_compiles("typed-ir-clang-ast-array-decay-subscript", rust);
 }
 
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/restrict_pointer_params_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "copy_one_restrict")
+        .expect("restrict-qualified pointer params should lower");
+    let values_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "values")
+        .expect("values param");
+    let out_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "out")
+        .expect("out param");
+    assert!(values_param.ty.spelled.contains("restrict"));
+    assert!(values_param.ty.canonical.contains("restrict"));
+    assert!(out_param.ty.spelled.contains("restrict"));
+    assert!(out_param.ty.canonical.contains("restrict"));
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("restrict-qualified readonly input plus mutable output should emit");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(lowered.globals.is_empty());
+    assert!(rust
+        .contains("pub fn copy_one_restrict(i: i32, values: &[i32], mut out: &mut [i32]) -> i32"));
+    assert!(rust.contains("out[i as usize] = values[i as usize];"));
+    assert!(rust.contains("return 0i32;"));
+    assert_rust_snippet_compiles("typed-ir-clang-ast-restrict-pointer-copy-one", rust);
+}
+
 #[cfg(feature = "typed-ir")]
 fn ir_integer(spelled: &str, canonical: &str, signed: bool, width: u16) -> IrType {
     IrType {

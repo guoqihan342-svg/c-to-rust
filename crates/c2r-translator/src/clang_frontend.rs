@@ -2772,11 +2772,15 @@ fn type_from_qual_type_with_target_abi(
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     let trimmed = qual_type.trim();
-    if let Some(pointee) = trimmed.strip_suffix('*') {
-        let pointee = type_from_qual_type_with_target_abi(pointee.trim(), target_abi)?;
+    if let Some(pointer) = split_pointer_qual_type(trimmed) {
+        let pointee = type_from_qual_type_with_target_abi(pointer.pointee.trim(), target_abi)?;
+        let canonical = match pointer.restrict_qualifier {
+            Some(qualifier) => format!("{} *{qualifier}", pointee.canonical),
+            None => format!("{} *", pointee.canonical),
+        };
         return Ok(ClangTypeSkeleton {
             spelled: trimmed.to_string(),
-            canonical: format!("{} *", pointee.canonical),
+            canonical,
             kind: ClangTypeKind::Pointer {
                 pointee: Box::new(pointee),
                 width: target_abi.and_then(|abi| nonzero_width(abi.pointer_width)),
@@ -3200,6 +3204,38 @@ fn bind_target_abi_to_type(ty: &mut ClangTypeSkeleton, target_abi: &TargetAbiPro
         ClangTypeKind::Array { element, .. } => bind_target_abi_to_type(element, target_abi),
         _ => {}
     }
+}
+
+#[cfg(feature = "typed-ir")]
+struct PointerQualType<'a> {
+    pointee: &'a str,
+    restrict_qualifier: Option<&'static str>,
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_pointer_qual_type(qual_type: &str) -> Option<PointerQualType<'_>> {
+    let trimmed = qual_type.trim();
+    if let Some(pointee) = trimmed.strip_suffix('*') {
+        return Some(PointerQualType {
+            pointee: pointee.trim_end(),
+            restrict_qualifier: None,
+        });
+    }
+
+    for qualifier in ["__restrict__", "__restrict", "restrict"] {
+        let Some(prefix) = trimmed.strip_suffix(qualifier) else {
+            continue;
+        };
+        let Some(pointee) = prefix.trim_end().strip_suffix('*') else {
+            continue;
+        };
+        return Some(PointerQualType {
+            pointee: pointee.trim_end(),
+            restrict_qualifier: Some(qualifier),
+        });
+    }
+
+    None
 }
 
 #[cfg(feature = "typed-ir")]
