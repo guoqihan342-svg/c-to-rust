@@ -65,7 +65,7 @@
 | `&&` `\|\|` (short-circuit) | 窄支持 | 条件和 value-position C int 0/1 |
 | `?:` (conditional) | 窄支持 | 仅纯整数 value-position；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | 整数 cast (显式/隐式) | 窄支持 | clang-proven `IntegralCast` / `IntegralPromotion`，source/target 同为支持整数；普通 value context、binary usual arithmetic context、direct-call argument context、`?:` condition context 以及 `if`/`while`/`do-while`/`for` condition context 中的 integral `ImplicitCastExpr` 会保留为显式 IR cast；已有 no-clang AST fixture replay 覆盖 `uint32_t + uint8_t` 中的 clang-proven RHS cast 和缺失 cast 的 fail-closed；普通表达式、参数位置或条件中的 `FloatingToIntegral`、`IntegralToFloating`、unknown/missing `ImplicitCastExpr.castKind` 会 fail-closed，只有已建模整数 cast 和 `LValueToRValue`/`NoOp` skeleton 边界可继续 |
-| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、受限 `memcmp(const void *, const void *, size_t)` 和 statement-only `memset(dst, 0, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
+| 函数调用 (direct call) | 窄支持 | 仅直接标识符 callee；用户函数 `helper`/`observe` 这类 bounded direct call 已有 no-clang AST fixture replay，参数位置的 clang-proven integer `ImplicitCastExpr` 会保留为显式 cast；`assert(int)`、`abs(int)`、target-ABI-bound `strlen(const char *)`、受限 `memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, 0, size)` 和 statement-only `memcpy(out, src, size)` 有最小模型，其它 reserved C macro/stdlib/extern surface 仍需显式模型或 extern binding，否则 fail-closed |
 | 嵌套 direct call | 窄支持 | 仅一层单个 nested arg |
 | `*p` (deref read) | 窄支持 | readonly integer pointer，无副作用 |
 | `*(p+i)` / `*(i+p)` (offset deref) | 窄支持 | readonly integer pointer，integer offset |
@@ -75,8 +75,9 @@
 | `assert(int)` | 窄支持 | 仅 modeled C assert macro 直接调用，返回类型必须为 `void`，恰好一个 bounded integer/condition argument；pointer、record、nested call、inc/dec、deref/member 等参数仍 fail-closed |
 | `abs(int)` | 窄支持 | 仅 modeled C `int abs(int)` 直接调用，参数和返回类型必须都是 `i32`；发射为 `checked_abs().expect(...)`，把 `INT_MIN` 作为 runtime precondition 暴露出来；`labs`、`llabs`、`fabs`、errno/locale 或其它 stdlib 变体仍 fail-closed |
 | `strlen(const char *)` | 窄支持 | 仅 modeled C `size_t strlen(const char *)` 直接调用；需要 target ABI profile 绑定 `size_t`/`char`/pointer 宽度，实参必须是直接 readonly 8-bit char/byte pointer 参数；Rust candidate 在 `&[u8]`/`&[i8]` 中查找首个 NUL byte，并用 `expect("C strlen precondition violated")` 暴露 NUL 终止前置条件；NULL、非 8-bit pointer、复杂表达式、非 `size_t` 返回、`strnlen`/其它字符串函数仍 fail-closed |
-| `memcmp(const void *, const void *, size_t)` | 窄支持 | 仅 modeled C `int memcmp(left, right, count)` 直接调用；返回类型必须为 `i32`，前两个实参必须是直接 readonly 8-bit pointer 参数，第三个实参必须是 `size_t`/`usize`；Rust candidate 对两侧 slice 使用 `.get(..count).expect("C memcmp precondition violated")` 暴露长度前置条件，并按 C `memcmp` 的 unsigned-byte 语义返回首个不同 byte 的 `i32` 差值或 `0`；NULL、mutable/non-byte pointer、复杂 pointer 表达式、非 size 参数、`memcpy`/`memmove`/`memset` 和其它 memory 函数仍 fail-closed |
-| `memset(void *, int, size_t)` | 窄支持 | 仅 statement-position `memset(out, 0, count)`；返回类型必须为 `void`，目标必须是直接 mutable unsigned 8-bit pointer 参数，值只支持 literal zero，count 必须是 `size_t`/`usize`；Rust candidate 对目标 slice 使用 `.get_mut(..count).expect("C memset precondition violated").fill(0u8)` 暴露长度前置条件；表达式位置、非零 byte pattern、`void *`/signed char/non-byte 目标、复杂目标表达式、非 size 参数、`memcpy`/`memmove` 和完整 alias/overlap/FFI ABI 语义仍 fail-closed |
+| `memcmp(const void *, const void *, size_t)` | 窄支持 | 仅 modeled C `int memcmp(left, right, count)` 直接调用；返回类型必须为 `i32`，前两个实参必须是直接 readonly 8-bit pointer 参数，第三个实参必须是 `size_t`/`usize`；Rust candidate 对两侧 slice 使用 `.get(..count).expect("C memcmp precondition violated")` 暴露长度前置条件，并按 C `memcmp` 的 unsigned-byte 语义返回首个不同 byte 的 `i32` 差值或 `0`；NULL、mutable/non-byte pointer、复杂 pointer 表达式、非 size 参数、statement-position 之外的 `memcpy`/`memset`、`memmove` 和其它 memory 函数仍 fail-closed |
+| `memset(void *, int, size_t)` | 窄支持 | 仅 statement-position `memset(out, 0, count)`；返回类型必须为 `void`，目标必须是直接 mutable unsigned 8-bit pointer 参数，值只支持 literal zero，count 必须是 `size_t`/`usize`；Rust candidate 对目标 slice 使用 `.get_mut(..count).expect("C memset precondition violated").fill(0u8)` 暴露长度前置条件；表达式位置、非零 byte pattern、`void *`/signed char/non-byte 目标、复杂目标表达式、非 size 参数、`memmove`、statement-position 之外的 `memcpy` 和完整 alias/overlap/FFI ABI 语义仍 fail-closed |
+| `memcpy(void *, const void *, size_t)` | 窄支持 | 仅 statement-position `memcpy(out, src, count)`；返回类型必须为 `void`，目标必须是直接 mutable unsigned 8-bit pointer 参数，source 必须是直接 readonly 8-bit pointer 参数，count 必须是 `size_t`/`usize`，且 readonly source + mutable dest 必须有 `restrict` 或等价 noalias 证明；Rust candidate 对目标 slice 使用 `.get_mut(..count).expect("C memcpy destination precondition violated").copy_from_slice(src.get(..count).expect("C memcpy source precondition violated"))` 暴露长度前置条件和非重叠 slice 合同；表达式位置、复杂 pointer 表达式、非 byte pointer、无 noalias/overlap 证明、`memmove` 和完整 FFI ABI 语义仍 fail-closed |
 | `++` / `--` (value-position) | 不支持 | 仅 statement value-discarded 场景 |
 | `p++` / `p--` (statement) | 窄支持 | 仅简单整数变量 target |
 | `++p` / `--p` (statement) | 窄支持 | 仅简单整数变量 target |
@@ -162,7 +163,7 @@
 
 | 函数/头文件 | 状态 | 说明 |
 |-------------|------|------|
-| 其它标准库函数 | 不支持 | 无 stub / extern callee 证明；`assert(int)`、`abs(int)`、`strlen(const char *)`、`memcmp(const void *, const void *, size_t)` 和 statement-only `memset(dst, 0, size)` 是上方单独列出的最小模型例外 |
+| 其它标准库函数 | 不支持 | 无 stub / extern callee 证明；`assert(int)`、`abs(int)`、`strlen(const char *)`、`memcmp(const void *, const void *, size_t)`、statement-only `memset(dst, 0, size)` 和 statement-only `memcpy(out, src, size)` 是上方单独列出的最小模型例外 |
 
 ## 关键边界说明
 

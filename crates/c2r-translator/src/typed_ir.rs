@@ -1451,6 +1451,11 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(line) = emit_c_memcpy_statement(expr, symbols, context)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -3032,6 +3037,40 @@ fn emit_c_memset_statement(
     )))
 }
 
+fn emit_c_memcpy_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if callee != "memcpy" {
+        return Ok(None);
+    }
+    let (dest, src, count) = validate_c_memcpy_statement_shape(args, ty)?;
+    let dest = emit_identifier(dest, "C memcpy destination")?;
+    let src = emit_identifier(src, "C memcpy source")?;
+    if !symbols.contains(&dest) {
+        return Err(format!(
+            "C memcpy destination {dest} is not a function parameter or local binding"
+        ));
+    }
+    if !symbols.contains(&src) {
+        return Err(format!(
+            "C memcpy source {src} is not a function parameter or local binding"
+        ));
+    }
+    let count =
+        emit_expr(count, symbols, context).map_err(|detail| format!("C memcpy size {detail}"))?;
+    Ok(Some(format!(
+        "{dest}.get_mut(..({count} as usize)).expect(\"C memcpy destination precondition violated\").copy_from_slice({src}.get(..({count} as usize)).expect(\"C memcpy source precondition violated\"));"
+    )))
+}
+
 fn validate_c_memset_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
@@ -3060,6 +3099,36 @@ fn validate_c_memset_statement_shape<'a>(
     }
     validate_bounded_call_arg(count, false).map_err(|detail| format!("C memset size {detail}"))?;
     Ok((dest, count))
+}
+
+fn validate_c_memcpy_statement_shape<'a>(
+    args: &'a [IrExpr],
+    ty: &IrType,
+) -> Result<(&'a str, &'a str, &'a IrExpr), String> {
+    if !is_void_type(ty) {
+        return Err(format!(
+            "C memcpy statement model requires void result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [dest, src, count] = args else {
+        return Err(format!(
+            "C memcpy statement model requires destination, source, and size arguments, got {}",
+            args.len()
+        ));
+    };
+    let dest = validate_direct_mutable_unsigned_8_bit_pointer_arg(dest, "C memcpy destination")?;
+    let src = validate_direct_readonly_8_bit_pointer_arg(src, "C memcpy source")?;
+    let count_ty =
+        expr_type(count).ok_or_else(|| "C memcpy size argument type is unsupported".to_string())?;
+    if !is_c_size_argument_type(count_ty) {
+        return Err(format!(
+            "C memcpy size argument must be size_t/usize, got {}",
+            type_label(count_ty)
+        ));
+    }
+    validate_bounded_call_arg(count, false).map_err(|detail| format!("C memcpy size {detail}"))?;
+    Ok((dest, src, count))
 }
 
 fn validate_direct_mutable_unsigned_8_bit_pointer_arg<'a>(
@@ -6017,6 +6086,11 @@ fn collect_mutable_pointer_write_params_from_body(
                     mutable_pointer_params,
                     write_params,
                 )?;
+                collect_c_memcpy_mutable_pointer_write_param(
+                    expr,
+                    mutable_pointer_params,
+                    write_params,
+                )?;
             }
             IrStmt::Decl { .. }
             | IrStmt::Return { .. }
@@ -6037,6 +6111,20 @@ fn collect_c_memset_mutable_pointer_write_param(
         return Ok(());
     };
     if callee == "memset" && args.len() == 3 {
+        collect_direct_mutable_pointer_write_param(&args[0], mutable_pointer_params, write_params)?;
+    }
+    Ok(())
+}
+
+fn collect_c_memcpy_mutable_pointer_write_param(
+    expr: &IrExpr,
+    mutable_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    let IrExpr::Call { callee, args, .. } = expr else {
+        return Ok(());
+    };
+    if callee == "memcpy" && args.len() == 3 {
         collect_direct_mutable_pointer_write_param(&args[0], mutable_pointer_params, write_params)?;
     }
     Ok(())
@@ -6305,6 +6393,13 @@ fn collect_readonly_pointer_read_params_from_expr(
                     readonly_pointer_params,
                     uses,
                 )?;
+                collect_direct_readonly_pointer_read_param(
+                    &args[1],
+                    readonly_pointer_params,
+                    uses,
+                )?;
+            }
+            if callee == "memcpy" && args.len() == 3 {
                 collect_direct_readonly_pointer_read_param(
                     &args[1],
                     readonly_pointer_params,
@@ -6927,7 +7022,9 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
             IrStmt::Expr { expr, .. } => {
-                if let Some(name) = c_memset_assigned_var_name(expr) {
+                if let Some(name) =
+                    c_memset_assigned_var_name(expr).or_else(|| c_memcpy_assigned_var_name(expr))
+                {
                     assigned_vars.insert(name.clone());
                 }
             }
@@ -6941,6 +7038,19 @@ fn c_memset_assigned_var_name(expr: &IrExpr) -> Option<&String> {
         return None;
     };
     if callee != "memset" || args.len() != 3 {
+        return None;
+    }
+    match &args[0] {
+        IrExpr::Var { name, .. } => Some(name),
+        _ => None,
+    }
+}
+
+fn c_memcpy_assigned_var_name(expr: &IrExpr) -> Option<&String> {
+    let IrExpr::Call { callee, args, .. } = expr else {
+        return None;
+    };
+    if callee != "memcpy" || args.len() != 3 {
         return None;
     }
     match &args[0] {

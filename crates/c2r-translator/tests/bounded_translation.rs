@@ -1759,11 +1759,31 @@ fn clang_ast_fixture_replays_control_flow_refusals_without_clang() {
     .expect("fixture JSON");
 
     for (function_name, expected_reason, expected_range) in [
-        ("label_refusal", "unsupported control-flow LabelStmt", "source_range=2:3-2:15"),
-        ("goto_refusal", "unsupported control-flow GotoStmt", "source_range=5:3-5:12"),
-        ("switch_refusal", "unsupported control-flow SwitchStmt", "source_range=8:3-8:48"),
-        ("case_refusal", "unsupported control-flow CaseStmt", "source_range=11:3-11:18"),
-        ("default_refusal", "unsupported control-flow DefaultStmt", "source_range=14:3-14:18"),
+        (
+            "label_refusal",
+            "unsupported control-flow LabelStmt",
+            "source_range=2:3-2:15",
+        ),
+        (
+            "goto_refusal",
+            "unsupported control-flow GotoStmt",
+            "source_range=5:3-5:12",
+        ),
+        (
+            "switch_refusal",
+            "unsupported control-flow SwitchStmt",
+            "source_range=8:3-8:48",
+        ),
+        (
+            "case_refusal",
+            "unsupported control-flow CaseStmt",
+            "source_range=11:3-11:18",
+        ),
+        (
+            "default_refusal",
+            "unsupported control-flow DefaultStmt",
+            "source_range=14:3-14:18",
+        ),
     ] {
         let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
             .expect_err("control-flow fixture must fail closed during clang AST lowering");
@@ -8034,6 +8054,147 @@ fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
             error.reason
         );
     }
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_memcpy_for_restrict_byte_slices_statement() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *restrict",
+        "const unsigned char *restrict",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer(
+        "uint8_t *restrict",
+        "unsigned char *restrict",
+        ir_u8(),
+        false,
+    );
+    let ir = IrFunction {
+        name: "copy_bytes_restrict".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit modeled C memcpy statement");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn copy_bytes_restrict(src: &[u8], mut out: &mut [u8], count: usize)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("C memcpy source precondition violated"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("C memcpy destination precondition violated"),
+        "{rust}"
+    );
+    assert!(rust.contains("copy_from_slice"), "{rust}");
+    assert!(!rust.contains("memcpy(out, src, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memcpy-model",
+        rust,
+        r#"
+    let src = [1u8, 2, 3, 4];
+    let mut out = [0u8; 4];
+    copy_bytes_restrict(&src, &mut out, 3);
+    assert_eq!(out, [1, 2, 3, 0]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_memcpy_without_noalias_proof() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let ir = IrFunction {
+        name: "copy_bytes_without_noalias".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("memcpy requires noalias proof");
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "{:?}",
+        error.reason
+    );
 }
 
 #[cfg(feature = "typed-ir")]

@@ -1361,6 +1361,7 @@
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
         "modeled C strlen(const char *) as a one-level nested direct-call argument",
+        "modeled C memcpy(void *, const void *, size_t) statement with restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
@@ -1436,6 +1437,10 @@
             {
               "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1469,6 +1474,10 @@
             {
               "name": "function-to-pointer decay value boundary test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_memcpy_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1498,12 +1507,16 @@
             {
               "name": "typed_ir_emits_strlen_as_nested_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. It does not yet claim strlen-specific L3 semantic evidence.",
+          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. It does not yet claim strlen- or memory-function-specific L3 semantic evidence.",
           "evidence": [
             {
               "name": "call expression diff evidence",
@@ -1521,7 +1534,7 @@
         },
         "route_evidence": {
           "status": "covered",
-          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. A strlen-specific named-slice route decision is still pending.",
+          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. Strlen- and memory-function-specific named-slice route decisions are still pending.",
           "evidence": [
             {
               "name": "call expression route decision",
@@ -1578,6 +1591,10 @@
         {
           "name": "clang_ast_dump_lowers_strlen_model_with_target_abi_when_enabled",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1630,6 +1647,11 @@
           "name": "clang_ast_fixture_rejects_function_decay_value_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "function-to-pointer decay outside direct callee position creates a function pointer value and requires explicit function-pointer lowering"
+        },
+        {
+          "name": "typed_ir_rejects_memcpy_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "memcpy reads a readonly source and writes a mutable destination, so safe Rust slice lowering requires restrict/noalias proof"
         }
       ]
     },
