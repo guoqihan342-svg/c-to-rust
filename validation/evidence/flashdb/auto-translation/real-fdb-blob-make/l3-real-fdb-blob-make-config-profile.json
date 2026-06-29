@@ -5,12 +5,12 @@
     "fixture_sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+      "c_oracle": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
       "diff": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
       "negative_diff": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
       "rust_report": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
-      "unsafe_ledger": "021277711f266e0547319d18ca2e05cd68f8474e6754e3f50114e164823a92d3",
-      "unsafe_scan": "ff71f6a2dae692754ddd983663bcd15658fa8ad997a1d76dcb16e3e23cb076d6"
+      "unsafe_ledger": "e9e3db4bf145dd1369c3eae8c0cd032af256ef1ee41ed5853f18bd725538a32d",
+      "unsafe_scan": "e2b8763ab3b12f26cc2047f4f1dec4f526622a4022e5e2e9c2b5d64ea85758cb"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
@@ -69,7 +69,7 @@
     "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
   ],
   "profile_id": "flashdb-real-fdb-blob-make-real-source",
-  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
+  "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

@@ -61,7 +61,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
+  "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
   "schema_version": 1,
   "signature_bindings": [],
   "slice_id": "real-fdb-blob-make",

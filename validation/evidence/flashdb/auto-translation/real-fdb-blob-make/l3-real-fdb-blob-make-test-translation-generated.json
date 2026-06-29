@@ -26,7 +26,7 @@
   "evidence_links": {
     "c_oracle": {
       "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-      "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+      "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
       "status": "passed"
     },
     "negative_diff": {
@@ -56,7 +56,7 @@
     "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
+  "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_blob_make",
@@ -92,7 +92,7 @@
     "oracle_reports": [
       {
         "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-        "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+        "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
         "status": "passed"
       },
       {
@@ -117,7 +117,7 @@
       "evidence": [
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-          "sha256": "20dcc505a052dde399fe29a4549e0b6bd8aeb329ed9cb546f0754f4f3d05afcb",
+          "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
           "status": "passed"
         },
         {
