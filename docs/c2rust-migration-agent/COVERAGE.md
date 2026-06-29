@@ -103,7 +103,7 @@
 | 表达式语句 | 已支持 | `value++;` |
 | `return` (with/without value) | 已支持 | |
 | `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
-| `while` | 已支持 | 含 postfix `size--`；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
+| `while` | 已支持 | 含 postfix `size--` 和窄形状 prefix `--size`；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `do-while` | 已支持 | condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `for` (scoped) | 窄支持 | init/condition/step 为简单形式；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `break` | 窄支持 | 仅在 loop body 内 |

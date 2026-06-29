@@ -1507,6 +1507,16 @@ fn emit_stmt(
         IrStmt::While {
             condition, body, ..
         } => {
+            if let Some(block) = emit_prefix_decrement_while_loop(
+                condition,
+                body,
+                return_type,
+                indent_level,
+                symbols,
+                context,
+            )? {
+                return Ok(block);
+            }
             if let Some(block) = emit_postfix_decrement_while_loop(
                 condition,
                 body,
@@ -2319,6 +2329,78 @@ fn emit_postfix_decrement_while_loop(
         "{inner_indent}{name} = {name}.wrapping_sub({one});\n"
     ));
     block.push_str(&format!("{inner_indent}if {snapshot} == {zero} {{\n"));
+    block.push_str(&format!("{break_indent}break;\n"));
+    block.push_str(&format!("{inner_indent}}}\n"));
+
+    let mut loop_symbols = symbols.clone();
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+            LoopContext::While,
+        )
+        .map_err(|detail| format!("while body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+    block.push_str(&format!("{indent}}}\n"));
+    Ok(Some(block))
+}
+
+fn emit_prefix_decrement_while_loop(
+    condition: &IrExpr,
+    body: &[IrStmt],
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Dec,
+        prefix: true,
+        ty,
+        ..
+    } = condition
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(name) {
+        return Err(format!(
+            "while condition prefix decrement target {name} is not declared"
+        ));
+    }
+    if !is_usize(target_ty) || !is_usize(ty) {
+        return Ok(None);
+    }
+
+    let name = emit_identifier(name, "while condition prefix decrement target")?;
+    let _counter_ty = emit_scalar_type(target_ty)
+        .map_err(|detail| format!("while condition prefix decrement target has {detail}"))?;
+    let zero = zero_literal_for_type(target_ty)
+        .map_err(|detail| format!("while condition prefix decrement zero {detail}"))?;
+    let one = emit_integer_literal(1, target_ty)
+        .map_err(|detail| format!("while condition prefix decrement step {detail}"))?;
+
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    let break_indent = "    ".repeat(indent_level + 2);
+    let mut block = String::new();
+    block.push_str(&format!("{indent}loop {{\n"));
+    block.push_str(&format!(
+        "{inner_indent}{name} = {name}.wrapping_sub({one});\n"
+    ));
+    block.push_str(&format!("{inner_indent}if {name} == {zero} {{\n"));
     block.push_str(&format!("{break_indent}break;\n"));
     block.push_str(&format!("{inner_indent}}}\n"));
 
@@ -7048,7 +7130,6 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 if let IrExpr::IncDec {
                     target,
                     op: IrIncDecOp::Dec,
-                    prefix: false,
                     ..
                 } = condition
                 {
@@ -7064,7 +7145,6 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 if let IrExpr::IncDec {
                     target,
                     op: IrIncDecOp::Dec,
-                    prefix: false,
                     ..
                 } = condition
                 {

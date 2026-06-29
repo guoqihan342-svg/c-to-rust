@@ -2167,6 +2167,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_prefix_decrement_while_loop",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_lowering_skeleton_maps_prefix_decrement_while_condition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "typed_ir_emits_break_in_scalar_while_body",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -2218,7 +2226,7 @@
         {
           "name": "typed_ir_rejects_while_with_incdec_condition_expr",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "side-effecting inc/dec loop conditions require explicit sequencing support before lowering"
+          "fail_closed_reason": "side-effecting inc/dec loop conditions outside the explicitly modeled postfix size-- and prefix --size shapes require explicit sequencing support before lowering"
         },
         {
           "name": "unsupported_goto_blocks_translation_without_false_success",

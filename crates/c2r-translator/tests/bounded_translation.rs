@@ -10493,6 +10493,66 @@ fn typed_ir_emits_postfix_decrement_while_condition_for_size_counter() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_prefix_decrement_while_loop() {
+    let usize_ty = ir_usize();
+    let ir = IrFunction {
+        name: "countdown_sum_prefix".to_string(),
+        return_type: usize_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "size".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "acc".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::IncDec {
+                    target: Box::new(ir_var("size", usize_ty.clone())),
+                    op: IrIncDecOp::Dec,
+                    prefix: true,
+                    ty: usize_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("acc", usize_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("acc", usize_ty.clone()),
+                        ir_var("size", usize_ty.clone()),
+                        usize_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("acc", usize_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit prefix decrement while condition");
+
+    assert!(rust.contains("pub fn countdown_sum_prefix(mut size: usize, mut acc: usize) -> usize"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("size = size.wrapping_sub(1usize);"));
+    assert!(rust.contains("if size == 0usize {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("acc = acc.wrapping_add(size);"));
+    assert!(rust.contains("return acc;"));
+    assert_rust_snippet_compiles("typed-ir-prefix-decrement-while", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_const_void_cast_cursor_without_byte_read() {
     let u8_ty = ir_u8();
     let const_void_ptr = ir_pointer(
@@ -19791,6 +19851,86 @@ fn clang_lowering_skeleton_maps_postfix_decrement_condition() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_maps_prefix_decrement_while_condition() {
+    let size_ty = ClangTypeSkeleton {
+        spelled: "size_t".to_string(),
+        canonical: "size_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 64,
+        },
+    };
+    let uint32_ty = ClangTypeSkeleton {
+        spelled: "uint32_t".to_string(),
+        canonical: "uint32_t".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: false,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "crc_while_prefix_size".to_string(),
+        return_type: uint32_ty.clone(),
+        params: vec![
+            ClangParamSkeleton {
+                name: "crc".to_string(),
+                ty: uint32_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "size".to_string(),
+                ty: size_ty.clone(),
+            },
+        ],
+        body: vec![
+            ClangStmtSkeleton::While {
+                condition: ClangExprSkeleton::IncDec {
+                    target: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "size".to_string(),
+                        ty: size_ty.clone(),
+                    }),
+                    op: ClangIncDecOperator::Dec,
+                    prefix: true,
+                    ty: size_ty.clone(),
+                },
+                body: vec![ClangStmtSkeleton::Assign {
+                    target: ClangExprSkeleton::DeclRef {
+                        name: "crc".to_string(),
+                        ty: uint32_ty.clone(),
+                    },
+                    value: ClangExprSkeleton::DeclRef {
+                        name: "crc".to_string(),
+                        ty: uint32_ty.clone(),
+                    },
+                }],
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::DeclRef {
+                    name: "crc".to_string(),
+                    ty: uint32_ty,
+                }),
+            },
+        ],
+    };
+
+    let ir = lower_function_skeleton(&skeleton).expect("lower prefix decrement condition");
+
+    let [IrStmt::While { condition, .. }, IrStmt::Return { .. }] = ir.body.as_slice() else {
+        panic!("expected while followed by return, got {:?}", ir.body);
+    };
+    let IrExpr::IncDec {
+        target,
+        op: IrIncDecOp::Dec,
+        prefix: true,
+        ..
+    } = condition
+    else {
+        panic!("expected prefix decrement condition, got {condition:?}");
+    };
+    assert!(matches!(target.as_ref(), IrExpr::Var { name, .. } if name == "size"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_const_void_pointer_and_size_t_params() {
     let uint32_ty = ClangTypeSkeleton {
         spelled: "uint32_t".to_string(),
@@ -24990,7 +25130,7 @@ fn clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled() {
+fn clang_ast_dump_emits_prefix_decrement_while_condition_when_enabled() {
     if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
         eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
         return;
@@ -25022,20 +25162,17 @@ fn clang_ast_dump_rejects_prefix_decrement_while_condition_when_enabled() {
         "crc_while_prefix_size",
     );
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_expr")
-    );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| error.message.contains("prefix opcode --"))
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
-    );
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit prefix decrement while condition");
+    assert!(rust.contains("pub fn crc_while_prefix_size(mut crc: u32, mut size: usize) -> u32"));
+    assert!(rust.contains("loop {"));
+    assert!(rust.contains("size = size.wrapping_sub(1usize);"));
+    assert!(rust.contains("if size == 0usize {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("crc = crc;"));
+    assert!(rust.contains("return crc;"));
+    assert_rust_snippet_compiles("typed-ir-real-clang-prefix-decrement-while", &rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
