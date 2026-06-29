@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "27f0ec3afa5381ee2aec36c9bd97cdfa22c4d74d23265c1d19bae0f375dc852c",
+    "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
@@ -119,11 +119,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "cc889df14412f0513873a90d8450079ed18d7362",
+  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "2d553a55fdc5be1e22f983e7724c624ccd2c968ec0cd32b7017d3480955138a2",
+    "sha256": "f8af1b3ec515d97d4e66793805fb9f79594c3a7ea895a2f73144e3c2c338d03c",
     "status": "refused"
   },
   "schema_version": 1,
@@ -182,7 +182,7 @@
           "accepted_evidence_authoritative": true,
           "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
           "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-          "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+          "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
           "generated_draft_semantic_pass": false,
           "kind": "accepted_named_slice_evidence",
           "semantic_pass": true,
@@ -332,7 +332,7 @@
           "accepted_evidence_authoritative": true,
           "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
           "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-          "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+          "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
           "generated_draft_semantic_pass": false,
           "kind": "accepted_named_slice_evidence",
           "semantic_pass": true,
@@ -412,7 +412,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "7dd8f31eb14809d064a4a81ebfe45a0e87f6e1a1aa96e9cc973521843dcab423",
+    "sha256": "0c9c15a99f18f57247446fba6e4a5a8755816d75efe47e7b431f6a2fba606b64",
     "status": "blocked"
   },
   "verification_plan": [

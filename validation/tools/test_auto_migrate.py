@@ -774,6 +774,40 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn(str(evidence_dir / "harness.exe"), resolved)
             self.assertNotIn(str(relative_evidence_dir / "harness.c"), resolved)
 
+    def test_c_oracle_compile_execution_handles_missing_subprocess_streams(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            (evidence_dir / "harness.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            compile_command = {
+                "argv": ["cc", "harness.c", "-o", "harness.exe"],
+                "working_directory": evidence_dir.as_posix(),
+            }
+
+            def fake_which(name: str) -> str | None:
+                if name == "cc":
+                    return "C:/tools/cc.exe"
+                return None
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                self.assertEqual(kwargs["encoding"], "utf-8")
+                self.assertEqual(kwargs["errors"], "replace")
+                return subprocess.CompletedProcess(args, 1, None, None)
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_failed")
+            self.assertEqual(compile_execution["stdout"], "")
+            self.assertEqual(compile_execution["stderr"], "")
+            self.assertIn("C oracle compile command failed", compile_execution["diagnostics"][0])
+
     def test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim(self) -> None:
         module = load_auto_migrate_module()
         spec = {
@@ -3696,6 +3730,63 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(replay_delta["generated_candidate_status"], "candidate")
             self.assertFalse(replay_delta["semantic_pass"])
+
+    def test_real_fdb_blob_make_accept_existing_evidence_refreshes_governance_summary(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-blob-make-accepted-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--accept-existing-evidence",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-blob-make"
+            prefix = "l3-real-fdb-blob-make"
+            route = json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8"))
+            governance_summary = route["candidate_generation"]["governance_summary"]
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertEqual(governance_summary["route_level"], "L4")
+            self.assertEqual(governance_summary["route_status"], "refused")
+            self.assertFalse(governance_summary["candidate_generation_allowed"])
+
+            validation_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-blob-make",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                validation_result.returncode,
+                0,
+                f"stdout:\n{validation_result.stdout}\nstderr:\n{validation_result.stderr}",
+            )
 
     def test_pointer_index_lvalue_decision_flows_through_auto_migrate(self) -> None:
         spec = {

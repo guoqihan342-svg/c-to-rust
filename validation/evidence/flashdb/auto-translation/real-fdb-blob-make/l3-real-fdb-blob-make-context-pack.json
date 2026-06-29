@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
+    "slice_spec_sha256=d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -62,13 +62,13 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "4880f67e4ede72b016b8946574a49505a4d6ce97",
+  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
   "schema_version": 1,
   "signature_bindings": [],
   "slice_id": "real-fdb-blob-make",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "sha256": "630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7"
+    "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
   },
   "source_boundary": {
     "direct_call_edges": [],

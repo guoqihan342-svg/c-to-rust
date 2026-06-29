@@ -2225,6 +2225,8 @@ def c_oracle_compile_execution(
             resolved_argv,
             cwd=None if compiler_resolution.get("adapter") == "wsl" else evidence_dir,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=30,
@@ -2687,7 +2689,13 @@ def c_oracle_output_executable(argv: list[str], evidence_dir: Path) -> Path | No
     return output_path
 
 
-def truncate_text(text: str, limit: int = 4000) -> str:
+def truncate_text(text: str | bytes | None, limit: int = 4000) -> str:
+    if text is None:
+        return ""
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    elif not isinstance(text, str):
+        text = str(text)
     if len(text) <= limit:
         return text
     return text[:limit] + "\n...[truncated]"
@@ -4977,6 +4985,14 @@ def mark_accepted_evidence_authoritative_route(
     policy["accepted_evidence_authoritative"] = True
     policy["generated_draft_semantic_pass"] = False
     route_decision["verification_profile"] = "L4-accepted-evidence"
+    candidate_generation = route_decision.get("candidate_generation")
+    if isinstance(candidate_generation, dict):
+        candidate_generation["governance_summary"] = route_governance_summary(
+            candidate_generation,
+            level=route_decision["level"],
+            route_status=route_decision["status"],
+            translator=route_decision["translator"],
+        )
     rationale = route_decision.setdefault("rationale", [])
     if not any(item.get("feature") == "accepted_evidence_authoritative" for item in rationale):
         rationale.append({"feature": "accepted_evidence_authoritative", "weight": "override"})

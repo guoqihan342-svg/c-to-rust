@@ -1,19 +1,19 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-    "sha256": "f7c34ca6b230938a8920cd8fdb8b0aef4eba60a7ea4820ea4d63f942b09ade9d",
+    "sha256": "9a4b15e75e81f1b5066fa85d6c80b0682f85179b8668b32002b585105b735ea7",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
+    "slice_spec_sha256=d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable",
     "effect_graph",
-    "effect_graph_sha256=50635d378b81627dfbf8d5b58c9ce57550fdff6bdf60bd5ff29e7464a10aeeb5"
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
   ],
   "generated_artifacts": [
     {
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -105,7 +105,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-      "sha256": "630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
+      "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
       "status": "ready"
     },
     "type_map": {
@@ -114,20 +114,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "4880f67e4ede72b016b8946574a49505a4d6ce97",
+  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-    "sha256": "98556222cf989277f75c07c18a6478d74ec8f7bac42e91b026a7096005342b2c",
+    "sha256": "a701defd091b795fe4801aa3e7915d9f755dd97951f3772f309a5211c9eb3464",
     "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "status": "blocked",
+  "status": "draft_generated",
   "target_id": "flashdb",
   "translation_source": {
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -141,20 +141,20 @@
     "external_direct_callee_blocks": [],
     "external_direct_callee_declarations": [],
     "external_direct_callees": [],
-    "lvalue_decision_counts": {
-      "safe_wrapper": 1
-    },
+    "lvalue_decision_counts": {},
     "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
-    "translation_rule_ids": [],
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir"
+    ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
-    "unsupported_node_count": 2
+    "unsupported_node_count": 0
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "9a29e7a228dbade66a482a00df9ee9f294b4f7f7c92f2f0a5de91bda24cde856",
+    "sha256": "8b571bc20b230089e0ae55ff5869ed79c252be81a0422a8635da7f510d126749",
     "status": "passed"
   },
   "verification_plan": [

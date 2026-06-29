@@ -101,7 +101,7 @@
         "accepted_evidence_authoritative": true,
         "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
         "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-        "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+        "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
         "generated_draft_semantic_pass": false,
         "kind": "accepted_named_slice_evidence",
         "semantic_pass": true,
@@ -251,7 +251,7 @@
         "accepted_evidence_authoritative": true,
         "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
         "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-        "final_verification_sha256": "075c994c3a8e6892454d925c07517699c8cf799b2957da2f9878c999de7aefd8",
+        "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
         "generated_draft_semantic_pass": false,
         "kind": "accepted_named_slice_evidence",
         "semantic_pass": true,
@@ -323,7 +323,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "cc889df14412f0513873a90d8450079ed18d7362",
+  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
   "schema_version": 1,
   "signature_bindings": [
     {

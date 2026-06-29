@@ -10,12 +10,12 @@
   },
   "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
   "c2rust_baseline_identity": {
-    "sha256": "b225edac2f9861ad8b8fa91e91d4163f5d81b0078920208f1c221e5dc15e90d0",
+    "sha256": "c73f4003d90f4fb428cffb60c22c46b22db4bdd2bb0638561900ad84ae05a55a",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-    "sha256": "cbc0052615980a2451f35f989a8fa57ccfa6091d23612927f9ac2136eec80e23",
+    "sha256": "5df9ac625310fe1b98d57777b5574c3cc8c1494f637513464b1313f849c928f0",
     "status": "draft"
   },
   "cache_input_fields": [
@@ -39,36 +39,60 @@
     "route_decision_identity",
     "validation_profile_identity",
     "global_dependency_identity",
-    "c_oracle_harness_identity"
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
   ],
   "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
     "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "--accept-existing-evidence"
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
   ],
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
   },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "f7c34ca6b230938a8920cd8fdb8b0aef4eba60a7ea4820ea4d63f942b09ade9d",
+      "sha256": "9a4b15e75e81f1b5066fa85d6c80b0682f85179b8668b32002b585105b735ea7",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-      "sha256": "98556222cf989277f75c07c18a6478d74ec8f7bac42e91b026a7096005342b2c",
+      "sha256": "a701defd091b795fe4801aa3e7915d9f755dd97951f3772f309a5211c9eb3464",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "9a29e7a228dbade66a482a00df9ee9f294b4f7f7c92f2f0a5de91bda24cde856",
+      "sha256": "8b571bc20b230089e0ae55ff5869ed79c252be81a0422a8635da7f510d126749",
       "status": "passed"
     }
   },
@@ -111,11 +135,11 @@
     "summary"
   ],
   "oracle_boundary_contract_identity": {
-    "sha256": "97ef1668bc5a7a2e634a3ae1293984b236b00b132a81d8cf799678548bcd3f3d",
+    "sha256": "f3900ed76a7396483d36fa2d88467336b40f06a7960fa7dde5e7463f57cf1ea3",
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "8d9bbdefeff69a6ffdf90f3a3b24003ec7bec11729e9f89088f0cd7f66191310",
+    "sha256": "77759d1f8f92c0230e236aebd0c0c6ece9c5ad7324a26685fe3a5c9919b962f1",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -132,7 +156,7 @@
     "type_map": 1
   },
   "slice_id": "real-fdb-blob-make",
-  "slice_spec_sha256": "630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
+  "slice_spec_sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "source_file_hashes": {
     "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -144,10 +168,13 @@
     "python": "Python 3.14.2",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
-  "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "76969e89829bf9ac7ff508a5540c9d83101c68c2bceb5bd34e01be84dcf537d2",
+    "sha256": "6e98e0a7192e8daea0cc56d53dff791778ba172d9ae8cd3edf852a198ae7aac0",
     "status": "passed"
   }
 }

@@ -42,14 +42,32 @@
       "-o",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
     ],
-    "attempted": false,
-    "diagnostics": [
-      "C oracle compile execution skipped by --skip-c-oracle."
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
     ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command failed; no oracle evidence accepted."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc -I/mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+    ],
+    "requested_compiler": "cc",
+    "returncode": 1,
     "semantic_pass": false,
-    "status": "skipped_by_flag",
-    "toolchain_adapter": "not_executed",
-    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+    "status": "compile_failed",
+    "stderr": "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:1: error: unknown type name \u2018fdb_err_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      | ^~~~~~~~~\n/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:22: error: unknown type name \u2018fdb_kvdb_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      |                      ^~~~~~~~~~\ncc1: fatal error: /mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c: No such file or directory\ncompilation terminated.\n",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_FAILED",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -103,7 +121,7 @@
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-kv-set",
-  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "status": "DRAFT_GENERATED",
   "target_id": "flashdb",
-  "toolchain_status": "DRAFT_NOT_EXECUTED"
+  "toolchain_status": "COMPILE_FAILED"
 }
