@@ -1,6 +1,7 @@
 import json
 import hashlib
 import importlib.util
+import jsonschema
 import shutil
 import subprocess
 import tempfile
@@ -23,6 +24,26 @@ def load_validator_module():
 
 
 class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
+    def test_auto_translation_event_schema_accepts_translation_fallback_event(self) -> None:
+        module = load_validator_module()
+        schema = module.load_json(REPO_ROOT / "validation/auto-translation-template/auto-translation-event.schema.json")
+        event = {
+            "schema_version": 1,
+            "event_id": "demo-slice-translation-fallback",
+            "timestamp_utc": "2026-06-24T00:00:00Z",
+            "target_id": "demo",
+            "slice_id": "slice",
+            "event_kind": "translation_fallback",
+            "status": "recorded",
+            "message": "Rust draft provenance recorded a compatibility fallback translator path.",
+            "selected": "legacy-string-translator",
+            "fallback_from": "clang-lowered-typed-ir",
+            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+            "artifact_refs": [{"path": "plan.json", "status": "recorded"}],
+        }
+
+        jsonschema.validate(event, schema)
+
     def test_generated_candidate_diff_boundary_remains_non_semantic(self) -> None:
         module = load_validator_module()
         slice_spec = {
