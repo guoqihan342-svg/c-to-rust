@@ -1487,8 +1487,7 @@ fn rewrite_supported_enum_types_in_expr(
         | ClangExprSkeleton::NullPtr { ty } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
-        ClangExprSkeleton::SizeOfType { arg_type, ty } => {
-            rewrite_supported_enum_type(arg_type, inventory)?;
+        ClangExprSkeleton::SizeOfType { ty, .. } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
         ClangExprSkeleton::Binary { lhs, rhs, ty, .. } => {
@@ -2730,6 +2729,21 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             "sizeof type operand is missing argType.qualType".to_string()
         },
     })?;
+    if clang_type_candidate_spellings(arg_type_object)
+        .iter()
+        .any(|spelling| is_enum_qual_type_spelling(spelling))
+    {
+        let spelled = string_field(arg_type_object, "qualType")
+            .or_else(|| string_field(arg_type_object, "desugaredQualType"))
+            .or_else(|| string_field(arg_type_object, "canonicalQualType"))
+            .unwrap_or_else(|| "enum".to_string());
+        return Err(ClangFrontendError {
+            kind: "unsupported_sizeof_type".to_string(),
+            message: format!(
+                "sizeof({spelled}) requires explicit C layout/ABI provenance before typed IR lowering"
+            ),
+        });
+    }
     let arg_type = type_from_ast_type_object(arg_type_object, None)?;
     if !matches!(
         arg_type.kind,
@@ -2750,6 +2764,18 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         arg_type,
         ty: expr_type(expr)?,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_enum_qual_type_spelling(qual_type: &str) -> bool {
+    let mut trimmed = qual_type.trim();
+    while let Some(unqualified) = trimmed.strip_prefix("const ") {
+        trimmed = unqualified.trim();
+    }
+    trimmed
+        .strip_prefix("enum ")
+        .map(|name| is_simple_c_identifier(name.trim()))
+        .unwrap_or(false)
 }
 
 #[cfg(feature = "typed-ir")]

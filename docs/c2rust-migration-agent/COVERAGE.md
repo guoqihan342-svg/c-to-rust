@@ -86,7 +86,7 @@
 | `p->field++` / `--p->field` (statement) | 窄支持 | 仅 direct single-pointer mutable record pointer scalar field target；按 value-discarded assignment desugar lowering，不支持 raw inc/dec value 语义 |
 | `*p++` (byte cursor post-increment) | 窄支持 | 仅在 proven byte cursor 上下文 |
 | `&x` (address-of) | 不支持 | |
-| `sizeof` | 窄支持 | 支持 clang `UnaryExprOrTypeTraitExpr` 的 ABI-bound integer type operand、完整定长整数数组 type operand、带 `argType.qualType` 的 expression operand，以及带 target `pointer_width` 的 pointer type operand，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`、`sizeof(int[3])`、`sizeof(value)`、`sizeof(const int *)`；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度；缺少 `argType` 的 expression operand、缺少 pointer width profile 的 pointer operand、incomplete/VLA array、record/struct layout、需要布局证据的 object operand、packing/alignment 仍 fail-closed |
+| `sizeof` | 窄支持 | 支持 clang `UnaryExprOrTypeTraitExpr` 的 ABI-bound integer type operand、完整定长整数数组 type operand、带 `argType.qualType` 的 expression operand，以及带 target `pointer_width` 的 pointer type operand，例如 `sizeof(int)`、`sizeof(long)`、`sizeof(size_t)`、`sizeof(int[3])`、`sizeof(value)`、`sizeof(const int *)`；降为 `size_t`/`usize` 整数字面量，并要求结果能放入目标 `size_t` 宽度；缺少 `argType` 的 expression operand、缺少 pointer width profile 的 pointer operand、incomplete/VLA array、enum/record/struct layout、需要布局证据的 object operand、packing/alignment 仍 fail-closed |
 | `_Alignof` | 不支持 | clang `_Alignof(type)` 会显式 fail-closed；当前 target profile 只有宽度证据，没有 alignment/layout profile，不能猜 alignment |
 | `(type){init}` compound literal | 不支持 | |
 | 函数指针 | 不支持 | |

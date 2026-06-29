@@ -490,6 +490,36 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "sizeof_mode_bytes",
+      "type": {
+        "qualType": "size_t (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "sizeof",
+                  "argType": {
+                    "qualType": "enum mode"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

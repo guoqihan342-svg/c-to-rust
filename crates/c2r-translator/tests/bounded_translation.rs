@@ -1069,6 +1069,45 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "sizeof_mode_bytes",
+        Some(&target_abi),
+    )
+    .expect_err("sizeof(enum) still needs explicit enum layout/ABI proof");
+    assert_eq!(error.kind, "unsupported_sizeof_type");
+    assert!(
+        error.message.contains("sizeof(enum mode)"),
+        "{}",
+        error.message
+    );
+    assert!(
+        error
+            .message
+            .contains("requires explicit C layout/ABI provenance"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/pointer_value_boundary_ast.json"

@@ -785,6 +785,11 @@
           "fail_closed_reason": "sizeof pointer operands require target ABI pointer-width provenance before typed IR lowering"
         },
         {
+          "name": "clang_ast_fixture_rejects_sizeof_enum_without_layout_abi",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "sizeof over enum types requires explicit enum layout/ABI provenance and is not unlocked by the scalar i32 enum subset"
+        },
+        {
           "name": "clang_ast_fixture_rejects_sizeof_int_without_target_abi_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "sizeof result type size_t must fail closed unless build_profile.target supplies ABI width evidence"
