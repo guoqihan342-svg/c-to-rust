@@ -48,7 +48,10 @@ def write_extract_spec(root: Path, target_id: str, slice_id: str) -> Path:
                 "function": slice_id.replace("-", "_"),
                 "target_id": target_id,
                 "slice_id": slice_id,
+                "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+                "source_branch": "competition",
                 "source_commit": "abc123",
+                "require_source_commit": "abc123",
                 "compiler_command_source": "compile_commands.json",
                 "include_paths": ["include"],
                 "defines": ["DEMO=1"],
@@ -305,7 +308,10 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertIn("--repo-root", extract_command)
             self.assertIn("--source-file src/demo.c", extract_command)
             self.assertIn("--function extracted_slice", extract_command)
+            self.assertIn("--source-repository https://gitcode.com/xwxf/FlashDB.git", extract_command)
+            self.assertIn("--source-branch competition", extract_command)
             self.assertIn("--source-commit abc123", extract_command)
+            self.assertIn("--require-source-commit abc123", extract_command)
             self.assertIn("--compiler-command-source compile_commands.json", extract_command)
             self.assertIn("--include-path include", extract_command)
             self.assertIn("--define DEMO=1", extract_command)
@@ -386,6 +392,12 @@ class RunCompetitionTests(unittest.TestCase):
                 "direct-slice",
                 "--source-commit",
                 "abc123",
+                "--source-repository",
+                "https://gitcode.com/xwxf/FlashDB.git",
+                "--source-branch",
+                "competition",
+                "--require-source-commit",
+                "abc123",
                 "--compiler-command-source",
                 "compile_commands.json",
                 "--include-path",
@@ -409,6 +421,9 @@ class RunCompetitionTests(unittest.TestCase):
         self.assertEqual(extraction["target_id"], "demo")
         self.assertEqual(extraction["slice_id"], "direct-slice")
         self.assertEqual(extraction["source_commit"], "abc123")
+        self.assertEqual(extraction["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+        self.assertEqual(extraction["source_branch"], "competition")
+        self.assertEqual(extraction["require_source_commit"], "abc123")
         self.assertEqual(extraction["compiler_command_source"], "compile_commands.json")
         self.assertEqual(extraction["include_paths"], ["include"])
         self.assertEqual(extraction["defines"], ["DIRECT=1"])

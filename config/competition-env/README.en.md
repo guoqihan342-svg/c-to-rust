@@ -26,6 +26,10 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - CMake: not found
 - clang: not required by default; the typed-IR competition lane requires either `CLANG_PATH` or a project-local vendored clang binary
 
+## FlashDB Source Pin
+
+`environment.json.source_pins.flashdb` fixes the competition-scoring source to `https://gitcode.com/xwxf/FlashDB.git`, the `competition` branch, and commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe`; the corresponding checkout command is `git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe`. New competition-targeted extraction must pass `--source-repository`, `--source-branch`, and `--require-source-commit` so `extract_source_slice.py` validates the real checkout before writing a slice spec.
+
 ## Files
 
 - `environment.json`: machine-readable baseline, mirrors, and adaptation policy.

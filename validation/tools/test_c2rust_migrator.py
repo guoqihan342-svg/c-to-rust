@@ -19,7 +19,10 @@ class C2RustMigratorTest(unittest.TestCase):
             "function": "add_one",
             "target_id": "demo",
             "slice_id": "demo-add-one",
+            "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+            "source_branch": "competition",
             "source_commit": "abc123",
+            "require_source_commit": "abc123",
             "compiler_command_source": "compile_commands.json",
             "include_paths": ["include", "src/include"],
             "defines": ["DEMO=1"],
@@ -33,6 +36,11 @@ class C2RustMigratorTest(unittest.TestCase):
         self.assertEqual(argv[0:2], ["python", "validation/tools/run_competition.py"])
         self.assertIn("--source-repo-root", argv)
         self.assertIn("external/demo", argv)
+        self.assertIn("--source-repository", argv)
+        self.assertIn("https://gitcode.com/xwxf/FlashDB.git", argv)
+        self.assertIn("--source-branch", argv)
+        self.assertIn("competition", argv)
+        self.assertIn("--require-source-commit", argv)
         self.assertIn("--include-path", argv)
         self.assertIn("src/include", argv)
         self.assertIn("--define", argv)

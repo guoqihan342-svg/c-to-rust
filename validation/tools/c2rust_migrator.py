@@ -70,8 +70,14 @@ def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
                 str(request["slice_id"]),
             ]
         )
+        if request.get("source_repository"):
+            argv.extend(["--source-repository", str(request["source_repository"])])
+        if request.get("source_branch"):
+            argv.extend(["--source-branch", str(request["source_branch"])])
         if request.get("source_commit"):
             argv.extend(["--source-commit", str(request["source_commit"])])
+        if request.get("require_source_commit"):
+            argv.extend(["--require-source-commit", str(request["require_source_commit"])])
         if request.get("compiler_command_source"):
             argv.extend(["--compiler-command-source", checked_posix_path(str(request["compiler_command_source"]))])
         for include_path in expect_string_list(request.get("include_paths") or [], "include_paths"):

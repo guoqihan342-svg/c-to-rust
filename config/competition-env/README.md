@@ -28,6 +28,10 @@
 - CMake：未找到
 - clang：默认不要求；typed IR 比赛路线需要显式安装 clang 或使用项目内置的 vendored clang
 
+## FlashDB 源码 Pin
+
+`environment.json.source_pins.flashdb` 固定比赛打分源码为 `https://gitcode.com/xwxf/FlashDB.git`、`competition` 分支、commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe`，对应检出命令为 `git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe`。新的 competition-targeted extraction 必须传 `--source-repository`、`--source-branch` 和 `--require-source-commit`，让 `extract_source_slice.py` 在生成 slice spec 前校验实际 checkout。
+
 ## 文件说明
 
 - `environment.json`：机器可读环境基线、镜像源和适配策略。

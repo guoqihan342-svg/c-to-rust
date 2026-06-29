@@ -16,6 +16,20 @@
     "npm": "https://mirrors.tools.huawei.com/npm/",
     "cargo_crates_io": "sparse+http://rust.inhuawei.com/crates.io-index/"
   },
+  "source_pins": {
+    "flashdb": {
+      "repository": "https://gitcode.com/xwxf/FlashDB.git",
+      "branch": "competition",
+      "commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "checkout_command": "git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "runner_required_flags": [
+        "--source-repository",
+        "--source-branch",
+        "--require-source-commit"
+      ],
+      "description": "Competition scoring source pin requested for FlashDB runs. Existing historical evidence may reference older commits, but new competition-targeted extraction must validate this repository, branch, and commit before generating slice specs."
+    }
+  },
   "cargo_mirror_activation": {
     "method": "CARGO_HOME",
     "env_var": "CARGO_HOME",

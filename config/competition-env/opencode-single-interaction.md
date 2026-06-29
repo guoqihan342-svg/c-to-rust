@@ -121,15 +121,15 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — 确认环境满足比赛基线；`env.sh` 会激活 `CARGO_HOME=config/competition-env/cargo`，`toolchain-check.sh` 找到 clang 时会额外验证 resource-dir 和包含 `stdint.h`/`stddef.h` 的最小 TU AST dump。
 
-2. 单个真实 C 源函数优先使用 runner 直接参数；批量或可复用输入可准备 `target/competition-out/extract-specs/<id>-<slice>.json`，至少包含 `repo_root`、`source_file`、`function`、`target_id`、`slice_id`，可选包含 `source_commit`、`compiler_command_source`、`include_paths`、`defines`；`source_file` 必须是相对 `repo_root` 的路径。
+2. 单个真实 C 源函数优先使用 runner 直接参数；批量或可复用输入可准备 `target/competition-out/extract-specs/<id>-<slice>.json`，至少包含 `repo_root`、`source_file`、`function`、`target_id`、`slice_id`，可选包含 `source_repository`、`source_branch`、`source_commit`、`require_source_commit`、`compiler_command_source`、`include_paths`、`defines`；`source_file` 必须是相对 `repo_root` 的路径。FlashDB 比赛打分源必须绑定 `https://gitcode.com/xwxf/FlashDB.git`、`competition` 分支和 `f9d0421315c564fb890a1b14eee77b290e0d7bbe`。
    — 直接参数和 JSON extract spec 都是 runner 调用 `extract_source_slice.py` 的参数化输入；不要手写 `c_source`。
 
-3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、OpenSpec 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
    — 批量或可复用输入用 `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` 替代直接 source 参数。
    — 若多个独立 worker 已分别产出 summary，可用 `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json` 重复传入汇总；汇总 runner 不会重新处理这些 slice，会合并计数并在任一 worker failed/blocked 时让最终 gate 失败。
 
-4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — 手动展开版的真实 C 源函数切片抽取。使用 runner 的 `--extract-spec` 时该步骤由 runner 调用。
 
 5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane

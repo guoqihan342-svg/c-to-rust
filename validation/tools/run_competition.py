@@ -49,7 +49,10 @@ def main() -> int:
     parser.add_argument("--function")
     parser.add_argument("--target-id")
     parser.add_argument("--slice-id")
+    parser.add_argument("--source-repository")
+    parser.add_argument("--source-branch")
     parser.add_argument("--source-commit")
+    parser.add_argument("--require-source-commit")
     parser.add_argument("--compiler-command-source")
     parser.add_argument("--include-path", action="append", dest="include_paths", default=[])
     parser.add_argument("--define", action="append", dest="defines", default=[])
@@ -403,6 +406,9 @@ def direct_extraction_spec_from_args(args: argparse.Namespace, parser: argparse.
     present = present or any(
         [
             args.source_commit,
+            args.source_repository,
+            args.source_branch,
+            args.require_source_commit,
             args.compiler_command_source,
             args.include_paths,
             args.defines,
@@ -424,6 +430,12 @@ def direct_extraction_spec_from_args(args: argparse.Namespace, parser: argparse.
     }
     if args.source_commit:
         extraction["source_commit"] = args.source_commit
+    if args.source_repository:
+        extraction["source_repository"] = args.source_repository
+    if args.source_branch:
+        extraction["source_branch"] = args.source_branch
+    if args.require_source_commit:
+        extraction["require_source_commit"] = args.require_source_commit
     if args.compiler_command_source:
         extraction["compiler_command_source"] = args.compiler_command_source
     return extraction
@@ -486,7 +498,10 @@ def extraction_command(extraction: dict[str, Any], *, output_path: Path, repo_ro
         rel_path(output_path, repo_root),
     ]
     optional_string_args = [
+        ("source_repository", "--source-repository"),
+        ("source_branch", "--source-branch"),
         ("source_commit", "--source-commit"),
+        ("require_source_commit", "--require-source-commit"),
         ("compiler_command_source", "--compiler-command-source"),
     ]
     for key, flag in optional_string_args:
