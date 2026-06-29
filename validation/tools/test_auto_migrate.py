@@ -712,6 +712,41 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(harness_execution["output_gate"]["status"], "unsupported_not_oracle")
             self.assertGreaterEqual(len(calls), 3)
 
+    def test_compile_execution_argv_resolves_evidence_and_repo_relative_paths(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "harness.c"
+            harness_path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            output_path = evidence_dir / "harness.exe"
+            compile_command = [
+                "cc",
+                "-std=c99",
+                "-Ivalidation",
+                "harness.c",
+                "validation/tools/auto_migrate.py",
+                "-o",
+                "harness.exe",
+            ]
+            compiler_resolution = {
+                "path": "C:/tools/cc.exe",
+                "name": "cc",
+                "candidates": ["cc"],
+                "adapter": "local",
+                "launcher": None,
+            }
+
+            execution_argv = module.c_oracle_compile_execution_argv(
+                compile_command, evidence_dir, compiler_resolution
+            )
+
+            self.assertEqual(execution_argv[0], "C:/tools/cc.exe")
+            self.assertIn(f"-I{REPO_ROOT / 'validation'}", execution_argv)
+            self.assertIn(str(harness_path), execution_argv)
+            self.assertIn(str(REPO_ROOT / "validation" / "tools" / "auto_migrate.py"), execution_argv)
+            self.assertIn(str(output_path), execution_argv)
+
     def test_wsl_path_failure_records_structured_compile_failure(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -3278,6 +3313,64 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
             self.assertIn("pub struct FdbBlob", draft)
             self.assertIn("pub fn fdb_blob_make", draft)
+
+    def test_real_fdb_blob_make_c_oracle_harness_binds_fixture_cases_without_semantic_claim(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-blob-make-c-oracle-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-blob-make"
+            prefix = "l3-real-fdb-blob-make"
+            oracle = json.loads((evidence_dir / f"{prefix}-c-oracle-status.json").read_text(encoding="utf-8"))
+            harness = (evidence_dir / f"{prefix}-c-oracle-harness-draft.c").read_text(encoding="utf-8")
+
+            self.assertEqual(oracle["status"], "SKIPPED_LOCAL_NO_C_TOOLCHAIN")
+            self.assertFalse(oracle["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertEqual(oracle["fixture_binding"]["case_count"], 3)
+            self.assertEqual(oracle["fixture_binding"]["expected_output_status"], "declared_not_executed")
+            self.assertIn("struct fdb_blob {", harness)
+            self.assertIn("typedef struct fdb_blob *fdb_blob_t;", harness)
+            self.assertLess(
+                harness.index("typedef struct fdb_blob *fdb_blob_t;"),
+                harness.index("fdb_blob_t fdb_blob_make(fdb_blob_t blob"),
+            )
+            self.assertIn("static const uint8_t nominal_bytes_value_buf[] = { 16u, 32u, 48u };", harness)
+            self.assertIn(
+                "static const uint8_t shorter_length_than_buffer_value_buf[] = { 170u, 187u, 204u, 221u };",
+                harness,
+            )
+            self.assertIn("fdb_blob_make(&null_empty_blob, NULL, (size_t)0u)", harness)
+            self.assertIn("fdb_blob_make(&nominal_bytes_blob, nominal_bytes_value_buf, (size_t)3u)", harness)
+            self.assertIn(
+                "fdb_blob_make(&shorter_length_than_buffer_blob, "
+                "shorter_length_than_buffer_value_buf, (size_t)2u)",
+                harness,
+            )
+            for case_id in ("null-empty", "nominal-bytes", "shorter-length-than-buffer"):
+                for field in ("return_same_blob", "blob.buf", "blob.size"):
+                    self.assertIn(f"fixture case {case_id} {field} matched", harness)
+            self.assertNotIn("TODO: load fixture values", harness)
+            self.assertNotIn("is not supported by this draft call generator", harness)
 
     def test_real_fdb_blob_make_rust_replay_passes_without_semantic_claim(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"

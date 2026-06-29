@@ -1501,7 +1501,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "real-fdb-blob-make now has committed Rust compile and Rust replay fixture evidence, but no committed C oracle/diff/negative-diff/final semantic acceptance"
+          "reason": "real-fdb-blob-make now has committed Rust compile, Rust replay fixture evidence, and a fixture-bound C oracle harness draft, but no committed executed C oracle/diff/negative-diff/final semantic acceptance"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -1534,9 +1534,14 @@
               "name": "real-fdb-blob-make Rust replay fixture",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-test-translation-generated.json",
               "proof_class": "committed_rust_replay_fixture_passed"
+            },
+            {
+              "name": "real-fdb-blob-make fixture-bound C oracle harness draft",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
+              "proof_class": "committed_fixture_bound_c_oracle_harness_draft_not_semantic"
             }
           ],
-          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence exists; semantic C oracle/diff acceptance remains a separate gap"
+          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence and fixture-bound C harness draft evidence exists; executed semantic C oracle/diff acceptance remains a separate gap"
         }
       },
       "positive_cases": [

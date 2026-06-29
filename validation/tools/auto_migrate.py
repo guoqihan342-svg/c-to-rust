@@ -1531,8 +1531,8 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         f"{fixture_comments}"
         f"{source_comments}"
         f"{global_comments}"
-        f"{prototype}\n\n"
         f"{fixture_execution['declarations']}"
+        f"{prototype}\n\n"
         "int main(void) {\n"
         f"  puts(\"oracle harness draft for {function_name}\");\n"
         f"  puts(\"fixture input: {fixture_path_text}\");\n"
@@ -1713,6 +1713,8 @@ def oracle_fixture_execution_source(
     fixture_binding: dict[str, Any],
 ) -> dict[str, str]:
     signature = c_function_signature(spec)
+    if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):
+        return c_oracle_fdb_blob_make_execution_source(spec, fixture_binding)
     if not c_oracle_signature_supports_return_code_call(spec, signature):
         return {"declarations": "", "statements": ""}
 
@@ -1754,6 +1756,122 @@ def c_oracle_signature_supports_return_code_call(
         for item in parameters
     ]
     return actual == expected
+
+
+def c_oracle_signature_supports_fdb_blob_make_call(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+) -> bool:
+    if required_str(spec, "function_name") != "fdb_blob_make":
+        return False
+    if normalize_c_type(str(signature.get("return_type") or "")) != "fdb_blob_t":
+        return False
+    if behavior_fields(spec) != ["return_same_blob", "blob.buf", "blob.size"]:
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 3:
+        return False
+    expected = [
+        ("blob", "fdb_blob_t"),
+        ("value_buf", "const void *"),
+        ("buf_len", "size_t"),
+    ]
+    actual = [
+        (str(item.get("name") or ""), normalize_c_type(str(item.get("c_type") or "")))
+        for item in parameters
+    ]
+    return actual == expected
+
+
+def c_oracle_fdb_blob_make_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    declarations: list[str] = [
+        "struct fdb_blob {\n"
+        "  void *buf;\n"
+        "  size_t size;\n"
+        "};\n"
+        "typedef struct fdb_blob *fdb_blob_t;\n\n"
+    ]
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_fdb_blob_make_case_execution_source(spec, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this fdb_blob_make draft generator. */\n"
+            )
+            continue
+        declarations.append(case_source["declarations"])
+        statements.append(case_source["statements"])
+    return {"declarations": "".join(declarations), "statements": "".join(statements)}
+
+
+def c_oracle_fdb_blob_make_case_execution_source(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    return_same_blob = expected_outputs.get("return_same_blob")
+    expected_blob_buf = expected_outputs.get("blob.buf")
+    expected_blob_size = expected_outputs.get("blob.size")
+    buf_len = case_payload.get("buf_len")
+    initial_blob_size = case_payload.get("initial_blob_size", 0)
+    value_buf = case_payload.get("value_buf")
+    if return_same_blob is not True or expected_blob_buf != "value_buf":
+        return None
+    if not is_size_value(buf_len) or not is_size_value(initial_blob_size):
+        return None
+    if expected_blob_size != int(buf_len):
+        return None
+    if value_buf is None:
+        value_expr = "NULL"
+        declarations = ""
+    elif is_byte_list(value_buf) and len(value_buf) >= int(buf_len):
+        case_ident = c_safe_ident(str(case_binding.get("id") or "case"))
+        value_expr = f"{case_ident}_value_buf"
+        declarations = f"static const uint8_t {value_expr}[] = {{ {c_byte_array_initializer(value_buf)} }};\n\n"
+    else:
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    blob_name = f"{case_ident}_blob"
+    actual_name = f"actual_{case_ident}"
+    expected_value_expr = f"(void *){value_expr}"
+    statements = (
+        f"  struct fdb_blob {blob_name} = {{ NULL, {c_integer_literal('size_t', int(initial_blob_size))} }};\n"
+        f"  fdb_blob_t {actual_name} = {function_name}(&{blob_name}, {value_expr}, "
+        f"{c_integer_literal('size_t', int(buf_len))});\n"
+        f"  if ({actual_name} != &{blob_name}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_same_blob mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_same_blob matched')});\n"
+        f"  if ({blob_name}.buf != {expected_value_expr}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' blob.buf mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' blob.buf matched')});\n"
+        f"  if ({blob_name}.size != {c_integer_literal('size_t', int(buf_len))}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' blob.size mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' blob.size matched')});\n"
+    )
+    return {"declarations": declarations, "statements": statements}
 
 
 def c_oracle_case_execution_source(
@@ -2101,16 +2219,66 @@ def c_oracle_compile_execution_argv(
     compiler_resolution: dict[str, Any],
 ) -> list[str]:
     compiler_path = str(compiler_resolution["path"])
+    resolved_args = c_oracle_compile_execution_args_with_resolved_paths(argv, evidence_dir)
     if compiler_resolution.get("adapter") != "wsl":
-        return [compiler_path, *argv[1:]]
+        return [compiler_path, *resolved_args[1:]]
 
     launcher = str(compiler_resolution["launcher"])
     wsl_cwd = wsl_path(evidence_dir, launcher)
     converted_args = [compiler_path]
-    for arg in argv[1:]:
+    for arg in resolved_args[1:]:
         converted_args.append(wsl_compile_arg(arg, launcher))
     shell_command = f"cd {shlex.quote(wsl_cwd)} && {' '.join(shlex.quote(item) for item in converted_args)}"
     return [launcher, "-e", "sh", "-lc", shell_command]
+
+
+def c_oracle_compile_execution_args_with_resolved_paths(argv: list[str], evidence_dir: Path) -> list[str]:
+    resolved: list[str] = []
+    output_next = False
+    for arg in argv:
+        if output_next:
+            resolved.append(c_oracle_resolve_output_path(arg, evidence_dir))
+            output_next = False
+            continue
+        if arg == "-o":
+            resolved.append(arg)
+            output_next = True
+            continue
+        if arg.startswith("-I") and len(arg) > 2:
+            resolved.append("-I" + c_oracle_resolve_input_path(arg[2:], evidence_dir, force=True))
+            continue
+        resolved.append(c_oracle_resolve_input_path(arg, evidence_dir))
+    return resolved
+
+
+def c_oracle_resolve_input_path(arg: str, evidence_dir: Path, force: bool = False) -> str:
+    if not force and not c_oracle_arg_looks_like_path(arg):
+        return arg
+    if path_is_absolute(arg):
+        return arg
+    evidence_candidate = evidence_dir / arg
+    if evidence_candidate.exists():
+        return str(evidence_candidate)
+    repo_candidate = REPO_ROOT / arg
+    if repo_candidate.exists() or "/" in arg or "\\" in arg:
+        return str(repo_candidate)
+    return arg
+
+
+def c_oracle_resolve_output_path(arg: str, evidence_dir: Path) -> str:
+    if path_is_absolute(arg):
+        return arg
+    return str(evidence_dir / arg)
+
+
+def c_oracle_arg_looks_like_path(arg: str) -> bool:
+    if not arg or arg.startswith("-"):
+        return False
+    return (
+        "/" in arg
+        or "\\" in arg
+        or Path(arg).suffix in {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".o", ".a", ".so", ".dylib", ".dll"}
+    )
 
 
 def wsl_compile_arg(arg: str, launcher: str) -> str:

@@ -42,7 +42,7 @@
     "No claim that this slice spec alone proves fdb_kv_set or FlashDB KVDB migration."
   ],
   "profile_id": "flashdb-real-fdb-blob-make-real-source",
-  "repo_commit": "c28e9de20f292aaf3887011ae0b46d8c69712c72",
+  "repo_commit": "b087c0416cfbc53a490f581499903e741e04221e",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
