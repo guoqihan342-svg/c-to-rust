@@ -23,7 +23,7 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
 - `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
 - `../config/competition-env/`: default standalone competition environment profile, Huawei mirror configs, and a toolchain self-check script.
-- `environment-profiles/huawei-competition-ubuntu-24.04/`: compatibility copy for older validation evidence and scripts.
+- `environment-profiles/huawei-competition-ubuntu-24.04/`: README-only historical redirect for older validation evidence path references.
 - `pointer-graph-template/`: reusable pointer dependency graph template for pointer-bearing L2/L3 migration slices.
 - `test-translation-template/`: reusable code-test translation manifest template for mapping C tests, fixtures, or oracle expectations to Rust tests and invalidation keys.
 
@@ -40,11 +40,11 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 ## Competition Environment Profile
 
-The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The compatibility profile under `validation/environment-profiles/huawei-competition-ubuntu-24.04/` is kept for older evidence references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
+The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The historical `validation/environment-profiles/huawei-competition-ubuntu-24.04/` directory is README-only and kept only for older evidence path references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
 
-中文：默认比赛环境 profile 是 `config/competition-env/environment.json`。新生成的自动翻译 `validation-profile` 必须记录 `profile_id`、路径和 SHA256，`auto-cache-metadata` 必须把同一份信息写入 `competition_environment_identity` 和 `cache_input_fields`。旧的 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 只作为历史兼容入口。
+中文：默认比赛环境 profile 是 `config/competition-env/environment.json`。新生成的自动翻译 `validation-profile` 必须记录 `profile_id`、路径和 SHA256，`auto-cache-metadata` 必须把同一份信息写入 `competition_environment_identity` 和 `cache_input_fields`。旧的 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 只保留 README-only 历史 redirect，不能作为新的可执行配置入口。
 
-English: newly generated auto-translation validation profiles must record the competition `profile_id`, path, and SHA256 from `config/competition-env/environment.json`; auto-cache metadata must carry the same value as `competition_environment_identity` and include it in `cache_input_fields`. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is compatibility-only.
+English: newly generated auto-translation validation profiles must record the competition `profile_id`, path, and SHA256 from `config/competition-env/environment.json`; auto-cache metadata must carry the same value as `competition_environment_identity` and include it in `cache_input_fields`. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is a README-only historical redirect and must not be used as a new executable configuration entrypoint.
 
 ## Real Source Slice Extraction
 

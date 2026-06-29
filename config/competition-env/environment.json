@@ -3,9 +3,6 @@
   "profile_id": "huawei-competition-ubuntu-24.04",
   "status": "required",
   "canonical_path": "config/competition-env/environment.json",
-  "compatibility_paths": [
-    "validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"
-  ],
   "os": {
     "name": "Ubuntu",
     "version": "24.04.4 LTS",

@@ -26,7 +26,7 @@
 - **unsafe 数字不是安全证明**：unsafe budget 是治理指标，不是 FFI、硬件、volatile、ABI 或并发语义已经安全建模的证明；0 findings 只能说明当前扫描范围内未发现 first-party non-test `unsafe`。
 - **C2Rust baseline 必须可追溯**：route/profile 中的 C2Rust candidate 只能作为 `candidate_context_only`，必须绑定 baseline manifest；当 baseline 真正生成输出时，还必须绑定 output path/status/sha256，并由 validator 拒绝漂移。
 - **C2Rust skipped 不能算候选成功**：baseline 为 `skipped`、`blocked` 或无 output 时，必须记录 reason、toolchain/env、input hash 和 `output_ref=null`；不得把 skipped 计入 generated、compiled、accepted 或 semantic pass。
-- **比赛环境配置是适配参考和证据 profile**：`config/competition-env/environment.json` 是当前默认比赛环境配置入口；开发时参考其中的 Ubuntu、Rust、Python、Node、gcc、镜像源和缺失工具约束。本机不需要强行复刻该环境，但新增默认构建、测试和验证路径不能违反这些约束；`validation/environment-profiles/...` 只作为兼容入口。
+- **比赛环境配置是适配参考和证据 profile**：`config/competition-env/environment.json` 是当前默认比赛环境配置入口；开发时参考其中的 Ubuntu、Rust、Python、Node、gcc、镜像源和缺失工具约束。本机不需要强行复刻该环境，但新增默认构建、测试和验证路径不能违反这些约束；`validation/environment-profiles/...` 只保留 README-only 历史引用，不能作为新的可执行配置入口。
 - **环境证据要分级**：比赛机真实运行才可标为 `competition-exact`；GitHub Actions 或其它 Linux CI 只能标为 `ci-approximation`；WSL/本机 Ubuntu 只能标为 `wsl-local-simulation` 或 `local-simulation`。三者都能用于开发，但不能混用为同等级证明。
 - **公开复现路径以 Linux/CI 为准**：PowerShell/Windows 命令可以保留为本机便利入口，但外部可评估的 quickstart、验证和 evidence 生成必须提供 competition Linux/CI 等价命令；没有等价路径时要标记为 local-only。
 - **OpenCode 比赛运行准确性优先**：600 分钟只作为外部评测预算或上限参考，不是优化目标；如果没有该限制，仍按同一套 evidence gate 追求更高准确性。比赛单次交互允许并行多 agent 或 batch worker 跑互不依赖的 slice，但每个 worker 必须有隔离输出目录、repo-relative evidence 和独立状态；最终是否通过只看统一 validator/final verification，不能把 agent 口头判断当 evidence。

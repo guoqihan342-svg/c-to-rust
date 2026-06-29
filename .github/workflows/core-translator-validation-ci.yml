@@ -16,7 +16,6 @@ on:
       - "validation/cfg-template/**"
       - "validation/pointer-graph-template/**"
       - "validation/slice-spec-template/**"
-      - "validation/environment-profiles/**"
       - "config/competition-env/**"
   pull_request:
     paths:
@@ -33,7 +32,6 @@ on:
       - "validation/cfg-template/**"
       - "validation/pointer-graph-template/**"
       - "validation/slice-spec-template/**"
-      - "validation/environment-profiles/**"
       - "config/competition-env/**"
   workflow_dispatch:
 

@@ -129,4 +129,4 @@ If package-manager configuration needs to be installed into the user profile, sy
 
 ## Relation To validation/
 
-`validation/environment-profiles/huawei-competition-ubuntu-24.04/` is the historical compatibility entrypoint. The new default configuration entrypoint is this directory; validation evidence may retain the old path as a compatibility reference, but new scripts should default to `config/competition-env/environment.json`.
+`validation/environment-profiles/huawei-competition-ubuntu-24.04/` is now a README-only historical redirect. The new default configuration entrypoint is this directory; validation evidence may retain the old path as a historical reference, but new scripts must use `config/competition-env/environment.json`.

@@ -131,4 +131,4 @@ python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <ou
 
 ## 与 validation 目录的关系
 
-`validation/environment-profiles/huawei-competition-ubuntu-24.04/` 是历史兼容入口。新的默认配置入口是本目录；验证 evidence 可以保留旧路径作为兼容引用，但新脚本默认应使用 `config/competition-env/environment.json`。
+`validation/environment-profiles/huawei-competition-ubuntu-24.04/` 现在只是 README-only 历史 redirect。新的默认配置入口是本目录；验证 evidence 可以保留旧路径作为历史引用，但新脚本必须使用 `config/competition-env/environment.json`。

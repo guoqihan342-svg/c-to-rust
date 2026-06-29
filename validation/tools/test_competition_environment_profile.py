@@ -1,4 +1,3 @@
-import hashlib
 import json
 import tomllib
 import unittest
@@ -24,10 +23,6 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def direct_rust_dependencies(manifest: Path) -> set[str]:
     cargo_toml = tomllib.loads(manifest.read_text(encoding="utf-8"))
     return set(cargo_toml.get("dependencies", {}))
@@ -39,10 +34,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
 
         self.assertEqual(profile["profile_id"], "huawei-competition-ubuntu-24.04")
         self.assertEqual(profile["canonical_path"], "config/competition-env/environment.json")
-        self.assertEqual(
-            profile["compatibility_paths"],
-            ["validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"],
-        )
+        self.assertNotIn("compatibility_paths", profile)
         self.assertEqual(
             profile["os"],
             {
@@ -138,8 +130,6 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         for script_path in [
             PROFILE_DIR / "env.sh",
             PROFILE_DIR / "toolchain-check.sh",
-            COMPAT_PROFILE_DIR / "env.sh",
-            COMPAT_PROFILE_DIR / "toolchain-check.sh",
         ]:
             script = script_path.read_text(encoding="utf-8")
             with self.subTest(script=script_path.relative_to(REPO_ROOT).as_posix()):
@@ -219,11 +209,21 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         )
 
         self.assertIn("validation.tools.test_competition_environment_profile", workflow)
-        self.assertIn("validation/environment-profiles/**", workflow)
+        self.assertIn("config/competition-env/**", workflow)
+        self.assertNotIn("validation/environment-profiles/**", workflow)
 
-    def test_compatibility_profile_stays_synchronized_with_default_profile(self) -> None:
-        synchronized_files = [
+    def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
+        self.assertTrue(COMPAT_PROFILE_DIR.exists())
+        files = sorted(
+            path.relative_to(COMPAT_PROFILE_DIR).as_posix()
+            for path in COMPAT_PROFILE_DIR.rglob("*")
+            if path.is_file()
+        )
+        self.assertEqual(files, ["README.en.md", "README.md"])
+
+        forbidden_runtime_files = [
             "environment.json",
+            "env.sh",
             "smoke.sh",
             "toolchain-check.sh",
             "apt/sources.list",
@@ -232,12 +232,15 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "cargo/config.toml",
             "rust/rust-toolchain.toml",
         ]
-        for relative_path in synchronized_files:
+        for relative_path in forbidden_runtime_files:
             with self.subTest(relative_path=relative_path):
-                self.assertEqual(
-                    sha256(PROFILE_DIR / relative_path),
-                    sha256(COMPAT_PROFILE_DIR / relative_path),
-                )
+                self.assertFalse((COMPAT_PROFILE_DIR / relative_path).exists())
+
+        for readme_name in ["README.md", "README.en.md"]:
+            readme = (COMPAT_PROFILE_DIR / readme_name).read_text(encoding="utf-8")
+            with self.subTest(readme=readme_name):
+                self.assertIn("config/competition-env/", readme)
+                self.assertIn("README-only", readme)
 
 
 if __name__ == "__main__":
