@@ -2777,6 +2777,9 @@ fn emit_call_expr(
     if callee == "strlen" {
         return emit_c_strlen_call_expr(args, ty, symbols, context);
     }
+    if callee == "memcmp" {
+        return emit_c_memcmp_call_expr(args, ty, symbols, context);
+    }
     if reserved_c_macro_or_stdlib_callee(&callee) {
         return Err(format!(
             "call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
@@ -2913,6 +2916,89 @@ fn validate_c_strlen_call_shape<'a>(args: &'a [IrExpr], ty: &IrType) -> Result<&
     Ok(name)
 }
 
+fn emit_c_memcmp_call_expr(
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let (left, right, count) = validate_c_memcmp_call_shape(args, ty)?;
+    let left = emit_identifier(left, "C memcmp left argument")?;
+    let right = emit_identifier(right, "C memcmp right argument")?;
+    if !symbols.contains(&left) {
+        return Err(format!(
+            "C memcmp left argument {left} is not a function parameter or local binding"
+        ));
+    }
+    if !symbols.contains(&right) {
+        return Err(format!(
+            "C memcmp right argument {right} is not a function parameter or local binding"
+        ));
+    }
+    let count =
+        emit_expr(count, symbols, context).map_err(|detail| format!("C memcmp size {detail}"))?;
+    Ok(format!(
+        "{{ let left_bytes = {left}.get(..({count} as usize)).expect(\"C memcmp precondition violated\"); let right_bytes = {right}.get(..({count} as usize)).expect(\"C memcmp precondition violated\"); left_bytes.iter().zip(right_bytes.iter()).find_map(|(&left_byte, &right_byte)| ((left_byte as u8) != (right_byte as u8)).then_some(((left_byte as u8) as i32) - ((right_byte as u8) as i32))).unwrap_or(0) }}"
+    ))
+}
+
+fn validate_c_memcmp_call_shape<'a>(
+    args: &'a [IrExpr],
+    ty: &IrType,
+) -> Result<(&'a str, &'a str, &'a IrExpr), String> {
+    if !is_c_int_type(ty) {
+        return Err(format!(
+            "C memcmp model requires i32 result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [left, right, count] = args else {
+        return Err(format!(
+            "C memcmp model requires exactly two readonly byte pointers and one size argument, got {}",
+            args.len()
+        ));
+    };
+    let left = validate_direct_readonly_8_bit_pointer_arg(left, "C memcmp left")?;
+    let right = validate_direct_readonly_8_bit_pointer_arg(right, "C memcmp right")?;
+    let count_ty =
+        expr_type(count).ok_or_else(|| "C memcmp size argument type is unsupported".to_string())?;
+    if !is_c_size_argument_type(count_ty) {
+        return Err(format!(
+            "C memcmp size argument must be size_t/usize, got {}",
+            type_label(count_ty)
+        ));
+    }
+    validate_bounded_call_arg(count, false).map_err(|detail| format!("C memcmp size {detail}"))?;
+    Ok((left, right, count))
+}
+
+fn validate_direct_readonly_8_bit_pointer_arg<'a>(
+    arg: &'a IrExpr,
+    context: &str,
+) -> Result<&'a str, String> {
+    let IrExpr::Var {
+        name, ty: arg_ty, ..
+    } = arg
+    else {
+        return Err(format!(
+            "{context} argument must be a direct readonly pointer parameter"
+        ));
+    };
+    let pointee = readonly_pointer_slice_element_type(arg_ty).ok_or_else(|| {
+        format!(
+            "{context} argument must be a readonly 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        )
+    })?;
+    if !is_8_bit_integer_type(pointee) {
+        return Err(format!(
+            "{context} argument must be a readonly 8-bit integer pointer, got {}",
+            type_label(arg_ty)
+        ));
+    }
+    Ok(name)
+}
+
 fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
     matches!(
         callee,
@@ -2936,7 +3022,6 @@ fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
             | "memcpy"
             | "memmove"
             | "memset"
-            | "memcmp"
             | "strlen"
             | "printf"
             | "fprintf"
@@ -3034,6 +3119,10 @@ fn validate_bounded_nested_call_arg(
     emit_identifier(callee, "nested call callee")?;
     if callee == "strlen" {
         validate_c_strlen_call_shape(args, ty)?;
+        return Ok(());
+    }
+    if callee == "memcmp" {
+        validate_c_memcmp_call_shape(args, ty)?;
         return Ok(());
     }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
@@ -6090,6 +6179,18 @@ fn collect_readonly_pointer_read_params_from_expr(
                     uses,
                 )?;
             }
+            if callee == "memcmp" && args.len() == 3 {
+                collect_direct_readonly_pointer_read_param(
+                    &args[0],
+                    readonly_pointer_params,
+                    uses,
+                )?;
+                collect_direct_readonly_pointer_read_param(
+                    &args[1],
+                    readonly_pointer_params,
+                    uses,
+                )?;
+            }
             for arg in args {
                 collect_readonly_pointer_read_params_from_expr(arg, readonly_pointer_params, uses)?;
             }
@@ -7115,6 +7216,10 @@ fn is_usize(ty: &IrType) -> bool {
 }
 
 fn is_c_strlen_result_type(ty: &IrType) -> bool {
+    is_c_size_argument_type(ty)
+}
+
+fn is_c_size_argument_type(ty: &IrType) -> bool {
     ty.spelled == "size_t"
         || ty.canonical == "size_t"
         || ty.spelled == "usize"
