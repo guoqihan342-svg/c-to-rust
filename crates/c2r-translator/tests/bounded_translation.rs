@@ -373,6 +373,160 @@ fn clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_memset_statement_void_pointer_return_without_clang() {
+    let ast: Value = serde_json::from_str(
+        r#"
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "clear_prefix",
+      "type": { "qualType": "void (uint8_t *, size_t)" },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "out",
+          "type": { "qualType": "uint8_t *" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": { "qualType": "size_t" }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "void *" },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": { "qualType": "void *(*)(void *, int, size_t)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "void *(void *, int, size_t)" },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "memset"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "uint8_t *" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "uint8_t *" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "out"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "IntegerLiteral",
+                  "type": { "qualType": "int" },
+                  "value": "0"
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": { "qualType": "size_t" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "size_t" },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "count"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+    )
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "clear_prefix",
+        Some(&target_abi),
+    )
+    .expect("lower clang memset statement fixture without invoking clang");
+    let [IrStmt::Expr {
+        expr: IrExpr::Call {
+            callee, args, ty, ..
+        },
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected memset expression statement, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "memset");
+    assert_eq!(args.len(), 3);
+    assert_eq!(ty.canonical, "void *");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled memset statement from clang fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(!rust.contains("memset(out, 0, count)"), "{rust}");
+    assert!(
+        rust.contains("pub fn clear_prefix(mut out: &mut [u8], count: usize)"),
+        "{rust}"
+    );
+    assert!(rust.contains(".get_mut(..(count as usize))"), "{rust}");
+    assert!(rust.contains(".fill(0u8);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-memset-void-pointer",
+        rust,
+        r#"
+    let mut out = [1u8, 2, 3, 4];
+    clear_prefix(&mut out, 3);
+    assert_eq!(out, [0u8, 0, 0, 4]);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_record_field_subset_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/record_field_ast.json"))
@@ -8786,6 +8940,63 @@ fn typed_ir_emits_memset_zero_for_mutable_byte_slice_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_memset_zero_for_discarded_void_pointer_result_statement() {
+    let void_ty = ir_void();
+    let usize_ty = ir_usize();
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let void_ptr_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let ir = IrFunction {
+        name: "clear_prefix".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memset".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_lit(0, "0", ir_i32()),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_ptr_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit modeled C memset statement with discarded void *");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains(".get_mut(..(count as usize))"), "{rust}");
+    assert!(rust.contains(".fill(0u8);"), "{rust}");
+    assert!(!rust.contains("memset(out, 0, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memset-discarded-void-pointer-result-model",
+        rust,
+        r#"
+    let mut out = [1u8, 2, 3, 4];
+    clear_prefix(&mut out, 3);
+    assert_eq!(out, [0u8, 0, 0, 4]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement() {
     let usize_ty = ir_usize();
     let void_ty = ir_void();
@@ -8879,7 +9090,7 @@ fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
                 ("out", mutable_u8_ptr_ty.clone()),
                 ("count", usize_ty.clone()),
             ],
-            "requires void result type",
+            "requires void or discarded void * result type",
         ),
         (
             "memset_truncating_value",

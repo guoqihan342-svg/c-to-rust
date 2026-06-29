@@ -1629,7 +1629,7 @@
         "modeled C strlen(const char *) as a one-level nested direct-call argument",
         "modeled C strnlen(const char *, size_t) direct call with bounded NUL-search precondition",
         "modeled C strnlen(const char *, size_t) as a one-level nested direct-call argument",
-        "modeled C memset(void *, int, size_t) statement with 0..=255 byte literal precondition",
+        "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
@@ -1677,6 +1677,10 @@
             {
               "name": "optional real clang strlen target ABI smoke test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "memset statement discarded void pointer return no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1721,6 +1725,10 @@
             },
             {
               "name": "typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_memset_zero_for_discarded_void_pointer_result_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1822,6 +1830,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_memset_zero_for_discarded_void_pointer_result_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_memcpy_for_restrict_byte_slices_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -1919,6 +1931,14 @@
         },
         {
           "name": "typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_memset_zero_for_discarded_void_pointer_result_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_memset_statement_void_pointer_return_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

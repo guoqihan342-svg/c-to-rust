@@ -3273,9 +3273,9 @@ fn validate_c_memset_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
 ) -> Result<(&'a str, u8, &'a IrExpr), String> {
-    if !is_void_type(ty) {
+    if !is_c_memset_discarded_result_type(ty) {
         return Err(format!(
-            "C memset statement model requires void result type, got {}",
+            "C memset statement model requires void or discarded void * result type, got {}",
             type_label(ty)
         ));
     }
@@ -7503,6 +7503,19 @@ fn is_c_int_type(ty: &IrType) -> bool {
 
 fn is_void_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Void)
+}
+
+fn is_c_memset_discarded_result_type(ty: &IrType) -> bool {
+    is_void_type(ty) || is_mutable_void_pointer(ty)
+}
+
+fn is_mutable_void_pointer(ty: &IrType) -> bool {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } => {
+            !pointee.is_const && matches!(pointee.kind, IrTypeKind::Void)
+        }
+        _ => false,
+    }
 }
 
 fn is_const_void_pointer(ty: &IrType) -> bool {

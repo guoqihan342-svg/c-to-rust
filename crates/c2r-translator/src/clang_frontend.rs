@@ -3090,8 +3090,12 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
         }
     };
     let mut args = Vec::with_capacity(arg_nodes.len());
-    for arg_node in arg_nodes {
-        let arg = expr_skeleton_from_ast_with_options(arg_node, true)?;
+    for (index, arg_node) in arg_nodes.iter().enumerate() {
+        let arg = if callee == "memset" && index == 0 {
+            memset_destination_arg_skeleton_from_ast(arg_node)?
+        } else {
+            expr_skeleton_from_ast_with_options(arg_node, true)?
+        };
         args.push(arg);
     }
     if let Some(reason) = bounded_call_args_rejection_reason(&args) {
@@ -3105,6 +3109,76 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
         args,
         ty: expr_type(expr)?,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn memset_destination_arg_skeleton_from_ast(
+    arg: &Value,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_mutable_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memset destination BitCast target {} is not mutable void *",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_mutable_unsigned_8_bit_pointer(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memset destination BitCast operand {} is not mutable unsigned 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: "memset destination BitCast operand must be a direct pointer parameter"
+                .to_string(),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_mutable_void_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if !clang_type_is_const(pointee) && matches!(&pointee.kind, ClangTypeKind::Void)
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_mutable_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if !clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 })
+    )
 }
 
 #[cfg(feature = "typed-ir")]
