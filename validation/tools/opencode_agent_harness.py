@@ -71,6 +71,13 @@ def main() -> int:
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
     )
 
+    finalize_parser = subcommands.add_parser("finalize-run")
+    finalize_parser.add_argument("--db", type=Path, required=True)
+    finalize_parser.add_argument("--run-id", required=True)
+    finalize_parser.add_argument("--status", required=True)
+    finalize_parser.add_argument("--summary", type=Path, required=True)
+    finalize_parser.add_argument("--final-gate-status")
+
     args = parser.parse_args()
     if args.command == "init-run":
         result = {"db_path": repo_relative(init_run(out_root=args.out_root, run_id=args.run_id, proof_class=args.proof_class))}
@@ -98,12 +105,20 @@ def main() -> int:
             worker_id=args.worker_id,
             summary_path=args.summary,
         )
-    else:
+    elif args.command == "write-merge-plan":
         result = write_merge_plan(
             db_path=args.db,
             run_id=args.run_id,
             out_root=args.out_root,
             proof_class=args.proof_class,
+        )
+    else:
+        result = finalize_run(
+            db_path=args.db,
+            run_id=args.run_id,
+            status=args.status,
+            summary_path=args.summary,
+            final_gate_status=args.final_gate_status,
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
@@ -439,6 +454,53 @@ def write_merge_plan(
     merge_path.parent.mkdir(parents=True, exist_ok=True)
     merge_path.write_text(json.dumps(merge_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return merge_plan
+
+
+def finalize_run(
+    *,
+    db_path: Path,
+    run_id: str,
+    status: str,
+    summary_path: Path,
+    final_gate_status: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    summary_path = repo_path(summary_path, repo_root=repo_root)
+    summary_rel = repo_relative(summary_path, repo_root=repo_root)
+    summary_hash = sha256_file(summary_path)
+    now = now_text()
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        cursor = connection.execute(
+            """
+            update runs
+            set status=?, ended_at=?, summary_path=?, summary_sha256=?,
+                final_gate_status=coalesce(?, final_gate_status)
+            where run_id=?
+            """,
+            (status, now, summary_rel, summary_hash, final_gate_status, run_id),
+        )
+        if cursor.rowcount == 0:
+            raise SystemExit(f"unknown run_id: {run_id}")
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="run_finalized",
+            payload={
+                "status": status,
+                "final_gate_status": final_gate_status,
+                "summary_path": summary_rel,
+                "summary_sha256": summary_hash,
+            },
+        )
+        connection.commit()
+    return {
+        "status": "finalized",
+        "run_id": run_id,
+        "summary_path": summary_rel,
+        "summary_sha256": summary_hash,
+    }
 
 
 def ensure_schema(connection: sqlite3.Connection) -> None:

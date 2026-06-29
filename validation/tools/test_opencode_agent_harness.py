@@ -148,6 +148,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 [repo_rel(summary_path)],
             )
             self.assertIn("--worker-summary", merge_plan["argv"])
+            self.assertIn("--run-id", merge_plan["argv"])
+            run_id_idx = merge_plan["argv"].index("--run-id")
+            self.assertEqual(merge_plan["argv"][run_id_idx + 1], "run-test")
             artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
             self.assertEqual(artifact_rows, [("competition-run-summary", repo_rel(summary_path), "run-summary")])
 
@@ -184,6 +187,56 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     summary_path=Path("C:/temp/summary.json"),
                     repo_root=REPO_ROOT,
                 )
+
+    def test_finalize_run_updates_run_record_with_summary(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-test",
+                        "proof_class": "local-simulation",
+                        "final_gate": {"status": "passed"},
+                        "slices": {"attempted": 1, "semantic_pass": 1},
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = harness.finalize_run(
+                db_path=db_path,
+                run_id="run-test",
+                status="completed",
+                summary_path=summary_path,
+                final_gate_status="passed",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "finalized")
+            self.assertEqual(result["run_id"], "run-test")
+            run_rows = fetch_rows(
+                db_path,
+                "select run_id, status, final_gate_status, summary_path, summary_sha256, ended_at from runs",
+            )
+            self.assertEqual(len(run_rows), 1)
+            run_row = run_rows[0]
+            self.assertEqual(run_row[0], "run-test")
+            self.assertEqual(run_row[1], "completed")
+            self.assertEqual(run_row[2], "passed")
+            self.assertIsNotNone(run_row[3])
+            self.assertIsNotNone(run_row[4])
+            self.assertIsNotNone(run_row[5])
 
 
 def fetch_rows(db_path: Path, query: str) -> list[tuple]:
