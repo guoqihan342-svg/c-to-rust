@@ -189,6 +189,19 @@ python validation/tools/run_competition.py \
   --proof-class competition-exact
 ```
 
+To execute the same single request through the OpenCode worker wrapper, run the assigned worker exactly once and require its summary output:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+Expected worker output: `target/competition-out/workers/worker-a/summary/competition-run-summary.json`. Missing summary output is a failed interaction, not a partial success.
+
 ## 7. Multi-Agent / Parallel Workers
 
 When multiple independent real C slices need to be processed, use the OpenCode agent harness for distribution:
@@ -221,13 +234,10 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --include-path tests \
-  --reuse-accepted-evidence \
-  --accepted-evidence-root validation/evidence \
-  --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/workers/worker-a
 ```
 
-When reusing committed accepted evidence, pass the maintained `--slice-spec`; a freshly extracted temporary spec must not impersonate the authoritative spec. The real source metadata is still recorded in the assignment and SQLite ledger.
+The quickstart path must generate or validate fresh output under `target/competition-out`. Committed historical evidence is diagnostic only and is not the default worker input.
 
 Repeat for worker-b, worker-c with other independent slices such as `fdb_kv_set`, `fdb_blob_make`, etc.
 
@@ -312,15 +322,33 @@ target/competition-out/
     └── commands.jsonl
 ```
 
+For the first FlashDB slice, the concrete artifacts to inspect are:
+
+- `target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json`
+- `target/competition-out/summary/competition-run-summary.json`
+- `target/competition-out/logs/commands.jsonl`
+
 Key fields in `competition-run-summary.json`:
 
 ```json
 {
+  "schema_version": 1,
   "run_id": "<uuid>",
   "proof_class": "local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
+  "profile_sha256": "<64 lowercase hex chars>",
   "clang_source": "CLANG_PATH | vendored | missing",
-  "cargo_mirror_activation": {"method": "CARGO_HOME", "path": "config/competition-env/cargo"},
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo",
+    "config_file": "config/competition-env/cargo/config.toml"
+  },
+  "elapsed_seconds": 0,
+  "translator_version": "<git sha or version>",
   "slices": {
     "attempted": 1,
     "typed_ir_generated": 1,
@@ -331,7 +359,16 @@ Key fields in `competition-run-summary.json`:
     "failed": 0
   },
   "unsafe_budget": {"status": "passed", "total_first_party_non_test_unsafe": 0, "ratio": 0.0},
-  "final_gate": {"status": "passed"}
+  "artifact_roots": [
+    "target/competition-out/slice-specs",
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed",
+    "validator": "validation/tools/validate_competition_run_summary.py"
+  }
 }
 ```
 
@@ -479,8 +516,8 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 
 ## 13. Next Steps
 
-1. Read `CONTEXT.md` for current project status
-2. Read `future-vision-and-mvp.md` for the roadmap and current P0 backlog
-3. Read `COVERAGE.md` for current C construct support boundaries
-4. Read `opencode-agent-harness-design.md` for multi-agent design
-5. Read `config/competition-env/opencode-single-interaction.md` for the competition single-interaction workflow
+1. Complete the environment smoke and `real-fdb-calc-crc32` minimal reproduction in Sections 3-5.
+2. Read `future-vision-and-mvp.md` for the roadmap and current P0 backlog.
+3. Read `COVERAGE.md` for current C construct support boundaries.
+4. Read `config/competition-env/opencode-single-interaction.md` for the competition single-interaction workflow.
+5. Read `opencode-agent-harness-design.md` for multi-agent design.

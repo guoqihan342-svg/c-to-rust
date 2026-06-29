@@ -23,6 +23,13 @@ def resolve_schema_ref(schema: dict, node: dict) -> dict:
 
 
 class TemplateSchemaContractTests(unittest.TestCase):
+    def test_auto_translation_template_documents_five_repair_round_default(self) -> None:
+        readme_path = REPO_ROOT / "validation" / "auto-translation-template" / "README.md"
+        text = readme_path.read_text(encoding="utf-8")
+
+        self.assertIn("Default repair retry limit is five repair rounds.", text)
+        self.assertNotIn("Default repair retry limit is three rounds.", text)
+
     def test_pointer_graph_template_exposes_alias_and_effect_contract(self) -> None:
         schema_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.schema.json"
         example_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.example.json"

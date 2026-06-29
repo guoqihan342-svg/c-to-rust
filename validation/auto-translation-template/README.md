@@ -38,7 +38,7 @@ English: effect graph identity is part of the same cache boundary. If read/write
 
 - Slice spec, type map, CFG, and pointer graph must be recorded before Rust draft generation.
 - PatchPlan evidence must exist before automatic patch application.
-- Default repair retry limit is three rounds.
+- Default repair retry limit is five repair rounds.
 - Repairs that edit oracle contracts, fixture expected behavior, accepted differences, public API outside the impact set, source slice boundaries, or unsafe budget policy must be blocked.
 - Final acceptance still requires C oracle, Rust replay, schema-aware diff, negative diff, unsafe evidence, version/config binding, cache metadata, final verification, and OpenSpec validation.
 - A change to `config/competition-env/environment.json` invalidates generated translation cache identity until the affected artifacts are regenerated or explicitly reviewed as non-competition evidence.

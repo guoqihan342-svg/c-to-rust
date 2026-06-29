@@ -160,6 +160,77 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
                 self.assertIn(commit, text)
 
+    def test_quickstart_runbook_documents_competition_commands_and_outputs(self) -> None:
+        quickstarts = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+        ]
+        required_terms = [
+            "config/competition-env/environment.json",
+            "config/competition-env/opencode-single-interaction.md",
+            "source config/competition-env/env.sh",
+            "bash config/competition-env/toolchain-check.sh",
+            "validation/tools/run_competition.py",
+            "python validation/tools/run_competition_smoke.py --proof-class ci-approximation",
+            "python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation",
+            "python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact",
+            "competition-run-summary.json",
+            "target/competition-smoke/summary/competition-smoke-summary.json",
+            "target/competition-out/summary/competition-run-summary.json",
+            "target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json",
+            "target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32",
+            "l3-real-fdb-calc-crc32-diff.json",
+            "l3-real-fdb-calc-crc32-negative-diff.json",
+            "l3-real-fdb-calc-crc32-final-verification.json",
+            "target/competition-out/logs/commands.jsonl",
+            "python -m validation.tools.opencode_agent_harness run-worker",
+            "--mode opencode",
+            "--opencode-variant max",
+            '"run_id"',
+            '"schema_version"',
+            '"proof_class"',
+            '"profile_id"',
+            '"profile_sha256"',
+            '"clang_source"',
+            '"cargo_mirror_activation"',
+            '"config_file"',
+            '"elapsed_seconds"',
+            '"translator_version"',
+            '"slices"',
+            '"unsafe_budget"',
+            '"artifact_roots"',
+            '"final_gate"',
+            '"validator"',
+            "--source-repo-root sources/FlashDB",
+            "--source-repository https://gitcode.com/xwxf/FlashDB.git",
+            "--source-branch competition",
+            "--source-file src/fdb_utils.c",
+            "fdb_calc_crc32",
+            "--target-id flashdb",
+            "--slice-id real-fdb-calc-crc32",
+            "validate_auto_translation_evidence.py",
+            "--evidence-root target/competition-out/evidence",
+            "--require-semantic-pass",
+            "workers/<worker-id>",
+            "target/competition-out/workers/worker-a",
+            "ci-approximation",
+            "wsl-local-simulation",
+            "local-simulation",
+            "competition-exact",
+        ]
+        forbidden_terms = [
+            "--reuse-accepted-evidence",
+            "--accepted-evidence-root validation/evidence",
+        ]
+        for quickstart in quickstarts:
+            text = quickstart.read_text(encoding="utf-8")
+            with self.subTest(quickstart=quickstart.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn("CONTEXT.md", text)
+                for term in forbidden_terms:
+                    self.assertNotIn(term, text)
+                for term in required_terms:
+                    self.assertIn(term, text)
+
     def test_competition_shell_entrypoints_use_repo_root_and_activate_cargo_mirror(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         activation = profile["cargo_mirror_activation"]

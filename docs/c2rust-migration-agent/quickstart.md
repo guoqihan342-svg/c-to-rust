@@ -189,6 +189,19 @@ python validation/tools/run_competition.py \
   --proof-class competition-exact
 ```
 
+如果要通过 OpenCode worker 包装层执行同一条单次请求，只运行已分配的 worker 一次，并要求它产出 summary：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+预期 worker 输出是 `target/competition-out/workers/worker-a/summary/competition-run-summary.json`。缺少 summary 输出就是交互失败，不能算部分成功。
+
 ## 7. 多 Agent / 并行 Worker
 
 当需要处理多个互不依赖的真实 C slice 时，可用 OpenCode agent harness 分发：
@@ -221,13 +234,10 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --include-path tests \
-  --reuse-accepted-evidence \
-  --accepted-evidence-root validation/evidence \
-  --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/workers/worker-a
 ```
 
-复用已提交 accepted evidence 时必须传维护版 `--slice-spec`，不能用临时抽取 spec 直接冒充权威 spec；真实源信息仍会写入 assignment 和 SQLite ledger。
+quickstart 主路径必须在 `target/competition-out` 下生成或验证新输出；已提交的历史 evidence 只作为诊断材料，不是默认 worker 输入。
 
 可以为 worker-b、worker-c 等分配其他独立 slice，如 `fdb_kv_set`、`fdb_blob_make` 等。
 
@@ -312,15 +322,33 @@ target/competition-out/
     └── commands.jsonl
 ```
 
+第一条 FlashDB slice 需要检查的具体 artifacts：
+
+- `target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json`
+- `target/competition-out/summary/competition-run-summary.json`
+- `target/competition-out/logs/commands.jsonl`
+
 `competition-run-summary.json` 关键字段：
 
 ```json
 {
+  "schema_version": 1,
   "run_id": "<uuid>",
   "proof_class": "local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
+  "profile_sha256": "<64 lowercase hex chars>",
   "clang_source": "CLANG_PATH | vendored | missing",
-  "cargo_mirror_activation": {"method": "CARGO_HOME", "path": "config/competition-env/cargo"},
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo",
+    "config_file": "config/competition-env/cargo/config.toml"
+  },
+  "elapsed_seconds": 0,
+  "translator_version": "<git sha or version>",
   "slices": {
     "attempted": 1,
     "typed_ir_generated": 1,
@@ -331,7 +359,16 @@ target/competition-out/
     "failed": 0
   },
   "unsafe_budget": {"status": "passed", "total_first_party_non_test_unsafe": 0, "ratio": 0.0},
-  "final_gate": {"status": "passed"}
+  "artifact_roots": [
+    "target/competition-out/slice-specs",
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed",
+    "validator": "validation/tools/validate_competition_run_summary.py"
+  }
 }
 ```
 
@@ -479,8 +516,8 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 
 ## 13. 下一步
 
-1. 阅读 `CONTEXT.md` 了解当前项目状态
-2. 阅读 `future-vision-and-mvp.md` 了解路线图和当前 P0 待办
-3. 阅读 `COVERAGE.md` 了解当前 C 构造支持边界
-4. 阅读 `opencode-agent-harness-design.md` 了解多 agent 设计
-5. 阅读 `config/competition-env/opencode-single-interaction.md` 了解比赛单次交互流程
+1. 按本文第 3-5 节完成环境 smoke 和 `real-fdb-calc-crc32` 最小复现。
+2. 阅读 `future-vision-and-mvp.md` 了解路线图和当前 P0 待办。
+3. 阅读 `COVERAGE.md` 了解当前 C 构造支持边界。
+4. 阅读 `config/competition-env/opencode-single-interaction.md` 了解比赛单次交互流程。
+5. 阅读 `opencode-agent-harness-design.md` 了解多 agent 设计。
