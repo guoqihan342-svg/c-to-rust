@@ -16,6 +16,13 @@
     "external_callee_scope": {
       "blocked_count": 4,
       "declared_count": 0,
+      "declared_spec_count": 4,
+      "declared_spec_names": [
+        "fdb_blob_make",
+        "fdb_kv_del",
+        "fdb_kv_set_blob",
+        "strlen"
+      ],
       "semantics_verified": false,
       "status": "blocked",
       "stub_kind": "none"
@@ -41,45 +48,45 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+      "sha256": "774bbf982e0d84a1e5d605be26bb3f89a6316d0fd0885333e81d34ca0a255d14",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-status.json",
-      "sha256": "0a5485844e2d1bc78d17dd8115dfa15c7e4fd78a65e0e8221d55db1116bcd90b",
+      "sha256": "37fb7e047189c1fa364a76571a064fc790faa5eb838826401710841ba1f32a18",
       "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-cache-metadata.json",
-      "sha256": "0a3db6e72ca47f9ca7f8bbeb4f866ce3102e8b3cb6ad0acb6801ef7d5dccb79b",
+      "sha256": "5c4cf6dfb7923e841603f83c1eb50474c2556ed2b28f45c190ac584acf79a61c",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-      "sha256": "d6369fd17316adcebe7cfc107145c00c3c0d3df427429b149e65ae65e141a9b2",
+      "sha256": "61a1d11dfe49a0ac024f9fc40f65307116b515788df96efe8eb32fa1405f331a",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-config-profile.json",
       "profile_id": "flashdb-real-fdb-kv-set-real-source",
-      "sha256": "5f91982b0460ffb809e943c6a30c2f0751045bbff8efc5d20912b580d617bccf",
+      "sha256": "61fadb8166d8d2c60b90f7dad97c13e478174112dd646c664ea0a8ab59e927cf",
       "status": "incomplete"
     },
     "context_pack": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
-      "sha256": "ba95bb8883986060d06edc7965a8e24628381cd72cf9e39cdae88b4bd36dc3b4",
+      "sha256": "63a9cdb32145fd38baf9815dda9c137d85ebc398ddc29e99e147f7ce567bcc19",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-final-verification.json",
-      "sha256": "2c5b92fe2229d7f22c5bfaf41b8a9edb100187fccc078df2bafd18289351521c",
+      "sha256": "c7f4b21106033fbbab67929d1b82918ea70e9226474ad9faddb538df564c05df",
       "status": "incomplete"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": false,
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-negative-diff.json",
-      "sha256": "7c71d18e9debe3fe8914c448cbb09ed28950101c414ccd1184be1dd16462ff69",
+      "sha256": "fe65377dbf550148a7a849c749f553f543a3a9f6bca4f00ed7b09cacee476e80",
       "status": "incomplete"
     },
     "performance_smoke": {
@@ -91,33 +98,33 @@
     "pointer_dependency_graph": {
       "not_applicable_reason": "slice has no pointer surface",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "sha256": "a849c0ed6d01e8f378cf68b56fa5f7c5ce1d0344e88aa894ffe62f30904ef1ef",
+      "sha256": "d23a1ceda4e5ceb2f8c48da037dddd863956d698de1a20d371389f858cddb267",
       "status": "not_applicable"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-      "sha256": "ca1be33dcfb069b4eb5ea769688c0fb6902e8610f842b6ed5a7f999250f2ab20",
+      "sha256": "43a7b1244f82203904123051a7bd774ffce26b68978052b5c3ed3109eb2fa944",
       "status": "refused"
     },
     "rust_check": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/rust-check.json",
-      "sha256": "0cd0eac367e46e0ab737e2ebb988b4530aed0de5760c3599f161d40ff0906bea",
+      "sha256": "282ab8f1b263857046afb09678a2297d7656ffc3e04e3b4e10a60529860c1fa2",
       "status": "skipped"
     },
     "rust_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-report.json",
-      "sha256": "fdfcf34d3c778eda8afc303d6c56333538fdbd69331b5f7f61e36d28a68fe4e3",
+      "sha256": "d69101ad1ccb0f35d285fe30de2fb059fac23e07de4db09defa4a703e89012c8",
       "status": "incomplete"
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-diff.json",
-      "sha256": "cefaeec93eb5a3842da3d8828489f5d18b43988415cfe281ac9ec5d4d85070b6",
+      "sha256": "633d8f5cbfa5e667e9b6c39936656e0a197f23503cc933e1132ba6b9247a286c",
       "status": "incomplete"
     },
     "slice_contract": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-slice-contract.json",
-      "sha256": "dc37c52df53f9b12a9ac6a5798ce02b6cc20626699badbfc28f7dd1bc9e7cfc4",
+      "sha256": "01439baaff1f02596c8f11c51d153dc893fae6195135feaa37178bb62181d3c4",
       "status": "recorded"
     },
     "summary": {
@@ -127,28 +134,28 @@
     },
     "test_translation": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-test-translation-generated.json",
-      "sha256": "cf725d2bc183993d0adacab0e260a5d71951ddba1c6ee990ccb6b6a5a7ca29d3",
+      "sha256": "dbac2951d0af0b33d52a39c42a2038c13fd3a21dd0d0f09ff01d21a3a0b8bc82",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-ledger.json",
-      "sha256": "c21e14b71eba30ccc5ee04f879b39d322d4fc7b33a86eea1882547449bcbe132",
+      "sha256": "bc79c5efe1b2a03c98e9f57e78ae3fa7c69f3c5ce6ead8c87770e934c2aebf55",
       "status": "incomplete"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-unsafe-scan.json",
-      "sha256": "75e68d942470910b1892be1ca77e988d29e58777a05a8c208a17add99a14b2f4",
+      "sha256": "55fdbda917093a8e4c4385c5de6d3916fc3144812d1f68be499576c276d1c18f",
       "status": "incomplete"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
       "profile": "L4-dev",
-      "sha256": "98c525e90df22bf76efe305da5f5de48389ac4edb3029a136da681ef16354b65",
+      "sha256": "31bf3e629f217eb7ae6245c82163c07fdb3fc42ca385d72dfe181fcc360dd950",
       "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-version-manifest.json",
-      "sha256": "25a2dae8039b4cf8b89a328e4d60efd79ba3385030ec9c8adb017caf2cd22ac7",
+      "sha256": "ad5077b774ebfb07bec5af5fce0a80d71b2424e54f102451f68dcb5e3c2583a9",
       "status": "recorded"
     }
   },
@@ -158,7 +165,7 @@
     "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json"
   },
   "level": "L3",
-  "repo_commit": "4fc8daac2d79f11ae1042af0212cb03b7eabfa77",
+  "repo_commit": "dbd43d1e331883bcbce919f10c9e2dc45438ae50",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",

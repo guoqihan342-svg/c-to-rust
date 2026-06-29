@@ -208,28 +208,39 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
+  --include-path tests \
+  --reuse-accepted-evidence \
+  --accepted-evidence-root validation/evidence \
+  --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/workers/worker-a
 ```
+
+When reusing committed accepted evidence, pass the maintained `--slice-spec`; a freshly extracted temporary spec must not impersonate the authoritative spec. The real source metadata is still recorded in the assignment and SQLite ledger.
 
 Repeat for worker-b, worker-c with other independent slices such as `fdb_kv_set`, `fdb_blob_make`, etc.
 
 ### 7.3 Run a Worker
 
 ```bash
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
-```
-
-### 7.4 Record Worker Results
-
-```bash
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
 ```
 
-### 7.5 Generate and Execute the Merge Plan
+`run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper for the same request:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+### 7.4 Generate and Execute the Merge Plan
 
 ```bash
 python -m validation.tools.opencode_agent_harness write-merge-plan \
@@ -274,7 +285,8 @@ target/competition-out/
 ├── workers/<worker-id>/                  # Isolated output per worker
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
-│   └── logs/commands.jsonl
+│   ├── harness/run-worker-report.json
+│   └── logs/
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs

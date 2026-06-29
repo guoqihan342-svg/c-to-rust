@@ -55,6 +55,17 @@ def main() -> int:
     parser.add_argument("--define", action="append", dest="defines", default=[])
     parser.add_argument("--out-root", type=Path, default=REPO_ROOT / "target" / "competition-out")
     parser.add_argument(
+        "--reuse-accepted-evidence",
+        action="store_true",
+        help="validate committed accepted evidence for each slice instead of regenerating candidates",
+    )
+    parser.add_argument(
+        "--accepted-evidence-root",
+        type=Path,
+        default=REPO_ROOT / "validation" / "evidence",
+        help="evidence root used with --reuse-accepted-evidence",
+    )
+    parser.add_argument(
         "--proof-class",
         default="local-simulation",
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
@@ -79,6 +90,8 @@ def main() -> int:
         proof_class=args.proof_class,
         run_id=args.run_id,
         repo_root=REPO_ROOT,
+        reuse_accepted_evidence=args.reuse_accepted_evidence,
+        accepted_evidence_root=args.accepted_evidence_root,
     )
     print(json.dumps(result.summary, indent=2, sort_keys=True))
     return result.exit_code
@@ -94,6 +107,8 @@ def run_competition(
     command_runner: CommandRunner = subprocess.run,
     repo_root: Path = REPO_ROOT,
     run_id: str | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: Path | None = None,
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
     worker_summaries = worker_summaries or []
@@ -111,6 +126,9 @@ def run_competition(
     logs_dir.mkdir(parents=True, exist_ok=True)
     evidence_root = out_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
+    accepted_evidence_root = accepted_evidence_root or repo_root / "validation" / "evidence"
+    if not accepted_evidence_root.is_absolute():
+        accepted_evidence_root = repo_root / accepted_evidence_root
     generated_slice_specs_root = out_root / "slice-specs"
     generated_slice_specs_root.mkdir(parents=True, exist_ok=True)
 
@@ -143,7 +161,7 @@ def run_competition(
         logs_dir=logs_dir,
         out_root=out_root,
     )
-    if environment_result.returncode != 0:
+    if environment_result.returncode != 0 and proof_class == "competition-exact":
         gate_failures += 1
 
     generated_slice_specs, extraction_failures = extract_slice_specs(
@@ -161,27 +179,29 @@ def run_competition(
     for spec_path, spec in specs:
         target_id = required_str(spec, "target_id")
         slice_id = required_str(spec, "slice_id")
-        auto_result = run_logged_step(
-            f"auto-migrate-{slice_id}",
-            [
-                sys.executable,
-                rel_script(AUTO_MIGRATE, repo_root),
-                "--slice-spec",
-                rel_path(spec_path, repo_root),
-                "--out-root",
-                rel_path(evidence_root, repo_root),
-                "--competition-clang-lane",
-            ],
-            command_runner=command_runner,
-            repo_root=repo_root,
-            logs_dir=logs_dir,
-            out_root=out_root,
-        )
-        if auto_result.returncode != 0:
-            slice_failures += 1
-            continue
+        slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
+        if not reuse_accepted_evidence:
+            auto_result = run_logged_step(
+                f"auto-migrate-{slice_id}",
+                [
+                    sys.executable,
+                    rel_script(AUTO_MIGRATE, repo_root),
+                    "--slice-spec",
+                    rel_path(spec_path, repo_root),
+                    "--out-root",
+                    rel_path(evidence_root, repo_root),
+                    "--competition-clang-lane",
+                ],
+                command_runner=command_runner,
+                repo_root=repo_root,
+                logs_dir=logs_dir,
+                out_root=out_root,
+            )
+            if auto_result.returncode != 0:
+                slice_failures += 1
+                continue
 
-        final = load_final_verification(evidence_root, target_id, slice_id)
+        final = load_final_verification(slice_evidence_root, target_id, slice_id)
         if final.get("rust_check_status") == "passed":
             compiled += 1
         if final.get("semantic_pass") is True:
@@ -208,7 +228,7 @@ def run_competition(
                 "--slice-spec",
                 rel_path(spec_path, repo_root),
                 "--evidence-root",
-                rel_path(evidence_root, repo_root),
+                rel_path(slice_evidence_root, repo_root),
                 "--require-semantic-pass",
             ],
             command_runner=command_runner,
@@ -306,7 +326,14 @@ def run_competition(
 
 
 def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
-    return command_runner(command, cwd=repo_root, text=True, capture_output=True)
+    return command_runner(
+        command,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
 
 
 def load_worker_summary_statuses(

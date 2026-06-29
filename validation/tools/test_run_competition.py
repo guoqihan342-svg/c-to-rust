@@ -245,6 +245,41 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
 
+    def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            accepted_evidence_root = tmp_path / "accepted-evidence"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(accepted_evidence_root, "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+                reuse_accepted_evidence=True,
+                accepted_evidence_root=accepted_evidence_root,
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            validate_commands = [text for text in command_texts if "validate_auto_translation_evidence.py" in text]
+            self.assertEqual(len(validate_commands), 1)
+            self.assertIn("--evidence-root", validate_commands[0])
+            self.assertIn(accepted_evidence_root.as_posix(), validate_commands[0])
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["compiled"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "passed")
+
     def test_runner_extracts_slice_spec_before_auto_migrate(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
@@ -811,7 +846,7 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["failed"], 0)
             self.assertEqual(summary["final_gate"]["status"], "failed")
 
-    def test_runner_marks_environment_check_failure_as_global_gate_failure(self) -> None:
+    def test_runner_records_local_environment_check_failure_without_blocking_translation(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
             tmp_path = Path(tmp)
@@ -824,6 +859,31 @@ class RunCompetitionTests(unittest.TestCase):
                 slice_specs=[spec_path],
                 out_root=out_root,
                 proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_runner_marks_exact_environment_check_failure_as_global_gate_failure(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"toolchain-check.sh"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="competition-exact",
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
                 run_id="run-test",

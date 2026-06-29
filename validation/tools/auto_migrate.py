@@ -424,15 +424,7 @@ def external_direct_callee_context(
             )
             continue
         if not descriptor.get("supported"):
-            blocked.append(
-                {
-                    "name": name,
-                    "reason": "unsupported_external_direct_callee_signature",
-                    "unsupported_reasons": descriptor.get("unsupported_reasons", []),
-                    "stub_kind": "none",
-                    "semantics_verified": False,
-                }
-            )
+            blocked.append(external_callee_block_from_descriptor(name, descriptor))
             continue
         declared.append(descriptor)
 
@@ -443,10 +435,26 @@ def external_direct_callee_context(
         status = "recorded"
     return {
         "status": status,
+        "declarations": [declared_map[name] for name in sorted(declared_map)],
         "declared": declared,
         "blocked": blocked,
+        "declared_spec_count": len(declared_map),
+        "declared_spec_names": sorted(declared_map),
         "declared_count": len(declared),
         "blocked_count": len(blocked),
+    }
+
+
+def external_callee_block_from_descriptor(name: str, descriptor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "reason": "unsupported_external_direct_callee_signature",
+        "signature_ref": descriptor.get("signature_ref", ""),
+        "source_ref": descriptor.get("source_ref", ""),
+        "definition_status": descriptor.get("definition_status", ""),
+        "unsupported_reasons": descriptor.get("unsupported_reasons", []),
+        "stub_kind": "none",
+        "semantics_verified": False,
     }
 
 
@@ -474,6 +482,8 @@ def external_context_input_ref(evidence_dir: Path, slice_id: str, context: dict[
         "path": rel(evidence_dir / f"l3-{slice_id}-context-pack.json"),
         "status": context["status"],
         "declared_count": context["declared_count"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "blocked_count": context["blocked_count"],
     }
 
@@ -581,6 +591,8 @@ def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
         status = context["status"]
     return {
         "status": status,
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "declared_count": context["declared_count"],
         "blocked_count": context["blocked_count"],
         "stub_kind": "compile_only" if context["declared_count"] else "none",
@@ -591,6 +603,8 @@ def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
 def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": context["status"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "declared_count": context["declared_count"],
         "blocked_count": context["blocked_count"],
         "declared_callees": [
@@ -1042,6 +1056,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
                 "alias_gate": alias_gate["summary"],
                 "call_expressions": call_expressions,
+                "external_direct_callee_declarations": external_callee_context["declarations"],
                 "external_direct_callees": external_callee_context["declared"],
                 "external_direct_callee_blocks": external_callee_context["blocked"],
             },
@@ -5788,6 +5803,7 @@ def write_context_pack(
         "global_dependencies": global_dependency_requirements(spec),
         "source_boundary": source_boundary(spec),
         "direct_call_edges": call_expressions or [],
+        "external_direct_callee_declarations": context["declarations"],
         "external_direct_callees": context["declared"],
         "external_direct_callee_blocks": context["blocked"],
         "callee_sources": external_callee_sources(context),

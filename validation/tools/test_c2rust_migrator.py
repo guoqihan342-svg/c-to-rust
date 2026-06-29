@@ -39,6 +39,43 @@ class C2RustMigratorTest(unittest.TestCase):
         self.assertIn("DEMO=1", argv)
         self.assertEqual(argv[-4:], ["--proof-class", "local-simulation", "--run-id", "run-test-worker-a"])
 
+    def test_builds_reuse_accepted_evidence_args_from_request(self) -> None:
+        request = {
+            "source_repo_root": "external/demo",
+            "source_file": "src/demo.c",
+            "function": "add_one",
+            "target_id": "demo",
+            "slice_id": "demo-add-one",
+            "source_commit": "abc123",
+            "proof_class": "local-simulation",
+            "out_root": "target/competition-out/workers/worker-a",
+            "reuse_accepted_evidence": True,
+            "accepted_evidence_root": "validation/evidence",
+        }
+
+        argv = c2rust_migrator.build_run_competition_argv(request)
+
+        self.assertIn("--reuse-accepted-evidence", argv)
+        self.assertIn("--accepted-evidence-root", argv)
+        self.assertIn("validation/evidence", argv)
+
+    def test_builds_run_competition_argv_from_slice_spec_request(self) -> None:
+        request = {
+            "slice_specs": ["validation/slice-specs/demo-add-one.json"],
+            "proof_class": "local-simulation",
+            "out_root": "target/competition-out/workers/worker-a",
+            "run_id": "run-test-worker-a",
+            "reuse_accepted_evidence": True,
+            "accepted_evidence_root": "validation/evidence",
+        }
+
+        argv = c2rust_migrator.build_run_competition_argv(request)
+
+        self.assertIn("--slice-spec", argv)
+        self.assertIn("validation/slice-specs/demo-add-one.json", argv)
+        self.assertNotIn("--source-file", argv)
+        self.assertIn("--reuse-accepted-evidence", argv)
+
     def test_builds_merge_argv_from_worker_summaries(self) -> None:
         request = {
             "worker_summaries": [

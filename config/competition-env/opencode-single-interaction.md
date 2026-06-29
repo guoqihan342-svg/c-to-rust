@@ -83,13 +83,24 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --define DEMO=1 \
   --out-root target/competition-out/workers/worker-a
 
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+# 复用已提交 accepted evidence 时额外添加：
+#   --slice-spec <repo-relative-maintained-slice-spec>
+#   --reuse-accepted-evidence
+#   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
+
+# 本机连接 OpenCode / DeepSeek V4 Pro 时可改用 agent 包装层：
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
 
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
@@ -132,7 +143,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger，再用 `assign-slice` 给每个 worker 生成 assignment。worker 只写自己的 `target/competition-out/workers/<worker-id>/`，完成后用 `record-worker-summary` 入库，最后用 `write-merge-plan` 生成统一汇总命令。
+9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger，再用 `assign-slice` 给每个 worker 生成 assignment。worker 只写自己的 `target/competition-out/workers/<worker-id>/`；随后用 `run-worker --mode deterministic` 走可复现 runner，或用 `run-worker --mode opencode --opencode-variant max` 让 OpenCode 包装执行同一个 request。`run-worker` 会在 summary 存在时自动入库，最后用 `write-merge-plan` 生成统一汇总命令。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。

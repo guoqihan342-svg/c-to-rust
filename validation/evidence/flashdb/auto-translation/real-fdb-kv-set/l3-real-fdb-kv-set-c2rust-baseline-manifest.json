@@ -28,19 +28,35 @@
   "output": null,
   "reason": "blocked_by_missing_tools",
   "reference_tree": {
-    "cargo_toml": "F:\\agent\\c2rust-master\\Cargo.toml",
-    "path": "F:\\agent\\c2rust-master",
-    "status": "present"
+    "cargo_toml": "",
+    "diagnostic_only": true,
+    "path": "tools/c2rust-reference",
+    "status": "missing"
   },
   "schema_version": 1,
   "selected_command": null,
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "61c2e752bdca06aad71f44958c40185417964a2ac0f7b26ddb4f3918a046def6"
+    "sha256": "4ea6e3666c4a0a8e1b5c0bd8f124cba20229e27df62257c96c760dc241665c64"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "status": "skipped",
   "target_id": "flashdb",
+  "tool_probe": {
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    },
+    "diagnostic_only": true,
+    "environment_profile_hash": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0",
+    "os_name": "nt",
+    "path_search": [
+      "c2rust-transpile",
+      "c2rust"
+    ],
+    "probed_at": "2026-06-29T14:05:58Z"
+  },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

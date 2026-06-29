@@ -304,7 +304,14 @@ def run_logged_step(
     logs_dir: Path,
     out_root: Path,
 ) -> subprocess.CompletedProcess[str]:
-    result = command_runner(command, cwd=repo_root, text=True, capture_output=True)
+    result = command_runner(
+        command,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
     entry = {
         "step": step,
         "command": command,

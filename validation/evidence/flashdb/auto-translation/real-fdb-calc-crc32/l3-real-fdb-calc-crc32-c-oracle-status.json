@@ -36,6 +36,7 @@
       }
     ],
     "link_strategy": "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
     "resolved_include_paths": [
       "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc",
       "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests"
@@ -254,6 +255,7 @@
         }
       }
     ],
+    "oracle_source_mode": "declared_c_boundary_sources",
     "source_files": [
       {
         "path": "src/fdb_utils.c",

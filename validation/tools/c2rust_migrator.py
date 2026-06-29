@@ -45,9 +45,13 @@ def load_request(path: str | PurePosixPath) -> dict[str, Any]:
 def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
     argv = ["python", RUN_COMPETITION]
     worker_summaries = request.get("worker_summaries") or []
+    slice_specs = request.get("slice_specs") or ([request["slice_spec"]] if request.get("slice_spec") else [])
     if worker_summaries:
         for summary in expect_string_list(worker_summaries, "worker_summaries"):
             argv.extend(["--worker-summary", checked_posix_path(summary)])
+    elif slice_specs:
+        for slice_spec in expect_string_list(slice_specs, "slice_specs"):
+            argv.extend(["--slice-spec", checked_posix_path(slice_spec)])
     else:
         missing = [field for field in DIRECT_REQUIRED_FIELDS if not request.get(field)]
         if missing:
@@ -78,6 +82,10 @@ def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
     out_root = checked_posix_path(str(request.get("out_root", "target/competition-out")))
     proof_class = str(request.get("proof_class", "local-simulation"))
     argv.extend(["--out-root", out_root, "--proof-class", proof_class])
+    if request.get("reuse_accepted_evidence"):
+        argv.append("--reuse-accepted-evidence")
+        if request.get("accepted_evidence_root"):
+            argv.extend(["--accepted-evidence-root", checked_posix_path(str(request["accepted_evidence_root"]))])
     if request.get("run_id"):
         argv.extend(["--run-id", str(request["run_id"])])
     return argv

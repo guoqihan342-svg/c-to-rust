@@ -54,6 +54,7 @@
     "status": "unavailable"
   },
   "metadata": {
+    "clang_ast_fixture": null,
     "compile_commands": null,
     "function_source_span": {
       "byte_end": 49710,

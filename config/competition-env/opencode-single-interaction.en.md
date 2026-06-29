@@ -81,13 +81,24 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --define DEMO=1 \
   --out-root target/competition-out/workers/worker-a
 
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+# For committed accepted evidence reuse, add:
+#   --slice-spec <repo-relative-maintained-slice-spec>
+#   --reuse-accepted-evidence
+#   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
+
+# When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper:
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
 
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
@@ -130,7 +141,7 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
-9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`, then use `assign-slice` to generate assignments for each worker. Each worker writes only to `target/competition-out/workers/<worker-id>/`; after completion, record the summary with `record-worker-summary`, then generate the aggregate command with `write-merge-plan`.
+9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`, then use `assign-slice` to generate assignments for each worker. Each worker writes only to `target/competition-out/workers/<worker-id>/`; then run `run-worker --mode deterministic` for the reproducible runner path, or `run-worker --mode opencode --opencode-variant max` to have OpenCode wrap the same request. `run-worker` records the worker summary automatically when the summary exists; then generate the aggregate command with `write-merge-plan`.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.

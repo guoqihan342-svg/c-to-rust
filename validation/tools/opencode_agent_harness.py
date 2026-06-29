@@ -15,6 +15,8 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import sqlite3
+import subprocess
+import sys
 import time
 from typing import Any
 
@@ -52,8 +54,22 @@ def main() -> int:
     assign_parser.add_argument("--compiler-command-source")
     assign_parser.add_argument("--include-path", action="append", default=[])
     assign_parser.add_argument("--define", action="append", default=[])
+    assign_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    assign_parser.add_argument("--accepted-evidence-root")
+    assign_parser.add_argument("--slice-spec")
     assign_parser.add_argument("--out-root", type=Path, required=True)
     assign_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
+
+    run_parser = subcommands.add_parser("run-worker")
+    run_parser.add_argument("--db", type=Path, required=True)
+    run_parser.add_argument("--run-id", required=True)
+    run_parser.add_argument("--worker-id", required=True)
+    run_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    run_parser.add_argument("--opencode-command", default="opencode")
+    run_parser.add_argument("--opencode-model")
+    run_parser.add_argument("--opencode-agent")
+    run_parser.add_argument("--opencode-variant", default="max")
+    run_parser.add_argument("--opencode-skip-permissions", action="store_true")
 
     record_parser = subcommands.add_parser("record-worker-summary")
     record_parser.add_argument("--db", type=Path, required=True)
@@ -95,8 +111,23 @@ def main() -> int:
             compiler_command_source=args.compiler_command_source,
             include_paths=args.include_path,
             defines=args.define,
+            reuse_accepted_evidence=args.reuse_accepted_evidence,
+            accepted_evidence_root=args.accepted_evidence_root,
+            slice_spec=args.slice_spec,
             out_root=args.out_root,
             lease_ttl_seconds=args.lease_ttl_seconds,
+        )
+    elif args.command == "run-worker":
+        result = run_worker(
+            db_path=args.db,
+            run_id=args.run_id,
+            worker_id=args.worker_id,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
         )
     elif args.command == "record-worker-summary":
         result = record_worker_summary(
@@ -122,7 +153,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0
+    return int(result.get("exit_code", 0)) if args.command == "run-worker" else 0
 
 
 def init_run(
@@ -200,6 +231,9 @@ def assign_slice(
     compiler_command_source: str | None = None,
     include_paths: list[str] | None = None,
     defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    slice_spec: str | None = None,
     out_root: Path,
     lease_ttl_seconds: int = 3600,
     repo_root: Path = REPO_ROOT,
@@ -211,6 +245,11 @@ def assign_slice(
     compiler_command_source_rel = checked_relative_path(compiler_command_source).as_posix() if compiler_command_source else None
     include_path_values = [checked_relative_path(include_path).as_posix() for include_path in (include_paths or [])]
     define_values = list(defines or [])
+    accepted_evidence_root_rel = (
+        checked_relative_path(accepted_evidence_root).as_posix() if accepted_evidence_root else None
+    )
+    slice_spec_rel = checked_relative_path(slice_spec).as_posix() if slice_spec else None
+    slice_spec_sha256 = sha256_file(repo_path(Path(slice_spec_rel), repo_root=repo_root)) if slice_spec_rel else None
     resource_key = f"slice:{target_id}/{slice_id}"
     task_id = f"{run_id}:{worker_id}:{target_id}:{slice_id}"
     now = now_text()
@@ -237,6 +276,7 @@ def assign_slice(
         "runner": {
             "command": "python validation/tools/run_competition.py",
             "out_root": repo_relative(out_root, repo_root=repo_root),
+            "reuse_accepted_evidence": reuse_accepted_evidence,
         },
     }
     if compiler_command_source_rel:
@@ -245,6 +285,11 @@ def assign_slice(
         assignment["slice"]["include_paths"] = include_path_values
     if define_values:
         assignment["slice"]["defines"] = define_values
+    if accepted_evidence_root_rel:
+        assignment["runner"]["accepted_evidence_root"] = accepted_evidence_root_rel
+    if slice_spec_rel:
+        assignment["slice"]["slice_spec"] = slice_spec_rel
+        assignment["slice"]["slice_spec_sha256"] = slice_spec_sha256
     request = {
         "source_repo_root": source_repo_root_rel,
         "source_file": source_file_rel,
@@ -262,6 +307,12 @@ def assign_slice(
         request["include_paths"] = include_path_values
     if define_values:
         request["defines"] = define_values
+    if reuse_accepted_evidence:
+        request["reuse_accepted_evidence"] = True
+    if accepted_evidence_root_rel:
+        request["accepted_evidence_root"] = accepted_evidence_root_rel
+    if slice_spec_rel:
+        request["slice_specs"] = [slice_spec_rel]
 
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
@@ -296,14 +347,17 @@ def assign_slice(
             """
             insert into slices(
               target_id, slice_id, source_repo_root_rel, source_file_rel,
-              function_name, source_commit, payload_json
+              function_name, source_commit, slice_spec_path, slice_spec_sha256,
+              payload_json
             )
-            values (?, ?, ?, ?, ?, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(target_id, slice_id) do update set
               source_repo_root_rel=excluded.source_repo_root_rel,
               source_file_rel=excluded.source_file_rel,
               function_name=excluded.function_name,
               source_commit=excluded.source_commit,
+              slice_spec_path=excluded.slice_spec_path,
+              slice_spec_sha256=excluded.slice_spec_sha256,
               payload_json=excluded.payload_json
             """,
             (
@@ -313,6 +367,8 @@ def assign_slice(
                 source_file_rel,
                 function,
                 source_commit,
+                slice_spec_rel,
+                slice_spec_sha256,
                 json.dumps(assignment["slice"], sort_keys=True),
             ),
         )
@@ -416,6 +472,187 @@ def record_worker_summary(
         )
         connection.commit()
     return {"status": "recorded", "summary": summary_rel, "sha256": summary_hash}
+
+
+def run_worker(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    assignment_path = assignment_file_path(db_path, worker_id)
+    request_path = assignment_path.with_name(f"{worker_id}-request.json")
+    if not request_path.exists():
+        raise SystemExit(f"worker request does not exist: {repo_relative(request_path, repo_root=repo_root)}")
+    request = load_json(request_path)
+    worker_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
+    summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+    logs_dir = worker_out_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = worker_out_root / "harness"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    worker_command = [
+        sys.executable,
+        "scripts/c2rust-migrator.py",
+        "--phase",
+        "migrate",
+        "--input",
+        repo_relative(request_path, repo_root=repo_root),
+    ]
+    if mode == "deterministic":
+        argv = worker_command
+        runner_kind = "repo-local-c2rust-migrator"
+    elif mode == "opencode":
+        argv = build_opencode_run_argv(
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            worker_command=worker_command,
+            request_path=request_path,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        runner_kind = "opencode-run"
+    else:
+        raise SystemExit(f"unsupported worker mode: {mode}")
+
+    completed = command_runner(
+        argv,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
+    stdout_path = logs_dir / "harness-worker-executor.stdout.log"
+    stderr_path = logs_dir / "harness-worker-executor.stderr.log"
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+
+    recorded: dict[str, Any] | None = None
+    summary_status = "missing-summary"
+    if summary_path.exists():
+        recorded = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        summary = load_json(summary_path)
+        summary_status = str(summary.get("final_gate", {}).get("status", "failed"))
+
+    effective_exit_code = int(completed.returncode)
+    if recorded is None and effective_exit_code == 0:
+        effective_exit_code = 1
+    status = "recorded" if recorded is not None else "failed"
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "mode": mode,
+        "runner_kind": runner_kind,
+        "request_path": repo_relative(request_path, repo_root=repo_root),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_status": summary_status,
+        "recorded": recorded is not None,
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+    }
+    report_path = report_dir / "run-worker-report.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        task_status = summary_status if recorded is not None else "failed"
+        connection.execute(
+            "update leases set status=?, heartbeat_at=? where run_id=? and lease_owner=?",
+            (task_status, now_text(), run_id, worker_id),
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="worker_executed",
+            payload={
+                "worker_id": worker_id,
+                "mode": mode,
+                "runner_kind": runner_kind,
+                "exit_code": effective_exit_code,
+                "process_returncode": int(completed.returncode),
+                "summary_path": repo_relative(summary_path, repo_root=repo_root),
+                "summary_status": summary_status,
+                "recorded": recorded is not None,
+                "report_path": repo_relative(report_path, repo_root=repo_root),
+            },
+        )
+        connection.commit()
+
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    if recorded is not None:
+        result["record_worker_summary"] = recorded
+    return result
+
+
+def build_opencode_run_argv(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    worker_command: list[str],
+    request_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    if not opencode_command:
+        raise SystemExit("opencode command must not be empty")
+    prompt = "\n".join(
+        [
+            "Execute this assigned C-to-Rust worker exactly once.",
+            "Run the repo-local deterministic command below, then stop.",
+            "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
+            f"Command: {json.dumps(worker_command)}",
+            f"Request: {repo_relative(request_path, repo_root=repo_root)}",
+            f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
+        ]
+    )
+    argv = [
+        opencode_command,
+        "run",
+        "--dir",
+        str(repo_root),
+        "--format",
+        "json",
+        "--variant",
+        opencode_variant,
+    ]
+    if opencode_model:
+        argv.extend(["--model", opencode_model])
+    if opencode_agent:
+        argv.extend(["--agent", opencode_agent])
+    if opencode_skip_permissions:
+        argv.append("--dangerously-skip-permissions")
+    argv.append(prompt)
+    return argv
 
 
 def write_merge_plan(

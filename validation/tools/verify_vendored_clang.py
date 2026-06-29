@@ -249,7 +249,14 @@ def run_logged_step(
     logs_dir: Path,
     command_logs: list[dict[str, Any]],
 ) -> subprocess.CompletedProcess[str]:
-    result = command_runner(command, cwd=repo_root, text=True, capture_output=True)
+    result = command_runner(
+        command,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
     log_path = logs_dir / "vendored-clang-commands.jsonl"
     entry = {
         "step": step,

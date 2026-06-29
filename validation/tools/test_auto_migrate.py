@@ -3281,7 +3281,19 @@ class AutoMigrateTests(unittest.TestCase):
             external_context = plan["inputs"]["external_callee_context"]
             self.assertEqual(external_context["status"], "blocked")
             self.assertEqual(external_context["declared_count"], 0)
+            self.assertEqual(external_context["declared_spec_count"], 4)
+            self.assertEqual(
+                set(external_context["declared_spec_names"]),
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
             self.assertEqual(external_context["blocked_count"], 4)
+            self.assertEqual(
+                {
+                    item["name"]
+                    for item in context_pack["external_direct_callee_declarations"]
+                },
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
             blocked_callees = {
                 item["name"]
                 for item in plan["translation_summary"]["external_direct_callee_blocks"]
@@ -3289,6 +3301,13 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(
                 blocked_callees,
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(
+                {
+                    item["reason"]
+                    for item in plan["translation_summary"]["external_direct_callee_blocks"]
+                },
+                {"unsupported_external_direct_callee_signature"},
             )
             self.assertEqual(route["level"], "L4")
             self.assertEqual(route["status"], "refused")

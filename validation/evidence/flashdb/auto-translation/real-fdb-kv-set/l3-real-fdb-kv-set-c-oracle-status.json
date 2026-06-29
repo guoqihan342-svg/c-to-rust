@@ -22,6 +22,7 @@
       }
     ],
     "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
     "resolved_include_paths": [
       "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
       "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests"
@@ -82,6 +83,7 @@
     },
     "function_prototype": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);",
     "global_dependencies": [],
+    "oracle_source_mode": "declared_c_boundary_sources",
     "source_files": [
       {
         "path": "src/fdb_kvdb.c",

@@ -208,28 +208,39 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
+  --include-path tests \
+  --reuse-accepted-evidence \
+  --accepted-evidence-root validation/evidence \
+  --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/workers/worker-a
 ```
+
+复用已提交 accepted evidence 时必须传维护版 `--slice-spec`，不能用临时抽取 spec 直接冒充权威 spec；真实源信息仍会写入 assignment 和 SQLite ledger。
 
 可以为 worker-b、worker-c 等分配其他独立 slice，如 `fdb_kv_set`、`fdb_blob_make` 等。
 
 ### 7.3 运行 worker
 
 ```bash
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
-```
-
-### 7.4 记录 worker 结果
-
-```bash
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
 ```
 
-### 7.5 生成合并计划并执行
+`run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / DeepSeek V4 Pro 时，可用 agent 包装层执行同一个 request：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+### 7.4 生成合并计划并执行
 
 ```bash
 python -m validation.tools.opencode_agent_harness write-merge-plan \
@@ -274,7 +285,8 @@ target/competition-out/
 ├── workers/<worker-id>/                  # 每个 worker 隔离输出
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
-│   └── logs/commands.jsonl
+│   ├── harness/run-worker-report.json
+│   └── logs/
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs
