@@ -2787,6 +2787,9 @@ fn emit_call_expr(
     if callee == "strlen" {
         return emit_c_strlen_call_expr(args, ty, symbols, context);
     }
+    if callee == "strnlen" {
+        return emit_c_strnlen_call_expr(args, ty, symbols, context);
+    }
     if callee == "memcmp" {
         return emit_c_memcmp_call_expr(args, ty, symbols, context);
     }
@@ -2924,6 +2927,55 @@ fn validate_c_strlen_call_shape<'a>(args: &'a [IrExpr], ty: &IrType) -> Result<&
         ));
     }
     Ok(name)
+}
+
+fn emit_c_strnlen_call_expr(
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let (name, max) = validate_c_strnlen_call_shape(args, ty)?;
+    let name = emit_identifier(name, "C strnlen argument")?;
+    if !symbols.contains(&name) {
+        return Err(format!(
+            "C strnlen argument {name} is not a function parameter or local binding"
+        ));
+    }
+    let max =
+        emit_expr(max, symbols, context).map_err(|detail| format!("C strnlen size {detail}"))?;
+    Ok(format!(
+        "{{ let bytes = {name}.get(..({max} as usize)).expect(\"C strnlen precondition violated\"); bytes.iter().position(|&byte| byte == 0).unwrap_or(bytes.len()) }}"
+    ))
+}
+
+fn validate_c_strnlen_call_shape<'a>(
+    args: &'a [IrExpr],
+    ty: &IrType,
+) -> Result<(&'a str, &'a IrExpr), String> {
+    if !is_c_strlen_result_type(ty) {
+        return Err(format!(
+            "C strnlen model requires size_t/usize result type, got {}",
+            type_label(ty)
+        ));
+    }
+    let [arg, max] = args else {
+        return Err(format!(
+            "C strnlen model requires exactly one string pointer and one size argument, got {}",
+            args.len()
+        ));
+    };
+    let name = validate_direct_readonly_8_bit_pointer_arg(arg, "C strnlen")?;
+    let max_ty =
+        expr_type(max).ok_or_else(|| "C strnlen size argument type is unsupported".to_string())?;
+    if !is_c_size_argument_type(max_ty) {
+        return Err(format!(
+            "C strnlen size argument must be size_t/usize, got {}",
+            type_label(max_ty)
+        ));
+    }
+    validate_bounded_call_arg(max, false).map_err(|detail| format!("C strnlen size {detail}"))?;
+    Ok((name, max))
 }
 
 fn emit_c_memcmp_call_expr(
@@ -3192,6 +3244,8 @@ fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
             | "memmove"
             | "memset"
             | "strlen"
+            | "strnlen"
+            | "strnlen_s"
             | "printf"
             | "fprintf"
             | "sprintf"
@@ -3288,6 +3342,10 @@ fn validate_bounded_nested_call_arg(
     emit_identifier(callee, "nested call callee")?;
     if callee == "strlen" {
         validate_c_strlen_call_shape(args, ty)?;
+        return Ok(());
+    }
+    if callee == "strnlen" {
+        validate_c_strnlen_call_shape(args, ty)?;
         return Ok(());
     }
     if callee == "memcmp" {
@@ -6381,6 +6439,13 @@ fn collect_readonly_pointer_read_params_from_expr(
         }
         IrExpr::Call { callee, args, .. } => {
             if callee == "strlen" && args.len() == 1 {
+                collect_direct_readonly_pointer_read_param(
+                    &args[0],
+                    readonly_pointer_params,
+                    uses,
+                )?;
+            }
+            if callee == "strnlen" && args.len() == 2 {
                 collect_direct_readonly_pointer_read_param(
                     &args[0],
                     readonly_pointer_params,

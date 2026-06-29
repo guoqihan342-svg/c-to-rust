@@ -26,6 +26,7 @@
       "dimension_status": {
         "clang_fixture_replay": {
           "status": "covered",
+          "scope_note": "No-clang fixture replay covers the generic direct-call path plus abs/strlen-specific stdlib models. The strnlen model is currently covered by handwritten typed IR, emitted-Rust runtime checks, and negative coverage; it does not yet claim strnlen-specific no-clang AST fixture replay.",
           "evidence": [
             {
               "name": "reduced add_one AST JSON fixture",
@@ -1364,6 +1365,8 @@
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
         "modeled C strlen(const char *) as a one-level nested direct-call argument",
+        "modeled C strnlen(const char *, size_t) direct call with bounded NUL-search precondition",
+        "modeled C strnlen(const char *, size_t) as a one-level nested direct-call argument",
         "modeled C memset(void *, int, size_t) statement with 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
@@ -1443,6 +1446,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_strnlen_direct_call_with_bound_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strnlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_memset_zero_for_mutable_byte_slice_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1477,6 +1488,14 @@
             },
             {
               "name": "typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_strnlen_calls_outside_minimal_model",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_strnlen_read_and_mutable_output_assignment_without_noalias_proof",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1525,6 +1544,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_strnlen_direct_call_with_bound_precondition",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_strnlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_memset_zero_for_mutable_byte_slice_statement",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1540,7 +1567,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. It does not yet claim strlen- or memory-function-specific L3 semantic evidence.",
+          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. It does not yet claim strlen-, strnlen-, or memory-function-specific L3 semantic evidence.",
           "evidence": [
             {
               "name": "call expression diff evidence",
@@ -1558,7 +1585,7 @@
         },
         "route_evidence": {
           "status": "covered",
-          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. Strlen- and memory-function-specific named-slice route decisions are still pending.",
+          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. Strlen-, strnlen-, and memory-function-specific named-slice route decisions are still pending.",
           "evidence": [
             {
               "name": "call expression route decision",
@@ -1609,6 +1636,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_strnlen_direct_call_with_bound_precondition",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_strnlen_as_nested_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -1654,6 +1689,16 @@
           "name": "typed_ir_rejects_strlen_calls_outside_minimal_model",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "modeled C strlen requires size_t/usize result and exactly one direct readonly 8-bit string pointer argument; NULL, non-byte pointers, complex arguments, and non-size_t returns fail closed"
+        },
+        {
+          "name": "typed_ir_rejects_strnlen_calls_outside_minimal_model",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "modeled C strnlen requires size_t/usize result, one direct readonly 8-bit string pointer argument, and one size_t/usize bound; NULL, non-byte pointers, complex arguments, non-size bounds, and non-size_t returns fail closed"
+        },
+        {
+          "name": "typed_ir_rejects_strnlen_read_and_mutable_output_assignment_without_noalias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "strnlen reads from a readonly pointer and must participate in the mutable-pointer noalias gate"
         },
         {
           "name": "typed_ir_rejects_strlen_read_and_mutable_output_assignment_without_noalias_proof",

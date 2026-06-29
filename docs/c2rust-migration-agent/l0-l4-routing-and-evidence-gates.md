@@ -38,6 +38,8 @@ L4: 显式拒绝翻译 / accepted evidence authoritative (拒绝对)
 
 Translation L0 只表示 typed IR candidate generation 的路径分类；真正的语义等价由 C oracle、Rust replay、schema diff、negative diff、unsafe ledger 和 final verification 决定。
 
+direct call / stdlib 模型细节不在本文作为 route level 展开；当前显式最小模型清单由 `COVERAGE.md` 和 `validation/translator-coverage-matrix.json` 约束。route evidence 不能把 `strlen`、`strnlen`、`memcmp`、`memset` 或 `memcpy` 这类已建模 stdlib candidate 当作语义接受，除非通过共同验证链。
+
 FlashDB showcase 中的 `flashDB_rust` 是 handwritten implementation / validation baseline，不是 translator-generated candidate。自动翻译管线只能把真实 C slice 生成的 Rust draft 记录为 candidate；candidate 不能因为存在手写基线、native-build catalogue 通过，或 catalog L0 通过而自动变成 accepted evidence。accepted evidence 必须显式绑定 C oracle、Rust replay、diff、negative diff、unsafe evidence 和 final verification；semantic pass 只由 validation profile + gates 判定。
 
 ### 2.2 各层含义

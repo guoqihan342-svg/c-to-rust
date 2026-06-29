@@ -36,6 +36,8 @@ L4: Explicit translation refusal / accepted evidence authoritative
 
 Translation L0 only classifies the typed IR candidate generation path. True semantic equivalence is determined by C oracle, Rust replay, schema diff, negative diff, unsafe ledger, and final verification.
 
+Direct-call / stdlib model details are not enumerated as route levels in this file. The current explicit minimal model list is constrained by `COVERAGE.md` and `validation/translator-coverage-matrix.json`; route evidence must not treat a modeled stdlib candidate such as `strlen`, `strnlen`, `memcmp`, `memset`, or `memcpy` as semantic acceptance without the common validation chain.
+
 ### 2.2 Layer Descriptions
 
 **L0 (Catalog)**: `projects.json` is valid JSON, at least 12 targets, required fields present. Optional remote HEAD probe reachable.
