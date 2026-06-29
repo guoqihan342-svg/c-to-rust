@@ -71,6 +71,18 @@ def main() -> int:
     run_parser.add_argument("--opencode-variant", default="max")
     run_parser.add_argument("--opencode-skip-permissions", action="store_true")
 
+    retry_parser = subcommands.add_parser("retry-worker")
+    retry_parser.add_argument("--db", type=Path, required=True)
+    retry_parser.add_argument("--run-id", required=True)
+    retry_parser.add_argument("--worker-id", required=True)
+    retry_parser.add_argument("--hint-id")
+    retry_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    retry_parser.add_argument("--opencode-command", default="opencode")
+    retry_parser.add_argument("--opencode-model")
+    retry_parser.add_argument("--opencode-agent")
+    retry_parser.add_argument("--opencode-variant", default="max")
+    retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
+
     record_parser = subcommands.add_parser("record-worker-summary")
     record_parser.add_argument("--db", type=Path, required=True)
     record_parser.add_argument("--run-id", required=True)
@@ -129,6 +141,19 @@ def main() -> int:
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
         )
+    elif args.command == "retry-worker":
+        result = retry_worker(
+            db_path=args.db,
+            run_id=args.run_id,
+            worker_id=args.worker_id,
+            hint_id=args.hint_id,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+        )
     elif args.command == "record-worker-summary":
         result = record_worker_summary(
             db_path=args.db,
@@ -153,7 +178,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return int(result.get("exit_code", 0)) if args.command == "run-worker" else 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker"} else 0
 
 
 def init_run(
@@ -560,6 +585,27 @@ def run_worker(
     if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
         effective_exit_code = 1
     status = "recorded" if recorded is not None else "failed"
+    report_path = report_dir / "run-worker-report.json"
+    repair_hint = None
+    if effective_exit_code != 0:
+        repair_hint = worker_repair_hint_payload(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=worker_failure_root_cause(
+                process_returncode=int(completed.returncode),
+                recorded=recorded is not None,
+                summary_status=summary_status,
+            ),
+            summary_status=summary_status,
+            process_returncode=int(completed.returncode),
+            summary_path=summary_path,
+            report_path=report_path,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+        )
     report = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
@@ -578,7 +624,12 @@ def run_worker(
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
     }
-    report_path = report_dir / "run-worker-report.json"
+    if repair_hint is not None:
+        report["repair_hint"] = {
+            "hint_id": repair_hint["hint_id"],
+            "root_cause_key": repair_hint["root_cause_key"],
+            "status": "open",
+        }
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     with closing(connect(db_path)) as connection:
@@ -604,6 +655,8 @@ def run_worker(
                 "report_path": repo_relative(report_path, repo_root=repo_root),
             },
         )
+        if repair_hint is not None:
+            record_repair_hint(connection, hint=repair_hint)
         connection.commit()
 
     result = dict(report)
@@ -611,6 +664,222 @@ def run_worker(
     if recorded is not None:
         result["record_worker_summary"] = recorded
     return result
+
+
+def retry_worker(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    hint_id: str | None = None,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        hint = load_open_repair_hint(connection, run_id=run_id, worker_id=worker_id, hint_id=hint_id)
+
+    result = run_worker(
+        db_path=db_path,
+        run_id=run_id,
+        worker_id=worker_id,
+        mode=mode,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    hint_status = (
+        "revalidated_passed"
+        if int(result.get("exit_code", 1)) == 0 and result.get("summary_status") == "passed"
+        else "revalidated_failed"
+    )
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        mark_repair_hint_revalidated(
+            connection,
+            hint_id=str(hint["hint_id"]),
+            status=hint_status,
+            result=result,
+        )
+        connection.commit()
+
+    retry_result = dict(result)
+    retry_result["hint_id"] = hint["hint_id"]
+    retry_result["hint_status"] = hint_status
+    return retry_result
+
+
+def worker_failure_root_cause(*, process_returncode: int, recorded: bool, summary_status: str) -> str:
+    if process_returncode != 0:
+        return "worker_process_failed"
+    if not recorded:
+        return "missing_summary"
+    if summary_status != "passed":
+        return "final_gate_failed"
+    return "worker_failed"
+
+
+def worker_repair_hint_payload(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    request: dict[str, Any],
+    root_cause_key: str,
+    summary_status: str,
+    process_returncode: int,
+    summary_path: Path,
+    report_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    target_id = str(request.get("target_id", "unknown"))
+    slice_id = str(request.get("slice_id", "unknown"))
+    hint_id = f"repair:{run_id}:{worker_id}:{root_cause_key}"
+    retry_command = [
+        sys.executable,
+        "validation/tools/opencode_agent_harness.py",
+        "retry-worker",
+        "--db",
+        repo_relative(db_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+        "--hint-id",
+        hint_id,
+    ]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "hint_id": hint_id,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "root_cause_key": root_cause_key,
+        "status": "open",
+        "summary_status": summary_status,
+        "process_returncode": process_returncode,
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_report_path": repo_relative(report_path, repo_root=repo_root),
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "retry_command": retry_command,
+        "revalidate_gate": "competition-run-summary.final_gate.status == passed",
+    }
+
+
+def record_repair_hint(connection: sqlite3.Connection, *, hint: dict[str, Any]) -> None:
+    now = now_text()
+    connection.execute(
+        """
+        insert into repair_hints(hint_id, run_id, target_id, slice_id, root_cause_key, status, payload_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(hint_id) do update set
+          target_id=excluded.target_id,
+          slice_id=excluded.slice_id,
+          root_cause_key=excluded.root_cause_key,
+          status=excluded.status,
+          payload_json=excluded.payload_json,
+          created_at=excluded.created_at
+        """,
+        (
+            hint["hint_id"],
+            hint["run_id"],
+            hint["target_id"],
+            hint["slice_id"],
+            hint["root_cause_key"],
+            "open",
+            json.dumps(hint, sort_keys=True),
+            now,
+        ),
+    )
+    record_event(
+        connection,
+        run_id=str(hint["run_id"]),
+        event_type="repair_hint_recorded",
+        payload={
+            "hint_id": hint["hint_id"],
+            "worker_id": hint["worker_id"],
+            "root_cause_key": hint["root_cause_key"],
+        },
+    )
+
+
+def load_open_repair_hint(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    hint_id: str | None,
+) -> dict[str, Any]:
+    if hint_id:
+        rows = connection.execute(
+            "select hint_id, status, payload_json from repair_hints where run_id=? and hint_id=?",
+            (run_id, hint_id),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "select hint_id, status, payload_json from repair_hints where run_id=? and status='open' order by created_at desc",
+            (run_id,),
+        ).fetchall()
+    for row_hint_id, status, payload_json in rows:
+        payload = json.loads(payload_json)
+        if payload.get("worker_id") != worker_id:
+            continue
+        if status != "open":
+            raise SystemExit(f"repair hint is not open: {row_hint_id} ({status})")
+        return payload
+    raise SystemExit(f"no open repair hint for worker {worker_id}")
+
+
+def mark_repair_hint_revalidated(
+    connection: sqlite3.Connection,
+    *,
+    hint_id: str,
+    status: str,
+    result: dict[str, Any],
+) -> None:
+    row = connection.execute("select run_id, payload_json from repair_hints where hint_id=?", (hint_id,)).fetchone()
+    if row is None:
+        raise SystemExit(f"unknown repair hint: {hint_id}")
+    run_id, payload_json = row
+    payload = json.loads(payload_json)
+    payload["status"] = status
+    payload["revalidation"] = {
+        "exit_code": result.get("exit_code"),
+        "summary_status": result.get("summary_status"),
+        "report_path": result.get("report_path"),
+    }
+    connection.execute(
+        "update repair_hints set status=?, payload_json=? where hint_id=?",
+        (status, json.dumps(payload, sort_keys=True), hint_id),
+    )
+    record_event(
+        connection,
+        run_id=str(run_id),
+        event_type="repair_hint_revalidated",
+        payload={
+            "hint_id": hint_id,
+            "status": status,
+            "exit_code": result.get("exit_code"),
+            "summary_status": result.get("summary_status"),
+        },
+    )
 
 
 def build_opencode_run_argv(

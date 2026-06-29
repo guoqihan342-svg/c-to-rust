@@ -139,7 +139,7 @@ Agent 只能选择已有 accepted L1 native evidence 的 target。若 target 没
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --evidence-root .\validation\evidence\libuv `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 该命令应生成 context pack、type map、CFG、pointer graph、Rust draft provenance、translation events、oracle/replay drafts、rust check、PatchPlan/blocked repairs 和 evidence manifest 输入。
@@ -205,7 +205,7 @@ python .\validation\tools\flashdb_l3_self_healing.py `
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --only self-heal `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 ### Evidence search

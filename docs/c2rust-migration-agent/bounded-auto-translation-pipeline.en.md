@@ -137,7 +137,7 @@ Expected interface:
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --evidence-root .\validation\evidence\libuv `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 This command should generate context pack, type map, CFG, pointer graph, Rust draft provenance, translation events, oracle/replay drafts, rust check, PatchPlan/blocked repairs, and evidence manifest inputs.
@@ -203,7 +203,7 @@ Expected auto-translation self-healing through `auto_migrate.py`:
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --only self-heal `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 ### Evidence Search

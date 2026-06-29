@@ -1,3 +1,4 @@
+import io
 import json
 import sqlite3
 import subprocess
@@ -5,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 from validation.tools import opencode_agent_harness as harness
@@ -367,6 +369,141 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["exit_code"], 1)
 
+    def test_run_worker_records_repair_hint_when_final_gate_fails(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                return subprocess.CompletedProcess(argv, 0, stdout="worker reported success\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            hint_rows = fetch_rows(
+                db_path,
+                "select target_id, slice_id, root_cause_key, status, payload_json from repair_hints",
+            )
+            self.assertEqual(len(hint_rows), 1)
+            self.assertEqual(hint_rows[0][:4], ("demo", "demo-add-one", "final_gate_failed", "open"))
+            payload = json.loads(hint_rows[0][4])
+            self.assertEqual(payload["worker_id"], "worker-a")
+            self.assertEqual(payload["retry_command"][1:4], ["validation/tools/opencode_agent_harness.py", "retry-worker", "--db"])
+            self.assertEqual(payload["revalidate_gate"], "competition-run-summary.final_gate.status == passed")
+
+    def test_retry_worker_consumes_repair_hint_and_marks_revalidated_passed(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            call_count = 0
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal call_count
+                call_count += 1
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                if call_count == 1:
+                    write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                else:
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {call_count}\n", stderr="")
+
+            first = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(first["exit_code"], 1)
+            hint_id = fetch_rows(db_path, "select hint_id from repair_hints")[0][0]
+
+            retry = harness.retry_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                hint_id=hint_id,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(retry["exit_code"], 0)
+            self.assertEqual(retry["hint_status"], "revalidated_passed")
+            self.assertEqual(call_count, 2)
+            hint_rows = fetch_rows(db_path, "select status from repair_hints where hint_id=?", (hint_id,))
+            self.assertEqual(hint_rows, [("revalidated_passed",)])
+
+    def test_retry_worker_cli_dispatches_and_returns_retry_exit_code(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "retry-worker",
+            "--db",
+            "target/competition-out/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-test",
+            "--worker-id",
+            "worker-a",
+            "--hint-id",
+            "repair:run-test:worker-a:final_gate_failed",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()), patch.object(
+            harness,
+            "retry_worker",
+            return_value={"exit_code": 7, "status": "retry-test"},
+        ) as retry:
+            self.assertEqual(harness.main(), 7)
+
+        retry.assert_called_once()
+        self.assertEqual(retry.call_args.kwargs["hint_id"], "repair:run-test:worker-a:final_gate_failed")
+
     def test_run_worker_rejects_missing_out_root(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -487,12 +624,68 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertIsNotNone(run_row[5])
 
 
-def fetch_rows(db_path: Path, query: str) -> list[tuple]:
+def fetch_rows(db_path: Path, query: str, params: tuple = ()) -> list[tuple]:
     connection = sqlite3.connect(db_path)
     try:
-        return list(connection.execute(query))
+        return list(connection.execute(query, params))
     finally:
         connection.close()
+
+
+def write_worker_summary(
+    summary_path: Path,
+    run_id: str,
+    *,
+    status: str,
+    failed: int,
+    semantic_pass: int,
+) -> None:
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "run_id": run_id,
+                "proof_class": "local-simulation",
+                "profile_id": "huawei-competition-ubuntu-24.04",
+                "profile_sha256": "0" * 64,
+                "clang_source": "missing",
+                "cargo_mirror_activation": {
+                    "method": "CARGO_HOME",
+                    "path": "config/competition-env/cargo",
+                    "config_file": "config/competition-env/cargo/config.toml",
+                },
+                "elapsed_seconds": 0,
+                "translator_version": "test",
+                "slices": {
+                    "attempted": 1,
+                    "typed_ir_generated": 1 if semantic_pass else 0,
+                    "compiled": 1 if semantic_pass else 0,
+                    "semantic_pass": semantic_pass,
+                    "refused": 0,
+                    "blocked": 0,
+                    "failed": failed,
+                },
+                "unsafe_budget": {
+                    "status": "passed",
+                    "total_first_party_non_test_unsafe": 0,
+                    "ratio": 0,
+                },
+                "artifact_roots": [
+                    "target/competition-out/evidence",
+                    "target/competition-out/summary",
+                    "target/competition-out/logs",
+                ],
+                "final_gate": {
+                    "status": status,
+                    "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def repo_rel(path: Path) -> str:
