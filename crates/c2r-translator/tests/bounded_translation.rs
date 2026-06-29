@@ -1576,6 +1576,73 @@ fn clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/global_designated_array_initializer_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_global_sparse")
+            .expect("sparse designated readonly global initializer should lower");
+    assert_eq!(lowered.globals.len(), 1);
+    assert_eq!(lowered.globals[0].name, "table");
+    assert_eq!(
+        lowered.globals[0].init,
+        IrGlobalInit::IntegerArray(vec![0, 7, 0])
+    );
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("sparse designated readonly global initializer should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("const TABLE: [i32; 3] = [0i32, 7i32, 0i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return TABLE[1i32 as usize];"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-sparse-designated-global-array-initializer",
+        rust,
+        r#"
+    assert_eq!(lookup_global_sparse(), 7);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_referenced_unexpanded_global_designated_initializer_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/global_designated_array_initializer_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "reject_unexpanded_global_sparse",
+    )
+    .expect("function shape should lower before unsupported global dependency is emitted");
+    assert!(
+        lowered
+            .globals
+            .iter()
+            .all(|global| global.name != "bad_table"),
+        "unsupported bad_table global must not be collected"
+    );
+
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("referenced unexpanded global designated initializer must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("index base bad_table is not declared"),
+        "unexpected error: {error:?}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/restrict_pointer_params_ast.json"

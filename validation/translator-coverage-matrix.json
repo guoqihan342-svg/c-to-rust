@@ -823,6 +823,8 @@
         "fixed-size integer array initializer",
         "clang InitListExpr array_filler zero-fill",
         "index-designated sparse initializer after clang semantic expansion",
+        "readonly static const global fixed-size integer array initializer",
+        "IrGlobalInit::IntegerArray",
         "ImplicitValueInitExpr integer zero initialization",
         "unexpanded DesignatedInitExpr fail-closed"
       ],
@@ -839,6 +841,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "global designated array initializer no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/global_designated_array_initializer_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -846,7 +856,7 @@
         },
         "handwritten_ir": {
           "status": "not_applicable",
-          "reason": "the capability is a clang AST array_filler lowering rule that produces the existing IrExpr::ArrayLiteral shape"
+          "reason": "the capability is a clang AST array_filler lowering rule that produces existing typed IR shapes: IrExpr::ArrayLiteral for locals and IrGlobalInit::IntegerArray for readonly globals"
         },
         "negative_case": {
           "status": "covered",
@@ -855,6 +865,16 @@
               "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs",
               "fail_closed_reason": "unexpanded DesignatedInitExpr remains outside the bounded fixed-array initializer subset"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_referenced_unexpanded_global_designated_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "fail_closed_reason": "referenced readonly global arrays with unexpanded DesignatedInitExpr must not be synthesized"
+            },
+            {
+              "name": "readonly_globals_from_ast_rejects_malformed_static_const_array_filler_initializer",
+              "path": "crates/c2r-translator/src/clang_frontend.rs",
+              "fail_closed_reason": "malformed array_filler shapes must not produce readonly globals"
             }
           ]
         },
@@ -863,6 +883,10 @@
           "evidence": [
             {
               "name": "clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -886,7 +910,19 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "readonly_globals_from_ast_maps_static_const_sparse_array_filler_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "readonly_globals_from_ast_maps_static_const_all_zero_array_filler_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "clang_ast_fixture_lowers_sparse_designated_array_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
@@ -895,6 +931,16 @@
           "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "unexpanded DesignatedInitExpr must stay fail-closed until a full designated-initializer model exists"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_referenced_unexpanded_global_designated_initializer_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "referenced readonly global arrays with unexpanded DesignatedInitExpr must fail closed at emission"
+        },
+        {
+          "name": "readonly_globals_from_ast_rejects_malformed_static_const_array_filler_initializer",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "array_filler sentinel, length, and materialized element guards remain fail-closed"
         }
       ]
     },

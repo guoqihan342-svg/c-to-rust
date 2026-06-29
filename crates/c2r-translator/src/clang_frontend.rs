@@ -936,8 +936,9 @@ fn readonly_global_from_toplevel_var_decl(
         return None;
     }
 
-    let values = integer_literal_init_list_values(initializer)?;
-    if Some(values.len()) != *len {
+    let array_len = (*len)?;
+    let values = integer_literal_init_list_values(initializer, array_len)?;
+    if values.len() != array_len {
         return None;
     }
 
@@ -950,17 +951,47 @@ fn readonly_global_from_toplevel_var_decl(
 }
 
 #[cfg(feature = "typed-ir")]
-fn integer_literal_init_list_values(init_list: &Value) -> Option<Vec<u64>> {
-    inner(init_list)
+fn integer_literal_init_list_values(init_list: &Value, len: usize) -> Option<Vec<u64>> {
+    let entries = inner(init_list);
+    if entries.is_empty() {
+        return integer_literal_array_filler_values(init_list, len);
+    }
+    entries.iter().map(integer_literal_init_value).collect()
+}
+
+#[cfg(feature = "typed-ir")]
+fn integer_literal_array_filler_values(init_list: &Value, len: usize) -> Option<Vec<u64>> {
+    let filler_entries = array_filler(init_list)?;
+    let filler = filler_entries.first()?;
+    if string_field(filler, "kind").as_deref() != Some("ImplicitValueInitExpr") {
+        return None;
+    }
+    if filler_entries.len().saturating_sub(1) > len {
+        return None;
+    }
+    let filler_value = integer_literal_init_value(filler)?;
+    let mut values = filler_entries[1..]
         .iter()
         .map(integer_literal_init_value)
-        .collect()
+        .collect::<Option<Vec<_>>>()?;
+    while values.len() < len {
+        values.push(filler_value);
+    }
+    Some(values)
 }
 
 #[cfg(feature = "typed-ir")]
 fn integer_literal_init_value(item: &Value) -> Option<u64> {
     match string_field(item, "kind").as_deref() {
         Some("IntegerLiteral") => string_field(item, "value")?.parse::<u64>().ok(),
+        Some("ImplicitValueInitExpr") => {
+            let ty = expr_type(item).ok()?;
+            if matches!(ty.kind, ClangTypeKind::Integer { .. }) {
+                Some(0)
+            } else {
+                None
+            }
+        }
         Some("ImplicitCastExpr" | "ParenExpr") => {
             let [operand] = inner(item) else {
                 return None;
@@ -8401,6 +8432,187 @@ mod tests {
         assert_eq!(
             global.init,
             IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+        );
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_maps_static_const_sparse_array_filler_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "const int" }
+                                },
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "const int" }
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "7"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert_eq!(globals.len(), 1);
+        let global = &globals[0];
+        assert_eq!(global.name, "table");
+        assert!(global.ty.is_const);
+        assert!(matches!(
+            global.ty.kind,
+            IrTypeKind::Array { len: Some(3), .. }
+        ));
+        assert_eq!(global.init, IrGlobalInit::IntegerArray(vec![0, 7, 0]));
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_maps_static_const_all_zero_array_filler_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "table",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "const int" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert_eq!(globals.len(), 1);
+        assert_eq!(globals[0].name, "table");
+        assert_eq!(globals[0].init, IrGlobalInit::IntegerArray(vec![0, 0, 0]));
+    }
+
+    #[test]
+    fn readonly_globals_from_ast_rejects_malformed_static_const_array_filler_initializer() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "VarDecl",
+                    "name": "bad_filler_sentinel",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "0"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "bad_filler_length",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "const int" }
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "1"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "2"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "3"
+                                },
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "4"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "bad_filler_side_effect",
+                    "storageClass": "static",
+                    "type": { "qualType": "const int[3]" },
+                    "init": "c",
+                    "inner": [
+                        {
+                            "kind": "InitListExpr",
+                            "type": { "qualType": "const int[3]" },
+                            "array_filler": [
+                                {
+                                    "kind": "ImplicitValueInitExpr",
+                                    "type": { "qualType": "const int" }
+                                },
+                                {
+                                    "kind": "CallExpr",
+                                    "type": { "qualType": "int" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let globals = readonly_globals_from_ast(&ast).expect("readonly globals");
+
+        assert!(
+            globals.is_empty(),
+            "malformed array_filler globals must stay fail-closed: {globals:?}"
         );
     }
 

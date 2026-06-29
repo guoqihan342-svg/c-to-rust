@@ -1,0 +1,201 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "VarDecl",
+      "name": "table",
+      "type": {
+        "qualType": "const int[3]"
+      },
+      "storageClass": "static",
+      "init": "c",
+      "inner": [
+        {
+          "kind": "InitListExpr",
+          "type": {
+            "qualType": "const int[3]"
+          },
+          "array_filler": [
+            {
+              "kind": "ImplicitValueInitExpr",
+              "type": {
+                "qualType": "const int"
+              }
+            },
+            {
+              "kind": "ImplicitValueInitExpr",
+              "type": {
+                "qualType": "const int"
+              }
+            },
+            {
+              "kind": "IntegerLiteral",
+              "type": {
+                "qualType": "int"
+              },
+              "value": "7"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "lookup_global_sparse",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ArraySubscriptExpr",
+                      "type": {
+                        "qualType": "const int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "ArrayToPointerDecay",
+                          "type": {
+                            "qualType": "const int *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "const int[3]"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "table"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "VarDecl",
+      "name": "bad_table",
+      "type": {
+        "qualType": "const int[3]"
+      },
+      "storageClass": "static",
+      "init": "c",
+      "inner": [
+        {
+          "kind": "InitListExpr",
+          "type": {
+            "qualType": "const int[3]"
+          },
+          "inner": [
+            {
+              "kind": "DesignatedInitExpr",
+              "type": {
+                "qualType": "void"
+              },
+              "inner": [
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "7"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "reject_unexpanded_global_sparse",
+      "type": {
+        "qualType": "int (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ArraySubscriptExpr",
+                      "type": {
+                        "qualType": "const int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "ArrayToPointerDecay",
+                          "type": {
+                            "qualType": "const int *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "const int[3]"
+                              },
+                              "referencedDecl": {
+                                "kind": "VarDecl",
+                                "name": "bad_table"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

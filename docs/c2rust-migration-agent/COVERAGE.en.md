@@ -45,7 +45,7 @@ This document honestly lists C language constructs that are "currently supported
 | `static` local variable | Unsupported | Requires static storage model |
 | `extern` declaration | Unsupported | Requires cross-file model |
 | Compound literal | Unsupported | `(struct point){1, 2}` |
-| Designated initializer | Narrow | Only fixed-size integer arrays with clang-semantically-expanded index-designated / sparse initializers, for example `int table[3] = { [1] = 7 };`; unspecified elements are zero-initialized according to C semantics; struct/union field designators, nested initializers, GNU range designators, VLA/incomplete arrays, unexpanded `DesignatedInitExpr`, and non-integer fields still fail closed |
+| Designated initializer | Narrow | Only local fixed-size integer arrays and top-level readonly `static const` fixed-size integer global arrays with clang-semantically-expanded index-designated / sparse initializers, for example `int table[3] = { [1] = 7 };`; unspecified elements are zero-initialized according to C semantics; struct/union field designators, nested initializers, GNU range designators, VLA/incomplete arrays, unexpanded `DesignatedInitExpr`, and non-integer fields still fail closed |
 
 ## Expressions
 
@@ -116,7 +116,7 @@ This document honestly lists C language constructs that are "currently supported
 | Local fixed-size integer array decl | Narrow | `uint32_t table[3] = {1, 2, 3};`; includes sequential initializers and the restricted index-designated sparse initializer subset; unspecified elements are zero-filled to the declared length, and initializer lengths/indices must be verifiable against the fixed array length |
 | Local array subscript read | Narrow | `table[i]` |
 | Local array subscript write | Narrow | `table[i] = value;` |
-| Global const integer array | Narrow | `static const uint32_t table[] = {...};` |
+| Global const integer array | Narrow | Top-level readonly `static const uint32_t table[3] = {...};`; includes sequential initializers and restricted index-designated sparse initializers represented by clang-semantic `array_filler`, producing `IrGlobalInit::IntegerArray` and Rust `const`; non-`static const`, incomplete arrays, non-integer elements, unexpanded `DesignatedInitExpr`, nested/struct/union/range designators still fail closed |
 | Global array subscript read | Narrow | `CRC32_TABLE[index as usize]` |
 | Global array subscript write | Unsupported | Readonly global |
 | Variable-length array (VLA) | Unsupported | |

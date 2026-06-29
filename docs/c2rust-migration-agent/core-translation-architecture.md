@@ -57,9 +57,9 @@ flowchart TD
   - 把支持的 C AST 节点 lowering 成紧凑的 clang skeleton。
   - 把 skeleton 节点转换成 typed IR。
   - 现在通过 `type_from_qual_type()` 支持固定宽度整数 typedef aliases：`int8_t`、`int16_t`、`int32_t`、`int64_t`、`uint8_t`、`uint16_t`、`uint32_t`、`uint64_t`，并精确支持 `signed char` 作为 signed 8-bit integer；`short` / `long long` 等其他目标相关 spelling 仍不当作 fixed-width typedef。
-  - 现在还会收集顶层 `static const` 固定长度整数数组 initializer，输出为 `ClangLoweringReport.globals: Vec<IrGlobal>`。
+  - 现在还会收集顶层 `static const` 固定长度整数数组 initializer，包含 clang 已语义化 `array_filler` 的受限 sparse/index-designated initializer，输出为 `ClangLoweringReport.globals: Vec<IrGlobal>`。
   - `compound_body_skeleton_from_ast()` 现在会把普通 compound body 中一个 `DeclStmt` 的多个简单 `VarDecl` 按源码顺序展开为多个 `ClangStmtSkeleton::Decl`；`for_init_stmt_skeletons_from_ast()` 对 `ForStmt` init 中的 `DeclStmt` 复用同一个多 `VarDecl` 展开 helper，assignment init 仍是一元素 vec。
-  - 现在也会把局部固定长度整数数组 `InitListExpr` lowering 成 `IrExpr::ArrayLiteral`，但只接受元素数量等于数组长度、且元素为纯整数字面量或整型 cast 包裹整数字面量的一维整数数组。
+  - 现在也会把局部固定长度整数数组 `InitListExpr` lowering 成 `IrExpr::ArrayLiteral`，支持连续 initializer 和 clang 已语义化 `array_filler` 的受限 sparse/index-designated initializer；仍只接受一维固定长度整数数组和纯整数字面量或整型 cast 包裹整数字面量。
   - 现在也会把 clang `NullToPointer` cast 包裹的整数零 lowering 成 typed IR null pointer literal，用于窄化的指针参数 presence check。
   - 现在会通过 `value_expr_skeleton_from_ast` 和二元 operand cast-preservation 保留 declaration initializer、assignment RHS、return value 和普通 binary operand 中的 clang `IntegralCast` / `IntegralPromotion` 包裹，让 typed IR emitter 能证明并发射整数 `as` cast，而不是静默丢掉 mixed signedness 或 promotion 信息。
   - 现在会把 `CompoundAssignOperator` 的 result type 和 compute type 带入 `ClangStmtSkeleton::CompoundAssign`，在 simple scalar variable target 和按值 record dot-field target 上支持 clang 已证明的窄化整数 promotion/truncation，同时继续拒绝 target/result 不一致和 compute-lhs/compute-result 不一致。
@@ -159,8 +159,8 @@ generic typed IR emission 现在覆盖：
 - readonly integer pointer parameter 的 null-presence check，例如 `const int *values; return values != NULL; -> values: Option<&[i32]>` 和 `values.is_some()`；nullable 参数必须只出现在直接 `== NULL` / `!= NULL` comparison 中；
 - readonly integer pointer parameter 的 dereference read，例如 `const uint8_t *p; return *p; -> p: &[u8]` 和 `return p[0usize];`，以及 bounded offset-deref read，例如 `return *(p+i);` / `return *(i+p); -> return p[i as usize];`；这些 read 也可以作为普通标量 read 参与 comparison/logical-not candidate generation，例如 `*p == 0`、`*(p+i) == 0`、`!*p` 和 `!*(p+i)`；
 - mutable integer pointer output write：`int *out` 只有在作为写目标出现时发射为 `out: &mut [i32]`，并支持 `*out = value; -> out[0usize] = value;`、`out[i] = value; -> out[i as usize] = value;`、`*(out+i) = value; -> out[i as usize] = value;`；当前只覆盖函数参数上的整数元素写入，不覆盖 mutable pointer read、复合写入、复杂 offset、nullable pointer、pointer escape、多指针 alias/noalias 证明或 semantic acceptance；
-- `static const` readonly integer array initializer 到 Rust `const`，例如 `crc32_table[] -> const CRC32_TABLE: [u32; 256]`；
-- clang-lowered typed IR 的局部固定长度整数数组字面量、下标读取和元素写入，例如 `uint32_t table[3] = {1,2,3}; table[i] = value; return table[i]; -> let mut table: [u32; 3] = ...; table[i as usize] = value;`；只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素，且写入目标必须是已声明的局部固定长度整数数组。partial initializer zero-fill、nested array、struct array、非 literal 或有副作用的 initializer、VLA/incomplete array、readonly global array 写入、const pointer slice 写入和 array-to-pointer decay 仍 fail closed；
+- `static const` readonly integer array initializer 到 Rust `const`，例如 `crc32_table[] -> const CRC32_TABLE: [u32; 256]`；连续 initializer 和 clang 已语义化 `array_filler` 的受限 sparse/index-designated initializer 都会落到 `IrGlobalInit::IntegerArray`；
+- clang-lowered typed IR 的局部固定长度整数数组字面量、下标读取和元素写入，例如 `uint32_t table[3] = {1,2,3}; table[i] = value; return table[i]; -> let mut table: [u32; 3] = ...; table[i as usize] = value;`；连续 initializer 和 clang 已语义化 `array_filler` 的受限 sparse/index-designated initializer 会补零成完整数组值。只支持 clang AST 中已规整为纯整数字面量/cast 的 initializer 元素，且写入目标必须是已声明的局部固定长度整数数组。未展开 `DesignatedInitExpr`、nested array、struct array、非 literal 或有副作用的 initializer、VLA/incomplete array、readonly global array 写入、const pointer slice 写入和一般 array-to-pointer decay 仍 fail closed；
 - 当已经证明存在 `const uint8_t *p` byte cursor 和 byte read 时，把 `const void *buf` 翻译成 `&[u8]`；
 - 通过 prelude temporary 支持嵌套 byte cursor read，例如 `(uint32_t)*p++`；
 - assignment RHS prelude，覆盖 `crc = table[(crc ^ (uint32_t)*p++) & 0xff] ^ (crc >> 8);`；

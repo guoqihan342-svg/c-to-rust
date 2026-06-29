@@ -35,7 +35,7 @@
 │  │  clang_frontend.rs: clang AST dump 前端                        │  │
 │  │  - 真实 clang -ast-dump=json 解析                               │  │
 │  │  - C AST -> skeleton AST -> typed IR lowering                  │  │
-│  │  - readonly global const array 收集                            │  │
+│  │  - readonly global const array 收集（含 clang array_filler sparse initializer） │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 │  ┌────────────────────────────────────────────────────────────────┐  │
 │  │  typed_ir.rs: Typed IR + Generic Rust Emitter                  │  │
@@ -87,7 +87,7 @@
 
 ## 当前状态
 
-- **typed IR emitter**: `GenericTypedIr` 覆盖 scalar 算术（无符号 `+`/`-`/`*` 显式 wrapping）/控制流、bitwise、comparison、logical not、short-circuit、`?:`、scoped `for`/`do-while`、`break`/`continue`、readonly pointer slice、mutable pointer write、global/local array、record field read、bounded direct call
+- **typed IR emitter**: `GenericTypedIr` 覆盖 scalar 算术（无符号 `+`/`-`/`*` 显式 wrapping）/控制流、bitwise、comparison、logical not、short-circuit、`?:`、scoped `for`/`do-while`、`break`/`continue`、readonly pointer slice、mutable pointer write、global/local fixed-length integer array read/write/init（global 仅 readonly `static const` index read，含受限 clang `array_filler` sparse initializer）、record field read、bounded direct call
 - **clang 前端**: 真实 `fdb_calc_crc32` 已能经 clang AST dump → skeleton → typed IR → global table → Rust draft 生成 `GenericTypedIr` candidate
 - **FlashDB crc32**: accepted evidence 已通过 semantic pass（L4 authoritative 路径），generated draft 仍是 candidate
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
