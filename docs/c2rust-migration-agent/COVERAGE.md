@@ -100,7 +100,7 @@
 
 | 构造 | 状态 | 说明 |
 |------|------|------|
-| 表达式语句 | 已支持 | `value++;` |
+| 表达式语句 | 已支持 | `value++;`、`++value;` |
 | `return` (with/without value) | 已支持 | |
 | `if` / `if-else` | 已支持 | 含 comparison condition；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `while` | 已支持 | 含 postfix `size--` 和窄形状 prefix `--size`；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |

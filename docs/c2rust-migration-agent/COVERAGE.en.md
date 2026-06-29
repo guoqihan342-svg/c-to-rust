@@ -98,7 +98,7 @@ This document honestly lists C language constructs that are "currently supported
 
 | Construct | Status | Notes |
 |-----------|--------|-------|
-| Expression statement | Supported | `value++;` |
+| Expression statement | Supported | `value++;`, `++value;` |
 | `return` (with/without value) | Supported | |
 | `if` / `if-else` | Supported | Including comparison condition; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |
 | `while` | Supported | Including postfix `size--` and the narrow prefix `--size` shape; clang-proven integral `ImplicitCastExpr` nodes in conditions are preserved only as explicit IR casts |

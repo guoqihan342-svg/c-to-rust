@@ -1456,6 +1456,11 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(line) = emit_prefix_inc_dec_statement(expr, symbols)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -3203,6 +3208,65 @@ fn emit_c_memcpy_statement(
     Ok(Some(format!(
         "{dest}.get_mut(..({count} as usize)).expect(\"C memcpy destination precondition violated\").copy_from_slice({src}.get(..({count} as usize)).expect(\"C memcpy source precondition violated\"));"
     )))
+}
+
+fn emit_prefix_inc_dec_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+) -> Result<Option<String>, String> {
+    let IrExpr::IncDec {
+        target,
+        op,
+        prefix: true,
+        ty,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(name) {
+        return Err(format!("prefix inc/dec target {name} is not declared"));
+    }
+    if target_ty != ty {
+        return Err(format!(
+            "prefix inc/dec target {name} type {} does not match result type {}",
+            type_label(target_ty),
+            type_label(ty)
+        ));
+    }
+    if !is_integer_type(target_ty) {
+        return Err(format!(
+            "prefix inc/dec target {name} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    }
+
+    let name = emit_identifier(name, "prefix inc/dec target")?;
+    let one = emit_integer_literal(1, target_ty)
+        .map_err(|detail| format!("prefix inc/dec step {detail}"))?;
+    let bin_op = match op {
+        IrIncDecOp::Inc => IrBinOp::Add,
+        IrIncDecOp::Dec => IrBinOp::Sub,
+    };
+    let rhs = if let Some(method) = unsigned_wrapping_method(&bin_op, target_ty) {
+        format!("{name}.{method}({one})")
+    } else if let Some((method, message)) = signed_checked_method(&bin_op, target_ty) {
+        format!("{name}.{method}({one}).expect(\"{message}\")")
+    } else {
+        return Err(format!(
+            "prefix inc/dec target {name} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    };
+    Ok(Some(format!("{name} = {rhs};")))
 }
 
 fn validate_c_memset_statement_shape<'a>(
@@ -7171,6 +7235,16 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                     c_memset_assigned_var_name(expr).or_else(|| c_memcpy_assigned_var_name(expr))
                 {
                     assigned_vars.insert(name.clone());
+                }
+                if let IrExpr::IncDec {
+                    target,
+                    prefix: true,
+                    ..
+                } = expr
+                {
+                    if let IrExpr::Var { name, .. } = target.as_ref() {
+                        assigned_vars.insert(name.clone());
+                    }
                 }
             }
             _ => {}
