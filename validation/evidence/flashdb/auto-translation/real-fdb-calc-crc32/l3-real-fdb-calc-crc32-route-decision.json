@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+        "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,9 +18,11 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "primary:clang-lowered-typed-ir",
-        "kind": "clang-lowered-typed-ir",
-        "role": "primary_rust_draft",
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -35,7 +37,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+          "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -49,14 +51,24 @@
         "status": "skipped"
       }
     ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": false,
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
     "generated_draft_semantic_pass": false,
     "primary_candidate": {
-      "candidate_id": "primary:clang-lowered-typed-ir",
+      "candidate_id": "primary:unknown",
       "fallback": false,
-      "selected": "clang-lowered-typed-ir",
+      "selected": "unknown",
       "semantic_pass": false
     },
-    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selected_candidate_id": null,
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -142,7 +154,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "594b8d7e76d56ebbdc6b90ea1f97099d3d88327b3656e2407ce0bd31a3509517",
+        "sha256": "d0ff5b17ee944418ec9e117ba94409e2af24bda3fcab4a15f15e375aa744f95d",
         "status": "lowered"
       },
       "status": "generated",
@@ -160,10 +172,14 @@
   },
   "rationale": [
     {
-      "feature": "typed_ir_scalar_admission_unresolved",
-      "route": "GenericTypedIr",
-      "unresolved_count": 1,
-      "weight": "requires_contract_or_domain_evidence"
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "recorded"
+      },
+      "weight": "hard_refuse"
     },
     {
       "feature": "accepted_evidence_authoritative",
@@ -198,31 +214,31 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+      "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "27d1d2f3b3b726dba0865c87b9d3074db57a2320e8b2828dcd768e8704e5217c",
+      "sha256": "50ff79633bc341e95fe924b40faac92985c46168ad1e1e99baf5732a6b5776b1",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-      "sha256": "594b8d7e76d56ebbdc6b90ea1f97099d3d88327b3656e2407ce0bd31a3509517",
+      "sha256": "d0ff5b17ee944418ec9e117ba94409e2af24bda3fcab4a15f15e375aa744f95d",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "9e1d5215b479f8d566ade7d4f46c769e5949a97cf7b045325d3396c344e832c2",
-      "status": "recorded"
+      "sha256": "6fc743625bc7fe6c0ad19d689aa2d801d879347f649905ec00d39e096788e92d",
+      "status": "not_applicable"
     },
     "translation_plan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
-      "status": "draft_generated"
+      "status": "blocked"
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "75ff25dc364d33312574862c5ba9d503d5b64abcd4d2a1477cb30a478980bf62",
+      "sha256": "3e7d526185e3663a86d977d23d758e52b9b93f6d2f440aa7b34910fd0a6267e0",
       "status": "recorded"
     }
   },

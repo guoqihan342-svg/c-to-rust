@@ -32,7 +32,7 @@
         "evidence_refs": [
           "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json"
         ],
-        "kind": "typed_ir_scalar_admission_unresolved",
+        "kind": "blocked_artifact",
         "source": "route_decision.rationale"
       },
       "oracle_fixture_gap": {
@@ -54,7 +54,7 @@
     }
   ],
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "patch_plan_schema=1"
   ],

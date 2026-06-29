@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
+    "build_profile_hash=130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -13,8 +13,24 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [],
-          "lvalue_kinds": [],
+          "lvalue_decisions": [
+            {
+              "decision": "value_assignment",
+              "lvalue_kind": "simple_identifier",
+              "source_span": {
+                "file": "slice-spec",
+                "line_end": 1,
+                "line_start": 1
+              },
+              "source_statement": "p = (const uint8_t *)buf",
+              "statement_index": 1,
+              "translation_rule_id": "assignment"
+            }
+          ],
+          "lvalue_kinds": [
+            "none",
+            "simple_identifier"
+          ],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -27,16 +43,27 @@
             "return"
           ],
           "statements": [
-            "decl p",
-            "assign p",
-            "assign crc",
-            "while",
-            "return"
-          ]
+            "const uint8_t *p",
+            "p = (const uint8_t *)buf",
+            "crc = crc ^ ~0U",
+            "while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }",
+            "return crc ^ ~0U"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
       "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "while-3"
+        },
         {
           "from": "entry",
           "kind": "return",
@@ -45,7 +72,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-4"
         }
       ],
       "entry_block": "entry",
@@ -56,7 +83,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "",
+          "expression": "crc ^ ~0U",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -75,20 +102,24 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 1,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
+  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
+    "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
     "status": "ready"
   },
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "target_id": "flashdb",
   "unsupported_control_flow": []

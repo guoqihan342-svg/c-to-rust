@@ -548,6 +548,8 @@ def run_worker(
     logs_dir.mkdir(parents=True, exist_ok=True)
     report_dir = worker_out_root / "harness"
     report_dir.mkdir(parents=True, exist_ok=True)
+    if summary_path.exists():
+        summary_path.unlink()
 
     worker_command = [
         sys.executable,
@@ -576,14 +578,22 @@ def run_worker(
     else:
         raise SystemExit(f"unsupported worker mode: {mode}")
 
-    completed = command_runner(
-        argv,
-        cwd=repo_root,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-    )
+    try:
+        completed = command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
     stdout_path.write_text(completed.stdout or "", encoding="utf-8")
@@ -917,12 +927,17 @@ def build_opencode_run_argv(
 ) -> list[str]:
     if not opencode_command:
         raise SystemExit("opencode command must not be empty")
+    command_line = subprocess.list2cmdline(worker_command)
     prompt = "\n".join(
         [
             "Execute this assigned C-to-Rust worker exactly once.",
+            "Do not inspect an existing summary before running the command.",
+            "Delete the expected summary file if it already exists, then execute the command exactly once.",
             "Run the repo-local deterministic command below, then stop.",
+            "Do not run substitute diagnostics instead of the command.",
             "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
             f"Command: {json.dumps(worker_command)}",
+            f"Command line: {command_line}",
             f"Request: {repo_relative(request_path, repo_root=repo_root)}",
             f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
         ]

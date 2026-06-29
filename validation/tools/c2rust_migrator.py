@@ -50,8 +50,10 @@ def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
         for summary in expect_string_list(worker_summaries, "worker_summaries"):
             argv.extend(["--worker-summary", checked_posix_path(summary)])
     elif slice_specs:
-        for slice_spec in expect_string_list(slice_specs, "slice_specs"):
-            argv.extend(["--slice-spec", checked_posix_path(slice_spec)])
+        checked_slice_specs = [checked_posix_path(slice_spec) for slice_spec in expect_string_list(slice_specs, "slice_specs")]
+        validate_slice_spec_source_pins(checked_slice_specs, request)
+        for slice_spec in checked_slice_specs:
+            argv.extend(["--slice-spec", slice_spec])
     else:
         missing = [field for field in DIRECT_REQUIRED_FIELDS if not request.get(field)]
         if missing:
@@ -95,6 +97,30 @@ def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
     if request.get("run_id"):
         argv.extend(["--run-id", str(request["run_id"])])
     return argv
+
+
+def validate_slice_spec_source_pins(slice_specs: list[str], request: dict[str, Any]) -> None:
+    required_commit = str(request.get("require_source_commit") or request.get("source_commit") or "")
+    if not required_commit:
+        return
+    for slice_spec in slice_specs:
+        spec = load_slice_spec(slice_spec)
+        actual_commit = spec.get("source_commit") or spec.get("source", {}).get("source_commit")
+        if actual_commit != required_commit:
+            raise SystemExit(
+                f"slice spec source_commit mismatch for {slice_spec}: {actual_commit or 'missing'} != {required_commit}"
+            )
+
+
+def load_slice_spec(path: str) -> dict[str, Any]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            spec = json.load(handle)
+    except FileNotFoundError as exc:
+        raise SystemExit(f"slice spec not found while validating source_commit: {path}") from exc
+    if not isinstance(spec, dict):
+        raise SystemExit(f"slice spec must be a JSON object: {path}")
+    return spec
 
 
 def expect_string_list(value: Any, field: str) -> list[str]:

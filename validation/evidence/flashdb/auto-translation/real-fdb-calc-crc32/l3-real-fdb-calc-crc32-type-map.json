@@ -1,14 +1,14 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
-    "sha256": "84aa1215dc3114b245a8a6141bb009ca00642dc423796ac42cc1cfbd536a8480",
+    "sha256": "5b19341ba47df02606ed1d76df3d63741011e35733c7949c1d1cdc2bf0712dbf",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
+    "build_profile_hash=130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -32,67 +32,16 @@
     }
   ],
   "level": "L3",
-  "mappings": [
-    {
-      "c_name": "return",
-      "c_type": "uint32_t",
-      "confidence": "proven",
-      "id": "type-1",
-      "kind": "primitive",
-      "rust_type": "u32",
-      "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
-    },
-    {
-      "c_name": "crc",
-      "c_type": "uint32_t",
-      "confidence": "proven",
-      "id": "type-2",
-      "kind": "primitive",
-      "rust_type": "u32",
-      "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
-    },
-    {
-      "c_name": "buf",
-      "c_type": "const void *",
-      "confidence": "proven",
-      "id": "type-3",
-      "kind": "pointer",
-      "rust_type": "&[u8]",
-      "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
-    },
-    {
-      "c_name": "size",
-      "c_type": "size_t",
-      "confidence": "proven",
-      "id": "type-4",
-      "kind": "unsupported",
-      "rust_type": "usize",
-      "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
-    },
-    {
-      "c_name": "p",
-      "c_type": "const uint8_t *",
-      "confidence": "proven",
-      "id": "type-5",
-      "kind": "pointer",
-      "rust_type": "&[u8]",
-      "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
-    }
-  ],
-  "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
+  "mappings": [],
+  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
+    "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
     "status": "ready"
   },
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "target_id": "flashdb",
   "uncertainties": [],

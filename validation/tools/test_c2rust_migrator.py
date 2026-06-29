@@ -84,6 +84,20 @@ class C2RustMigratorTest(unittest.TestCase):
         self.assertNotIn("--source-file", argv)
         self.assertIn("--reuse-accepted-evidence", argv)
 
+    def test_slice_spec_request_rejects_mismatched_required_source_commit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c2rust-migrator-test-", dir=REPO_ROOT / "target") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text(json.dumps({"source_commit": "old-commit"}), encoding="utf-8")
+            request = {
+                "slice_specs": [spec_path.relative_to(REPO_ROOT).as_posix()],
+                "require_source_commit": "new-commit",
+                "proof_class": "local-simulation",
+                "out_root": "target/competition-out/workers/worker-a",
+            }
+
+            with self.assertRaisesRegex(SystemExit, "source_commit mismatch"):
+                c2rust_migrator.build_run_competition_argv(request)
+
     def test_builds_merge_argv_from_worker_summaries(self) -> None:
         request = {
             "worker_summaries": [

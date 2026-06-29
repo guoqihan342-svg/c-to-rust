@@ -23,8 +23,10 @@ class UnsafeBudgetTests(unittest.TestCase):
 
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["ledger"]["status"], "loaded")
-        self.assertEqual(report["first_party_non_test_unsafe_count"], 0)
+        self.assertEqual(report["first_party_non_test_unsafe_count"], 4)
+        self.assertEqual(report["registered_unsafe_count"], 4)
         self.assertEqual(report["unregistered_unsafe_count"], 0)
+        self.assertEqual(report["categories"]["raw_pointer"], 4)
         self.assertGreaterEqual(report["scanned_files"], 3)
         self.assertEqual(
             [scope["path"] for scope in report["scopes"]],

@@ -6,7 +6,7 @@
   "status": "draft",
   "function_name": "fdb_calc_crc32",
   "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)\n{\n    const uint8_t *p;\n\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n\n    return crc ^ ~0U;\n}",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "fixture_hash": "real-fdb-calc-crc32-fixture",
   "l1_evidence": {
     "path": "validation/evidence/flashdb/l1-native-build.json",
@@ -14,9 +14,11 @@
     "accepted": false
   },
   "source": {
-    "source_root": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
     }
@@ -105,7 +107,7 @@
   },
   "build_profile": {
     "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-    "compiler_command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+    "compiler_command_source": "CMakeLists.txt",
     "include_paths": [
       "inc",
       "tests"

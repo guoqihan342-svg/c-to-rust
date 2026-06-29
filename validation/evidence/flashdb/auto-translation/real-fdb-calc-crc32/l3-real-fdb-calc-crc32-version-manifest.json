@@ -2,15 +2,15 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "0c182f2c54b80db71a370f4e57ffbe0d73ed38b92983736881efdff9b45f20a4",
-      "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
-      "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
-      "rust_report": "0bffea59ef533ea88c9668e1a92e643391fdd3c2e3a3ce7156885402035777eb",
-      "unsafe_ledger": "eb162631f86bbb7b3749be30c297a3a5c314683e891aa8d991a63dca76a65026",
-      "unsafe_scan": "93f25912be2e47edd30c5f7600242963dee28b4d9a612f35451ebf80f0d5b3a3"
+      "c_oracle": "8b15e66c32350820553deafe019fe5d964ed431c7d83d173c009efc11e44ae88",
+      "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+      "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+      "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+      "unsafe_ledger": "e64539172ff12e6ad222860932850c311dff7869876b06638ecb1e8166627e3b",
+      "unsafe_scan": "87024c9614d130d8462a538070436a81c13334eb857545c5a65bd4f1820543ad"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -21,7 +21,7 @@
       "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
     },
     "slice_id": "real-fdb-calc-crc32",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "status": "accepted",
     "target_id": "flashdb",
     "toolchain_status": "C_ORACLE_GENERATED"
@@ -36,14 +36,14 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
+    "build_profile_hash": "130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
     "c2rust_baseline_identity": {
-      "sha256": "530983427c21025614a3878ec1b6de7d5ca0013f4c357e772b0b29cc07b9e1e1",
+      "sha256": "0470a7a9f893b827d9ef95edf64681dd389612dccd4455fc3e38dae202c9d2c6",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+      "sha256": "d2794cdec34bb058825b73054dc510a81bc262b86f5f0fadc1324be7705666b5",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -67,60 +67,36 @@
       "route_decision_identity",
       "validation_profile_identity",
       "global_dependency_identity",
-      "c_oracle_harness_identity",
-      "translator_feature_set",
-      "clang_lowering_identity"
+      "c_oracle_harness_identity"
     ],
     "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
-    "clang_lowering_identity": {
-      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
-      "clang_path_status": "configured",
-      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
-      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
-      "enabled": true,
-      "features": [
-        "clang-lowering-report"
-      ],
-      "frontend": "clang_ast_dump_json",
-      "ignored_env_for_ast_dump": {
-        "LIBCLANG_PATH": {
-          "reason": "ignored_for_ast_dump",
-          "status": "not_configured",
-          "value": ""
-        }
-      },
-      "requires_env": [
-        "CLANG_PATH"
-      ]
-    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-      "--accept-existing-evidence",
-      "--emit-clang-lowering-report"
+      "--accept-existing-evidence"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
+      "sha256": "062135195e3281dc520d42128af4c0500434961bf0d0f35fd32cebf640156755"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+        "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "be6f41a032970223f7e46a95acb1b5e5ad2b6a457467fe3f62870c36f5799bbd",
+        "sha256": "186d26373be9bb59a6317a9da8e92921b4f24b88a7a7b189ac4d6f9d1aa041cb",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "36cf1e56ed578b9539a75e3f40ceb613084db4ba3e5e1b7c733537e5b2832aaf",
+        "sha256": "1567d952bb1e23190ebcb8eb2047d3a1365319e507bbb92778079413f13d63b6",
         "status": "passed"
       }
     },
@@ -163,11 +139,11 @@
       "summary"
     ],
     "oracle_boundary_contract_identity": {
-      "sha256": "add1a68d1d58dfaec75e47d3b09b69e90df7ce7426dc950c75ad6c7bd3fec543",
+      "sha256": "09813c5fe1b9241003ae0c05fe6c8b979b268863d8bede1c0a0b9f56a8e98b83",
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "24cb5be1d0178f2ea0aa97b338b9ab4bcb57b4754ce93f167cea30fe775c35ac",
+      "sha256": "e57d7ab4f89f9e78b563b020056964927273a843d7a550a9fdd1a5185b96cfd6",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -184,8 +160,8 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-calc-crc32",
-    "slice_spec_sha256": "8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "slice_spec_sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
     },
@@ -196,22 +172,19 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_feature_set": [
-      "clang-lowering-report"
-    ],
-    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+    "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "751c2fe7b9eea25440ed17e52b91f471265d2f7b7cf041998db10170257bd08c",
+      "sha256": "be226211fcb37dacde94bceffe0b52bbfc35c955124c03282b5c34eeede029e3",
       "status": "passed"
     }
   },
-  "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
+  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "real-fdb-calc-crc32",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "target_id": "flashdb",
   "translator_version": "0.1.0"
