@@ -96,7 +96,9 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             ledger["by_construct"]["external_direct_callee_context"]["refused"],
             1,
         )
+        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 0)
         self.assertEqual(ledger["semantic_pass_count"], 0)
+        self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 2)
         self.assertIn("not semantic acceptance evidence", ledger["claim_boundary"])
 
     def test_capability_delta_ledger_keeps_refusal_separate_from_semantic_pass(self) -> None:
@@ -159,6 +161,38 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             self.assertEqual(ledger["route_statuses"]["refused"], 1)
             self.assertEqual(ledger["blocked_callee_count"], 1)
             self.assertEqual(ledger["by_construct"]["external_direct_callee_context"]["refused"], 1)
+
+    def test_capability_delta_ledger_counts_accepted_evidence_semantic_pass_without_translation_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="translator-coverage-matrix-") as tmp:
+            root = Path(tmp)
+            self._write(root / "crates/c2r-translator/tests/bounded_translation.rs", "// tests\n")
+            self._write_json(
+                root / "validation/evidence/demo/auto-translation/refused/l3-refused-capability-delta.json",
+                self._refused_capability_ledger(),
+            )
+            self._write_json(
+                root / "validation/evidence/demo/auto-translation/refused/l3-refused-final-verification.json",
+                {
+                    "schema_version": 1,
+                    "status": "passed",
+                    "semantic_pass": True,
+                    "accepted_evidence_authoritative": True,
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+            path = root / "matrix.json"
+            path.write_text(
+                json.dumps(self._minimal_matrix([self._capability(capability_id="scalar-add")])),
+                encoding="utf-8",
+            )
+
+            report = translator_coverage_matrix.build_report(root, matrix_path=path)
+
+            ledger_report = report["capability_delta_ledger"]
+            self.assertEqual(ledger_report["translator_generated_semantic_pass_count"], 0)
+            self.assertEqual(ledger_report["semantic_pass_count"], 0)
+            self.assertEqual(ledger_report["accepted_evidence_semantic_pass_count"], 1)
+            self.assertEqual(ledger_report["generated_candidate_status"]["refused"], 1)
 
     def test_rejects_invalid_capability_delta_ledger_contract(self) -> None:
         cases = [

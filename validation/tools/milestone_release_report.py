@@ -53,7 +53,13 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
     require(ledger.get("schema_version") == 1, "capability_delta_ledger schema_version must be 1")
     require(ledger.get("status") == "recorded", "capability_delta_ledger status must be recorded")
 
-    semantic_pass_count = require_int(ledger, "semantic_pass_count")
+    legacy_semantic_pass_count = require_int(ledger, "semantic_pass_count")
+    translator_generated_semantic_pass_count = optional_int(
+        ledger,
+        "translator_generated_semantic_pass_count",
+        legacy_semantic_pass_count,
+    )
+    accepted_evidence_semantic_pass_count = optional_int(ledger, "accepted_evidence_semantic_pass_count", 0)
     ledger_count = require_int(ledger, "ledger_count")
     delta_count = require_int(ledger, "delta_count")
     generated_status = require_dict(ledger, "generated_candidate_status")
@@ -61,19 +67,19 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
     route_statuses = require_dict(ledger, "route_statuses")
     ledgers = ledger.get("ledgers", [])
     require(isinstance(ledgers, list), "capability_delta_ledger ledgers must be a list")
-    if semantic_pass_count > 0 and ledgers and all(is_l4_refused(item) for item in ledgers):
+    if translator_generated_semantic_pass_count > 0 and ledgers and all(is_l4_refused(item) for item in ledgers):
         raise SystemExit("L4/refused ledger entries cannot be the translation coverage numerator")
     candidate_classification = classify_candidate_statuses(
         generated_status,
         route_levels=route_levels,
         route_statuses=route_statuses,
-        semantic_pass_count=semantic_pass_count,
+        semantic_pass_count=translator_generated_semantic_pass_count,
     )
 
     blockers = []
-    if semantic_pass_count == 0:
+    if translator_generated_semantic_pass_count == 0:
         blockers.append("no_translator_generated_semantic_pass")
-    if semantic_pass_count < 3:
+    if translator_generated_semantic_pass_count < 3:
         blockers.append("translator_generated_semantic_pass_below_p0_minimum")
     blockers.append("external_review_not_recorded")
 
@@ -91,7 +97,8 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
             }
         },
         "metrics": {
-            "translation_coverage_numerator": semantic_pass_count,
+            "translation_coverage_numerator": translator_generated_semantic_pass_count,
+            "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
             "tracked_capability_delta_ledgers": ledger_count,
             "tracked_capability_delta_count": delta_count,
             "native_build_catalogue_included_in_translation_coverage": False,
@@ -100,7 +107,9 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
             "capability_delta_ledger": {
                 "ledger_count": ledger_count,
                 "delta_count": delta_count,
-                "semantic_pass_count": semantic_pass_count,
+                "translator_generated_semantic_pass_count": translator_generated_semantic_pass_count,
+                "semantic_pass_count": legacy_semantic_pass_count,
+                "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
                 "generated_candidate_status": generated_status,
                 "route_levels": route_levels,
                 "route_statuses": route_statuses,
@@ -185,6 +194,12 @@ def load_coverage_report(repo_root: Path, *, coverage_report_path: Path | None) 
 
 def require_int(payload: dict[str, Any], key: str) -> int:
     value = payload.get(key)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def optional_int(payload: dict[str, Any], key: str, default: int) -> int:
+    value = payload.get(key, default)
     require(isinstance(value, int), f"{key} must be an integer")
     return value
 
