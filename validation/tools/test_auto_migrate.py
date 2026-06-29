@@ -3280,13 +3280,13 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(context_pack["direct_call_edges"], [])
             external_context = plan["inputs"]["external_callee_context"]
             self.assertEqual(external_context["status"], "blocked")
-            self.assertEqual(external_context["declared_count"], 0)
+            self.assertEqual(external_context["declared_count"], 1)
             self.assertEqual(external_context["declared_spec_count"], 4)
             self.assertEqual(
                 set(external_context["declared_spec_names"]),
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
-            self.assertEqual(external_context["blocked_count"], 4)
+            self.assertEqual(external_context["blocked_count"], 3)
             self.assertEqual(
                 {
                     item["name"]
@@ -3300,8 +3300,18 @@ class AutoMigrateTests(unittest.TestCase):
             }
             self.assertEqual(
                 blocked_callees,
-                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+                {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
+            modeled_callees = {
+                item["name"]: item
+                for item in plan["translation_summary"]["external_direct_callees"]
+            }
+            self.assertIn("strlen", modeled_callees)
+            self.assertEqual(modeled_callees["strlen"]["stub_kind"], "compile_only")
+            self.assertEqual(modeled_callees["strlen"]["stub_boundary"], "stdlib_readonly_string_model")
+            self.assertEqual(modeled_callees["strlen"]["return_type"], "size_t")
+            self.assertEqual(modeled_callees["strlen"]["parameters"][0]["c_type"], "const char*")
+            self.assertFalse(modeled_callees["strlen"]["semantics_verified"])
             self.assertEqual(
                 {
                     item["reason"]
@@ -3330,7 +3340,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(capability["capability_delta"][0]["semantic_pass"])
             self.assertEqual(
                 set(capability["capability_delta"][0]["blocked_callees"]),
-                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+                {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
             self.assertTrue(capability["capability_delta"][0]["negative_coverage"])
             governance = capability["governance_delta"][0]
@@ -3347,6 +3357,42 @@ class AutoMigrateTests(unittest.TestCase):
                 "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
                 capability["verification_commands"],
             )
+
+    def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-stdlib-stub-") as tmp:
+            draft_path = Path(tmp) / "draft.rs"
+            draft_path.write_text("pub fn caller() -> i32 { 0 }\n", encoding="utf-8")
+
+            changed = module.inject_external_callee_stubs(
+                draft_path,
+                {
+                    "declared": [
+                        {
+                            "name": "strlen",
+                            "parameters": [{"name": "s", "c_type": "const char*"}],
+                            "return_type": "size_t",
+                            "stub_kind": "compile_only",
+                            "stub_generation": "not_emitted_modeled_stdlib",
+                            "semantics_verified": False,
+                        },
+                        {
+                            "name": "helper_add_one",
+                            "parameters": [{"name": "value", "c_type": "int"}],
+                            "return_type": "int",
+                            "stub_kind": "compile_only",
+                            "stub_generation": "generated_compile_only",
+                            "semantics_verified": False,
+                        },
+                    ]
+                },
+            )
+
+            text = draft_path.read_text(encoding="utf-8")
+            self.assertTrue(changed)
+            self.assertIn("fn helper_add_one(value: i32) -> i32", text)
+            self.assertNotIn("fn strlen", text)
+            self.assertNotIn("s: i32", text)
 
     def test_real_fdb_blob_make_generates_typed_ir_candidate_without_semantic_claim(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"

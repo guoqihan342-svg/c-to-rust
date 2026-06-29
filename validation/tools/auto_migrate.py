@@ -316,6 +316,24 @@ def primitive_rust_type(c_type: str) -> str | None:
     }.get(normalized)
 
 
+def compact_c_type(c_type: str) -> str:
+    return "".join(str(c_type).strip().split())
+
+
+def is_modeled_strlen_contract(
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    if name != "strlen":
+        return False
+    if compact_c_type(return_type) != "size_t":
+        return False
+    if len(parameters) != 1:
+        return False
+    return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
+
+
 def declared_external_direct_callee_map(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     c_boundary = spec.get("c_boundary", {})
     signatures = c_boundary.get("signatures", [])
@@ -375,6 +393,9 @@ def external_callee_descriptor(
             unsupported_reasons.append(f"unsupported_parameter_type:{param['name']}")
     if not parameters:
         unsupported_reasons.append("missing_parameters")
+    modeled_strlen = is_modeled_strlen_contract(name, return_type, parameters)
+    if modeled_strlen:
+        unsupported_reasons = []
     return {
         "name": name,
         "signature_ref": signature_ref,
@@ -383,7 +404,9 @@ def external_callee_descriptor(
         "header_files": item.get("header_files", []),
         "definition_status": item.get("definition_status") or signature.get("definition_status") or "real_source_bound",
         "stub_kind": "compile_only",
-        "stub_boundary": item.get("stub_boundary", "compile_only"),
+        "stub_boundary": "stdlib_readonly_string_model" if modeled_strlen else item.get("stub_boundary", "compile_only"),
+        "stub_generation": "not_emitted_modeled_stdlib" if modeled_strlen else "generated_compile_only",
+        "model_contract": "strlen_readonly_nul_terminated" if modeled_strlen else "",
         "semantics_verified": False,
         "parameters": parameters,
         "return_type": return_type,
@@ -635,6 +658,8 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        if callee.get("stub_generation") == "not_emitted_modeled_stdlib":
+            continue
         name = rust_identifier(callee["name"])
         params = []
         for index, param in enumerate(callee.get("parameters", [])):
