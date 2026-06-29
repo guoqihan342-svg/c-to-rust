@@ -1727,6 +1727,7 @@
         "final IrStmt::If accepted when both branches end in return values",
         "legacy CFG evidence for label/goto/switch/case/default",
         "unsupported_control_flow classification",
+        "clang source_range diagnostics for unsupported control-flow refusals",
         "relooper_refusal evidence for goto/switch",
         "schema-bound unsupported_control_flow kind contract",
         "normalized CFG block/edge preservation for goto/switch refusals",
@@ -1744,9 +1745,20 @@
             },
             {
               "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",
-              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "assertion": "requires LabelStmt/GotoStmt/SwitchStmt/CaseStmt/DefaultStmt refusal messages to include CFG/relooper support and source_range=line:col-line:col"
+            },
+            {
+              "name": "control-flow refusal AST JSON fixture source ranges",
+              "path": "crates/c2r-translator/fixtures/clang_ast/control_flow_refusals_ast.json"
+            },
+            {
+              "name": "clang_source_range_summary_falls_back_to_loc_when_range_is_missing",
+              "path": "crates/c2r-translator/src/clang_frontend.rs",
+              "assertion": "requires clang frontend diagnostics to fall back from range to loc when range is absent"
             }
-          ]
+          ],
+          "scope_note": "clang fixture replay and source_range diagnostics only; this does not claim Control IR, relooper support, Rust candidate lowering, or C/Rust semantic pass for switch/goto"
         },
         "handwritten_ir": {
           "status": "covered",
@@ -1890,7 +1902,7 @@
         {
           "name": "clang_ast_fixture_replays_control_flow_refusals_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "clang AST GotoStmt/SwitchStmt/LabelStmt/CaseStmt/DefaultStmt nodes must fail closed with structured CFG/relooper reasons before typed-IR lowering"
+          "fail_closed_reason": "clang AST GotoStmt/SwitchStmt/LabelStmt/CaseStmt/DefaultStmt nodes must fail closed with structured CFG/relooper reasons and source_range diagnostics before typed-IR lowering"
         },
         {
           "name": "test_unsupported_control_flow_blocks_auto_migrate_candidate_generation",

@@ -21,6 +21,10 @@
             {
               "kind": "LabelStmt",
               "name": "again",
+              "range": {
+                "begin": { "line": 2, "col": 3 },
+                "end": { "line": 2, "col": 15 }
+              },
               "inner": [
                 {
                   "kind": "UnaryOperator",
@@ -92,6 +96,10 @@
             {
               "kind": "GotoStmt",
               "targetLabelDeclId": "0x1",
+              "range": {
+                "begin": { "line": 5, "col": 3 },
+                "end": { "line": 5, "col": 12 }
+              },
               "inner": [
                 {
                   "kind": "LabelDecl",
@@ -146,6 +154,10 @@
           "inner": [
             {
               "kind": "SwitchStmt",
+              "range": {
+                "begin": { "line": 8, "col": 3 },
+                "end": { "line": 8, "col": 48 }
+              },
               "inner": [
                 {
                   "kind": "ImplicitCastExpr",
@@ -237,6 +249,10 @@
           "inner": [
             {
               "kind": "CaseStmt",
+              "range": {
+                "begin": { "line": 11, "col": 3 },
+                "end": { "line": 11, "col": 18 }
+              },
               "inner": [
                 {
                   "kind": "IntegerLiteral",
@@ -282,6 +298,10 @@
           "inner": [
             {
               "kind": "DefaultStmt",
+              "range": {
+                "begin": { "line": 14, "col": 3 },
+                "end": { "line": 14, "col": 18 }
+              },
               "inner": [
                 {
                   "kind": "ReturnStmt",

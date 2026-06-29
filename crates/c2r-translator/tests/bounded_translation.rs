@@ -1758,12 +1758,12 @@ fn clang_ast_fixture_replays_control_flow_refusals_without_clang() {
     ))
     .expect("fixture JSON");
 
-    for (function_name, expected_reason) in [
-        ("label_refusal", "unsupported control-flow LabelStmt"),
-        ("goto_refusal", "unsupported control-flow GotoStmt"),
-        ("switch_refusal", "unsupported control-flow SwitchStmt"),
-        ("case_refusal", "unsupported control-flow CaseStmt"),
-        ("default_refusal", "unsupported control-flow DefaultStmt"),
+    for (function_name, expected_reason, expected_range) in [
+        ("label_refusal", "unsupported control-flow LabelStmt", "source_range=2:3-2:15"),
+        ("goto_refusal", "unsupported control-flow GotoStmt", "source_range=5:3-5:12"),
+        ("switch_refusal", "unsupported control-flow SwitchStmt", "source_range=8:3-8:48"),
+        ("case_refusal", "unsupported control-flow CaseStmt", "source_range=11:3-11:18"),
+        ("default_refusal", "unsupported control-flow DefaultStmt", "source_range=14:3-14:18"),
     ] {
         let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
             .expect_err("control-flow fixture must fail closed during clang AST lowering");
@@ -1778,6 +1778,11 @@ fn clang_ast_fixture_replays_control_flow_refusals_without_clang() {
                 .message
                 .contains("requires structured CFG/relooper support"),
             "expected {function_name} refusal to mention CFG/relooper support, got {:?}",
+            error.message
+        );
+        assert!(
+            error.message.contains(expected_range),
+            "expected {function_name} refusal to contain {expected_range:?}, got {:?}",
             error.message
         );
     }

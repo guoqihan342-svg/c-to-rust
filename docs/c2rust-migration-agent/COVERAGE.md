@@ -104,10 +104,10 @@
 | `for` (scoped) | 窄支持 | init/condition/step 为简单形式；condition 中 clang-proven integral `ImplicitCastExpr` 仅作为显式 IR cast 保留 |
 | `break` | 窄支持 | 仅在 loop body 内 |
 | `continue` | 窄支持 | 仅在 loop body 内 |
-| `switch` | 不支持 | 已有 schema-bound CFG/relooper/route 拒绝证据、归一化 `switch-0 -> case/default` edges 和最小 structured-recovery precondition/refusal evidence；仍需完整 CFG + relooper + Rust candidate lowering 才能支持 |
-| `goto` | 不支持 | 已有 schema-bound CFG/relooper/route 拒绝证据、归一化 `goto-* -> label-*` edges 和最小 structured-recovery precondition/refusal evidence；仍需完整 CFG + relooper + Rust candidate lowering 才能支持 |
-| label | 不支持 | 仅作为 `goto` refusal 的 schema-bound CFG/relooper evidence 记录 |
-| `case` / `default` | 不支持 | 仅作为 `switch` refusal 的 schema-bound CFG/relooper evidence 记录 |
+| `switch` | 不支持 | 已有 schema-bound CFG/relooper/route 拒绝证据、clang AST `source_range` refusal diagnostics、归一化 `switch-0 -> case/default` edges 和最小 structured-recovery precondition/refusal evidence；仍需完整 CFG + relooper + Rust candidate lowering 才能支持 |
+| `goto` | 不支持 | 已有 schema-bound CFG/relooper/route 拒绝证据、clang AST `source_range` refusal diagnostics、归一化 `goto-* -> label-*` edges 和最小 structured-recovery precondition/refusal evidence；仍需完整 CFG + relooper + Rust candidate lowering 才能支持 |
+| label | 不支持 | 仅作为 `goto` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
+| `case` / `default` | 不支持 | 仅作为 `switch` refusal 的 schema-bound CFG/relooper evidence 记录；clang AST fixture 已要求拒绝原因带 `source_range` |
 
 ## 数组
 

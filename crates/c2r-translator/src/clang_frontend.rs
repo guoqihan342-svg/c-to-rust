@@ -1869,7 +1869,35 @@ fn unsupported_control_flow_stmt_reason(stmt: &Value) -> String {
         }
         _ => {}
     }
+    if let Some(source_range) = clang_source_range_summary(stmt) {
+        reason.push_str(&format!(" source_range={source_range}"));
+    }
     reason
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_source_range_summary(node: &Value) -> Option<String> {
+    let (begin_node, end_node) = match node.get("range") {
+        Some(range) => (range.get("begin")?, range.get("end")?),
+        None => {
+            let loc = node.get("loc")?;
+            (loc, loc)
+        }
+    };
+    let begin = clang_location_summary(begin_node)?;
+    let end = clang_location_summary(end_node)?;
+    Some(format!("{begin}-{end}"))
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_location_summary(node: &Value) -> Option<String> {
+    let location = node
+        .get("spellingLoc")
+        .or_else(|| node.get("expansionLoc"))
+        .unwrap_or(node);
+    let line = integer_field(location, "line")?;
+    let col = integer_field(location, "col")?;
+    Some(format!("{line}:{col}"))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4238,6 +4266,11 @@ fn string_field(node: &Value, field: &str) -> Option<String> {
 }
 
 #[cfg(feature = "typed-ir")]
+fn integer_field(node: &Value, field: &str) -> Option<i64> {
+    node.get(field).and_then(Value::as_i64)
+}
+
+#[cfg(feature = "typed-ir")]
 fn normalized_report_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
@@ -4320,6 +4353,19 @@ mod tests {
                 }
             ]
         })
+    }
+
+    #[test]
+    fn clang_source_range_summary_falls_back_to_loc_when_range_is_missing() {
+        let node = serde_json::json!({
+            "kind": "GotoStmt",
+            "loc": { "line": 20, "col": 7 }
+        });
+
+        assert_eq!(
+            clang_source_range_summary(&node),
+            Some("20:7-20:7".to_string())
+        );
     }
 
     fn assert_unsigned_integral_condition_cast(condition: ClangExprSkeleton) {
