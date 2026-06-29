@@ -2,3 +2,4 @@
 /flashDB_rust/target/
 /validation/l2_slices/target/
 /crates/*/target/
+/.worktrees
