@@ -1166,8 +1166,23 @@ fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
             width: 32
         }
     ));
-    let IrExpr::Var { name, ty, .. } = expr.as_ref() else {
-        panic!("expected NoOp cast operand to be the original parameter, got {expr:?}");
+    let IrExpr::LValueToRValue {
+        target: read_target,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected NoOp cast operand to be an explicit LValueToRValue read, got {expr:?}");
+    };
+    assert!(matches!(
+        read_target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected LValueToRValue operand to be the original parameter, got {read_expr:?}");
     };
     assert_eq!(name, "value");
     assert!(matches!(
@@ -1190,6 +1205,47 @@ fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
         "typed-ir-clang-ast-fixture-implicit-integer-noop-cast",
         rust,
         "assert_eq!(identity_noop(-7i32), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/lvalue_to_rvalue_integer_return_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let read_value = lower_function_and_globals_from_clang_ast_json_value(&ast, "read_value")
+        .expect("lower clang-proven integer LValueToRValue fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(expr), ..
+    }] = read_value.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer LValueToRValue return expression, got {:?}",
+            read_value.function_ir.body
+        );
+    };
+    let lowered_json = serde_json::to_value(expr).expect("serialize return expression");
+    let Some(lvalue_to_rvalue) = lowered_json.get("LValueToRValue") else {
+        panic!("expected explicit LValueToRValue IR node, got {lowered_json}");
+    };
+    assert_eq!(lvalue_to_rvalue["target"]["kind"]["Integer"]["width"], 32);
+    assert_eq!(lvalue_to_rvalue["expr"]["Var"]["name"], "value");
+
+    let emitted = emit_rust_from_ir_with_globals(&read_value.function_ir, &read_value.globals)
+        .expect("emit Rust from clang-proven integer LValueToRValue fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn read_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-integer-lvalue-to-rvalue",
+        rust,
+        "assert_eq!(read_value(-7i32), -7i32);",
     );
 }
 
@@ -1798,6 +1854,46 @@ fn typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence() {
     assert!(error.reason.contains("function-to-pointer decay"));
     assert!(error.reason.contains("function pointer value"));
     assert!(error.reason.contains("explicit function-pointer lowering"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_pointer_lvalue_to_rvalue_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let lvalue_to_rvalue_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "LValueToRValue": {
+            "target": serde_json::to_value(&ptr_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("values", ptr_ty.clone())).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit pointer lvalue-to-rvalue IR node");
+    let ir = IrFunction {
+        name: "bad_pointer_lvalue_read".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty,
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Expr {
+                expr: lvalue_to_rvalue_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer lvalue-to-rvalue must stay fail closed");
+    assert!(error.reason.contains("lvalue-to-rvalue target"));
+    assert!(error.reason.contains("const int *"));
+    assert!(error.reason.contains("unsupported"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

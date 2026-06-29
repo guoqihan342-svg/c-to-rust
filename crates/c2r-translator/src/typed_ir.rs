@@ -177,6 +177,11 @@ pub enum IrExpr {
         implicit: bool,
         source_span: Option<SourceSpan>,
     },
+    LValueToRValue {
+        target: IrType,
+        expr: Box<IrExpr>,
+        source_span: Option<SourceSpan>,
+    },
     ArrayToPointerDecay {
         target: IrType,
         expr: Box<IrExpr>,
@@ -1057,6 +1062,7 @@ fn collect_record_field_uses_from_expr<'a>(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
@@ -2519,6 +2525,25 @@ fn emit_expr(
                 .map_err(|detail| format!("cast expr {detail}"))?;
             Ok(format!("({expr} as {target})"))
         }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "lvalue-to-rvalue target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            let source_type = expr_type(expr)
+                .ok_or_else(|| "lvalue-to-rvalue source type is unsupported".to_string())?;
+            if !is_integer_type(source_type) {
+                return Err(format!(
+                    "lvalue-to-rvalue source {} is unsupported",
+                    type_label(source_type)
+                ));
+            }
+            validate_expr_matches_type(expr, target, "lvalue-to-rvalue expr")?;
+            emit_expr(expr, symbols, context)
+                .map_err(|detail| format!("lvalue-to-rvalue expr {detail}"))
+        }
         IrExpr::ArrayToPointerDecay { .. } => {
             Err("array-to-pointer decay requires explicit lowering evidence".to_string())
         }
@@ -2795,6 +2820,15 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
             if !is_integer_type(target) {
                 return Err(format!(
                     "deref pointer add index cast target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            validate_readonly_pointer_add_index_expr(expr)
+        }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "deref pointer add index lvalue-to-rvalue target {} is unsupported",
                     type_label(target)
                 ));
             }
@@ -3467,7 +3501,9 @@ fn validate_bounded_call_arg(
             validate_bounded_call_arg(lhs, false)?;
             validate_bounded_call_arg(rhs, false)
         }
-        IrExpr::Unary { operand, .. } | IrExpr::Cast { expr: operand, .. } => {
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. } => {
             validate_bounded_call_arg(operand, false)
         }
         IrExpr::ArrayToPointerDecay { .. } => Err(
@@ -3552,6 +3588,7 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
             .or_else(|| find_call_callee(then_expr))
             .or_else(|| find_call_callee(else_expr)),
         IrExpr::Cast { expr, .. }
+        | IrExpr::LValueToRValue { expr, .. }
         | IrExpr::ArrayToPointerDecay { expr, .. }
         | IrExpr::FunctionToPointerDecay { expr, .. } => find_call_callee(expr),
         IrExpr::Index { base, index, .. } => {
@@ -4583,6 +4620,7 @@ fn expr_has_inc_dec(expr: &IrExpr) -> bool {
         IrExpr::Binary { lhs, rhs, .. } => expr_has_inc_dec(lhs) || expr_has_inc_dec(rhs),
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_inc_dec(operand),
@@ -4619,6 +4657,7 @@ fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_assign_or_comma(operand),
@@ -5139,6 +5178,8 @@ fn validate_definite_assignment_expr(
         }
         IrExpr::Cast { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("cast expr {detail}")),
+        IrExpr::LValueToRValue { expr, .. } => validate_definite_assignment_expr(expr, state)
+            .map_err(|detail| format!("lvalue-to-rvalue expr {detail}")),
         IrExpr::ArrayToPointerDecay { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("array-to-pointer decay expr {detail}")),
         IrExpr::FunctionToPointerDecay { expr, .. } => {
@@ -5456,6 +5497,7 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
@@ -5497,6 +5539,7 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
@@ -5671,6 +5714,7 @@ fn reject_nullable_mutable_pointer_params_in_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
@@ -5881,6 +5925,7 @@ fn collect_nullable_pointer_params_from_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => collect_nullable_pointer_params_from_expr(
@@ -6603,6 +6648,7 @@ fn collect_readonly_pointer_read_params_from_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
@@ -7050,6 +7096,7 @@ fn validate_nullable_pointer_param_uses_in_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
@@ -7388,6 +7435,7 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => Some(ty),
         IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }
         | IrExpr::FunctionToPointerDecay { target, .. } => Some(target),
         IrExpr::Unsupported { .. } => None,

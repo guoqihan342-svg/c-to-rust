@@ -388,6 +388,10 @@ pub enum ClangExprSkeleton {
         expr: Box<ClangExprSkeleton>,
         implicit: bool,
     },
+    LValueToRValue {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+    },
     ArrayToPointerDecay {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
@@ -1520,7 +1524,8 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(else_expr, inventory)?;
             rewrite_supported_enum_type(ty, inventory)?;
         }
-        ClangExprSkeleton::Cast { expr, target, .. } => {
+        ClangExprSkeleton::Cast { expr, target, .. }
+        | ClangExprSkeleton::LValueToRValue { expr, target } => {
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;
         }
@@ -2485,6 +2490,12 @@ fn expr_skeleton_from_ast_with_options(
                     implicit: true,
                 });
             }
+            if preserve_integral_casts && is_integer_lvalue_to_rvalue_cast_expr(expr) {
+                return Ok(ClangExprSkeleton::LValueToRValue {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
+                });
+            }
             match cast_kind.as_deref() {
                 Some("LValueToRValue" | "NoOp") => Ok(operand),
                 Some(cast_kind) => Ok(ClangExprSkeleton::Unsupported {
@@ -3397,7 +3408,8 @@ fn bounded_call_arg_rejection_reason(
         ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs, false)
             .or_else(|| bounded_call_arg_rejection_reason(rhs, false)),
         ClangExprSkeleton::Unary { operand, .. }
-        | ClangExprSkeleton::Cast { expr: operand, .. } => {
+        | ClangExprSkeleton::Cast { expr: operand, .. }
+        | ClangExprSkeleton::LValueToRValue { expr: operand, .. } => {
             bounded_call_arg_rejection_reason(operand, false)
         }
         ClangExprSkeleton::ArrayToPointerDecay { .. } => Some(
@@ -3471,6 +3483,26 @@ fn is_integer_noop_cast_expr(expr: &Value) -> bool {
         return false;
     };
     matches!(operand_ty.kind, ClangTypeKind::Integer { .. })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integer_lvalue_to_rvalue_cast_expr(expr: &Value) -> bool {
+    if string_field(expr, "castKind").as_deref() != Some("LValueToRValue") {
+        return false;
+    }
+    let Ok(target) = expr_type(expr) else {
+        return false;
+    };
+    if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    let Some(operand) = inner(expr).first() else {
+        return false;
+    };
+    let Ok(operand_ty) = expr_type(operand) else {
+        return false;
+    };
+    matches!(operand_ty.kind, ClangTypeKind::Integer { .. }) && operand_ty.kind == target.kind
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4058,6 +4090,7 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
             bind_target_abi_to_type(ty, target_abi);
         }
         ClangExprSkeleton::Cast { target, .. }
+        | ClangExprSkeleton::LValueToRValue { target, .. }
         | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
         | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => {
             bind_target_abi_to_type(target, target_abi);
@@ -4089,7 +4122,7 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         ClangExprSkeleton::Deref { ptr, .. } => {
             bind_target_abi_to_expr(ptr, target_abi);
         }
-        ClangExprSkeleton::Cast { expr, .. } => {
+        ClangExprSkeleton::Cast { expr, .. } | ClangExprSkeleton::LValueToRValue { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
         ClangExprSkeleton::ArrayToPointerDecay { expr, .. } => {
@@ -4489,6 +4522,7 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
         | IrExpr::Member { ty, .. }
         | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
         IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }
         | IrExpr::FunctionToPointerDecay { target, .. } => {
             ir_types_match_for_clang(target, expected)
@@ -4603,6 +4637,11 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             target: lower_type(target)?,
             expr: Box::new(lower_expr(expr)?),
             implicit: *implicit,
+            source_span: None,
+        }),
+        ClangExprSkeleton::LValueToRValue { target, expr } => Ok(IrExpr::LValueToRValue {
+            target: lower_type(target)?,
+            expr: Box::new(lower_expr(expr)?),
             source_span: None,
         }),
         ClangExprSkeleton::ArrayToPointerDecay { target, expr } => {
@@ -4755,6 +4794,7 @@ fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkelet
         | ClangExprSkeleton::Call { ty, .. }
         | ClangExprSkeleton::Member { ty, .. } => Some(ty),
         ClangExprSkeleton::Cast { target, .. }
+        | ClangExprSkeleton::LValueToRValue { target, .. }
         | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
         | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => Some(target),
         ClangExprSkeleton::Unsupported { .. } => None,
@@ -5390,6 +5430,7 @@ fn attach_record_inventory_to_expr(
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => attach_record_inventory_to_type(ty, inventory),
         IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
         | IrExpr::ArrayToPointerDecay { target, .. }
         | IrExpr::FunctionToPointerDecay { target, .. } => {
             attach_record_inventory_to_type(target, inventory)
@@ -5404,6 +5445,7 @@ fn attach_record_inventory_to_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
         | IrExpr::ArrayToPointerDecay { expr: operand, .. }
         | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
@@ -5609,6 +5651,59 @@ mod tests {
         ));
     }
 
+    fn assert_lvalue_to_rvalue_decl_ref(
+        expr: &ClangExprSkeleton,
+        expected_name: &str,
+        signed: bool,
+        width: u16,
+    ) {
+        let ClangExprSkeleton::LValueToRValue {
+            target,
+            expr: operand,
+        } = expr
+        else {
+            panic!("expected LValueToRValue read of {expected_name}, got {expr:?}");
+        };
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: actual_signed,
+                width: actual_width
+            } if actual_signed == signed && actual_width == width
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == expected_name
+        ));
+    }
+
+    fn assert_ir_lvalue_to_rvalue_var(
+        expr: &IrExpr,
+        expected_name: &str,
+        signed: bool,
+        width: u16,
+    ) {
+        let IrExpr::LValueToRValue {
+            target,
+            expr: operand,
+            ..
+        } = expr
+        else {
+            panic!("expected LValueToRValue read of {expected_name}, got {expr:?}");
+        };
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: actual_signed,
+                width: actual_width
+            } if actual_signed == signed && actual_width == width
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == expected_name
+        ));
+    }
+
     #[test]
     fn expr_skeleton_from_ast_maps_comparison_opcodes() {
         let cases = [
@@ -5793,10 +5888,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            lhs.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(lhs.as_ref(), "value", false, 32);
         assert!(matches!(
             rhs.as_ref(),
             IrExpr::Cast { target, .. }
@@ -6276,10 +6368,7 @@ mod tests {
                     width: 32
                 }
             ));
-            assert!(matches!(
-                lhs.as_ref(),
-                IrExpr::Var { name, .. } if name == "value"
-            ));
+            assert_ir_lvalue_to_rvalue_var(lhs.as_ref(), "value", false, 32);
             assert!(matches!(
                 rhs.as_ref(),
                 IrExpr::Cast { target, .. }
@@ -6347,10 +6436,10 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            args.as_slice(),
-            [IrExpr::Var { name, .. }] if name == "value"
-        ));
+        let [arg] = args.as_slice() else {
+            panic!("expected one direct call argument, got {args:?}");
+        };
+        assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
     }
 
     #[test]
@@ -6400,10 +6489,10 @@ mod tests {
             panic!("expected IR expr call statement, got {ir:?}");
         };
         assert_eq!(callee, "observe");
-        assert!(matches!(
-            args.as_slice(),
-            [IrExpr::Var { name, .. }] if name == "value"
-        ));
+        let [arg] = args.as_slice() else {
+            panic!("expected one direct call statement argument, got {args:?}");
+        };
+        assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
     }
 
     #[test]
@@ -6477,10 +6566,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            expr.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 8);
     }
 
     #[test]
@@ -6554,10 +6640,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            expr.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 8);
     }
 
     #[test]
@@ -6622,7 +6705,7 @@ mod tests {
             }
         ));
         assert_eq!(compute_lhs_ty, compute_result_ty);
-        assert!(matches!(value, ClangExprSkeleton::DeclRef { name, .. } if name == "y"));
+        assert_lvalue_to_rvalue_decl_ref(&value, "y", true, 32);
     }
 
     #[test]
@@ -7109,15 +7192,9 @@ mod tests {
         else {
             panic!("expected conditional skeleton, got {skeleton:?}");
         };
-        assert!(
-            matches!(condition.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "flag")
-        );
-        assert!(
-            matches!(then_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "left")
-        );
-        assert!(
-            matches!(else_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "right")
-        );
+        assert_lvalue_to_rvalue_decl_ref(condition.as_ref(), "flag", true, 32);
+        assert_lvalue_to_rvalue_decl_ref(then_expr.as_ref(), "left", true, 32);
+        assert_lvalue_to_rvalue_decl_ref(else_expr.as_ref(), "right", true, 32);
         assert!(matches!(
             ty.kind,
             ClangTypeKind::Integer {
@@ -7360,7 +7437,24 @@ mod tests {
         let ClangExprSkeleton::Binary { lhs, rhs, .. } = skeleton else {
             panic!("expected binary skeleton, got {skeleton:?}");
         };
-        assert!(matches!(lhs.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "value"));
+        let ClangExprSkeleton::LValueToRValue {
+            target: lhs_target,
+            expr: lhs_expr,
+        } = lhs.as_ref()
+        else {
+            panic!("expected preserved lhs LValueToRValue read, got {lhs:?}");
+        };
+        assert!(matches!(
+            lhs_target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            lhs_expr.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+        ));
         let ClangExprSkeleton::Cast {
             target,
             expr,
@@ -7437,8 +7531,22 @@ mod tests {
                 width: 32
             }
         ));
+        let ClangExprSkeleton::LValueToRValue {
+            target: read_target,
+            expr: read_expr,
+        } = expr.as_ref()
+        else {
+            panic!("expected preserved integer LValueToRValue read, got {expr:?}");
+        };
         assert!(matches!(
-            expr.as_ref(),
+            read_target.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            read_expr.as_ref(),
             ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
@@ -7678,10 +7786,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            init,
-            ClangExprSkeleton::DeclRef { name, .. } if name == "crc"
-        ));
+        assert_lvalue_to_rvalue_decl_ref(&init, "crc", false, 32);
     }
 
     #[test]
@@ -8214,7 +8319,7 @@ mod tests {
         else {
             panic!("expected if skeleton, got {skeleton:?}");
         };
-        assert!(matches!(condition, ClangExprSkeleton::DeclRef { name, .. } if name == "flag"));
+        assert_lvalue_to_rvalue_decl_ref(&condition, "flag", true, 32);
         assert!(matches!(
             then_body.as_slice(),
             [ClangStmtSkeleton::Assign { .. }]
