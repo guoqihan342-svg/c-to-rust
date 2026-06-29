@@ -1714,7 +1714,8 @@
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
         "simple scalar function pointer parameter type emitted as Rust fn pointer",
-        "ordinary FunctionToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
+        "direct function-name decay as simple function pointer call argument",
+        "ordinary FunctionToPointerDecay outside direct callees and direct function-name call arguments lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "pointer value call argument/return fail-closed",
         "route candidate evidence"
       ],
@@ -1735,8 +1736,12 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/pointer_value_boundary_ast.json"
             },
             {
-              "name": "function-to-pointer decay explicit typed IR no-clang AST fixture",
+              "name": "function name decay call argument no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/function_decay_boundary_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
               "name": "function pointer parameter direct call no-clang AST fixture",
@@ -1910,6 +1915,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2011,6 +2020,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_function_pointer_parameter_call_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -2133,11 +2146,6 @@
           "name": "clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "no-clang AST replay must lower pointer-value C shapes to typed IR and keep Rust lowering fail-closed at the explicit ABI/lifetime boundary"
-        },
-        {
-          "name": "clang_ast_fixture_rejects_function_decay_value_argument_without_clang",
-          "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "function-to-pointer decay outside direct callee position is visible as explicit typed IR, but Rust emission still requires explicit function-pointer lowering evidence"
         },
         {
           "name": "typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence",

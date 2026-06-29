@@ -1788,7 +1788,7 @@ fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
+fn clang_ast_fixture_replays_function_name_decay_argument_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/function_decay_boundary_ast.json"
     ))
@@ -1797,23 +1797,21 @@ fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
     let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "call_with_function_value")
             .expect("function-to-pointer decay argument should stay visible in typed IR");
-    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect_err("function-to-pointer decay argument must fail closed at emission");
-
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust for bounded function name decay argument");
+    let rust = &emitted.rust;
     assert!(
-        error.reason.contains("function-to-pointer decay"),
-        "{:?}",
-        error.reason
+        rust.contains("pub fn call_with_function_value(value: i32) -> i32"),
+        "{rust}"
     );
-    assert!(
-        error.reason.contains("function pointer value"),
-        "{:?}",
-        error.reason
+    assert!(rust.contains("return apply(helper, value);"), "{rust}");
+    let rust_with_helpers = format!(
+        "fn helper(value: i32) -> i32 {{ value + 1 }}\nfn apply(func: fn(i32) -> i32, value: i32) -> i32 {{ func(value) }}\n{rust}"
     );
-    assert!(
-        error.reason.contains("explicit function-pointer lowering"),
-        "{:?}",
-        error.reason
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-function-name-decay-argument",
+        &rust_with_helpers,
+        "assert_eq!(call_with_function_value(41i32), 42i32);",
     );
 }
 

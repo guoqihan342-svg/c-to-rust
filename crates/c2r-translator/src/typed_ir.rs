@@ -3030,11 +3030,78 @@ fn emit_call_expr(
         .iter()
         .enumerate()
         .map(|(index, arg)| {
-            emit_expr(arg, symbols, context).map_err(|detail| format!("call arg[{index}] {detail}"))
+            emit_call_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("call arg[{index}] {detail}"))
         })
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     Ok(format!("{callee}({args})"))
+}
+
+fn emit_call_arg_expr(
+    arg: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    match arg {
+        IrExpr::FunctionToPointerDecay { target, expr, .. } => {
+            emit_function_pointer_decay_call_arg(target, expr)
+        }
+        _ => emit_expr(arg, symbols, context),
+    }
+}
+
+fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
+    let name = validate_function_pointer_decay_call_arg(target, expr)?;
+    emit_identifier(name, "function pointer decay argument")
+}
+
+fn validate_function_pointer_decay_call_arg<'a>(
+    target: &IrType,
+    expr: &'a IrExpr,
+) -> Result<&'a str, String> {
+    let Some(target_signature) = emit_function_pointer_param_type(target)? else {
+        return Err(format!(
+            "function-to-pointer decay target {} is outside the simple function pointer argument subset",
+            type_label(target)
+        ));
+    };
+    let IrTypeKind::Pointer { pointee } = &target.kind else {
+        return Err(format!(
+            "function-to-pointer decay target {} is not a function pointer",
+            type_label(target)
+        ));
+    };
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Err(
+            "function-to-pointer decay argument must be a direct function name".to_string(),
+        );
+    };
+    if !matches!(ty.kind, IrTypeKind::Function) {
+        return Err(format!(
+            "function-to-pointer decay argument {name} has unsupported source type {}",
+            type_label(ty)
+        ));
+    }
+    let source_signature = emit_function_pointer_signature_type(&ty.spelled).map_err(|detail| {
+        format!(
+            "function-to-pointer decay argument {name} source type {} is unsupported: {detail}",
+            type_label(ty)
+        )
+    })?;
+    let pointee_signature =
+        emit_function_pointer_signature_type(&pointee.spelled).map_err(|detail| {
+            format!(
+                "function-to-pointer decay target pointee {} is unsupported: {detail}",
+                type_label(pointee)
+            )
+        })?;
+    if source_signature != target_signature || source_signature != pointee_signature {
+        return Err(format!(
+            "function-to-pointer decay argument {name} signature {source_signature} does not match target {target_signature}"
+        ));
+    }
+    Ok(name)
 }
 
 fn emit_c_assert_call_expr(
@@ -3576,17 +3643,14 @@ fn validate_bounded_call_arg(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
-        | IrExpr::LValueToRValue { expr: operand, .. } => {
-            validate_bounded_call_arg(operand, false)
-        }
+        | IrExpr::LValueToRValue { expr: operand, .. } => validate_bounded_call_arg(operand, false),
         IrExpr::ArrayToPointerDecay { .. } => Err(
             "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
                 .to_string(),
         ),
-        IrExpr::FunctionToPointerDecay { .. } => Err(
-            "call arguments cannot use function-to-pointer decay; function pointer value requires explicit function-pointer lowering evidence"
-                .to_string(),
-        ),
+        IrExpr::FunctionToPointerDecay { target, expr, .. } => {
+            validate_function_pointer_decay_call_arg(target, expr).map(|_| ())
+        }
         IrExpr::Conditional { .. } => {
             Err("conditional call arguments are outside the bounded call subset".to_string())
         }
