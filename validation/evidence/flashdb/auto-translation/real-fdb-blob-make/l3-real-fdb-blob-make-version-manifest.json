@@ -2,15 +2,15 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-    "fixture_sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
+    "fixture_sha256": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
-      "diff": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
-      "negative_diff": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
-      "rust_report": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
-      "unsafe_ledger": "e9e3db4bf145dd1369c3eae8c0cd032af256ef1ee41ed5853f18bd725538a32d",
-      "unsafe_scan": "e2b8763ab3b12f26cc2047f4f1dec4f526622a4022e5e2e9c2b5d64ea85758cb"
+      "diff": "8e98d9741ab6a1aa9a1f818190fcd6c0efd66dbd6e0cb17088e18d70a68b1370",
+      "negative_diff": "a6d83643267f930c1d5b305c4b8e0e1704ab4f5c10e0665ae034d4d26fef05b1",
+      "rust_report": "7956eb97cf207bf80537eaf687a4fe0454ce09f9e34a2b9046cd69dd88c31d4d",
+      "unsafe_ledger": "c6ab70cc3813885774aca470aa115f233c436096bc9454cc886d5bc85b57652e",
+      "unsafe_scan": "9b18f1fc7ccf71d24f26c1250e2e29233adcfc26697169c94f71cb92f6c37324"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
@@ -38,7 +38,7 @@
     },
     "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "c2rust_baseline_identity": {
-      "sha256": "ce1b64a15203c9b4fddb2130fe98f76090faaba9a5fd8ad3b7c34988cefa5f1c",
+      "sha256": "b225edac2f9861ad8b8fa91e91d4163f5d81b0078920208f1c221e5dc15e90d0",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -79,24 +79,24 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "71ceb466d3b054559c7dec2ba514cc8a741161b7880c286873f082d876595770"
+      "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
+        "sha256": "f7c34ca6b230938a8920cd8fdb8b0aef4eba60a7ea4820ea4d63f942b09ade9d",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "sha256": "7890ffa946937c995d1645555fefd4dee6a48a8e936ec3050bd2e8e9f9f74b31",
+        "sha256": "98556222cf989277f75c07c18a6478d74ec8f7bac42e91b026a7096005342b2c",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "4375f75f82e387660f4b6d13d7302a306cf7417378209c895d4e3e24d09c571c",
+        "sha256": "9a29e7a228dbade66a482a00df9ee9f294b4f7f7c92f2f0a5de91bda24cde856",
         "status": "passed"
       }
     },
@@ -143,7 +143,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "0f3eb080825379b2898ce268b27c36a31ff2a9ee06dfc5ee76fab38f33cb119a",
+      "sha256": "8d9bbdefeff69a6ffdf90f3a3b24003ec7bec11729e9f89088f0cd7f66191310",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -160,7 +160,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-blob-make",
-    "slice_spec_sha256": "5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
+    "slice_spec_sha256": "630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
     "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -172,14 +172,14 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
+    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "413399824e7692acf77f944e4fcd532b94f72762688df56e8059f3a14edbc4f0",
+      "sha256": "76969e89829bf9ac7ff508a5540c9d83101c68c2bceb5bd34e01be84dcf537d2",
       "status": "passed"
     }
   },
-  "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
+  "repo_commit": "4880f67e4ede72b016b8946574a49505a4d6ce97",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

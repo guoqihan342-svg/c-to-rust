@@ -1,13 +1,13 @@
 {
   "accepted_rust_report": {
     "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
-    "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+    "sha256": "7956eb97cf207bf80537eaf687a4fe0454ce09f9e34a2b9046cd69dd88c31d4d",
     "status": "passed"
   },
   "case_count": 3,
   "fixture": {
     "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-    "sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f"
+    "sha256": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b"
   },
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
@@ -23,7 +23,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
+      "slice_spec_sha256=630409964253a7a14630e9c9a02b2de05e8b84622d2bfdaafa970a0adcdb0ee7",
       "fixture_hash=real-fdb-blob-make-fixture",
       "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
       "translator_version=0.1.0",
@@ -48,7 +48,7 @@
       },
       "negative_diff": {
         "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
-        "sha256": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+        "sha256": "a6d83643267f930c1d5b305c4b8e0e1704ab4f5c10e0665ae034d4d26fef05b1",
         "status": "passed"
       },
       "rust_draft": {
@@ -57,12 +57,12 @@
       },
       "rust_report": {
         "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
-        "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+        "sha256": "7956eb97cf207bf80537eaf687a4fe0454ce09f9e34a2b9046cd69dd88c31d4d",
         "status": "passed"
       },
       "schema_diff": {
         "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
-        "sha256": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
+        "sha256": "8e98d9741ab6a1aa9a1f818190fcd6c0efd66dbd6e0cb17088e18d70a68b1370",
         "status": "passed"
       }
     },
@@ -73,7 +73,7 @@
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
+    "repo_commit": "4880f67e4ede72b016b8946574a49505a4d6ce97",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_blob_make",
@@ -100,7 +100,7 @@
     "source_test_inputs": {
       "fixtures": [
         {
-          "hash": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
+          "hash": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
           "source_kind": "fixture"
@@ -114,7 +114,7 @@
         },
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
-          "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+          "sha256": "7956eb97cf207bf80537eaf687a4fe0454ce09f9e34a2b9046cd69dd88c31d4d",
           "status": "passed"
         }
       ],
@@ -139,12 +139,12 @@
           },
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
-            "sha256": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
+            "sha256": "7956eb97cf207bf80537eaf687a4fe0454ce09f9e34a2b9046cd69dd88c31d4d",
             "status": "passed"
           },
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-diff.json",
-            "sha256": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
+            "sha256": "8e98d9741ab6a1aa9a1f818190fcd6c0efd66dbd6e0cb17088e18d70a68b1370",
             "status": "passed"
           }
         ],
@@ -162,7 +162,7 @@
         "evidence": [
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-negative-diff.json",
-            "sha256": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
+            "sha256": "a6d83643267f930c1d5b305c4b8e0e1704ab4f5c10e0665ae034d4d26fef05b1",
             "status": "passed"
           }
         ],
