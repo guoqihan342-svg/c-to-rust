@@ -45,7 +45,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec_sha256=b8a6d4645b3815e56b053a7c58478abc6918be3b54aec066ced336c3acefbb96",
+      "slice_spec_sha256=30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
       "fixture_hash=real-fdb-blob-make-fixture",
       "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
       "translator_version=0.1.0",
@@ -80,16 +80,16 @@
     ],
     "level": "L3",
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-2hdai8h_\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-2hdai8h_\\generated_replay.exe'",
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.exe'",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-2hdai8h_\\generated_replay.exe' --nocapture",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-zxtu117y\\generated_replay.exe' --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/generated-rust-replay.stdout.log"
     },
-    "repo_commit": "b087c0416cfbc53a490f581499903e741e04221e",
+    "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_blob_make_fixture_contract",

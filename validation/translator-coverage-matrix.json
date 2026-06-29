@@ -1382,7 +1382,8 @@
         "mutable record pointer opaque void pointer field write",
         "opaque void pointer field assignment cast",
         "mutable record pointer identity return after field write",
-        "typedef-backed mutable record pointer via desugared/canonical clang type fallback"
+        "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
+        "embedded slice source C oracle harness diagnostic execution"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1501,7 +1502,7 @@
         },
         "c_rust_diff": {
           "status": "gap",
-          "reason": "real-fdb-blob-make now has committed Rust compile, Rust replay fixture evidence, and a fixture-bound C oracle harness draft, but no committed executed C oracle/diff/negative-diff/final semantic acceptance"
+          "reason": "real-fdb-blob-make now has committed Rust compile, Rust replay fixture evidence, and a fixture-bound C oracle harness that compiles/runs under WSL/local-simulation with matched_not_oracle, but no accepted C oracle/diff/negative-diff/final semantic acceptance"
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -1539,9 +1540,14 @@
               "name": "real-fdb-blob-make fixture-bound C oracle harness draft",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
               "proof_class": "committed_fixture_bound_c_oracle_harness_draft_not_semantic"
+            },
+            {
+              "name": "real-fdb-blob-make C oracle harness diagnostic execution",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-status.json",
+              "proof_class": "committed_wsl_local_simulation_matched_not_oracle"
             }
           ],
-          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence and fixture-bound C harness draft evidence exists; executed semantic C oracle/diff acceptance remains a separate gap"
+          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence and fixture-bound C harness diagnostic execution exists; accepted semantic C oracle/diff evidence remains a separate gap"
         }
       },
       "positive_cases": [

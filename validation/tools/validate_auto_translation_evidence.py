@@ -420,6 +420,8 @@ def validate_oracle_harness_contract(evidence_dir: Path, prefix: str, slice_spec
     expected_source_files = slice_spec.get("c_boundary", {}).get("files", [])
     if contract.get("source_files") != expected_source_files:
         raise SystemExit(f"oracle harness contract source_files drift in {oracle_path}")
+    if contract.get("oracle_source_mode") != c_oracle_source_mode(slice_spec):
+        raise SystemExit(f"oracle harness contract source mode drift in {oracle_path}")
 
     contract_globals = contract.get("global_dependencies", [])
     if contract_globals != expected_globals:
@@ -430,7 +432,11 @@ def validate_oracle_harness_contract(evidence_dir: Path, prefix: str, slice_spec
     validate_compile_execution(oracle.get("compile_execution"), compile_command, oracle, oracle_path)
 
     harness_text = harness_path.read_text(encoding="utf-8")
-    if expected_prototype not in harness_text:
+    if c_oracle_embeds_slice_source(slice_spec):
+        embedded_source = c_oracle_embedded_slice_source(slice_spec)
+        if embedded_source is None or embedded_source.strip() not in harness_text:
+            raise SystemExit(f"oracle harness embedded slice source missing from {harness_path}")
+    elif expected_prototype not in harness_text:
         raise SystemExit(f"oracle harness function prototype missing from {harness_path}")
     if f"fixture input: {fixture_path_from_spec(slice_spec)}" not in harness_text:
         raise SystemExit(f"oracle harness fixture binding missing from {harness_path}")
@@ -478,7 +484,7 @@ def validate_compile_command_draft(
         for path in slice_spec.get("build_profile", {}).get("include_paths", [])
     ]
     expected_defines = [str(item) for item in slice_spec.get("build_profile", {}).get("defines", [])]
-    expected_sources = compile_link_source_files(slice_spec, source_root)
+    expected_sources = [] if c_oracle_embeds_slice_source(slice_spec) else compile_link_source_files(slice_spec, source_root)
     output_name = harness_path.with_suffix(".exe").name
     expected_argv = [
         "cc",
@@ -502,6 +508,8 @@ def validate_compile_command_draft(
         raise SystemExit(f"oracle harness compile command source linkage drift in {oracle_path}")
     if compile_command.get("link_strategy") != c_oracle_link_strategy(slice_spec):
         raise SystemExit(f"oracle harness compile command link strategy drift in {oracle_path}")
+    if compile_command.get("oracle_source_mode") != c_oracle_source_mode(slice_spec):
+        raise SystemExit(f"oracle harness compile command source mode drift in {oracle_path}")
     if compile_command.get("argv") != expected_argv:
         raise SystemExit(f"oracle harness compile command argv drift in {oracle_path}")
     if compile_command.get("status") != "draft_not_executed":
@@ -975,9 +983,35 @@ def compile_link_source_files(spec: dict[str, Any], source_root: str) -> list[di
 
 
 def c_oracle_link_strategy(spec: dict[str, Any]) -> str:
+    if c_oracle_embeds_slice_source(spec):
+        return "compile_harness_with_embedded_slice_source"
     if spec.get("build_profile", {}).get("link_source_files"):
         return "compile_harness_with_declared_c_boundary_and_build_profile_sources"
     return "compile_harness_with_declared_c_boundary_sources"
+
+
+def c_oracle_source_mode(spec: dict[str, Any]) -> str:
+    return str(spec.get("c_boundary", {}).get("oracle_source_mode") or "declared_c_boundary_sources")
+
+
+def c_oracle_embeds_slice_source(spec: dict[str, Any]) -> bool:
+    return c_oracle_source_mode(spec) == "embedded_slice_c_source"
+
+
+def c_oracle_embedded_slice_source(spec: dict[str, Any]) -> str | None:
+    if not c_oracle_embeds_slice_source(spec):
+        return None
+    c_source = spec.get("c_source")
+    if isinstance(c_source, str) and c_source.strip():
+        return c_source
+    function_name = required_str(spec, "function_name")
+    for signature in spec.get("c_boundary", {}).get("signatures", []):
+        if not isinstance(signature, dict) or signature.get("function") != function_name:
+            continue
+        c_source = signature.get("c_source")
+        if isinstance(c_source, str) and c_source.strip():
+            return c_source
+    return None
 
 
 def resolve_source_root_path(source_root: str, path: Any) -> str:

@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "0dc9273d25e8e4bc340a6cc15a3f75556a0af7dba86fcde8b58ab538816e301f",
+        "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -36,7 +36,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "0dc9273d25e8e4bc340a6cc15a3f75556a0af7dba86fcde8b58ab538816e301f",
+          "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -199,7 +199,7 @@
   },
   "profile": "L1-dev",
   "required_gate_status": {
-    "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "c_oracle_diff": "DRAFT_GENERATED",
     "compile": "passed"
   },
   "required_gates": [
@@ -237,7 +237,7 @@
   "skipped_gates": [
     {
       "gate": "c_oracle_diff",
-      "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
+      "reason": "DRAFT_GENERATED"
     }
   ],
   "slice_id": "real-fdb-blob-make",

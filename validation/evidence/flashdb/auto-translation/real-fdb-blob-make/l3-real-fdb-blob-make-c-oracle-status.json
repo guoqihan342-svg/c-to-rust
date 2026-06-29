@@ -7,21 +7,13 @@
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
       "l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_utils.c",
       "-o",
       "l3-real-fdb-blob-make-c-oracle-harness-draft.exe"
     ],
     "defines": [],
-    "link_source_files": [
-      {
-        "path": "src/fdb_utils.c",
-        "resolution": "source_root_relative",
-        "resolved_path": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_utils.c",
-        "role": "source",
-        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
-      }
-    ],
-    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "link_source_files": [],
+    "link_strategy": "compile_harness_with_embedded_slice_source",
+    "oracle_source_mode": "embedded_slice_c_source",
     "resolved_include_paths": [
       "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
       "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests"
@@ -37,18 +29,99 @@
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
       "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
       "l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_utils.c",
       "-o",
       "l3-real-fdb-blob-make-c-oracle-harness-draft.exe"
     ],
-    "attempted": false,
-    "diagnostics": [
-      "C oracle compile execution skipped by --skip-c-oracle."
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
     ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-blob-make && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0625ctr/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc -I/mnt/f/agent/crustpaper/0625ctr/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c -o /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.exe",
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-blob-make && /mnt/f/agent/crustpaper/0625ctr/validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.exe"
+      ],
+      "output_gate": {
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+        "compared_fields": [
+          "return_same_blob",
+          "blob.buf",
+          "blob.size"
+        ],
+        "diagnostics": [
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+        ],
+        "expected_stdout_fragments": [
+          "fixture case null-empty return_same_blob matched",
+          "fixture case null-empty blob.buf matched",
+          "fixture case null-empty blob.size matched",
+          "fixture case nominal-bytes return_same_blob matched",
+          "fixture case nominal-bytes blob.buf matched",
+          "fixture case nominal-bytes blob.size matched",
+          "fixture case shorter-length-than-buffer return_same_blob matched",
+          "fixture case shorter-length-than-buffer blob.buf matched",
+          "fixture case shorter-length-than-buffer blob.size matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "matched_stdout_fragments": [
+          "fixture case null-empty return_same_blob matched",
+          "fixture case null-empty blob.buf matched",
+          "fixture case null-empty blob.size matched",
+          "fixture case nominal-bytes return_same_blob matched",
+          "fixture case nominal-bytes blob.buf matched",
+          "fixture case nominal-bytes blob.size matched",
+          "fixture case shorter-length-than-buffer return_same_blob matched",
+          "fixture case shorter-length-than-buffer blob.buf matched",
+          "fixture case shorter-length-than-buffer blob.size matched"
+        ],
+        "missing_stdout_fragments": [],
+        "schema_version": 1,
+        "semantic_pass": false,
+        "status": "matched_not_oracle"
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for fdb_blob_make\nfixture input: validation/l2_slices/fixtures/real-fdb-blob-make.json\nfixture case null-empty return_same_blob matched\nfixture case null-empty blob.buf matched\nfixture case null-empty blob.size matched\nfixture case nominal-bytes return_same_blob matched\nfixture case nominal-bytes blob.buf matched\nfixture case nominal-bytes blob.size matched\nfixture case shorter-length-than-buffer return_same_blob matched\nfixture case shorter-length-than-buffer blob.buf matched\nfixture case shorter-length-than-buffer blob.size matched\n",
+      "timeout_seconds": 30,
+      "toolchain_adapter": "wsl",
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
     "semantic_pass": false,
-    "status": "skipped_by_flag",
-    "toolchain_adapter": "not_executed",
-    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make"
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
@@ -194,6 +267,7 @@
     },
     "function_prototype": "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len);",
     "global_dependencies": [],
+    "oracle_source_mode": "embedded_slice_c_source",
     "source_files": [
       {
         "path": "src/fdb_utils.c",
@@ -206,14 +280,14 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-    "sha256": "754dbde5e4ec550606182f2904bc9b98b15e7b9e5c8fb61178a8e367e4f8bb3c",
+    "sha256": "cbc0052615980a2451f35f989a8fa57ccfa6091d23612927f9ac2136eec80e23",
     "status": "draft"
   },
   "required_final_status": "C_ORACLE_GENERATED",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-blob-make",
-  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+  "status": "DRAFT_GENERATED",
   "target_id": "flashdb",
-  "toolchain_status": "DRAFT_NOT_EXECUTED"
+  "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE"
 }

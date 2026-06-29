@@ -24,7 +24,13 @@ static const uint8_t nominal_bytes_value_buf[] = { 16u, 32u, 48u };
 
 static const uint8_t shorter_length_than_buffer_value_buf[] = { 170u, 187u, 204u, 221u };
 
-fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len);
+fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)
+{
+    blob->buf = (void *)value_buf;
+    blob->size = buf_len;
+
+    return blob;
+}
 
 int main(void) {
   puts("oracle harness draft for fdb_blob_make");

@@ -25,6 +25,8 @@
     }
   },
   "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
+    "oracle_source_ref": "c_boundary.signatures[0].c_source",
     "files": [
       {
         "path": "src/fdb_utils.c",

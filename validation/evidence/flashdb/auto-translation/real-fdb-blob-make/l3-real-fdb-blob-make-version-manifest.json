@@ -11,12 +11,12 @@
     },
     "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "c2rust_baseline_identity": {
-      "sha256": "114882bb1fff5ee6d2f2cdb940029502e7db336aa98c297e017e28bd0f6e1325",
+      "sha256": "bf99c1ef72454888bee85f21f1f786649c2cbe7779d02ab54371d86db375e150",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-      "sha256": "754dbde5e4ec550606182f2904bc9b98b15e7b9e5c8fb61178a8e367e4f8bb3c",
+      "sha256": "cbc0052615980a2451f35f989a8fa57ccfa6091d23612927f9ac2136eec80e23",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -80,19 +80,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "0dc9273d25e8e4bc340a6cc15a3f75556a0af7dba86fcde8b58ab538816e301f",
+        "sha256": "55509c758001c56d96bdc281d58a3b8a451d18f8bd3ee46f2bb6c9529a49e140",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L1",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
-        "sha256": "03e32b904df5d1da69471faa3c39fcaf36659c1c0fbfc65c775c55c709f10311",
+        "sha256": "6d84d1de69d9ca6d6f994d2a9f5acd288bc1ec56653cb14f115f62e6e7c0ec44",
         "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json",
         "profile": "L1-dev",
-        "sha256": "a5e2dbf363053bccd1b12f7139f34e37da5b2751d5020092e149aa8fd41cbacd",
+        "sha256": "f014e93a51b40bce8d5ab7ff6464984cf777cf458aa2c08dc2ca538d4035fb13",
         "status": "incomplete"
       }
     },
@@ -139,7 +139,7 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "e4fa5cb6dde9db63e1374a35e65364cd8d1f8514d27306e4f8d8d177b04cce8e",
+      "sha256": "ea31fa8c00f63b917147350af8fba42c512629cf780839c370ef83e9eefba24f",
       "status": "recorded"
     },
     "scalar_ub_contract_identity": {
@@ -156,7 +156,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-blob-make",
-    "slice_spec_sha256": "b8a6d4645b3815e56b053a7c58478abc6918be3b54aec066ced336c3acefbb96",
+    "slice_spec_sha256": "30b60ec1dc12320c30e343d1a84866d399ff1897d0e9d02a56af79b7923d9c02",
     "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
     "source_file_hashes": {
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -174,11 +174,11 @@
     "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "c2627fb3761b16fcfed716a7826e055f0dcec1c7cbada496418ad6a3c136d513",
+      "sha256": "31d71de29029fd74b3818451319b7741016f1b7cdc2a7f29b415beadad52ac53",
       "status": "incomplete"
     }
   },
-  "repo_commit": "b087c0416cfbc53a490f581499903e741e04221e",
+  "repo_commit": "ee97ad98648f8489fc37cc570464887710c15c3e",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-blob-make",

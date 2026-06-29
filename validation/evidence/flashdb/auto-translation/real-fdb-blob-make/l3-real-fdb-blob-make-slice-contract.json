@@ -55,6 +55,8 @@
     "functions": [
       "fdb_blob_make"
     ],
+    "oracle_source_mode": "embedded_slice_c_source",
+    "oracle_source_ref": "c_boundary.signatures[0].c_source",
     "pointer_contract": {
       "aliasing_proven": false,
       "inout_pointers": [

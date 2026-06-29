@@ -1790,6 +1790,35 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("harness contract", result.stderr + result.stdout)
 
+    def test_rejects_oracle_harness_contract_source_mode_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["harness_contract"]["oracle_source_mode"] = "stale-mode"
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("source mode", result.stderr + result.stdout)
+
     def test_rejects_oracle_fixture_binding_case_output_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))

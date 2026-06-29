@@ -747,6 +747,72 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn(str(REPO_ROOT / "validation" / "tools" / "auto_migrate.py"), execution_argv)
             self.assertIn(str(output_path), execution_argv)
 
+    def test_compile_execution_argv_resolves_relative_evidence_directory_to_absolute_paths(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-relative-evidence-", dir=REPO_ROOT) as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "harness.c"
+            harness_path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            relative_evidence_dir = evidence_dir.relative_to(REPO_ROOT)
+
+            resolved = module.c_oracle_compile_execution_args_with_resolved_paths(
+                ["cc", "harness.c", "-o", "harness.exe"],
+                relative_evidence_dir,
+            )
+
+            self.assertIn(str(harness_path), resolved)
+            self.assertIn(str(evidence_dir / "harness.exe"), resolved)
+            self.assertNotIn(str(relative_evidence_dir / "harness.c"), resolved)
+
+    def test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-blob-make",
+        }
+        route_decision = {
+            "level": "L1",
+            "status": "recorded",
+            "translator": {"candidate_generation_allowed": True},
+        }
+        validation_profile = {"generated_draft_semantic_pass": False}
+        c_oracle = {
+            "compile_execution": {
+                "status": "compile_succeeded_not_oracle",
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "output_gate": {
+                        "status": "matched_not_oracle",
+                        "matched_stdout_fragments": [
+                            "fixture case null-empty return_same_blob matched",
+                        ],
+                        "missing_stdout_fragments": [],
+                    },
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-capability-ledger-") as tmp:
+            evidence_dir = Path(tmp)
+
+            payload = module.emit_capability_delta_ledger(
+                spec,
+                evidence_dir,
+                route_decision,
+                validation_profile,
+                c_oracle=c_oracle,
+            )
+
+            c_oracle_delta = next(
+                item
+                for item in payload["capability_delta"]
+                if item["construct_id"] == "c_oracle_harness_matched_not_oracle"
+            )
+            self.assertEqual(c_oracle_delta["kind"], "candidate_verification")
+            self.assertEqual(c_oracle_delta["generated_candidate_status"], "candidate")
+            self.assertFalse(c_oracle_delta["semantic_pass"])
+            self.assertTrue(c_oracle_delta["negative_coverage"])
+
     def test_wsl_path_failure_records_structured_compile_failure(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -2899,6 +2965,7 @@ class AutoMigrateTests(unittest.TestCase):
                         }
                     ],
                     "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+                    "oracle_source_mode": "declared_c_boundary_sources",
                     "argv": [
                         "cc",
                         "-std=c99",
@@ -3348,11 +3415,24 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
             self.assertEqual(oracle["fixture_binding"]["case_count"], 3)
             self.assertEqual(oracle["fixture_binding"]["expected_output_status"], "declared_not_executed")
+            self.assertEqual(
+                oracle["compile_command_draft"]["link_strategy"],
+                "compile_harness_with_embedded_slice_source",
+            )
+            self.assertNotIn("src/fdb_utils.c", " ".join(oracle["compile_command_draft"]["argv"]))
             self.assertIn("struct fdb_blob {", harness)
             self.assertIn("typedef struct fdb_blob *fdb_blob_t;", harness)
+            self.assertIn(
+                "fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{",
+                harness,
+            )
             self.assertLess(
                 harness.index("typedef struct fdb_blob *fdb_blob_t;"),
-                harness.index("fdb_blob_t fdb_blob_make(fdb_blob_t blob"),
+                harness.index("fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{"),
+            )
+            self.assertLess(
+                harness.index("fdb_blob_t fdb_blob_make(fdb_blob_t blob, const void *value_buf, size_t buf_len)\n{"),
+                harness.index("int main(void)"),
             )
             self.assertIn("static const uint8_t nominal_bytes_value_buf[] = { 16u, 32u, 48u };", harness)
             self.assertIn(

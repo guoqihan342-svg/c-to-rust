@@ -3,3 +3,6 @@
 /validation/l2_slices/target/
 /crates/*/target/
 /.worktrees
+/validation/evidence/**/*.exe
+/validation/evidence/**/generated-rust-replay-compile.*
+/validation/evidence/**/rust-check*.stderr.jsonl

@@ -148,7 +148,7 @@ def main() -> int:
     emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
-    emit_capability_delta_ledger(spec, evidence_dir, route_decision, validation_profile, rust_check, replay)
+    emit_capability_delta_ledger(spec, evidence_dir, route_decision, validation_profile, rust_check, replay, oracle)
     cache = emit_cache_metadata(
         spec,
         args.slice_spec,
@@ -1513,6 +1513,8 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
     fixture_comments = oracle_fixture_comments(fixture_binding)
     fixture_execution = oracle_fixture_execution_source(spec, fixture_binding)
     compile_command = c_oracle_compile_command(spec, c_path, evidence_dir)
+    embedded_source = c_oracle_embedded_slice_source(spec)
+    target_definition = f"{embedded_source.rstrip()}\n\n" if embedded_source else f"{prototype}\n\n"
     fixture_execution_statements = fixture_execution["statements"]
     if not fixture_execution_statements:
         fixture_execution_statements = (
@@ -1532,7 +1534,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         f"{source_comments}"
         f"{global_comments}"
         f"{fixture_execution['declarations']}"
-        f"{prototype}\n\n"
+        f"{target_definition}"
         "int main(void) {\n"
         f"  puts(\"oracle harness draft for {function_name}\");\n"
         f"  puts(\"fixture input: {fixture_path_text}\");\n"
@@ -1560,6 +1562,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
             "fixture": fixture_binding,
             "source_files": source_files,
             "global_dependencies": global_requirements,
+            "oracle_source_mode": c_oracle_source_mode(spec),
             "status": "draft_requires_review",
         },
         "compile_command_draft": compile_command,
@@ -2020,7 +2023,7 @@ def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_
         for path in spec.get("build_profile", {}).get("include_paths", [])
     ]
     defines = [str(item) for item in spec.get("build_profile", {}).get("defines", [])]
-    link_source_files = compile_link_source_files(spec, source_root)
+    link_source_files = [] if c_oracle_embeds_slice_source(spec) else compile_link_source_files(spec, source_root)
     define_args = [f"-D{item}" for item in defines]
     include_args = [f"-I{path}" for path in resolved_include_paths]
     link_args = [item["resolved_path"] for item in link_source_files]
@@ -2032,6 +2035,7 @@ def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_
         "resolved_include_paths": resolved_include_paths,
         "link_source_files": link_source_files,
         "link_strategy": c_oracle_link_strategy(spec),
+        "oracle_source_mode": c_oracle_source_mode(spec),
         "argv": [
             "cc",
             "-std=c99",
@@ -2233,6 +2237,7 @@ def c_oracle_compile_execution_argv(
 
 
 def c_oracle_compile_execution_args_with_resolved_paths(argv: list[str], evidence_dir: Path) -> list[str]:
+    evidence_dir = c_oracle_absolute_evidence_dir(evidence_dir)
     resolved: list[str] = []
     output_next = False
     for arg in argv:
@@ -2252,6 +2257,7 @@ def c_oracle_compile_execution_args_with_resolved_paths(argv: list[str], evidenc
 
 
 def c_oracle_resolve_input_path(arg: str, evidence_dir: Path, force: bool = False) -> str:
+    evidence_dir = c_oracle_absolute_evidence_dir(evidence_dir)
     if not force and not c_oracle_arg_looks_like_path(arg):
         return arg
     if path_is_absolute(arg):
@@ -2266,9 +2272,16 @@ def c_oracle_resolve_input_path(arg: str, evidence_dir: Path, force: bool = Fals
 
 
 def c_oracle_resolve_output_path(arg: str, evidence_dir: Path) -> str:
+    evidence_dir = c_oracle_absolute_evidence_dir(evidence_dir)
     if path_is_absolute(arg):
         return arg
     return str(evidence_dir / arg)
+
+
+def c_oracle_absolute_evidence_dir(evidence_dir: Path) -> Path:
+    if evidence_dir.is_absolute():
+        return evidence_dir
+    return REPO_ROOT / evidence_dir
 
 
 def c_oracle_arg_looks_like_path(arg: str) -> bool:
@@ -2599,9 +2612,35 @@ def compile_link_source_files(spec: dict[str, Any], source_root: str) -> list[di
 
 
 def c_oracle_link_strategy(spec: dict[str, Any]) -> str:
+    if c_oracle_embeds_slice_source(spec):
+        return "compile_harness_with_embedded_slice_source"
     if spec.get("build_profile", {}).get("link_source_files"):
         return "compile_harness_with_declared_c_boundary_and_build_profile_sources"
     return "compile_harness_with_declared_c_boundary_sources"
+
+
+def c_oracle_source_mode(spec: dict[str, Any]) -> str:
+    return str(spec.get("c_boundary", {}).get("oracle_source_mode") or "declared_c_boundary_sources")
+
+
+def c_oracle_embeds_slice_source(spec: dict[str, Any]) -> bool:
+    return c_oracle_source_mode(spec) == "embedded_slice_c_source"
+
+
+def c_oracle_embedded_slice_source(spec: dict[str, Any]) -> str | None:
+    if not c_oracle_embeds_slice_source(spec):
+        return None
+    c_source = spec.get("c_source")
+    if isinstance(c_source, str) and c_source.strip():
+        return c_source
+    function_name = required_str(spec, "function_name")
+    for signature in spec.get("c_boundary", {}).get("signatures", []):
+        if not isinstance(signature, dict) or signature.get("function") != function_name:
+            continue
+        c_source = signature.get("c_source")
+        if isinstance(c_source, str) and c_source.strip():
+            return c_source
+    return None
 
 
 def resolve_source_root_path(source_root: str, path: Any) -> str:
@@ -3464,6 +3503,7 @@ def emit_capability_delta_ledger(
     validation_profile: dict[str, Any],
     rust_check: dict[str, Any] | None = None,
     replay: dict[str, Any] | None = None,
+    c_oracle: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     target_id = required_str(spec, "target_id")
@@ -3562,6 +3602,52 @@ def emit_capability_delta_ledger(
         )
         if replay_command not in verification_commands:
             verification_commands.append(replay_command)
+    if c_oracle_harness_matched_not_oracle(c_oracle):
+        c_oracle_construct_id = "c_oracle_harness_matched_not_oracle"
+        c_oracle_refs = list(
+            dict.fromkeys(
+                [
+                    route_ref,
+                    profile_ref,
+                    rel(evidence_dir / f"{prefix}-c-oracle-status.json"),
+                    rel(evidence_dir / f"{prefix}-c-oracle-harness-draft.c"),
+                ]
+            )
+        )
+        c_oracle_command = (
+            "python -B -m unittest "
+            "validation.tools.test_auto_migrate.AutoMigrateTests."
+            "test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim"
+        )
+        capability_delta.append(
+            {
+                "delta_id": f"cap-{slice_id}-{c_oracle_construct_id}",
+                "kind": "candidate_verification",
+                "construct_id": c_oracle_construct_id,
+                "real_c_slice": slice_id,
+                "generated_candidate_status": generated_status,
+                "semantic_pass": semantic_pass,
+                "blocked_callees": [],
+                "evidence_refs": c_oracle_refs,
+                "negative_coverage": [
+                    {
+                        "kind": "c_oracle_diagnostic_regression",
+                        "command": c_oracle_command,
+                    }
+                ],
+            }
+        )
+        governance_delta.append(
+            {
+                "delta_id": f"gov-{slice_id}-{c_oracle_construct_id}-evidence",
+                "kind": "evidence_contract",
+                "construct_id": c_oracle_construct_id,
+                "evidence_refs": c_oracle_refs,
+                "bound_to": "P0 capability delta; governance records that the C harness executed and matched fixture markers without semantic acceptance.",
+            }
+        )
+        if c_oracle_command not in verification_commands:
+            verification_commands.append(c_oracle_command)
     payload = {
         "schema_version": 1,
         "target_id": target_id,
@@ -3576,6 +3662,26 @@ def emit_capability_delta_ledger(
     }
     write_json(evidence_dir / f"{prefix}-capability-delta.json", payload)
     return payload
+
+
+def c_oracle_harness_matched_not_oracle(c_oracle: dict[str, Any] | None) -> bool:
+    if not isinstance(c_oracle, dict):
+        return False
+    compile_execution = c_oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        return False
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        return False
+    output_gate = harness_execution.get("output_gate")
+    return (
+        compile_execution.get("status") == "compile_succeeded_not_oracle"
+        and harness_execution.get("status") == "exited_zero_not_oracle"
+        and isinstance(output_gate, dict)
+        and output_gate.get("status") == "matched_not_oracle"
+        and bool(output_gate.get("matched_stdout_fragments"))
+        and not output_gate.get("missing_stdout_fragments")
+    )
 
 
 def route_refused_repair_summary(evidence_dir: Path, slice_id: str) -> dict[str, Any]:
