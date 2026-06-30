@@ -1805,6 +1805,71 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_flashdb_before_after_profile_fails_closed_without_repair_trace(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = REPO_ROOT / "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            self.assertTrue(profile["require_repair_trace"])
+            write_worker_summary(
+                summary_path,
+                "run-flashdb-before-after-strict-repair",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=before_after_worker_metrics(out_root, "run-flashdb-before-after-strict-repair"),
+            )
+
+            with self.assertRaisesRegex(SystemExit, "requires verified repair trace"):
+                harness.write_before_after_exhibit_profile_report(
+                    profile=profile,
+                    profile_path=profile_path,
+                    run_id="run-flashdb-before-after-strict-repair",
+                    proof_class="local-simulation",
+                    mode="deterministic",
+                    plan={"status": "planned", "units": [{"slice_id": "real-fdb-calc-crc32"}]},
+                    run_result={"workers": [{"worker_id": "flashdb-worker-001-fdb-calc-crc32", "exit_code": 0}]},
+                    route_metrics_artifact=None,
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_flashdb_before_after_profile_run_batch_fails_closed_without_repair_trace(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            profile_path = REPO_ROOT / "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(
+                    summary_path,
+                    "run-flashdb-before-after-profile-strict",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=1,
+                    workflow_metrics=before_after_worker_metrics(out_root, "run-flashdb-before-after-profile-strict"),
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "requires verified repair trace"):
+                harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-flashdb-before-after-profile-strict",
+                    out_root=out_root,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertFalse((out_root / "summary" / "before-after-exhibit.json").exists())
+            self.assertFalse((out_root / "harness" / "batch-profile-report.json").exists())
+
     def test_run_batch_profile_auto_retry_produces_verified_before_after_repair_exhibit(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
