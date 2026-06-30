@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -48,6 +49,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
         raise SystemExit(f"competition run summary schema error at {path}: {error.message}") from error
 
     validate_artifact_roots(summary.get("artifact_roots", []), repo_root=repo_root)
+    validate_workflow_metrics(summary, summary_path=summary_path, repo_root=repo_root)
     validate_final_gate(summary)
     validate_slice_counts(summary)
     validate_workers(summary)
@@ -87,6 +89,76 @@ def is_repo_relative_posix_path(value: str) -> bool:
         return False
     parts = PurePosixPath(value).parts
     return ".." not in parts
+
+
+def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:
+    binding = summary["workflow_metrics"]
+    metrics_ref = binding["path"]
+    if not is_repo_relative_posix_path(metrics_ref):
+        raise SystemExit(f"competition run summary workflow_metrics.path must be repo-relative POSIX: {metrics_ref}")
+    metrics_path = resolve_summary_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None:
+        raise SystemExit(f"competition run summary workflow_metrics.path does not exist: {metrics_ref}")
+    actual_sha = sha256(metrics_path)
+    if actual_sha != binding["sha256"]:
+        raise SystemExit("competition run summary workflow_metrics.sha256 does not match artifact")
+    metrics = load_json(metrics_path)
+    required_fields = [
+        "schema_version",
+        "run_id",
+        "proof_class",
+        "units_total",
+        "units_converged",
+        "units_baseline_only",
+        "unsafe_reduction",
+        "avg_repair_rounds",
+        "auto_recovery_rate",
+        "human_interventions",
+        "always_compiles",
+        "always_equivalent",
+        "fail_closed_count",
+        "wall_clock_seconds",
+        "llm_calls",
+        "per_unit_statuses",
+    ]
+    missing = [field for field in required_fields if field not in metrics]
+    if missing:
+        raise SystemExit(f"workflow metrics artifact missing required fields: {', '.join(missing)}")
+    slices = summary["slices"]
+    expected = {
+        "run_id": summary["run_id"],
+        "proof_class": summary["proof_class"],
+        "units_total": slices["attempted"],
+        "units_converged": slices["semantic_pass"],
+        "units_baseline_only": max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+        "fail_closed_count": int(slices["refused"]) + int(slices["blocked"]),
+        "wall_clock_seconds": summary["elapsed_seconds"],
+    }
+    for field, value in expected.items():
+        if metrics[field] != value:
+            raise SystemExit(f"workflow metrics artifact {field} does not match competition summary")
+    if not isinstance(metrics["per_unit_statuses"], list):
+        raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
+
+
+def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def validate_final_gate(summary: dict[str, Any]) -> None:

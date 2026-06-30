@@ -248,6 +248,61 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
 
+    def test_runner_writes_machine_readable_workflow_metrics_artifact(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["workflow_metrics"]["path"], "summary/workflow-metrics.json")
+            self.assertRegex(summary["workflow_metrics"]["sha256"], r"^[0-9a-f]{64}$")
+
+            metrics_path = out_root / "summary" / "workflow-metrics.json"
+            self.assertTrue(metrics_path.exists())
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            self.assertEqual(metrics["run_id"], "run-test")
+            self.assertEqual(metrics["units_total"], 1)
+            self.assertEqual(metrics["units_converged"], 1)
+            self.assertEqual(metrics["units_baseline_only"], 0)
+            self.assertEqual(metrics["fail_closed_count"], 0)
+            self.assertEqual(metrics["avg_repair_rounds"], 0.0)
+            self.assertEqual(metrics["auto_recovery_rate"], 0.0)
+            self.assertEqual(metrics["human_interventions"], 0)
+            self.assertTrue(metrics["always_compiles"])
+            self.assertTrue(metrics["always_equivalent"])
+            self.assertEqual(metrics["llm_calls"], 0)
+            self.assertEqual(metrics["wall_clock_seconds"], summary["elapsed_seconds"])
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "not_measured")
+            self.assertEqual(
+                metrics["per_unit_statuses"],
+                [
+                    {
+                        "unit_id": "demo/store-add-one",
+                        "source": "slice-spec",
+                        "status": "converged",
+                        "compiled": True,
+                        "semantic_pass": True,
+                        "refused": False,
+                        "blocked": False,
+                        "failed": False,
+                    }
+                ],
+            )
+
     def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

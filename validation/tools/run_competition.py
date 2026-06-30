@@ -145,6 +145,7 @@ def run_competition(
     refused = 0
     blocked = 0
     worker_statuses = load_worker_summary_statuses(worker_summaries, repo_root=repo_root, out_root=out_root)
+    unit_statuses = [workflow_unit_status_from_worker(worker) for worker in worker_statuses]
     for worker in worker_statuses:
         worker_slices = worker["slices"]
         typed_ir_generated += worker_slices["typed_ir_generated"]
@@ -167,7 +168,7 @@ def run_competition(
     if environment_result.returncode != 0 and proof_class == "competition-exact":
         gate_failures += 1
 
-    generated_slice_specs, extraction_failures = extract_slice_specs(
+    generated_slice_specs, extraction_failures, extraction_unit_statuses = extract_slice_specs(
         extraction_specs,
         generated_slice_specs_root=generated_slice_specs_root,
         command_runner=command_runner,
@@ -175,13 +176,16 @@ def run_competition(
         logs_dir=logs_dir,
         out_root=out_root,
     )
+    unit_statuses.extend(extraction_unit_statuses)
     slice_failures += extraction_failures
 
     all_slice_specs = list(slice_specs) + generated_slice_specs
+    generated_slice_spec_paths = {path.resolve() for path in generated_slice_specs}
     specs = [load_slice_spec(path, repo_root=repo_root) for path in all_slice_specs]
     for spec_path, spec in specs:
         target_id = required_str(spec, "target_id")
         slice_id = required_str(spec, "slice_id")
+        unit_source = "extract-spec" if spec_path.resolve() in generated_slice_spec_paths else "slice-spec"
         slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
         if not reuse_accepted_evidence:
             auto_result = run_logged_step(
@@ -202,22 +206,50 @@ def run_competition(
             )
             if auto_result.returncode != 0:
                 slice_failures += 1
+                unit_statuses.append(
+                    workflow_unit_status(
+                        target_id=target_id,
+                        slice_id=slice_id,
+                        source=unit_source,
+                        status="failed",
+                        compiled=False,
+                        semantic_pass=False,
+                        refused=False,
+                        blocked=False,
+                        failed=True,
+                    )
+                )
                 continue
 
         final = load_final_verification(slice_evidence_root, target_id, slice_id)
-        if final.get("rust_check_status") == "passed":
+        compiled_unit = final.get("rust_check_status") == "passed"
+        semantic_unit = final.get("semantic_pass") is True
+        final_status = str(final.get("status", "failed"))
+        if compiled_unit:
             compiled += 1
-        if final.get("semantic_pass") is True:
+        if semantic_unit:
             semantic_pass += 1
         else:
-            status = str(final.get("status", "failed"))
-            if status == "refused":
+            if final_status == "refused":
                 refused += 1
-            elif status == "blocked":
+            elif final_status == "blocked":
                 blocked += 1
             else:
                 slice_failures += 1
         typed_ir_generated += 1
+        unit_statuses.append(
+            workflow_unit_status(
+                target_id=target_id,
+                slice_id=slice_id,
+                source=unit_source,
+                status=workflow_status_from_final(final_status=final_status, semantic_pass=semantic_unit),
+                compiled=compiled_unit,
+                semantic_pass=semantic_unit,
+                refused=final_status == "refused",
+                blocked=final_status == "blocked",
+                failed=not semantic_unit and final_status not in {"refused", "blocked"},
+            )
+        )
 
         validation_result = run_logged_step(
             f"validate-evidence-{slice_id}",
@@ -305,8 +337,12 @@ def run_competition(
             "count": len(worker_statuses),
             "summaries": worker_statuses,
         }
-    summary_path = out_root / "summary" / "competition-run-summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary_path = write_summary_with_workflow_metrics(
+        summary,
+        unit_statuses=unit_statuses,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
 
     summary_validation = run_logged_step(
         "validate-competition-summary",
@@ -319,7 +355,12 @@ def run_competition(
     if summary_validation.returncode != 0:
         gate_failures += 1
         summary["final_gate"]["status"] = "failed"
-        summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        summary_path = write_summary_with_workflow_metrics(
+            summary,
+            unit_statuses=unit_statuses,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
 
     return CompetitionRunResult(
         exit_code=0 if summary["final_gate"]["status"] == "passed" and slice_failures == 0 and gate_failures == 0 else 1,
@@ -378,6 +419,108 @@ def load_worker_summary_statuses(
             }
         )
     return statuses
+
+
+def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
+    slices = worker["slices"]
+    attempted = int(slices["attempted"])
+    return {
+        "unit_id": worker["path"],
+        "source": "worker-summary",
+        "status": "converged" if worker["status"] == "passed" else worker["status"],
+        "compiled": attempted > 0 and int(slices["compiled"]) == attempted,
+        "semantic_pass": attempted > 0 and int(slices["semantic_pass"]) == attempted,
+        "refused": int(slices["refused"]) > 0,
+        "blocked": int(slices["blocked"]) > 0,
+        "failed": worker["status"] != "passed" or int(slices["failed"]) > 0,
+    }
+
+
+def workflow_unit_status(
+    *,
+    target_id: str,
+    slice_id: str,
+    source: str,
+    status: str,
+    compiled: bool,
+    semantic_pass: bool,
+    refused: bool,
+    blocked: bool,
+    failed: bool,
+) -> dict[str, Any]:
+    return {
+        "unit_id": f"{target_id}/{slice_id}",
+        "source": source,
+        "status": status,
+        "compiled": compiled,
+        "semantic_pass": semantic_pass,
+        "refused": refused,
+        "blocked": blocked,
+        "failed": failed,
+    }
+
+
+def workflow_status_from_final(*, final_status: str, semantic_pass: bool) -> str:
+    if semantic_pass:
+        return "converged"
+    if final_status in {"refused", "blocked"}:
+        return final_status
+    return "failed"
+
+
+def write_summary_with_workflow_metrics(
+    summary: dict[str, Any],
+    *,
+    unit_statuses: list[dict[str, Any]],
+    out_root: Path,
+    repo_root: Path,
+) -> Path:
+    summary_dir = out_root / "summary"
+    workflow_metrics_path = summary_dir / "workflow-metrics.json"
+    metrics = build_workflow_metrics(summary, unit_statuses=unit_statuses)
+    workflow_metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary["workflow_metrics"] = {
+        "path": summary_reference_path(workflow_metrics_path, repo_root=repo_root, out_root=out_root),
+        "sha256": sha256(workflow_metrics_path),
+    }
+    summary_path = summary_dir / "competition-run-summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return summary_path
+
+
+def build_workflow_metrics(summary: dict[str, Any], *, unit_statuses: list[dict[str, Any]]) -> dict[str, Any]:
+    slices = summary["slices"]
+    attempted = int(slices["attempted"])
+    compiled = int(slices["compiled"])
+    semantic_pass = int(slices["semantic_pass"])
+    refused = int(slices["refused"])
+    blocked = int(slices["blocked"])
+    failed = int(slices["failed"])
+    unsafe_budget = summary["unsafe_budget"]
+    return {
+        "schema_version": 1,
+        "run_id": summary["run_id"],
+        "proof_class": summary["proof_class"],
+        "units_total": attempted,
+        "units_converged": semantic_pass,
+        "units_baseline_only": max(0, compiled - semantic_pass),
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": unsafe_budget["total_first_party_non_test_unsafe"],
+            "reduced_by": None,
+            "ratio": unsafe_budget["ratio"],
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": attempted > 0 and compiled == attempted and failed == 0,
+        "always_equivalent": attempted > 0 and semantic_pass == attempted and failed == 0,
+        "fail_closed_count": refused + blocked,
+        "wall_clock_seconds": summary["elapsed_seconds"],
+        "llm_calls": 0,
+        "per_unit_statuses": unit_statuses,
+    }
 
 
 def nonnegative_int(value: Any) -> int:
@@ -449,9 +592,10 @@ def extract_slice_specs(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
-) -> tuple[list[Path], int]:
+) -> tuple[list[Path], int, list[dict[str, Any]]]:
     generated = []
     failures = 0
+    unit_statuses = []
     for spec_path in extraction_specs:
         extraction = load_extraction_spec(spec_path, repo_root=repo_root)
         target_id = required_str(extraction, "target_id")
@@ -468,9 +612,22 @@ def extract_slice_specs(
         )
         if result.returncode != 0:
             failures += 1
+            unit_statuses.append(
+                workflow_unit_status(
+                    target_id=target_id,
+                    slice_id=slice_id,
+                    source="extract-spec",
+                    status="failed",
+                    compiled=False,
+                    semantic_pass=False,
+                    refused=False,
+                    blocked=False,
+                    failed=True,
+                )
+            )
             continue
         generated.append(output_path)
-    return generated, failures
+    return generated, failures, unit_statuses
 
 
 def load_extraction_spec(path: ExtractionSpecInput, *, repo_root: Path) -> dict[str, Any]:

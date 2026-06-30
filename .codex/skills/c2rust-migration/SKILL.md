@@ -1,6 +1,6 @@
 ---
 name: c2rust-migration
-description: Repo-owned workflow for C-to-Rust migration harness work in this repository. Use when Codex works on FlashDB or other C-to-Rust slices, C2Rust baselines, oracle/replay/diff evidence, unsafe-reduction repair loops, typed-IR candidate diagnostics, migration evidence refreshes, or multi-agent worker handoffs.
+description: Repo-owned workflow for C-to-Rust migration harness work in this repository. Use when Codex works on FlashDB or other C-to-Rust slices, C2Rust baselines, oracle/replay/diff evidence, unsafe-reduction repair loops, workflow metrics artifacts, typed-IR candidate diagnostics, migration evidence refreshes, or multi-agent worker handoffs.
 ---
 
 # C2Rust Migration
@@ -42,6 +42,7 @@ Typed IR and generic emitter work is supporting infrastructure: use it for trivi
 - Keep tool operations repository-confined: accept only POSIX relative paths, reject absolute paths, drive prefixes, backslashes, `~`, and `..` for repo MCP inputs.
 - For docs, keep the Chinese source and English mirror synchronized in the same change.
 - For coverage claims, update the relevant coverage matrix or workflow metrics artifact instead of relying on checklist percentages.
+- For harness runs, require `competition-run-summary.json` to bind `workflow_metrics.path` and `sha256`; the referenced `workflow-metrics.json` must include units, convergence, fail-closed count, unsafe-reduction status, repair/auto-recovery placeholders or measurements, wall clock, LLM calls, and per-unit status.
 - For competition environment work, make tool assumptions explicit; do not silently depend on locally installed Windows tools.
 - Do not claim full verifier/runtime completion unless the current validation profile, oracle/replay/diff evidence, unsafe ledger, and final gates prove it.
 
@@ -63,6 +64,12 @@ Run the translator coverage matrix after changing typed-IR or route evidence:
 
 ```bash
 python -B validation/tools/translator_coverage_matrix.py --matrix validation/translator-coverage-matrix.json
+```
+
+Run focused competition runner contract tests after editing `run_competition.py`, its summary schema, validator, or workflow metrics:
+
+```bash
+python -B -m unittest validation.tools.test_run_competition validation.tools.test_validate_competition_run_summary
 ```
 
 ## Thin MCP / Stdio Server

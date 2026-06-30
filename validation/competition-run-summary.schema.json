@@ -15,6 +15,7 @@
     "translator_version",
     "slices",
     "unsafe_budget",
+    "workflow_metrics",
     "artifact_roots",
     "final_gate"
   ],
@@ -160,6 +161,24 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        }
+      }
+    },
+    "workflow_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       }
     },
