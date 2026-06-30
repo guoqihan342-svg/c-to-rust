@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--coverage-report", type=Path)
     parser.add_argument("--competition-summary", type=Path, action="append", default=[])
+    parser.add_argument("--batch-profile-report", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
@@ -39,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_root,
         coverage_report_path=args.coverage_report,
         competition_summary_paths=args.competition_summary,
+        batch_profile_report_paths=args.batch_profile_report,
     )
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
@@ -54,6 +56,7 @@ def build_report(
     *,
     coverage_report_path: Path | None = None,
     competition_summary_paths: list[Path] | None = None,
+    batch_profile_report_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     coverage_report = load_coverage_report(repo_root, coverage_report_path=coverage_report_path)
@@ -62,6 +65,11 @@ def build_report(
         competition_summary_paths=competition_summary_paths or [],
     )
     s2_workflow_metrics = summarize_s2_workflow_metrics(workflow_metrics_inputs)
+    before_after_exhibit_inputs = load_bound_before_after_exhibits(
+        repo_root,
+        batch_profile_report_paths=batch_profile_report_paths or [],
+    )
+    before_after_exhibits = summarize_before_after_exhibits(before_after_exhibit_inputs)
 
     require(coverage_report.get("schema_version") == 1, "coverage report schema_version must be 1")
     require(coverage_report.get("status") == "passed", "coverage report status must be passed")
@@ -117,6 +125,7 @@ def build_report(
             "translation_coverage_numerator": translator_generated_semantic_pass_count,
             "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
             "s2_workflow_metrics": s2_workflow_metrics,
+            "before_after_exhibits": before_after_exhibits,
             "tracked_capability_delta_ledgers": ledger_count,
             "tracked_capability_delta_count": delta_count,
             "native_build_catalogue_included_in_translation_coverage": False,
@@ -143,6 +152,7 @@ def build_report(
         "release_note_inputs": {
             "capability_delta_ledger": ledger,
             "s2_workflow_metrics": s2_workflow_metrics,
+            "before_after_exhibits": before_after_exhibits,
             "coverage_claim_boundary": coverage_report.get("claim_boundary"),
             "must_not_claim": [
                 "native build catalogue as translated Rust coverage",
@@ -261,6 +271,77 @@ def load_competition_workflow_metrics(
     return metrics
 
 
+def load_bound_before_after_exhibits(
+    repo_root: Path,
+    *,
+    batch_profile_report_paths: list[Path],
+) -> list[dict[str, Any]]:
+    exhibits = []
+    for report_path in batch_profile_report_paths:
+        report_abs = report_path if report_path.is_absolute() else repo_root / report_path
+        report_abs = report_abs.resolve()
+        require(report_abs.exists(), f"batch profile report does not exist: {report_path}")
+        batch_report = json.loads(report_abs.read_text(encoding="utf-8-sig"))
+        require(isinstance(batch_report, dict), f"batch profile report must be an object: {report_path}")
+        binding = batch_report.get("before_after_exhibit_report")
+        require(
+            isinstance(binding, dict),
+            f"batch profile report before_after_exhibit_report binding is required: {report_path}",
+        )
+        exhibit_ref = binding.get("path")
+        expected_sha = binding.get("sha256")
+        require(
+            isinstance(exhibit_ref, str) and isinstance(expected_sha, str),
+            f"before_after_exhibit_report.path and before_after_exhibit_report.sha256 are required: {report_path}",
+        )
+        exhibit_path = resolve_bound_summary_artifact(exhibit_ref, summary_path=report_abs, repo_root=repo_root)
+        require(exhibit_path is not None, f"before_after_exhibit_report.path does not exist: {exhibit_ref}")
+        require(
+            sha256_file(exhibit_path) == expected_sha,
+            f"before_after_exhibit_report.sha256 does not match artifact: {report_path}",
+        )
+        exhibit = json.loads(exhibit_path.read_text(encoding="utf-8-sig"))
+        require(isinstance(exhibit, dict), f"before-after exhibit artifact must be an object: {exhibit_ref}")
+        require(exhibit.get("report_kind") == "before-after-exhibit", f"unexpected before-after report_kind: {exhibit_ref}")
+        require(isinstance(exhibit.get("status"), str), f"before-after exhibit status is required: {exhibit_ref}")
+        if isinstance(batch_report.get("run_id"), str) and isinstance(exhibit.get("run_id"), str):
+            require(
+                batch_report["run_id"] == exhibit["run_id"],
+                f"before-after exhibit run_id must match batch profile report: {report_path}",
+            )
+        validate_before_after_exhibit_inputs(repo_root, exhibit=exhibit, exhibit_path=exhibit_path)
+        exhibits.append(
+            {
+                "batch_profile_report_path": rel(repo_root, report_abs),
+                "before_after_exhibit_path": rel(repo_root, exhibit_path),
+                "before_after_exhibit_sha256": expected_sha,
+                "binding": binding,
+                "exhibit": exhibit,
+            }
+        )
+    return exhibits
+
+
+def validate_before_after_exhibit_inputs(repo_root: Path, *, exhibit: dict[str, Any], exhibit_path: Path) -> None:
+    inputs = require_dict(exhibit, "inputs")
+    for field in ("competition_summary", "workflow_metrics"):
+        binding = require_dict(inputs, field)
+        artifact_ref = binding.get("path")
+        expected_sha = binding.get("sha256")
+        require(
+            isinstance(artifact_ref, str) and isinstance(expected_sha, str),
+            f"before-after exhibit inputs.{field}.path and sha256 are required: {exhibit_path}",
+        )
+        artifact_path = resolve_bound_summary_artifact(artifact_ref, summary_path=exhibit_path, repo_root=repo_root)
+        require(artifact_path is not None, f"before-after exhibit inputs.{field}.path does not exist: {artifact_ref}")
+        require(
+            sha256_file(artifact_path) == expected_sha,
+            f"before-after exhibit inputs.{field}.sha256 does not match artifact: {exhibit_path}",
+        )
+        if field == "competition_summary":
+            validate_competition_run_summary.validate_summary(artifact_path, repo_root=repo_root)
+
+
 def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]]) -> dict[str, Any]:
     metrics = [item["metrics"] for item in workflow_metrics_inputs if isinstance(item.get("metrics"), dict)]
     units_total = sum(nonnegative_int(metric.get("units_total")) for metric in metrics)
@@ -320,6 +401,61 @@ def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]])
             "semantic acceptance or unsafe reduction unless the underlying metrics already mark unsafe_reduction "
             "as measured with baseline/current counts; before/after bindings are artifact references, not semantic "
             "acceptance by themselves."
+        ),
+    }
+
+
+def summarize_before_after_exhibits(exhibit_inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    unit_count = 0
+    measured_unsafe_unit_count = 0
+    accepted_patch_unit_count = 0
+    passed_report_count = 0
+    input_reports = []
+    for item in exhibit_inputs:
+        exhibit = item["exhibit"]
+        translation_before_after = (
+            exhibit.get("translation_before_after")
+            if isinstance(exhibit.get("translation_before_after"), dict)
+            else {}
+        )
+        unit_count += nonnegative_int(translation_before_after.get("unit_count"))
+        measured_unsafe_unit_count += nonnegative_int(translation_before_after.get("measured_unsafe_unit_count"))
+        accepted_patch_unit_count += nonnegative_int(translation_before_after.get("accepted_patch_unit_count"))
+        status = str(exhibit.get("status", "unknown"))
+        if status == "passed":
+            passed_report_count += 1
+        stage_contracts = exhibit.get("stage_contracts") if isinstance(exhibit.get("stage_contracts"), dict) else {}
+        input_reports.append(
+            {
+                "batch_profile_report_path": item["batch_profile_report_path"],
+                "before_after_exhibit_path": item["before_after_exhibit_path"],
+                "before_after_exhibit_sha256": item["before_after_exhibit_sha256"],
+                "status": status,
+                "unit_count": nonnegative_int(translation_before_after.get("unit_count")),
+                "measured_unsafe_unit_count": nonnegative_int(
+                    translation_before_after.get("measured_unsafe_unit_count")
+                ),
+                "accepted_patch_unit_count": nonnegative_int(
+                    translation_before_after.get("accepted_patch_unit_count")
+                ),
+                "stage_contract_statuses": {
+                    str(stage): str(contract.get("status", "unknown"))
+                    for stage, contract in stage_contracts.items()
+                    if isinstance(contract, dict)
+                },
+            }
+        )
+    return {
+        "status": "bound" if unit_count > 0 else "not_provided",
+        "report_count": len(exhibit_inputs),
+        "passed_report_count": passed_report_count,
+        "unit_count": unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_unit_count,
+        "accepted_patch_unit_count": accepted_patch_unit_count,
+        "input_reports": input_reports,
+        "claim_boundary": (
+            "Before/after exhibits are judge-facing harness artifacts. They bind baseline/final/patch/oracle "
+            "references and unsafe deltas, but do not expand the translation coverage numerator."
         ),
     }
 
