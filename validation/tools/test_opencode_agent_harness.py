@@ -620,6 +620,130 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["merge_execution"]["status"], "skipped")
             self.assertEqual(result["merge_execution"]["reason"], "unrecorded-worker-summaries")
 
+    def test_run_batch_profile_initializes_plans_and_executes_merge(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_root = Path(tmp) / "slice-specs"
+            spec_root.mkdir()
+            first_spec = write_slice_spec(spec_root / "first-unit.json", "demo", "demo-first", "first_unit", "abc123")
+            second_spec = write_slice_spec(spec_root / "second-unit.json", "demo", "demo-second", "second_unit", "abc123")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-two-unit-accepted-evidence",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "require_source_commit": "abc123",
+                        "functions": ["first_unit", "second_unit"],
+                        "slice_specs": [repo_rel(first_spec), repo_rel(second_spec)],
+                        "reuse_accepted_evidence": True,
+                        "accepted_evidence_root": "validation/evidence",
+                        "slice_id_prefix": "wrong-prefix",
+                        "worker_prefix": "worker",
+                        "mode": "deterministic",
+                        "execute_merge": True,
+                        "acceptance_boundary": {
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            merge_calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                merge_calls.append(argv)
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-profile", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-profile",
+                out_root=out_root,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["profile_id"], "demo-two-unit-accepted-evidence")
+            self.assertTrue(result["profile_sha256"])
+            self.assertEqual(
+                result["acceptance_boundary"],
+                {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+            self.assertEqual(result["worker_count"], 2)
+            self.assertEqual(len(merge_calls), 1)
+            self.assertEqual(
+                [unit["slice_id"] for unit in result["plan"]["units"]],
+                ["demo-first", "demo-second"],
+            )
+            self.assertEqual(result["run_plan"]["merge_execution"]["final_gate_status"], "passed")
+            self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
+            report = json.loads((out_root / "harness" / "batch-profile-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["report_path"], result["report_path"])
+            self.assertEqual(report["acceptance_boundary"], result["acceptance_boundary"])
+
+    def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "run-batch-profile",
+            "--profile",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json",
+            "--run-id",
+            "run-profile",
+            "--out-root",
+            "target/competition-out-profile",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_batch_profile",
+            return_value={"status": "completed", "exit_code": 0},
+        ) as runner:
+            self.assertEqual(harness.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "completed")
+        runner.assert_called_once()
+        self.assertEqual(
+            runner.call_args.kwargs["profile_path"],
+            Path("config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json"),
+        )
+        self.assertEqual(runner.call_args.kwargs["run_id"], "run-profile")
+        self.assertEqual(runner.call_args.kwargs["out_root"], Path("target/competition-out-profile"))
+
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -2038,6 +2162,24 @@ def write_worker_summary(
         + "\n",
         encoding="utf-8",
     )
+
+
+def write_slice_spec(path: Path, target_id: str, slice_id: str, function_name: str, source_commit: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "function_name": function_name,
+                "source_commit": source_commit,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def repo_rel(path: Path) -> str:

@@ -130,6 +130,54 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("--source-branch", flashdb["runner_required_flags"])
         self.assertIn("--require-source-commit", flashdb["runner_required_flags"])
 
+    def test_flashdb_planned_batch_profile_follows_competition_source_pin(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        commit = flashdb["commit"]
+        batch_profile_path = PROFILE_DIR / "planned-batches" / "flashdb-fdb-utils-accepted-evidence.json"
+        batch = load_json(batch_profile_path)
+
+        self.assertEqual(batch["schema_version"], 1)
+        self.assertEqual(batch["profile_id"], "flashdb-fdb-utils-accepted-evidence")
+        self.assertEqual(batch["proof_class"], "local-simulation")
+        self.assertEqual(batch["target_id"], "flashdb")
+        self.assertEqual(batch["source_repo_root"], "sources/FlashDB")
+        self.assertEqual(batch["source_repository"], flashdb["repository"])
+        self.assertEqual(batch["source_branch"], flashdb["branch"])
+        self.assertEqual(batch["source_file"], "src/fdb_utils.c")
+        self.assertEqual(batch["source_commit"], commit)
+        self.assertEqual(batch["require_source_commit"], commit)
+        self.assertEqual(batch["functions"], ["fdb_calc_crc32"])
+        self.assertEqual(batch["slice_specs"], ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"])
+        self.assertTrue(batch["reuse_accepted_evidence"])
+        self.assertEqual(batch["accepted_evidence_root"], "validation/evidence")
+        self.assertEqual(batch["mode"], "deterministic")
+        self.assertTrue(batch["execute_merge"])
+        self.assertEqual(
+            batch["acceptance_boundary"],
+            {
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+            },
+        )
+        self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, json.dumps(batch, sort_keys=True))
+
+        for path_value in [
+            batch["source_repo_root"],
+            batch["accepted_evidence_root"],
+            *batch["slice_specs"],
+        ]:
+            with self.subTest(path_value=path_value):
+                self.assertNotIn("\\", path_value)
+                self.assertFalse(path_value.startswith("/"))
+                self.assertNotIn("..", Path(path_value).parts)
+                self.assertTrue((REPO_ROOT / path_value).exists())
+
+        slice_spec = load_json(REPO_ROOT / batch["slice_specs"][0])
+        self.assertEqual(slice_spec["target_id"], batch["target_id"])
+        self.assertEqual(slice_spec["function_name"], "fdb_calc_crc32")
+        self.assertEqual(slice_spec["source_commit"], commit)
+
     def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]

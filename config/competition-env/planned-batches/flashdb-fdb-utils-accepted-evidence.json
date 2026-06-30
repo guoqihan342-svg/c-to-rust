@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "profile_id": "flashdb-fdb-utils-accepted-evidence",
+  "proof_class": "local-simulation",
+  "target_id": "flashdb",
+  "source_repo_root": "sources/FlashDB",
+  "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+  "source_branch": "competition",
+  "source_file": "src/fdb_utils.c",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "functions": [
+    "fdb_calc_crc32"
+  ],
+  "slice_specs": [
+    "validation/slice-specs/flashdb-real-fdb-calc-crc32.json"
+  ],
+  "reuse_accepted_evidence": true,
+  "accepted_evidence_root": "validation/evidence",
+  "slice_id_prefix": "flashdb-fdb-utils",
+  "worker_prefix": "flashdb-worker",
+  "mode": "deterministic",
+  "execute_merge": true,
+  "acceptance_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false
+  }
+}

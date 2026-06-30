@@ -41,6 +41,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `env.sh`: shell environment entrypoint for the competition host, including local clang auto-detection.
 - `toolchain-check.sh`: competition host self-check script.
 - `smoke.sh`: lightweight Linux/WSL/CI smoke entrypoint; it calls `run_competition_smoke.py` and emits a proof-classed summary.
+- `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile.
 - `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
 
 ## Clang Policy: Project-Local Vendored Binary
@@ -114,6 +115,17 @@ python validation/tools/run_competition_smoke.py \
 ```
 
 The smoke runs the environment check, the structured vendored clang verifier, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, `vendored_clang_verification.path`, gate status, and log paths. In non-`competition-exact` proof classes, missing clang is recorded as `missing_clang_path` in `vendored-clang-verification.json`; `competition-exact` treats the vendored clang verifier as a required gate. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
+
+Reusable planned batch profile entrypoint:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
+  --run-id flashdb-fdb-utils-local \
+  --out-root target/competition-out
+```
+
+This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate.
 
 The clang typed-IR competition lane is explicit opt-in:
 

@@ -110,6 +110,11 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
     run_plan_parser.add_argument("--execute-merge", action="store_true")
 
+    batch_profile_parser = subcommands.add_parser("run-batch-profile")
+    batch_profile_parser.add_argument("--profile", type=Path, required=True)
+    batch_profile_parser.add_argument("--run-id", required=True)
+    batch_profile_parser.add_argument("--out-root", type=Path, required=True)
+
     run_parser = subcommands.add_parser("run-worker")
     run_parser.add_argument("--db", type=Path, required=True)
     run_parser.add_argument("--run-id", required=True)
@@ -221,6 +226,12 @@ def main() -> int:
             opencode_skip_permissions=args.opencode_skip_permissions,
             execute_merge=args.execute_merge,
         )
+    elif args.command == "run-batch-profile":
+        result = run_batch_profile(
+            profile_path=args.profile,
+            run_id=args.run_id,
+            out_root=args.out_root,
+        )
     elif args.command == "run-worker":
         result = run_worker(
             db_path=args.db,
@@ -270,7 +281,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan"} else 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile"} else 0
 
 
 def init_run(
@@ -730,6 +741,158 @@ def load_slice_specs_by_function(
             raise SystemExit(f"duplicate slice spec for function {function}: {slice_spec_rel}")
         specs_by_function[function] = {"path": slice_spec_rel, "slice_id": slice_id}
     return specs_by_function
+
+
+def run_batch_profile(
+    *,
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    profile = load_json(profile_path)
+    acceptance_boundary = profile.get("acceptance_boundary")
+    if acceptance_boundary is not None and not isinstance(acceptance_boundary, dict):
+        raise SystemExit("batch profile field must be an object: acceptance_boundary")
+    if profile.get("schema_version") != SCHEMA_VERSION:
+        raise SystemExit(f"unsupported batch profile schema_version: {profile.get('schema_version')}")
+    profile_id = profile_required_string(profile, "profile_id")
+    proof_class = profile_required_string(profile, "proof_class")
+    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+        raise SystemExit(f"unsupported proof_class in batch profile: {proof_class}")
+    mode = profile_string(profile, "mode", default="deterministic")
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode in batch profile: {mode}")
+
+    db_path = init_run(
+        out_root=out_root,
+        run_id=run_id,
+        proof_class=proof_class,
+        repo_root=repo_root,
+    )
+    plan = plan_source_file(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=profile_required_string(profile, "target_id"),
+        source_repo_root=Path(profile_required_string(profile, "source_repo_root")),
+        source_repository=profile_string(profile, "source_repository"),
+        source_branch=profile_string(profile, "source_branch"),
+        source_file=profile_required_string(profile, "source_file"),
+        functions=profile_string_list(profile, "functions"),
+        source_commit=profile_required_string(profile, "source_commit"),
+        require_source_commit=profile_string(profile, "require_source_commit"),
+        slice_specs=profile_string_list(profile, "slice_specs"),
+        compiler_command_source=profile_string(profile, "compiler_command_source"),
+        include_paths=profile_string_list(profile, "include_paths"),
+        defines=profile_string_list(profile, "defines"),
+        reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
+        accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
+        out_root=out_root,
+        slice_id_prefix=profile_required_string(profile, "slice_id_prefix"),
+        worker_prefix=profile_string(profile, "worker_prefix", default="worker"),
+        limit=profile_int(profile, "limit"),
+        lease_ttl_seconds=profile_int(profile, "lease_ttl_seconds", default=3600),
+        repo_root=repo_root,
+    )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=profile_string(profile, "opencode_command", default="opencode"),
+        opencode_model=profile_string(profile, "opencode_model"),
+        opencode_agent=profile_string(profile, "opencode_agent"),
+        opencode_variant=profile_string(profile, "opencode_variant", default="max"),
+        opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+        execute_merge=profile_bool(profile, "execute_merge", default=False),
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "profile_id": profile_id,
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if acceptance_boundary is not None:
+        result["acceptance_boundary"] = acceptance_boundary
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="batch-profile-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="batch-profile-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def profile_required_string(profile: dict[str, Any], field: str) -> str:
+    value = profile.get(field)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"batch profile field must be a non-empty string: {field}")
+    return value
+
+
+def profile_string(profile: dict[str, Any], field: str, *, default: str | None = None) -> str | None:
+    value = profile.get(field, default)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"batch profile field must be a non-empty string: {field}")
+    return value
+
+
+def profile_string_list(profile: dict[str, Any], field: str) -> list[str]:
+    value = profile.get(field, [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        raise SystemExit(f"batch profile field must be a list of non-empty strings: {field}")
+    return list(value)
+
+
+def profile_bool(profile: dict[str, Any], field: str, *, default: bool) -> bool:
+    value = profile.get(field, default)
+    if not isinstance(value, bool):
+        raise SystemExit(f"batch profile field must be boolean: {field}")
+    return value
+
+
+def profile_int(profile: dict[str, Any], field: str, *, default: int | None = None) -> int | None:
+    value = profile.get(field, default)
+    if value is None:
+        return None
+    if not isinstance(value, int) or value < 1:
+        raise SystemExit(f"batch profile field must be a positive integer: {field}")
+    return value
 
 
 def run_plan(
