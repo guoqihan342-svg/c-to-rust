@@ -60,6 +60,8 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - `record-worker-summary` must reject summaries outside that assigned expected summary path, even when the path stays inside the repository.
 - If an OpenCode process exits 0 but does not write the expected summary, record `missing-summary` repair evidence; do not treat process success or chat text as acceptance.
 - In `--mode opencode`, require `run-worker` to write a machine-readable handoff contract and OpenCode session evidence, and bind both from the worker report, event stream, repair hint, and artifact index.
+- Before using `run-worker --mode opencode`, `retry-worker --mode opencode`, or `run-plan --mode opencode`, run `opencode-preflight` and pass the resulting `harness/opencode-preflight-report.json` through `--opencode-preflight-report`. The report must be `status=passed`, `exit_code=0`, `marker_exists=true`, and `contract_verification.status=executed`.
+- Treat a missing or failed OpenCode preflight report as a launch blocker, not as a worker failure or semantic result. Do not start OpenCode workers without a passed preflight report bound into the worker report/event/artifact index.
 - `retry-worker` must reuse the same worker, ledger assignment, out-root, and repair hint; the revalidation result comes only from the newly written final gate.
 - `retry-worker` may count a retry as revalidated only from the newly written final gate; repair history, rollback ids, or an OpenCode process exit code are audit signals, not semantic acceptance.
 - The SQLite ledger is scheduling, lease, recovery, and artifact index state. Semantic evidence still comes only from on-disk summaries, evidence, workflow metrics, and validators.

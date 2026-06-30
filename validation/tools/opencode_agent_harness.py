@@ -108,6 +108,7 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-agent")
     run_plan_parser.add_argument("--opencode-variant", default="max")
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
     run_plan_parser.add_argument("--execute-merge", action="store_true")
 
     batch_profile_parser = subcommands.add_parser("run-batch-profile")
@@ -138,6 +139,7 @@ def main() -> int:
     run_parser.add_argument("--opencode-agent")
     run_parser.add_argument("--opencode-variant", default="max")
     run_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_parser.add_argument("--opencode-preflight-report", type=Path)
 
     retry_parser = subcommands.add_parser("retry-worker")
     retry_parser.add_argument("--db", type=Path, required=True)
@@ -150,6 +152,7 @@ def main() -> int:
     retry_parser.add_argument("--opencode-agent")
     retry_parser.add_argument("--opencode-variant", default="max")
     retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    retry_parser.add_argument("--opencode-preflight-report", type=Path)
 
     record_parser = subcommands.add_parser("record-worker-summary")
     record_parser.add_argument("--db", type=Path, required=True)
@@ -237,6 +240,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
             execute_merge=args.execute_merge,
         )
     elif args.command == "run-batch-profile":
@@ -271,6 +275,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
         )
     elif args.command == "retry-worker":
         result = retry_worker(
@@ -284,6 +289,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
         )
     elif args.command == "record-worker-summary":
         result = record_worker_summary(
@@ -794,6 +800,10 @@ def run_batch_profile(
     mode = profile_string(profile, "mode", default="deterministic")
     if mode not in {"deterministic", "opencode"}:
         raise SystemExit(f"unsupported mode in batch profile: {mode}")
+    opencode_preflight_report_text = profile_string(profile, "opencode_preflight_report")
+    opencode_preflight_report = (
+        Path(opencode_preflight_report_text) if opencode_preflight_report_text is not None else None
+    )
 
     db_path = init_run(
         out_root=out_root,
@@ -837,6 +847,7 @@ def run_batch_profile(
         opencode_agent=profile_string(profile, "opencode_agent"),
         opencode_variant=profile_string(profile, "opencode_variant", default="max"),
         opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+        opencode_preflight_report=opencode_preflight_report,
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         command_runner=command_runner,
         repo_root=repo_root,
@@ -936,6 +947,7 @@ def run_plan(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
     execute_merge: bool = False,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -967,6 +979,7 @@ def run_plan(
             opencode_agent=opencode_agent,
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
+            opencode_preflight_report=opencode_preflight_report,
             command_runner=command_runner,
             repo_root=repo_root,
         )
@@ -1240,6 +1253,7 @@ def run_worker(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
     attempt_number: int = 1,
@@ -1290,6 +1304,12 @@ def run_worker(
         "--input",
         repo_relative(request_path, repo_root=repo_root),
     ]
+    preflight_binding = None
+    if mode == "opencode":
+        preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            repo_root=repo_root,
+        )
     if mode == "deterministic":
         argv = worker_command
         runner_kind = "repo-local-c2rust-migrator"
@@ -1490,6 +1510,8 @@ def run_worker(
     }
     if handoff_contract is not None:
         report["handoff_contract"] = handoff_contract
+    if preflight_binding is not None:
+        report["opencode_preflight_report"] = preflight_binding
     if opencode_session_evidence is not None:
         report["opencode_session_evidence"] = opencode_session_evidence
     if opencode_contract_verification is not None:
@@ -1546,6 +1568,19 @@ def run_worker(
                 payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
                 repo_root=repo_root,
             )
+        if preflight_binding is not None:
+            event_payload["opencode_preflight_report"] = preflight_binding
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-preflight-report",
+                path=repo_path(Path(preflight_binding["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-preflight-evidence",
+                payload=load_json(repo_path(Path(preflight_binding["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
         if opencode_session_evidence is not None:
             event_payload["opencode_session_evidence"] = opencode_session_evidence
             record_artifact(
@@ -1585,6 +1620,7 @@ def retry_worker(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -1605,6 +1641,7 @@ def retry_worker(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_preflight_report=opencode_preflight_report,
         command_runner=command_runner,
         repo_root=repo_root,
         attempt_number=attempt_number,
@@ -1756,6 +1793,44 @@ def run_opencode_preflight(
         report["root_cause_key"] = root_cause_key
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
+
+
+def validate_opencode_preflight_report(
+    report_path: Path | None,
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if report_path is None:
+        raise SystemExit("opencode preflight report is required before --mode opencode")
+    report_path = repo_path(report_path, repo_root=repo_root)
+    if not report_path.exists():
+        raise SystemExit(f"opencode preflight report does not exist: {repo_relative(report_path, repo_root=repo_root)}")
+    report = load_json(report_path)
+    contract_verification = report.get("contract_verification")
+    contract_status = contract_verification.get("status") if isinstance(contract_verification, dict) else None
+    if (
+        report.get("status") != "passed"
+        or int(report.get("exit_code", 1)) != 0
+        or report.get("marker_exists") is not True
+        or contract_status != "executed"
+    ):
+        raise SystemExit(
+            "opencode preflight report is not passed: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    return {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": "passed",
+        "run_id": str(report.get("run_id", "")),
+        "contract_status": "executed",
+        "evidence_boundary": str(
+            report.get(
+                "evidence_boundary",
+                "preflight proves exact-command compliance only; it is not semantic acceptance",
+            )
+        ),
+    }
 
 
 def write_opencode_preflight_marker(
@@ -2143,7 +2218,7 @@ def build_opencode_run_argv(
         "The first shell/bash/powershell/cmd tool call must be exactly the Command line string.",
         "Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.",
         "Do not inspect an existing summary before running the command.",
-        "Delete the expected summary file if it already exists, then execute the command exactly once.",
+        "The harness has already removed any stale expected summary before launching OpenCode.",
         "Run the repo-local deterministic command below, then stop.",
         "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
         "Do not explore files, spawn subagents, or infer a different slice before executing the command.",
