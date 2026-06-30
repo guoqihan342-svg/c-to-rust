@@ -352,22 +352,149 @@ def load_bound_before_after_exhibits(
 
 def validate_before_after_exhibit_inputs(repo_root: Path, *, exhibit: dict[str, Any], exhibit_path: Path) -> None:
     inputs = require_dict(exhibit, "inputs")
-    for field in ("competition_summary", "workflow_metrics"):
+    workflow_metrics = {}
+    for field in ("profile", "competition_summary", "workflow_metrics"):
         binding = require_dict(inputs, field)
-        artifact_ref = binding.get("path")
-        expected_sha = binding.get("sha256")
-        require(
-            isinstance(artifact_ref, str) and isinstance(expected_sha, str),
-            f"before-after exhibit inputs.{field}.path and sha256 are required: {exhibit_path}",
-        )
-        artifact_path = resolve_bound_summary_artifact(artifact_ref, summary_path=exhibit_path, repo_root=repo_root)
-        require(artifact_path is not None, f"before-after exhibit inputs.{field}.path does not exist: {artifact_ref}")
-        require(
-            sha256_file(artifact_path) == expected_sha,
-            f"before-after exhibit inputs.{field}.sha256 does not match artifact: {exhibit_path}",
+        artifact_path = validate_path_sha_binding(
+            repo_root,
+            binding=binding,
+            field=f"before-after exhibit inputs.{field}",
+            anchor_path=exhibit_path,
         )
         if field == "competition_summary":
             validate_competition_run_summary.validate_summary(artifact_path, repo_root=repo_root)
+        if field == "workflow_metrics":
+            workflow_metrics = json.loads(artifact_path.read_text(encoding="utf-8-sig"))
+    units = exhibit.get("units")
+    require(isinstance(units, list), f"before-after exhibit units must be an array: {exhibit_path}")
+    for index, unit in enumerate(units):
+        require(isinstance(unit, dict), f"before-after exhibit units[{index}] must be an object: {exhibit_path}")
+        for field in ("baseline", "final", "oracle_evidence", "accepted_patch", "patch_log"):
+            binding = require_dict(unit, field)
+            validate_path_sha_binding(
+                repo_root,
+                binding=binding,
+                field=f"before-after exhibit units[{index}].{field}",
+                anchor_path=exhibit_path,
+            )
+        repair_history = unit.get("repair_history")
+        if isinstance(repair_history, dict):
+            validate_repair_history_binding(
+                repo_root,
+                repair_history=repair_history,
+                field=f"before-after exhibit units[{index}].repair_history",
+                anchor_path=exhibit_path,
+            )
+        validate_before_after_unit_matches_workflow(
+            unit,
+            workflow_metrics=workflow_metrics,
+            field=f"before-after exhibit units[{index}]",
+            exhibit_path=exhibit_path,
+        )
+    stage_contracts = exhibit.get("stage_contracts")
+    repairer = stage_contracts.get("repairer") if isinstance(stage_contracts, dict) else None
+    if isinstance(repairer, dict) and repairer.get("status") == "verified":
+        histories = repairer.get("histories")
+        verified_histories = [
+            history
+            for history in histories
+            if isinstance(history, dict) and history.get("verified") is True
+        ] if isinstance(histories, list) else []
+        require(
+            verified_histories,
+            f"before-after exhibit repairer.status=verified requires verified history: {exhibit_path}",
+        )
+        for index, history in enumerate(verified_histories):
+            repair_history = history.get("repair_history")
+            require(
+                isinstance(repair_history, dict),
+                f"before-after exhibit stage_contracts.repairer.histories[{index}].repair_history is required: {exhibit_path}",
+            )
+            validate_repair_history_binding(
+                repo_root,
+                repair_history=repair_history,
+                field=f"before-after exhibit stage_contracts.repairer.histories[{index}].repair_history",
+                anchor_path=exhibit_path,
+            )
+
+
+def validate_before_after_unit_matches_workflow(
+    unit: dict[str, Any],
+    *,
+    workflow_metrics: dict[str, Any],
+    field: str,
+    exhibit_path: Path,
+) -> None:
+    unit_id = unit.get("unit_id")
+    require(isinstance(unit_id, str) and unit_id, f"{field}.unit_id is required: {exhibit_path}")
+    per_unit_statuses = workflow_metrics.get("per_unit_statuses")
+    require(isinstance(per_unit_statuses, list), f"{field} requires workflow metrics per_unit_statuses: {exhibit_path}")
+    workflow_unit = next(
+        (
+            item
+            for item in per_unit_statuses
+            if isinstance(item, dict) and item.get("unit_id") == unit_id
+        ),
+        None,
+    )
+    require(workflow_unit is not None, f"{field}.unit_id is not present in workflow metrics: {unit_id}")
+    before_after = workflow_unit.get("translation_before_after")
+    require(
+        isinstance(before_after, dict) and before_after.get("status") == "bound",
+        f"{field} requires bound workflow translation_before_after: {unit_id}",
+    )
+    for binding_field in ("baseline", "final", "oracle_evidence", "accepted_patch", "patch_log"):
+        require(
+            unit.get(binding_field) == before_after.get(binding_field),
+            f"{field}.{binding_field} must match workflow metrics translation_before_after: {exhibit_path}",
+        )
+    require(
+        unit.get("unsafe_reduction") == before_after.get("unsafe_reduction"),
+        f"{field}.unsafe_reduction must match workflow metrics translation_before_after: {exhibit_path}",
+    )
+
+
+def validate_path_sha_binding(
+    repo_root: Path,
+    *,
+    binding: dict[str, Any],
+    field: str,
+    anchor_path: Path,
+) -> Path:
+    artifact_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    require(
+        isinstance(artifact_ref, str) and isinstance(expected_sha, str),
+        f"{field}.path and sha256 are required: {anchor_path}",
+    )
+    artifact_path = resolve_bound_summary_artifact(artifact_ref, summary_path=anchor_path, repo_root=repo_root)
+    require(artifact_path is not None, f"{field}.path does not exist: {artifact_ref}")
+    require(
+        sha256_file(artifact_path) == expected_sha,
+        f"{field}.sha256 does not match artifact: {anchor_path}",
+    )
+    return artifact_path
+
+
+def validate_repair_history_binding(
+    repo_root: Path,
+    *,
+    repair_history: dict[str, Any],
+    field: str,
+    anchor_path: Path,
+) -> None:
+    patch_events_path = repair_history.get("patch_events_path")
+    patch_events_sha256 = repair_history.get("patch_events_sha256")
+    require(
+        isinstance(patch_events_path, str) and isinstance(patch_events_sha256, str),
+        f"{field}.patch_events_path and patch_events_sha256 are required: {anchor_path}",
+    )
+    artifact_path = resolve_bound_summary_artifact(patch_events_path, summary_path=anchor_path, repo_root=repo_root)
+    require(artifact_path is not None, f"{field}.patch_events_path does not exist: {patch_events_path}")
+    require(
+        sha256_file(artifact_path) == patch_events_sha256,
+        f"{field}.patch_events_sha256 does not match artifact: {anchor_path}",
+    )
 
 
 def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]]) -> dict[str, Any]:

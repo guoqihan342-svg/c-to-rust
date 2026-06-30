@@ -178,6 +178,114 @@ class MilestoneReleaseReportTests(unittest.TestCase):
 
             self.assertIn("before_after_exhibit_report.sha256", str(raised.exception))
 
+    def test_report_rejects_before_after_unit_artifact_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["baseline"]["sha256"] = "f" * 64
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("units[0].baseline.sha256", str(raised.exception))
+
+    def test_report_rejects_before_after_repair_history_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["repair_history"]["patch_events_sha256"] = "f" * 64
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("repair_history.patch_events_sha256", str(raised.exception))
+
+    def test_report_rejects_before_after_unit_retargeted_away_from_workflow_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["baseline"] = dict(exhibit["units"][0]["final"])
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("baseline must match workflow metrics", str(raised.exception))
+
+    def test_report_rejects_verified_repairer_history_without_repair_history_binding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            del exhibit["stage_contracts"]["repairer"]["histories"][0]["repair_history"]
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("repair_history is required", str(raised.exception))
+
     def test_report_rejects_competition_summary_workflow_metrics_hash_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
             root = Path(tmp)
@@ -468,6 +576,48 @@ class MilestoneReleaseReportTests(unittest.TestCase):
         root = summary_path.parents[3]
         workflow_metrics_path = summary_path.parent / "workflow-metrics.json"
         exhibit_path = summary_path.parent / "before-after-exhibit.json"
+        profile_path = summary_path.parent.parent / "harness" / "planned-batch.json"
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(
+            json.dumps({"schema_version": 1, "profile_id": "demo-before-after"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        before_after_unit = workflow_metrics["per_unit_statuses"][0]["translation_before_after"]
+        repair_history = workflow_metrics["per_unit_statuses"][0].get("repair_history")
+        exhibit_unit = {
+            "unit_id": "demo/store-add-one",
+            "status": "converged",
+            "baseline": before_after_unit["baseline"],
+            "final": before_after_unit["final"],
+            "oracle_evidence": before_after_unit["oracle_evidence"],
+            "accepted_patch": before_after_unit["accepted_patch"],
+            "patch_log": before_after_unit["patch_log"],
+            "unsafe_reduction": before_after_unit["unsafe_reduction"],
+        }
+        if isinstance(repair_history, dict):
+            exhibit_unit["repair_history"] = repair_history
+        repairer = {"stage": "repairer", "status": "not_exercised"}
+        if isinstance(repair_history, dict):
+            repairer = {
+                "stage": "repairer",
+                "status": "verified",
+                "repair_round_cap": 5,
+                "observed_repair_unit_count": 1,
+                "avg_repair_rounds": workflow_metrics["avg_repair_rounds"],
+                "auto_recovery_rate": workflow_metrics["auto_recovery_rate"],
+                "root_cause_counts": workflow_metrics["root_cause_counts"],
+                "histories": [
+                    {
+                        "unit_id": "demo/store-add-one",
+                        "source": "opencode-worker",
+                        "status": "converged",
+                        "repair_rounds": workflow_metrics["per_unit_statuses"][0]["repair_rounds"],
+                        "auto_recovered": True,
+                        "verified": True,
+                        "repair_history": repair_history,
+                    }
+                ],
+            }
         exhibit_payload = {
             "schema_version": 1,
             "report_kind": "before-after-exhibit",
@@ -477,6 +627,10 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             "proof_class": workflow_metrics["proof_class"],
             "mode": "deterministic",
             "inputs": {
+                "profile": {
+                    "path": self._repo_rel(root, profile_path),
+                    "sha256": sha256_file(profile_path),
+                },
                 "competition_summary": {
                     "path": self._repo_rel(root, summary_path),
                     "sha256": sha256_file(summary_path),
@@ -496,27 +650,10 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 "planner": {"stage": "planner", "status": "planned"},
                 "worker": {"stage": "worker", "status": "passed"},
                 "verifier": {"stage": "verifier", "status": "passed"},
-                "repairer": {"stage": "repairer", "status": "not_exercised"},
+                "repairer": repairer,
                 "reporter": {"stage": "reporter", "status": "passed"},
             },
-            "units": [
-                {
-                    "unit_id": "demo/store-add-one",
-                    "status": "converged",
-                    "baseline": {"path": "evidence/before-after/baseline-unsafe.rs", "sha256": "0" * 64},
-                    "final": {"path": "evidence/before-after/final-safe.rs", "sha256": "0" * 64},
-                    "oracle_evidence": {"path": "evidence/before-after/oracle-diff.json", "sha256": "0" * 64},
-                    "accepted_patch": {"path": "evidence/before-after/accepted.patch", "sha256": "0" * 64},
-                    "patch_log": {"path": "evidence/before-after/step-log.jsonl", "sha256": "0" * 64},
-                    "unsafe_reduction": {
-                        "status": "measured",
-                        "baseline_total_unsafe": 3,
-                        "current_total_unsafe": 0,
-                        "reduced_by": 3,
-                        "ratio": 0.0,
-                    },
-                }
-            ],
+            "units": [exhibit_unit],
         }
         exhibit_path.write_text(json.dumps(exhibit_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         batch_profile_report = summary_path.parent.parent / "harness" / "batch-profile-report.json"
@@ -609,6 +746,7 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 "ratio": 0.0,
             },
         }
+        payload["per_unit_statuses"][0]["unit_id"] = "demo/store-add-one"
         payload["translation_before_after"] = {
             "status": "bound",
             "unit_count": 1,
