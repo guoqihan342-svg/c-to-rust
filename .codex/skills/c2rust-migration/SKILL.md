@@ -88,6 +88,7 @@ Before handing work back or starting another slice, leave these facts current:
 - For docs, keep the Chinese source and English mirror synchronized in the same change.
 - For coverage claims, update the relevant coverage matrix or workflow metrics artifact instead of relying on checklist percentages.
 - For harness runs, require `competition-run-summary.json` to bind `workflow_metrics.path` and `sha256`; the referenced `workflow-metrics.json` must include units, convergence, fail-closed count, unsafe-reduction status, repair/auto-recovery placeholders or measurements, wall clock, LLM calls, and per-unit status.
+- Mark `unsafe_reduction.status=measured` only when every bound worker workflow metrics artifact provides measured baseline/current unsafe counts and their `units_total` covers the parent attempted units. Aggregate baseline/current counts, compute `reduced_by`, and use `ratio=current_total_unsafe / baseline_total_unsafe`; otherwise keep `unsafe_reduction.status=not_measured`.
 - For competition environment work, make tool assumptions explicit; do not silently depend on locally installed Windows tools.
 - Do not claim full verifier/runtime completion unless the current validation profile, oracle/replay/diff evidence, unsafe ledger, and final gates prove it.
 

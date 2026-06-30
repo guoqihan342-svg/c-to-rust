@@ -673,13 +673,7 @@ def build_workflow_metrics(
         "units_total": attempted,
         "units_converged": semantic_pass,
         "units_baseline_only": max(0, compiled - semantic_pass),
-        "unsafe_reduction": {
-            "status": "not_measured",
-            "baseline_total_unsafe": None,
-            "current_total_unsafe": unsafe_budget["total_first_party_non_test_unsafe"],
-            "reduced_by": None,
-            "ratio": unsafe_budget["ratio"],
-        },
+        "unsafe_reduction": aggregate_unsafe_reduction(worker_workflow_metrics, unsafe_budget, attempted=attempted),
         "avg_repair_rounds": repair_rounds,
         "auto_recovery_rate": auto_recovery_rate,
         "human_interventions": sum_worker_int_metric(worker_workflow_metrics, "human_interventions"),
@@ -690,6 +684,49 @@ def build_workflow_metrics(
         "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls")
         + sum_unit_int_metric(unit_statuses, "llm_calls"),
         "per_unit_statuses": unit_statuses,
+    }
+
+
+def aggregate_unsafe_reduction(
+    metrics: list[dict[str, Any]],
+    unsafe_budget: dict[str, Any],
+    *,
+    attempted: int,
+) -> dict[str, Any]:
+    fallback = {
+        "status": "not_measured",
+        "baseline_total_unsafe": None,
+        "current_total_unsafe": unsafe_budget["total_first_party_non_test_unsafe"],
+        "reduced_by": None,
+        "ratio": unsafe_budget["ratio"],
+    }
+    if attempted <= 0 or not metrics:
+        return fallback
+
+    baseline_total = 0
+    current_total = 0
+    measured_units = 0
+    for metric in metrics:
+        unsafe_reduction = metric.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            return fallback
+        baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+        current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+        if baseline is None or current is None:
+            return fallback
+        baseline_total += baseline
+        current_total += current
+        measured_units += nonnegative_int(metric.get("units_total"))
+
+    if measured_units != attempted:
+        return fallback
+    ratio = 0.0 if baseline_total == 0 else current_total / baseline_total
+    return {
+        "status": "measured",
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": baseline_total - current_total,
+        "ratio": ratio,
     }
 
 
@@ -740,6 +777,12 @@ def sum_unit_int_metric(unit_statuses: list[dict[str, Any]], key: str) -> int:
 
 def nonnegative_int(value: Any) -> int:
     return value if isinstance(value, int) and value >= 0 else 0
+
+
+def nonnegative_count(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    return value if isinstance(value, int) and value >= 0 else None
 
 
 def summary_reference_path(path: Path, *, repo_root: Path, out_root: Path) -> str:

@@ -907,6 +907,138 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["human_interventions"], 1)
             self.assertEqual(metrics["llm_calls"], 4)
 
+    def test_runner_aggregates_measured_worker_unsafe_reduction_into_parent_artifact(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 8,
+                        "current_total_unsafe": 5,
+                        "reduced_by": 3,
+                        "ratio": 0.625,
+                    },
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 3,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-b",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 4,
+                        "current_total_unsafe": 2,
+                        "reduced_by": 2,
+                        "ratio": 0.5,
+                    },
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 2,
+                    "llm_calls": 0,
+                    "per_unit_statuses": [],
+                },
+            )
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(metrics["unsafe_reduction"]["baseline_total_unsafe"], 12)
+            self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 7)
+            self.assertEqual(metrics["unsafe_reduction"]["reduced_by"], 5)
+            self.assertAlmostEqual(metrics["unsafe_reduction"]["ratio"], 7 / 12)
+
+    def test_unsafe_reduction_aggregation_requires_full_measured_worker_coverage(self) -> None:
+        module = load_runner_module()
+        unsafe_budget = {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 9,
+            "ratio": 0.03,
+        }
+
+        partial = module.aggregate_unsafe_reduction(
+            [
+                {
+                    "units_total": 1,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 8,
+                        "current_total_unsafe": 5,
+                    },
+                }
+            ],
+            unsafe_budget,
+            attempted=2,
+        )
+        not_measured = module.aggregate_unsafe_reduction(
+            [{"units_total": 1, "unsafe_reduction": {"status": "not_measured"}}],
+            unsafe_budget,
+            attempted=1,
+        )
+
+        for aggregate in [partial, not_measured]:
+            self.assertEqual(
+                aggregate,
+                {
+                    "status": "not_measured",
+                    "baseline_total_unsafe": None,
+                    "current_total_unsafe": 9,
+                    "reduced_by": None,
+                    "ratio": 0.03,
+                },
+            )
+
     def test_runner_preserves_worker_repair_history_in_parent_workflow_metrics(self) -> None:
         module = load_runner_module()
         validator = load_summary_validator_module()
