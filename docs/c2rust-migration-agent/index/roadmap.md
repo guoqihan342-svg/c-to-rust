@@ -10,6 +10,7 @@
 ## 评委 Demo / Milestone
 
 当前公开 before/after 入口是 `../judge-demo.md`。
+机器可读的评委入口目录是 `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`，其中集中绑定 FlashDB before/after demo、显式多 worker evaluate profile、预期 artifacts、tracked manifests 和 claim boundary。
 
 首选真实 FlashDB 运行路径：
 
@@ -46,7 +47,7 @@ Profile 形式的一键入口：
 python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
 ```
 
-该路径会复用完整 batch-profile pipeline，并额外产出 `harness/evaluate-report.json` wrapper；wrapper 只索引已验证的 batch artifacts、summary validator 和 context/index，不是新的语义接受门禁。
+该路径会复用完整 batch-profile pipeline，并额外产出 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`；二者只索引已验证的 batch artifacts、summary validator 和 context/index，不是新的语义接受门禁。
 
 保底 repo-local demo：
 

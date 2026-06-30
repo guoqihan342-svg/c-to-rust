@@ -18,6 +18,7 @@ The Chinese source currently contains these major headings:
 ## Judge Demo / Milestone
 
 The current public before/after demo entrypoint is `../judge-demo.md`.
+The machine-readable judge entrypoint directory is `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`; it binds the FlashDB before/after demo, explicit multi-worker evaluate profile, expected artifacts, tracked manifests, and claim boundaries in one place.
 
 Primary real FlashDB run:
 
@@ -52,7 +53,7 @@ Profile form of the same one-command entrypoint:
 python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
 ```
 
-This path reuses the full batch-profile pipeline and additionally emits a `harness/evaluate-report.json` wrapper. The wrapper only indexes verified batch artifacts, summary validation, and context/index entrypoints; it is not a new semantic acceptance gate.
+This path reuses the full batch-profile pipeline and additionally emits a `harness/evaluate-report.json` wrapper plus `harness/judge-evidence-index.json`. These only index verified batch artifacts, summary validation, and context/index entrypoints; they are not a new semantic acceptance gate.
 
 This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation.
 

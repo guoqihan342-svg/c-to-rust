@@ -1,8 +1,9 @@
 import hashlib
 import json
+import re
 import tomllib
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +28,21 @@ def load_json(path: Path) -> dict:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def assert_repo_relative_posix(testcase: unittest.TestCase, path_text: str) -> None:
+    testcase.assertIsInstance(path_text, str)
+    testcase.assertTrue(path_text)
+    testcase.assertNotIn("\\", path_text)
+    testcase.assertFalse(path_text.startswith("/"))
+    testcase.assertFalse(path_text.startswith("~"))
+    testcase.assertFalse(len(path_text) >= 2 and path_text[1] == ":")
+    testcase.assertNotIn("..", PurePosixPath(path_text).parts)
+
+
+def assert_no_local_absolute_path(testcase: unittest.TestCase, text: str) -> None:
+    testcase.assertIsInstance(text, str)
+    testcase.assertNotRegex(text, re.compile(r"(?:^|[^A-Za-z0-9_])(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/)"))
 
 
 def direct_rust_dependencies(manifest: Path) -> set[str]:
@@ -305,6 +321,126 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             with self.subTest(artifact=key):
                 self.assertTrue(artifact_path.exists())
                 self.assertEqual(artifact["sha256"], sha256_file(artifact_path))
+
+    def test_flashdb_judge_entrypoints_contract(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        config_path = PROFILE_DIR / "judge-entrypoints" / "flashdb-harness.json"
+        config = load_json(config_path)
+
+        self.assertEqual(config["schema_version"], 1)
+        self.assertEqual(config["manifest_kind"], "judge-entrypoints")
+        self.assertEqual(config["profile_id"], "flashdb-harness-judge-entrypoint")
+        self.assertEqual(config["entrypoint_id"], "flashdb-harness")
+        self.assertEqual(config["entrypoint_type"], "judge_one_click")
+        self.assertEqual(config["target_id"], "flashdb")
+        self.assertEqual(config["status"], "active")
+        self.assertEqual(config["proof_class_default"], "local-simulation")
+        self.assertIn("competition-exact", config["allowed_proof_classes"])
+
+        environment_ref = config["environment_profile"]
+        assert_repo_relative_posix(self, environment_ref["path"])
+        self.assertEqual(environment_ref["path"], "config/competition-env/environment.json")
+        self.assertEqual(environment_ref["profile_id"], "huawei-competition-ubuntu-24.04")
+        self.assertEqual(environment_ref["sha256"], sha256_file(REPO_ROOT / environment_ref["path"]))
+        self.assertEqual(config["source_pin"]["repository"], flashdb["repository"])
+        self.assertEqual(config["source_pin"]["branch"], flashdb["branch"])
+        self.assertEqual(config["source_pin"]["commit"], flashdb["commit"])
+        self.assertEqual(config["source_pin"]["checkout_command"], flashdb["checkout_command"])
+        assert_no_local_absolute_path(self, config["source_pin"]["checkout_command"])
+
+        claim_boundary = config["claim_boundary"]
+        self.assertEqual(claim_boundary["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertFalse(claim_boundary["generated_draft_semantic_pass"])
+        self.assertEqual(claim_boundary["translation_coverage_numerator"], 0)
+        self.assertIn("not a semantic gate", claim_boundary["boundary"])
+        self.assertIn("translator-generated semantic pass", claim_boundary["non_goals"])
+        self.assertIn("whole-project FlashDB migration", claim_boundary["non_goals"])
+        self.assertIn("translator-generated semantic pass", claim_boundary["forbidden_claims"])
+        self.assertIn("whole-project FlashDB automatic C-to-Rust translation", claim_boundary["forbidden_claims"])
+        self.assertIn("unsafe 2 -> 0", " ".join(claim_boundary["allowed_claims"]))
+        self.assertEqual(
+            set(config["harness_features_demonstrated"]),
+            {
+                "h1_evaluate_one_click",
+                "h2_multi_worker_fanout",
+                "h3_precise_repair_self_heal",
+                "h4_before_after_exhibit",
+                "h5_context_management",
+                "h6_judge_reports",
+            },
+        )
+        self.assertTrue(all(config["harness_features_demonstrated"].values()))
+
+        entrypoints = {entry["id"]: entry for entry in config["entrypoints"]}
+        self.assertEqual(
+            set(entrypoints),
+            {"before_after_judge_demo", "multi_worker_evaluate_profile"},
+        )
+        contract = config["test_contract"]
+        self.assertEqual(set(contract["required_entrypoint_ids"]), set(entrypoints))
+        self.assertTrue(contract["paths_must_be_repo_relative_posix"])
+        self.assertTrue(contract["commands_must_use_python_b"])
+        self.assertEqual(contract["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertFalse(contract["generated_draft_semantic_pass"])
+        self.assertEqual(contract["translation_coverage_numerator"], 0)
+
+        before_after = entrypoints["before_after_judge_demo"]
+        self.assertEqual(before_after["priority"], 1)
+        self.assertEqual(before_after["purpose"], "core-translation-before-after-exhibit")
+        self.assertIn("validation.tools.judge_demo", before_after["command"])
+        self.assertIn("--profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json", before_after["command"])
+        self.assertIn("--run-id competition-flashdb-before-after-exhibit", before_after["command"])
+        self.assertIn("--out-root target/competition-out-flashdb-before-after-exhibit", before_after["command"])
+        self.assertIn("validate_competition_run_summary.py", " ".join(before_after["verification_commands"]))
+        for artifact in [
+            "competition_summary",
+            "workflow_metrics",
+            "judge_demo_report",
+            "before_after_exhibit",
+            "milestone_release_report",
+            "context_pack",
+            "agent_index",
+        ]:
+            self.assertIn(artifact, before_after["expected_artifacts"])
+
+        multi_worker = entrypoints["multi_worker_evaluate_profile"]
+        self.assertEqual(multi_worker["priority"], 2)
+        self.assertEqual(multi_worker["purpose"], "harness-architecture-multi-worker-evaluate")
+        self.assertIn("validation.tools.opencode_agent_harness evaluate", multi_worker["command"])
+        self.assertIn("--profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json", multi_worker["command"])
+        self.assertIn("--run-id harness-flashdb-explicit-workers-evaluate-profile-20260701", multi_worker["command"])
+        self.assertIn(
+            "--out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
+            multi_worker["command"],
+        )
+        for artifact in [
+            "competition_summary",
+            "workflow_metrics",
+            "route_governance_metrics_report",
+            "evaluate_report",
+            "judge_evidence_index",
+            "batch_profile_report",
+            "context_pack",
+            "agent_index",
+            "run_plan_report",
+            "merge_plan",
+        ]:
+            self.assertIn(artifact, multi_worker["expected_artifacts"])
+
+        for entry in config["entrypoints"]:
+            self.assertEqual(entry["proof_class"], "local-simulation")
+            self.assertIn("python -B", entry["command"])
+            for ref_name in ["profile", "tracked_manifest"]:
+                ref = entry[ref_name]
+                assert_repo_relative_posix(self, ref["path"])
+                path = REPO_ROOT / ref["path"]
+                self.assertTrue(path.exists(), ref["path"])
+                self.assertEqual(ref["sha256"], sha256_file(path), ref["path"])
+            for artifact_path in entry["expected_artifacts"].values():
+                assert_repo_relative_posix(self, artifact_path)
+            for command in [entry["command"], entry.get("audit_command", ""), *entry["verification_commands"]]:
+                assert_no_local_absolute_path(self, command)
 
     def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")

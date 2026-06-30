@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "manifest_kind": "judge-entrypoints",
+  "profile_id": "flashdb-harness-judge-entrypoint",
+  "entrypoint_id": "flashdb-harness",
+  "entrypoint_set_id": "flashdb-harness-judge-entrypoints",
+  "entrypoint_type": "judge_one_click",
+  "target_id": "flashdb",
+  "status": "active",
+  "proof_class_default": "local-simulation",
+  "allowed_proof_classes": [
+    "local-simulation",
+    "wsl-local-simulation",
+    "ci-approximation",
+    "competition-exact"
+  ],
+  "environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+  },
+  "source_pin": {
+    "target_id": "flashdb",
+    "repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "branch": "competition",
+    "commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "checkout_command": "git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe"
+  },
+  "claim_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "translation_coverage_numerator": 0,
+    "scope": [
+      "FlashDB harness fan-out/fan-in, context/index, merge evidence",
+      "real-fdb-calc-crc32 before/after unsafe reduction exhibit"
+    ],
+    "baseline_boundary": "reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline output remains skipped",
+    "allowed_claims": [
+      "FlashDB real-fdb-calc-crc32 before/after safety exhibit with unsafe 2 -> 0 and accepted oracle evidence",
+      "Harness planner/worker/verifier/repairer/reporter contract with repair trace and rollback evidence",
+      "Explicit multi-worker fan-out/fan-in with source pinning, context pack, agent index, and judge evidence index"
+    ],
+    "forbidden_claims": [
+      "translator-generated semantic pass",
+      "whole-project FlashDB automatic C-to-Rust translation",
+      "C2Rust baseline was automatically generated and accepted",
+      "general C language coverage",
+      "production-ready translation quality"
+    ],
+    "boundary": "This file indexes judge-facing harness entrypoints and stable tracked manifests. It is a reproduction/runbook index, not a semantic gate, and it does not claim translator-generated semantic pass or whole-project FlashDB migration.",
+    "non_goals": [
+      "translator-generated semantic pass",
+      "whole-project FlashDB migration",
+      "complete OpenCode autonomous runtime proof",
+      "general C coverage",
+      "competition-exact host proof"
+    ]
+  },
+  "entrypoints": [
+    {
+      "id": "before_after_judge_demo",
+      "priority": 1,
+      "purpose": "core-translation-before-after-exhibit",
+      "proof_class": "local-simulation",
+      "run_id": "competition-flashdb-before-after-exhibit",
+      "profile": {
+        "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+        "profile_id": "flashdb-fdb-utils-before-after",
+        "sha256": "0f1bd2182edcfc8932ef84bec8dff8025c1e0e11d6955fb11d2c6da9aa710bfe"
+      },
+      "tracked_manifest": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
+        "sha256": "39c21dc89cf19a9281e742bab937fd28ba6fd56e82dc45527626859b46973c90"
+      },
+      "command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit",
+      "audit_command": "python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit",
+      "verification_commands": [
+        "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"
+      ],
+      "expected_artifacts": {
+        "competition_summary": "target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json",
+        "workflow_metrics": "target/competition-out-flashdb-before-after-exhibit/summary/workflow-metrics.json",
+        "judge_demo_report": "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+        "before_after_exhibit": "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
+        "milestone_release_report": "target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json",
+        "context_pack": "target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json",
+        "agent_index": "target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json"
+      },
+      "judge_focus": [
+        "unsafe baseline to final safe Rust",
+        "oracle evidence and unsafe reduction",
+        "repair trace and rollback contract",
+        "planner worker verifier repairer reporter stage contract"
+      ]
+    },
+    {
+      "id": "multi_worker_evaluate_profile",
+      "priority": 2,
+      "purpose": "harness-architecture-multi-worker-evaluate",
+      "proof_class": "local-simulation",
+      "run_id": "harness-flashdb-explicit-workers-evaluate-profile-20260701",
+      "profile": {
+        "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
+        "profile_id": "flashdb-fdb-utils-explicit-workers",
+        "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
+      },
+      "tracked_manifest": {
+        "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
+        "sha256": "555109c41a1af0ff85ae7d49a83449324e6d44d46f73012d02be6c9a75d5f8af"
+      },
+      "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
+      "verification_commands": [
+        "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
+      ],
+      "expected_artifacts": {
+        "competition_summary": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
+        "workflow_metrics": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
+        "route_governance_metrics_report": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
+        "evaluate_report": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
+        "judge_evidence_index": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
+        "batch_profile_report": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
+        "context_pack": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
+        "agent_index": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
+        "run_plan_report": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
+        "merge_plan": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json"
+      },
+      "judge_focus": [
+        "evaluate profile as one-command wrapper",
+        "explicit workers fan-out fan-in",
+        "context pack and agent index continuation",
+        "judge evidence index path and hash chain"
+      ]
+    }
+  ],
+  "harness_features_demonstrated": {
+    "h1_evaluate_one_click": true,
+    "h2_multi_worker_fanout": true,
+    "h3_precise_repair_self_heal": true,
+    "h4_before_after_exhibit": true,
+    "h5_context_management": true,
+    "h6_judge_reports": true
+  },
+  "test_contract": {
+    "paths_must_be_repo_relative_posix": true,
+    "commands_must_use_python_b": true,
+    "required_entrypoint_ids": [
+      "before_after_judge_demo",
+      "multi_worker_evaluate_profile"
+    ],
+    "required_expected_artifacts": [
+      "competition_summary",
+      "workflow_metrics",
+      "context_pack",
+      "agent_index"
+    ],
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "translation_coverage_numerator": 0
+  }
+}
