@@ -58,6 +58,11 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             self.assertNotIn(fragment, chinese)
             self.assertNotIn(fragment, english)
 
+    def test_core_validation_ci_runs_judge_demo_entrypoint_contract(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("validation.tools.test_judge_demo_entrypoint", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
