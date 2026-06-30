@@ -573,6 +573,78 @@ def validate_context_agent_index_consistency(
     return {"status": "passed", "worker_count": len(context_worker_ids)}
 
 
+def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[str, Any]:
+    policy = context_payload.get("attempt_evidence_policy")
+    if policy is None:
+        return {"status": "skipped", "reason": "attempt_evidence_policy absent"}
+    policy_payload = require_object(policy, "attempt_evidence_policy")
+    if policy_payload.get("mode") != "baseline_repair_gate":
+        return {"status": "skipped", "reason": f"unsupported attempt_evidence_policy mode: {policy_payload.get('mode')}"}
+    baseline = require_object(policy_payload.get("baseline_attempt"), "attempt_evidence_policy.baseline_attempt")
+    accepted = require_object(policy_payload.get("accepted_attempt"), "attempt_evidence_policy.accepted_attempt")
+    baseline_attempt = baseline.get("attempt_number")
+    if baseline_attempt != 1:
+        raise ValueError("baseline_repair_gate baseline attempt_number must be 1")
+    if baseline.get("expected_final_gate") != "failed":
+        raise ValueError("baseline_repair_gate baseline expected_final_gate must be failed")
+    root_cause_key = require_string(baseline.get("root_cause_key"), "baseline_repair_gate baseline root_cause_key")
+    min_accepted_attempt = accepted.get("min_attempt_number")
+    if not isinstance(min_accepted_attempt, int) or min_accepted_attempt < 2:
+        raise ValueError("baseline_repair_gate accepted min_attempt_number must be >= 2")
+    if accepted.get("require_hint_id") is not True:
+        raise ValueError("baseline_repair_gate accepted require_hint_id must be true")
+
+    workers = context_payload.get("workers")
+    if not isinstance(workers, list) or not workers:
+        raise ValueError("baseline_repair_gate requires context_pack.workers")
+    checked_workers = 0
+    for worker in workers:
+        worker_payload = require_object(worker, "context_pack.workers[]")
+        attempts = worker_payload.get("attempts")
+        if not isinstance(attempts, list) or not attempts:
+            continue
+        first = next(
+            (attempt for attempt in attempts if isinstance(attempt, dict) and attempt.get("attempt") == baseline_attempt),
+            None,
+        )
+        if first is None:
+            continue
+        if first.get("summary_status") != "failed":
+            raise ValueError("baseline_repair_gate attempt 1 summary_status must be failed")
+        if first.get("root_cause_key") != root_cause_key:
+            raise ValueError("baseline_repair_gate attempt 1 root_cause_key mismatch")
+        hint_id = require_string(first.get("hint_id"), "baseline_repair_gate attempt 1 hint_id")
+        if first.get("hint_status") != "opened":
+            raise ValueError("baseline_repair_gate attempt 1 hint_status must be opened")
+        accepted_attempt = next(
+            (
+                attempt
+                for attempt in attempts
+                if isinstance(attempt, dict)
+                and isinstance(attempt.get("attempt"), int)
+                and attempt["attempt"] >= min_accepted_attempt
+                and int(attempt.get("exit_code", 1)) == 0
+                and attempt.get("summary_status") == "passed"
+            ),
+            None,
+        )
+        if accepted_attempt is None:
+            raise ValueError("baseline_repair_gate requires a passed accepted retry attempt")
+        if accepted_attempt.get("hint_id") != hint_id or accepted_attempt.get("retry_of") != hint_id:
+            raise ValueError("baseline_repair_gate accepted retry must bind the opened hint_id")
+        rollback = require_object(accepted_attempt.get("rollback_evidence"), "baseline_repair_gate rollback_evidence")
+        assert_repo_relative_posix(require_string(rollback.get("path"), "baseline_repair_gate rollback_evidence.path"))
+        if not isinstance(rollback.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", rollback["sha256"]):
+            raise ValueError("baseline_repair_gate rollback_evidence.sha256 must be a sha256 hex string")
+        final_decision = require_object(worker_payload.get("final_decision"), "baseline_repair_gate worker final_decision")
+        if final_decision.get("status") != "accepted":
+            raise ValueError("baseline_repair_gate worker final_decision.status must be accepted")
+        checked_workers += 1
+    if checked_workers == 0:
+        raise ValueError("baseline_repair_gate did not find a worker with repair attempts")
+    return {"status": "passed", "checked_workers": checked_workers, "repair_round_cap": 5}
+
+
 def validate_harness_artifact_contracts(
     artifacts: dict[str, Any],
     *,
@@ -605,6 +677,10 @@ def validate_harness_artifact_contracts(
             context_payload,
             agent_payload,
         )
+    if context_payload is not None:
+        repair_contract = validate_repair_self_heal_contract(context_payload)
+        if repair_contract.get("status") != "skipped":
+            result["repair_self_heal"] = repair_contract
     if "judge_evidence_index" in artifacts:
         judge_index_path = repo_path(str(artifacts["judge_evidence_index"]), repo_root=repo_root)
         result["judge_evidence_index"] = validate_judge_evidence_index_contract(

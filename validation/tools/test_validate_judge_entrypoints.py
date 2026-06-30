@@ -112,6 +112,18 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             context_pack,
             {
                 "report_kind": "context-pack",
+                "attempt_evidence_policy": {
+                    "accepted_attempt": {
+                        "min_attempt_number": 2,
+                        "require_hint_id": True,
+                    },
+                    "baseline_attempt": {
+                        "attempt_number": 1,
+                        "expected_final_gate": "failed",
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                    },
+                    "mode": "baseline_repair_gate",
+                },
                 "context_management_contract": {
                     "agent_index": repo_relative(agent_index),
                     "chat_output_is_evidence": False,
@@ -144,6 +156,29 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "source_sha256": "f" * 64,
                         "summary_path": repo_relative(summary),
                         "worker_id": "worker-001",
+                        "attempts": [
+                            {
+                                "attempt": 1,
+                                "exit_code": 1,
+                                "hint_id": "repair:test:worker-001:unsafe_baseline_requires_repair",
+                                "hint_status": "opened",
+                                "root_cause_key": "unsafe_baseline_requires_repair",
+                                "summary_status": "failed",
+                            },
+                            {
+                                "attempt": 2,
+                                "exit_code": 0,
+                                "hint_id": "repair:test:worker-001:unsafe_baseline_requires_repair",
+                                "hint_status": "revalidated_passed",
+                                "retry_of": "repair:test:worker-001:unsafe_baseline_requires_repair",
+                                "rollback_evidence": {
+                                    "path": repo_relative(report),
+                                    "sha256": "e" * 64,
+                                },
+                                "summary_status": "passed",
+                            },
+                        ],
+                        "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
                     }
                 ],
             },
@@ -204,6 +239,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(contracts["context_pack"]["repair_round_cap"], 5)
         self.assertEqual(contracts["agent_index"]["worker_count"], 1)
         self.assertEqual(contracts["context_agent_consistency"]["worker_count"], 1)
+        self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
 
     def test_context_pack_workers_must_match_agent_index_workers(self) -> None:
         config = load_default_config()
