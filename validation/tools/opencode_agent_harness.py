@@ -3037,16 +3037,23 @@ def verify_opencode_contract_execution(
     )
     status = "not-observed"
     if executed_shell_commands:
-        status = "executed" if first_shell_command_matches_worker_command else "not-executed"
+        status = (
+            "executed"
+            if first_shell_command_matches_worker_command and not tools_before_first_shell
+            else "not-executed"
+        )
     contract_failure_reason = ""
     if status == "not-observed":
         contract_failure_reason = "no_shell_command_observed"
     elif status == "not-executed":
-        contract_failure_reason = (
-            "first_shell_command_mismatch_worker_command_seen_later"
-            if exact_worker_command_seen
-            else "first_shell_command_mismatch"
-        )
+        if tools_before_first_shell:
+            contract_failure_reason = "tool_before_first_shell_command"
+        else:
+            contract_failure_reason = (
+                "first_shell_command_mismatch_worker_command_seen_later"
+                if exact_worker_command_seen
+                else "first_shell_command_mismatch"
+            )
     return {
         "expected_worker_command_line": expected_worker_command_line,
         "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),

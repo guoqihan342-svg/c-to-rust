@@ -2016,7 +2016,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["tools_before_first_shell"], [])
         self.assertEqual(verification["contract_failure_reason"], "first_shell_command_mismatch_worker_command_seen_later")
 
-    def test_opencode_contract_records_tools_before_first_shell_command(self) -> None:
+    def test_opencode_contract_rejects_any_tool_before_first_shell_command(self) -> None:
         worker_command = [
             sys.executable,
             "scripts/c2rust-migrator.py",
@@ -2046,11 +2046,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             repo_root=REPO_ROOT,
         )
 
-        self.assertEqual(verification["status"], "executed")
+        self.assertEqual(verification["status"], "not-executed")
         self.assertEqual(verification["first_tool_name"], "read")
         self.assertEqual(verification["first_shell_tool_name"], "bash")
         self.assertEqual(verification["tools_before_first_shell"], ["read"])
-        self.assertEqual(verification["contract_failure_reason"], "")
+        self.assertEqual(verification["contract_failure_reason"], "tool_before_first_shell_command")
 
     def test_opencode_worker_argv_resolves_path_command_before_launch(self) -> None:
         with tempfile.TemporaryDirectory(prefix="opencode-command-shim-") as tmp:
@@ -3100,13 +3100,7 @@ def before_after_worker_metrics(out_root: Path, run_id: str) -> dict:
         "units_total": 1,
         "units_converged": 1,
         "units_baseline_only": 0,
-        "unsafe_reduction": {
-            "status": "not_measured",
-            "baseline_total_unsafe": None,
-            "current_total_unsafe": 0,
-            "reduced_by": None,
-            "ratio": 0,
-        },
+        "unsafe_reduction": before_after["unsafe_reduction"],
         "translation_before_after": {
             "status": "bound",
             "unit_count": 1,
