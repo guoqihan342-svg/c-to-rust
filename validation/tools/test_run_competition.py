@@ -340,7 +340,7 @@ class RunCompetitionTests(unittest.TestCase):
                 "keyword-param",
                 [
                     {"round": 1, "status": "applied"},
-                    {"round": 2, "status": "applied"},
+                    {"round": 2, "status": "applied", "ai_usage": {"used": True, "candidate_id": "ai-repair-1"}},
                     {"round": 3, "status": "applied"},
                     {"round": 3, "status": "verified"},
                 ],
@@ -360,8 +360,19 @@ class RunCompetitionTests(unittest.TestCase):
             metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(metrics["avg_repair_rounds"], 3.0)
             self.assertEqual(metrics["auto_recovery_rate"], 1.0)
+            self.assertEqual(metrics["llm_calls"], 1)
             self.assertEqual(metrics["per_unit_statuses"][0]["repair_rounds"], 3)
             self.assertTrue(metrics["per_unit_statuses"][0]["auto_recovered"])
+            self.assertEqual(metrics["per_unit_statuses"][0]["llm_calls"], 1)
+            repair_history = metrics["per_unit_statuses"][0]["repair_history"]
+            self.assertEqual(
+                repair_history["patch_events_path"],
+                "evidence/demo/auto-translation/keyword-param/l3-keyword-param-patch-events.jsonl",
+            )
+            self.assertRegex(repair_history["patch_events_sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(repair_history["statuses"], ["applied", "applied", "applied", "verified"])
+            self.assertEqual(repair_history["rollback_ids"], [])
+            self.assertTrue(repair_history["verified"])
 
     def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
         module = load_runner_module()

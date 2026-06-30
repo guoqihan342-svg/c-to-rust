@@ -207,6 +207,37 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertIn("sha256", str(raised.exception))
 
+    def test_rejects_repair_rounds_without_repair_history(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["per_unit_statuses"] = [
+                {
+                    "unit_id": "demo/keyword-param",
+                    "source": "slice-spec",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                    "repair_rounds": 2,
+                    "auto_recovered": True,
+                }
+            ]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("repair_history", str(raised.exception))
+
     def test_rejects_worker_summary_count_mismatch(self) -> None:
         module = load_validator_module()
         summary = valid_summary()

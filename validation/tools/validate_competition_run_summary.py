@@ -139,6 +139,66 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
             raise SystemExit(f"workflow metrics artifact {field} does not match competition summary")
     if not isinstance(metrics["per_unit_statuses"], list):
         raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
+    validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
+
+
+def validate_per_unit_statuses(
+    metrics: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    for index, unit in enumerate(metrics["per_unit_statuses"]):
+        if not isinstance(unit, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        if "repair_rounds" not in unit:
+            continue
+        repair_rounds = unit["repair_rounds"]
+        if not isinstance(repair_rounds, int) or repair_rounds < 1:
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_rounds must be a positive integer")
+        if not isinstance(unit.get("auto_recovered"), bool):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].auto_recovered must be boolean")
+        repair_history = unit.get("repair_history")
+        if not isinstance(repair_history, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] missing repair_history")
+        patch_events_ref = repair_history.get("patch_events_path")
+        patch_events_sha = repair_history.get("patch_events_sha256")
+        if not isinstance(patch_events_ref, str) or not is_repo_relative_posix_path(patch_events_ref):
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path "
+                "must be repo-relative POSIX"
+            )
+        if not isinstance(patch_events_sha, str) or len(patch_events_sha) != 64:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_sha256 must be sha256"
+            )
+        patch_events_path = resolve_summary_artifact(
+            patch_events_ref,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if patch_events_path is None:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path does not exist: "
+                f"{patch_events_ref}"
+            )
+        if sha256(patch_events_path) != patch_events_sha:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_sha256 does not match"
+            )
+        statuses = repair_history.get("statuses")
+        if not isinstance(statuses, list) or not all(isinstance(status, str) for status in statuses):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_history.statuses must be strings")
+        rollback_ids = repair_history.get("rollback_ids")
+        if not isinstance(rollback_ids, list) or not all(isinstance(item, str) for item in rollback_ids):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_history.rollback_ids must be strings")
+        verified = repair_history.get("verified")
+        if not isinstance(verified, bool):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_history.verified must be boolean")
+        if unit["auto_recovered"] and (not verified or "verified" not in statuses):
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}] auto_recovered requires verified repair history"
+            )
 
 
 def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:

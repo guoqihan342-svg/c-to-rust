@@ -240,7 +240,14 @@ def run_competition(
             else:
                 slice_failures += 1
         typed_ir_generated += 1
-        repair_metrics = self_healing_repair_metrics(slice_evidence_root, target_id, slice_id, semantic_unit)
+        repair_metrics = self_healing_repair_metrics(
+            slice_evidence_root,
+            target_id,
+            slice_id,
+            semantic_unit,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
         unit_statuses.append(
             workflow_unit_status(
                 target_id=target_id,
@@ -254,6 +261,8 @@ def run_competition(
                 failed=not semantic_unit and final_status not in {"refused", "blocked"},
                 repair_rounds=repair_metrics["repair_rounds"],
                 auto_recovered=repair_metrics["auto_recovered"],
+                repair_history=repair_metrics.get("repair_history"),
+                llm_calls=repair_metrics["llm_calls"],
             )
         )
 
@@ -518,6 +527,8 @@ def workflow_unit_status(
     failed: bool,
     repair_rounds: int = 0,
     auto_recovered: bool = False,
+    repair_history: dict[str, Any] | None = None,
+    llm_calls: int = 0,
 ) -> dict[str, Any]:
     status_payload = {
         "unit_id": f"{target_id}/{slice_id}",
@@ -532,6 +543,10 @@ def workflow_unit_status(
     if repair_rounds > 0:
         status_payload["repair_rounds"] = repair_rounds
         status_payload["auto_recovered"] = auto_recovered
+        if repair_history is not None:
+            status_payload["repair_history"] = repair_history
+    if llm_calls > 0:
+        status_payload["llm_calls"] = llm_calls
     return status_payload
 
 
@@ -617,7 +632,8 @@ def build_workflow_metrics(
         "always_equivalent": attempted > 0 and semantic_pass == attempted and failed == 0,
         "fail_closed_count": refused + blocked,
         "wall_clock_seconds": summary["elapsed_seconds"],
-        "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls"),
+        "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls")
+        + sum_unit_int_metric(unit_statuses, "llm_calls"),
         "per_unit_statuses": unit_statuses,
     }
 
@@ -657,6 +673,13 @@ def sum_worker_int_metric(metrics: list[dict[str, Any]], key: str) -> int:
     total = 0
     for metric in metrics:
         total += nonnegative_int(metric.get(key))
+    return total
+
+
+def sum_unit_int_metric(unit_statuses: list[dict[str, Any]], key: str) -> int:
+    total = 0
+    for unit in unit_statuses:
+        total += nonnegative_int(unit.get(key))
     return total
 
 
@@ -884,6 +907,9 @@ def self_healing_repair_metrics(
     target_id: str,
     slice_id: str,
     semantic_pass: bool,
+    *,
+    repo_root: Path,
+    out_root: Path,
 ) -> dict[str, Any]:
     events_path = (
         evidence_root
@@ -893,9 +919,12 @@ def self_healing_repair_metrics(
         / f"l3-{slice_id}-patch-events.jsonl"
     )
     if not events_path.exists():
-        return {"repair_rounds": 0, "auto_recovered": False}
+        return {"repair_rounds": 0, "auto_recovered": False, "llm_calls": 0}
     repair_rounds = 0
     verified = False
+    statuses: list[str] = []
+    rollback_ids: list[str] = []
+    llm_call_keys: set[str] = set()
     for line in events_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -907,12 +936,36 @@ def self_healing_repair_metrics(
         if not isinstance(round_value, int) or round_value < 1:
             continue
         status = event.get("status")
+        if isinstance(status, str):
+            statuses.append(status)
+        rollback_id = event.get("rollback_id")
+        if isinstance(rollback_id, str) and rollback_id and rollback_id not in rollback_ids:
+            rollback_ids.append(rollback_id)
+        ai_usage = event.get("ai_usage")
+        if isinstance(ai_usage, dict) and ai_usage.get("used") is True:
+            candidate_id = ai_usage.get("candidate_id")
+            patch_id = event.get("patch_id")
+            key = candidate_id if isinstance(candidate_id, str) and candidate_id else patch_id
+            if isinstance(key, str) and key:
+                llm_call_keys.add(key)
         if status == "applied":
             repair_rounds = max(repair_rounds, round_value)
         elif status == "verified":
             verified = True
             repair_rounds = max(repair_rounds, round_value)
-    return {"repair_rounds": repair_rounds, "auto_recovered": repair_rounds > 0 and verified and semantic_pass}
+    repair_history = {
+        "patch_events_path": summary_reference_path(events_path, repo_root=repo_root, out_root=out_root),
+        "patch_events_sha256": sha256(events_path),
+        "statuses": statuses,
+        "rollback_ids": rollback_ids,
+        "verified": verified,
+    }
+    return {
+        "repair_rounds": repair_rounds,
+        "auto_recovered": repair_rounds > 0 and verified and semantic_pass,
+        "repair_history": repair_history,
+        "llm_calls": len(llm_call_keys),
+    }
 
 
 def required_str(data: dict[str, Any], key: str) -> str:
