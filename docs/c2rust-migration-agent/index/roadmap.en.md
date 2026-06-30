@@ -46,6 +46,14 @@ Current harness-first development entrypoint:
 python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
 ```
 
+Profile form of the same one-command entrypoint:
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
+```
+
+This path reuses the full batch-profile pipeline and additionally emits a `harness/evaluate-report.json` wrapper. The wrapper only indexes verified batch artifacts, summary validation, and context/index entrypoints; it is not a new semantic acceptance gate.
+
 This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation.
 
 Fallback repo-local demo:

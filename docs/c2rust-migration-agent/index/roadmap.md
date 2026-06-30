@@ -40,6 +40,14 @@ python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evalu
 
 该入口会产出 `harness/evaluate-report.json`、`harness/context-pack.json`、`harness/agent-index.json` 和 SQLite `context_packs` 索引，用于评委审计和下一轮 OpenCode 多 agent 续跑。
 
+Profile 形式的一键入口：
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
+```
+
+该路径会复用完整 batch-profile pipeline，并额外产出 `harness/evaluate-report.json` wrapper；wrapper 只索引已验证的 batch artifacts、summary validator 和 context/index，不是新的语义接受门禁。
+
 保底 repo-local demo：
 
 ```bash

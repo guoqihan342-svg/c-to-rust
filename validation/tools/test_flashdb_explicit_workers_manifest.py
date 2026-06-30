@@ -48,6 +48,11 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
         self.assertEqual(manifest["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertIn("run-batch-profile", manifest["reproduction"]["run_batch_profile_command"])
         self.assertIn("evaluate --profile", manifest["reproduction"]["evaluate_profile_command"])
+        evaluate_report = manifest["evaluate_profile_artifacts"]["artifacts"]["evaluate_report"]
+        self.assertEqual(
+            evaluate_report["path"],
+            "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
+        )
 
     def test_tracked_artifact_hashes_match(self):
         tracked_roots = [
@@ -79,6 +84,15 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
                 continue
             existing_refs += 1
             self.assertEqual(sha256(path), ref["sha256"], ref["path"])
+        evaluate_report_path = repo_path(
+            self.manifest["evaluate_profile_artifacts"]["artifacts"]["evaluate_report"]["path"]
+        )
+        if evaluate_report_path.exists():
+            evaluate_report = json.loads(evaluate_report_path.read_text(encoding="utf-8"))
+            self.assertEqual(evaluate_report["report_kind"], "evaluate-report")
+            self.assertEqual(evaluate_report["entrypoint"], "evaluate --profile")
+            self.assertIn("not a new semantic gate", evaluate_report["claim_boundary"])
+            self.assertFalse(evaluate_report["acceptance_boundary"]["generated_draft_semantic_pass"])
         if repo_path(target_root["path"]).exists():
             self.assertGreater(existing_refs, 0)
 

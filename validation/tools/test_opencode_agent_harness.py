@@ -2447,12 +2447,18 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             harness,
             "run_batch_profile",
             return_value={"status": "completed", "exit_code": 0},
-        ) as batch_runner, patch.object(harness, "evaluate") as direct_evaluate:
+        ) as batch_runner, patch.object(
+            harness,
+            "write_evaluate_profile_report",
+            return_value={"status": "completed", "exit_code": 0, "report_kind": "evaluate-report"},
+        ) as evaluate_profile_report, patch.object(harness, "evaluate") as direct_evaluate:
             self.assertEqual(harness.main(), 0)
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["report_kind"], "evaluate-report")
         batch_runner.assert_called_once()
+        evaluate_profile_report.assert_called_once()
         direct_evaluate.assert_not_called()
         self.assertEqual(
             batch_runner.call_args.kwargs["profile_path"],
@@ -2460,6 +2466,142 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         )
         self.assertEqual(batch_runner.call_args.kwargs["run_id"], "run-evaluate-profile")
         self.assertEqual(batch_runner.call_args.kwargs["out_root"], Path("target/competition-out-evaluate-profile"))
+        self.assertEqual(evaluate_profile_report.call_args.kwargs["batch_result"], {"status": "completed", "exit_code": 0})
+        self.assertEqual(
+            evaluate_profile_report.call_args.kwargs["profile_path"],
+            Path("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"),
+        )
+
+    def test_write_evaluate_profile_report_updates_context_index_and_ledger(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-evaluate-profile",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            profile_path = out_root / "profile.json"
+            profile_path.write_text(
+                json.dumps({"schema_version": 1, "profile_id": "demo-profile"}),
+                encoding="utf-8",
+            )
+            batch_report_path = out_root / "harness" / "batch-profile-report.json"
+            batch_report_path.parent.mkdir(parents=True)
+            batch_report_path.write_text(
+                json.dumps(
+                    {
+                        "report_kind": "batch-profile-report",
+                        "judge_summary": {
+                            "harness_architecture": {
+                                "context_pack": {"path": "old", "sha256": "old"},
+                                "agent_index": {"path": "old", "sha256": "old"},
+                            }
+                        },
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            context_pack_path = out_root / "harness" / "context-pack.json"
+            context_pack_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "report_kind": "context-pack",
+                        "context_pack_id": "run-evaluate-profile-context-pack",
+                        "run_id": "run-evaluate-profile",
+                        "target_id": "demo",
+                        "budget": {"depth": 1, "max_tokens": 20000},
+                        "entrypoints": {"primary_report": repo_rel(batch_report_path)},
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            agent_index_path = out_root / "harness" / "agent-index.json"
+            agent_index_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "report_kind": "agent-index",
+                        "run_id": "run-evaluate-profile",
+                        "target_id": "demo",
+                        "reports": {},
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            batch_result = {
+                "status": "completed",
+                "exit_code": 0,
+                "run_id": "run-evaluate-profile",
+                "out_root": repo_rel(out_root),
+                "db_path": repo_rel(db_path),
+                "profile_id": "demo-profile",
+                "proof_class": "local-simulation",
+                "mode": "deterministic",
+                "report_path": repo_rel(batch_report_path),
+                "context_pack": {"path": repo_rel(context_pack_path), "sha256": "old"},
+                "agent_index": {"path": repo_rel(agent_index_path), "sha256": "old"},
+                "judge_summary": {
+                    "entrypoint": "run-batch-profile",
+                    "harness_architecture": {"entrypoint": "run-batch-profile"},
+                },
+            }
+
+            result = harness.write_evaluate_profile_report(
+                batch_result=batch_result,
+                profile_path=profile_path,
+                run_id="run-evaluate-profile",
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            report_path = out_root / "harness" / "evaluate-report.json"
+            self.assertTrue(report_path.exists())
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["report_path"], repo_rel(report_path))
+            self.assertEqual(report["entrypoint"], "evaluate --profile")
+            self.assertEqual(report["judge_summary"]["entrypoint"], "evaluate")
+            self.assertEqual(report["judge_summary"]["harness_architecture"]["entrypoint"], "evaluate")
+            self.assertEqual(report["batch_profile_report"]["path"], repo_rel(batch_report_path))
+            self.assertEqual(report["judge_summary"]["harness_architecture"]["context_pack"], report["context_pack"])
+            self.assertEqual(report["judge_summary"]["harness_architecture"]["agent_index"], report["agent_index"])
+
+            context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["entrypoints"]["primary_report"], repo_rel(report_path))
+            self.assertEqual(context_pack["entrypoints"]["evaluate_report"], repo_rel(report_path))
+            self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], repo_rel(batch_report_path))
+            agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
+            self.assertEqual(agent_index["reports"]["evaluate_report"]["path"], repo_rel(report_path))
+            self.assertEqual(agent_index["reports"]["batch_profile_report"]["path"], repo_rel(batch_report_path))
+            batch_report = json.loads(batch_report_path.read_text(encoding="utf-8"))
+            self.assertEqual(batch_report["context_pack"], report["context_pack"])
+            self.assertEqual(batch_report["agent_index"], report["agent_index"])
+            self.assertEqual(
+                batch_report["judge_summary"]["harness_architecture"]["context_pack"],
+                report["context_pack"],
+            )
+
+            artifact_rows = fetch_rows(
+                db_path,
+                "select kind, repo_rel_path, semantic_role from artifacts where kind in ('evaluate-report', 'context-pack', 'agent-index') order by kind",
+            )
+            self.assertEqual(
+                artifact_rows,
+                [
+                    ("agent-index", repo_rel(agent_index_path), "agent-index"),
+                    ("context-pack", repo_rel(context_pack_path), "agent-context-pack"),
+                    ("evaluate-report", repo_rel(report_path), "evaluate-report"),
+                ],
+            )
+            event_rows = fetch_rows(
+                db_path,
+                "select event_type from events where event_type in ('evaluate_profile_context_refs_updated', 'evaluate_profile_executed') order by event_type",
+            )
+            self.assertEqual(event_rows, [("evaluate_profile_context_refs_updated",), ("evaluate_profile_executed",)])
 
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [

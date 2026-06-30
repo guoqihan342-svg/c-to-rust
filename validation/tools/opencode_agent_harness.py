@@ -295,7 +295,13 @@ def main() -> int:
         )
     elif args.command == "evaluate":
         if args.profile:
-            result = run_batch_profile(
+            batch_result = run_batch_profile(
+                profile_path=args.profile,
+                run_id=args.run_id,
+                out_root=args.out_root,
+            )
+            result = write_evaluate_profile_report(
+                batch_result=batch_result,
                 profile_path=args.profile,
                 run_id=args.run_id,
                 out_root=args.out_root,
@@ -1319,6 +1325,257 @@ def run_batch_profile(
         record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
         connection.commit()
     return result
+
+
+def write_evaluate_profile_report(
+    *,
+    batch_result: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    report_path = out_root / "harness" / "evaluate-report.json"
+    batch_report_path_text = batch_result.get("report_path")
+    batch_report_path: Path | None = None
+    batch_report_ref = {"path": str(batch_report_path_text or ""), "sha256": ""}
+    if isinstance(batch_report_path_text, str) and batch_report_path_text:
+        batch_report_path = repo_path(Path(batch_report_path_text), repo_root=repo_root)
+        batch_report_ref = (
+            artifact_ref(batch_report_path, repo_root=repo_root)
+            if batch_report_path.is_file()
+            else {"path": batch_report_path_text, "sha256": ""}
+        )
+    run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+    merge_execution = (
+        run_plan.get("merge_execution") if isinstance(run_plan.get("merge_execution"), dict) else {}
+    )
+    summary_path_text = merge_execution.get("summary_path")
+    summary_validation: dict[str, Any] | None = None
+    if isinstance(summary_path_text, str) and summary_path_text:
+        summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+        if summary_path.exists():
+            summary_validation = validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "evaluate-report",
+        "entrypoint": "evaluate --profile",
+        "status": str(batch_result.get("status", "unknown")),
+        "exit_code": int(batch_result.get("exit_code", 1)),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "profile": artifact_ref(profile_path, repo_root=repo_root),
+        "profile_id": batch_result.get("profile_id"),
+        "proof_class": batch_result.get("proof_class"),
+        "mode": batch_result.get("mode"),
+        "batch_profile_report": batch_report_ref,
+        "context_pack": batch_result.get("context_pack"),
+        "agent_index": batch_result.get("agent_index"),
+        "summary_validation": summary_validation,
+        "judge_summary": evaluate_profile_judge_summary(batch_result.get("judge_summary")),
+        "claim_boundary": (
+            "This evaluate wrapper is the judge-facing entrypoint for a full batch-profile run. "
+            "It indexes verified reports only; semantic acceptance remains owned by the final "
+            "competition summary, workflow metrics, and validators; it is not a new semantic gate."
+        ),
+    }
+    if "acceptance_boundary" in batch_result:
+        payload["acceptance_boundary"] = batch_result["acceptance_boundary"]
+    if "route_governance_metrics_report" in batch_result:
+        payload["route_governance_metrics_report"] = batch_result["route_governance_metrics_report"]
+    if "before_after_exhibit_report" in batch_result:
+        payload["before_after_exhibit_report"] = batch_result["before_after_exhibit_report"]
+
+    payload["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    db_path_text = batch_result.get("db_path")
+    if isinstance(db_path_text, str) and db_path_text:
+        db_path = repo_path(Path(db_path_text), repo_root=repo_root)
+        context_refs = update_evaluate_profile_context_refs(
+            db_path=db_path,
+            run_id=run_id,
+            out_root=out_root,
+            evaluate_report_path=report_path,
+            batch_profile_report_path=batch_report_ref["path"],
+            status=str(payload["status"]),
+            repo_root=repo_root,
+        )
+        if batch_report_path is not None and batch_report_path.is_file():
+            batch_report_ref = update_batch_profile_report_context_refs(
+                batch_report_path=batch_report_path,
+                context_refs=context_refs,
+                repo_root=repo_root,
+            )
+            payload["batch_profile_report"] = batch_report_ref
+        payload.update(context_refs)
+        architecture = payload.get("judge_summary", {}).get("harness_architecture")
+        if isinstance(architecture, dict):
+            architecture["context_pack"] = context_refs["context_pack"]
+            architecture["agent_index"] = context_refs["agent_index"]
+        report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="evaluate-report",
+                path=report_path,
+                status=str(payload["status"]),
+                semantic_role="evaluate-report",
+                payload=payload,
+                repo_root=repo_root,
+            )
+            if batch_report_path is not None and batch_report_path.is_file():
+                record_artifact(
+                    connection,
+                    run_id=run_id,
+                    worker_id="planner",
+                    kind="batch-profile-report",
+                    path=batch_report_path,
+                    status=str(batch_result.get("status", payload["status"])),
+                    semantic_role="batch-profile-report",
+                    payload=load_json(batch_report_path),
+                    repo_root=repo_root,
+                )
+            record_event(connection, run_id=run_id, event_type="evaluate_profile_executed", payload=payload)
+            connection.commit()
+    return payload
+
+
+def evaluate_profile_judge_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    summary = json.loads(json.dumps(value))
+    summary["entrypoint"] = "evaluate"
+    architecture = summary.get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["entrypoint"] = "evaluate"
+    return summary
+
+
+def update_evaluate_profile_context_refs(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    evaluate_report_path: Path,
+    batch_profile_report_path: str,
+    status: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    context_pack_path = out_root / "harness" / "context-pack.json"
+    agent_index_path = out_root / "harness" / "agent-index.json"
+    evaluate_report_rel = repo_relative(evaluate_report_path, repo_root=repo_root)
+
+    if context_pack_path.exists():
+        context_pack = load_json(context_pack_path)
+        entrypoints = context_pack.setdefault("entrypoints", {})
+        if isinstance(entrypoints, dict):
+            entrypoints["primary_report"] = evaluate_report_rel
+            entrypoints["evaluate_report"] = evaluate_report_rel
+            if batch_profile_report_path:
+                entrypoints["batch_profile_report"] = batch_profile_report_path
+        context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    if agent_index_path.exists():
+        agent_index = load_json(agent_index_path)
+        reports = agent_index.setdefault("reports", {})
+        if isinstance(reports, dict):
+            reports["evaluate_report"] = {
+                "path": evaluate_report_rel,
+                "report_kind": "evaluate-report",
+                "status": status,
+            }
+            if batch_profile_report_path:
+                reports["batch_profile_report"] = {
+                    "path": batch_profile_report_path,
+                    "report_kind": "batch-profile-report",
+                    "status": status,
+                }
+        agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    context_pack_ref = artifact_ref(context_pack_path, repo_root=repo_root)
+    agent_index_ref = artifact_ref(agent_index_path, repo_root=repo_root)
+    context_pack = load_json(context_pack_path)
+    agent_index = load_json(agent_index_path)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(context_pack_id) do update set
+              artifact_path=excluded.artifact_path,
+              artifact_sha256=excluded.artifact_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                str(context_pack.get("context_pack_id", f"{run_id}-context-pack")),
+                run_id,
+                str(context_pack.get("target_id", "")),
+                None,
+                int(context_pack.get("budget", {}).get("depth", 1)),
+                int(context_pack.get("budget", {}).get("max_tokens", 20000)),
+                context_pack_ref["path"],
+                context_pack_ref["sha256"],
+                json.dumps(context_pack, sort_keys=True),
+            ),
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="context-pack",
+            path=context_pack_path,
+            status=status,
+            semantic_role="agent-context-pack",
+            payload=context_pack,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="agent-index",
+            path=agent_index_path,
+            status=status,
+            semantic_role="agent-index",
+            payload=agent_index,
+            repo_root=repo_root,
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="evaluate_profile_context_refs_updated",
+            payload={"context_pack": context_pack_ref, "agent_index": agent_index_ref},
+        )
+        connection.commit()
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref}
+
+
+def update_batch_profile_report_context_refs(
+    *,
+    batch_report_path: Path,
+    context_refs: dict[str, dict[str, str]],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    report = load_json(batch_report_path)
+    report.update(context_refs)
+    architecture = report.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["context_pack"] = context_refs["context_pack"]
+        architecture["agent_index"] = context_refs["agent_index"]
+    batch_report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return artifact_ref(batch_report_path, repo_root=repo_root)
 
 
 def evaluate(
