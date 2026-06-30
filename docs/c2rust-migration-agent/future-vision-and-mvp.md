@@ -49,7 +49,7 @@
 - [ ] H2 多 worker fan-out/fan-in：`run-plan --max-workers` 固定按 planner 顺序汇总，所有 worker 隔离输出，SQLite 开启 busy timeout，OpenCode wrapper 可以并行跑互不依赖的 slice。
 - [ ] H3 精准 repair 自愈：失败 worker 必须落 `repair_hints`，同一 assignment 最多自动重试 5 轮；每次失败、回滚和最终接受/拒绝都要进入报告。
 - [ ] H4 before/after 评分展品：FlashDB 首选路径必须展示 raw unsafe baseline、agent safety patch、oracle 通过、unsafe 下降、repair/retry 轨迹、复现命令和 artifact hash。
-- [ ] H5 上下文管理：`context-pack.json` 是下一轮 agent 和评委的入口，必须包含 source pin、graph、entrypoints、worker summary、merge summary、acceptance boundary；`agent-index.json` 必须按 worker_id 索引 assignment/request/summary/report。
+- [ ] H5 上下文管理：`evaluate` 和 `run-batch-profile` 都必须产出 `context-pack.json` 作为下一轮 agent 和评委的入口，包含 source pin、graph、entrypoints、worker summary、merge summary、acceptance boundary；`agent-index.json` 必须按 worker_id 索引 assignment/request/summary/report。
 - [ ] H6 评测报告：`judge_demo`、`run-batch-profile`、`milestone-release-report` 和 `evaluate-report` 的字段要能说明 harness 架构与核心翻译质量，不只说明治理百分比。
 
 冻结/后置项：

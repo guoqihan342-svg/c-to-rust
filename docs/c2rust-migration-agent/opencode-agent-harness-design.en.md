@@ -129,6 +129,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 These files are indexes and context only. They are not semantic acceptance. Acceptance still comes from worker summaries, the merge summary, and validators.
 
+`run-batch-profile`, the current before/after demo and profile-regression entrypoint, writes the same `context-pack.json` / `agent-index.json` artifacts with `harness/batch-profile-report.json` as the primary report. This gives the judge demo path and the development evaluation path the same context index for continuation and audits.
+
 When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
 
 ```bash

@@ -131,6 +131,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 这两份文件只是索引和上下文，不构成 semantic acceptance。最终通过仍由 worker summary、merge summary 和 validator 决定。
 
+`run-batch-profile` 作为当前 before/after demo 和 profile 回归入口，也写入同样的 `context-pack.json` / `agent-index.json`，其中 primary report 为 `harness/batch-profile-report.json`。因此评委 demo 入口和开发评测入口都能用同一种上下文索引续跑或审计。
+
 连接本机 OpenCode / DeepSeek V4 Pro 时，可以让 OpenCode 包装同一份 assignment request：
 
 ```bash

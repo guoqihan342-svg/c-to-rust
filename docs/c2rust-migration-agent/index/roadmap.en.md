@@ -37,6 +37,8 @@ Key artifacts:
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
+- `target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
+- `target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
 
 Current harness-first development entrypoint:
 

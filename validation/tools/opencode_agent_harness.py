@@ -973,6 +973,20 @@ def run_batch_profile(
         result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=profile_required_string(profile, "target_id"),
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        primary_report_path=report_path,
+        report_entrypoint="batch_profile_report",
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with closing(connect(db_path)) as connection:
@@ -1143,7 +1157,8 @@ def evaluate(
         out_root=out_root,
         plan=plan,
         run_result=run_result,
-        evaluate_report_path=report_path,
+        primary_report_path=report_path,
+        report_entrypoint="evaluate_report",
         repo_root=repo_root,
     )
     result.update(context_refs)
@@ -1177,7 +1192,8 @@ def write_context_pack_and_agent_index(
     out_root: Path,
     plan: dict[str, Any],
     run_result: dict[str, Any],
-    evaluate_report_path: Path,
+    primary_report_path: Path,
+    report_entrypoint: str,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     db_path = repo_path(db_path, repo_root=repo_root)
@@ -1256,7 +1272,8 @@ def write_context_pack_and_agent_index(
             "source_sha256": plan.get("source_sha256"),
         },
         "entrypoints": {
-            "evaluate_report": repo_relative(evaluate_report_path, repo_root=repo_root),
+            "primary_report": repo_relative(primary_report_path, repo_root=repo_root),
+            report_entrypoint: repo_relative(primary_report_path, repo_root=repo_root),
             "run_plan_report": run_result.get("report_path"),
             "worker_plan": plan.get("plan_path"),
             "merge_plan": run_result.get("merge_plan", {}).get("path") if isinstance(run_result.get("merge_plan"), dict) else None,

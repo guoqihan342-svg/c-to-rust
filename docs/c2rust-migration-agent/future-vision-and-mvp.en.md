@@ -47,7 +47,7 @@ Active items:
 - [ ] H2 Multi-worker fan-out/fan-in: `run-plan --max-workers` merges in planner order, every worker uses isolated output, SQLite uses a busy timeout, and the OpenCode wrapper can run independent slices in parallel.
 - [ ] H3 Precise repair self-healing: failed workers must write `repair_hints` and retry the same assignment automatically for at most 5 rounds; every failed attempt, rollback, and final accept/refuse decision must be report-visible.
 - [ ] H4 Before/after scoring exhibit: the preferred FlashDB path must show the raw unsafe baseline, agent safety patch, oracle pass, unsafe reduction, repair/retry trace, reproduction command, and artifact hashes.
-- [ ] H5 Context management: `context-pack.json` is the next-agent and judge entrypoint and must include the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`.
+- [ ] H5 Context management: both `evaluate` and `run-batch-profile` must emit `context-pack.json` as the next-agent and judge entrypoint, including the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`.
 - [ ] H6 Evaluation reports: `judge_demo`, `run-batch-profile`, `milestone-release-report`, and `evaluate-report` must explain both harness architecture and core translation quality, not only governance percentages.
 
 Frozen/deferred items:

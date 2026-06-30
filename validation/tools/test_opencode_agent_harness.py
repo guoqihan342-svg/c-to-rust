@@ -942,6 +942,48 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["report_path"], result["report_path"])
             self.assertEqual(report["acceptance_boundary"], result["acceptance_boundary"])
             self.assertEqual(report["route_governance_metrics_report"], route_report_ref)
+            self.assertEqual(report["context_pack"], result["context_pack"])
+            self.assertEqual(report["agent_index"], result["agent_index"])
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["run_id"], "run-profile")
+            self.assertEqual(context_pack["entrypoints"]["primary_report"], result["report_path"])
+            self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], result["report_path"])
+            self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
+            self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], [unit["worker_id"] for unit in result["plan"]["units"]])
+            self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], [unit["worker_id"] for unit in result["plan"]["units"]])
+            context_rows = fetch_rows(
+                Path(REPO_ROOT / result["db_path"]),
+                "select context_pack_id, artifact_path, artifact_sha256 from context_packs",
+            )
+            self.assertEqual(context_rows, [("run-profile-context-pack", result["context_pack"]["path"], result["context_pack"]["sha256"])])
+            artifact_rows = fetch_rows(
+                Path(REPO_ROOT / result["db_path"]),
+                """
+                select kind, agent_id, repo_rel_path, sha256, semantic_role
+                from artifacts
+                where kind in ('context-pack', 'agent-index')
+                order by kind
+                """,
+            )
+            self.assertEqual(
+                artifact_rows,
+                [
+                    ("agent-index", "planner", result["agent_index"]["path"], result["agent_index"]["sha256"], "agent-index"),
+                    ("context-pack", "planner", result["context_pack"]["path"], result["context_pack"]["sha256"], "agent-context-pack"),
+                ],
+            )
+            for path_value in [
+                result["context_pack"]["path"],
+                result["agent_index"]["path"],
+                context_pack["entrypoints"]["primary_report"],
+                context_pack["entrypoints"]["batch_profile_report"],
+                context_pack["entrypoints"]["run_plan_report"],
+                context_pack["entrypoints"]["worker_plan"],
+                context_pack["entrypoints"]["merge_plan"],
+                context_pack["entrypoints"]["merge_summary"],
+            ]:
+                self.assert_repo_relative_posix_path(path_value)
 
     def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
         with temp_repo_dir() as tmp:
