@@ -52,7 +52,7 @@ These estimates are only for planning, not acceptance criteria. Competition and 
 
 For FlashDB crc32 (the proven case): typed IR candidate generation to validation profile generation takes ~5-8 minutes.
 
-**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence. For reusable file-level batches, prefer `run-batch-profile` to pin the inputs; when debugging the expanded flow, use `plan-source-file` to generate a plan, then `run-plan --mode deterministic --execute-merge` to execute planned workers in order and run the final worker-summary aggregation. This is deterministic batch orchestration around the final runner/validator, not a replacement for it. A profile may set `emit_route_governance_metrics_report=true` to also write and bind `summary/route-governance-metrics-report.json` for public-claim boundaries and capability/refusal metrics, not as a semantic gate. If any planned worker lacks a recorded summary, final merge execution is skipped fail-closed.
+**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence. For reusable file-level batches, prefer `run-batch-profile` to pin the inputs; when debugging the expanded flow, use `plan-source-file` to generate a plan, then `run-plan --mode deterministic --execute-merge --auto-retry` to execute planned workers in order, retry failed workers through persisted repair hints, and run the final worker-summary aggregation. This is deterministic batch orchestration around the final runner/validator, not a replacement for it. A profile may set `emit_route_governance_metrics_report=true` to also write and bind `summary/route-governance-metrics-report.json` for public-claim boundaries and capability/refusal metrics, not as a semantic gate. If any planned worker lacks a recorded summary after the bounded retry path, final merge execution is skipped fail-closed.
 
 ## OpenCode Harness Multi-Agent + SQLite Flow
 
@@ -96,6 +96,7 @@ python -m validation.tools.opencode_agent_harness run-plan \
   --proof-class <proof-class> \
   --mode deterministic \
   --execute-merge \
+  --auto-retry \
   --out-root target/competition-out
 
 # Manual expanded single-worker path:
@@ -143,6 +144,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `opencode-preflight` only verifies that OpenCode can make its first shell/bash/powershell/cmd tool call exactly match the harness-specified command and write the marker/report; it is not semantic acceptance. `run-worker --mode opencode` and `run-plan --mode opencode` must bind a passed preflight report with `--opencode-preflight-report <report>`, otherwise they fail closed before launching OpenCode. `--mode opencode` writes `harness/opencode-handoff-contract.json` and `logs/opencode-session-evidence.json` under the isolated worker directory, then binds both from `harness/run-worker-report.json`, the SQLite event stream, the repair hint, and the artifact index. The contract records the exact deterministic worker command, request, expected summary, and OpenCode prompt; the session evidence parses OpenCode `--format json` JSON/JSONL output and keeps a raw fallback when parsing fails. These artifacts prove the agent audit chain only; they do not replace `competition-run-summary.json`, the final gate, or validators.
 
+`run-plan --auto-retry` is the bounded self-healing path: a failed worker writes a repair hint, the harness retries that same worker, and the loop stops when the worker revalidates or reaches the `REPAIR_ROUND_CAP=5` limit. Retry success still only means the worker summary revalidated; semantic acceptance remains the final summary validator plus oracle/diff/unsafe gates.
+
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
@@ -184,11 +187,11 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
-9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries skip final merge fail-closed.
+9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers, run bounded `auto_retry=true`, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge --auto-retry`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries after up to 5 repair retries skip final merge fail-closed.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
-If a command fails, record the reason and do not enter a repair loop.
+If a command fails outside the harness retry path, record the reason and do not enter a manual or unbounded repair loop.
 ```
 
 ## Agent Behavioral Constraints

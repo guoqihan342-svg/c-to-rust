@@ -158,6 +158,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(batch["accepted_evidence_root"], "validation/evidence")
         self.assertEqual(batch["mode"], "deterministic")
         self.assertTrue(batch["execute_merge"])
+        self.assertTrue(batch["auto_retry"])
         self.assertEqual(
             batch["acceptance_boundary"],
             {
@@ -191,6 +192,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(batch["proof_class"], "local-simulation")
         self.assertEqual(batch["mode"], "deterministic")
         self.assertTrue(batch["execute_merge"])
+        self.assertTrue(batch["auto_retry"])
         self.assertTrue(batch["emit_before_after_exhibit_report"])
         self.assertTrue(batch["emit_route_governance_metrics_report"])
         self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
@@ -208,6 +210,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertIn("python -B validation/tools/validate_competition_run_summary.py", text)
                 self.assertIn("target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json", text)
                 self.assertIn("generated_draft_semantic_pass=false", text)
+                self.assertIn("auto_retry=true", text)
                 self.assertIn("translation_coverage_numerator", text)
 
         before_after = load_json(REPO_ROOT / batch["acceptance_boundary"]["translation_before_after"])
@@ -230,6 +233,18 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertTrue(artifact_path.exists())
                 self.assertEqual(artifact["sha256"], sha256_file(artifact_path))
 
+    def test_opencode_single_interaction_documents_auto_retry_contract(self) -> None:
+        for runbook_path in [
+            PROFILE_DIR / "opencode-single-interaction.md",
+            PROFILE_DIR / "opencode-single-interaction.en.md",
+        ]:
+            text = runbook_path.read_text(encoding="utf-8")
+            with self.subTest(runbook=runbook_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("--auto-retry", text)
+                self.assertIn("repair", text)
+                self.assertIn("5", text)
+                self.assertIn("validator", text)
+
     def test_flashdb_real_before_after_profile_contract(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]
@@ -248,6 +263,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(batch["slice_specs"], ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"])
         self.assertTrue(batch["reuse_accepted_evidence"])
         self.assertTrue(batch["execute_merge"])
+        self.assertTrue(batch["auto_retry"])
         self.assertTrue(batch["emit_route_governance_metrics_report"])
         self.assertTrue(batch["emit_before_after_exhibit_report"])
         self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")

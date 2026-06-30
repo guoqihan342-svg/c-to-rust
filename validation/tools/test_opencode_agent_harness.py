@@ -487,6 +487,81 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 [repo_rel(first_summary), repo_rel(second_summary)],
             )
 
+    def test_run_plan_auto_retries_failed_worker_before_merge(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int repairable_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            worker_attempts = 0
+            merge_calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal worker_attempts
+                if "scripts/c2rust-migrator.py" in argv:
+                    worker_attempts += 1
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    if worker_attempts < 3:
+                        write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                    else:
+                        write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
+                merge_calls.append(argv)
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-test", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-test",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                execute_merge=True,
+                auto_retry=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(worker_attempts, 3)
+            self.assertEqual(len(merge_calls), 1)
+            self.assertEqual(result["failed_workers"], 0)
+            self.assertEqual(result["workers"][0]["summary_status"], "passed")
+            self.assertEqual(result["workers"][0]["auto_retry"]["attempt_count"], 2)
+            self.assertEqual(result["workers"][0]["auto_retry"]["final_hint_status"], "revalidated_passed")
+            hint_rows = fetch_rows(db_path, "select status from repair_hints")
+            self.assertEqual(hint_rows, [("revalidated_passed",)])
+
     def test_run_plan_can_execute_final_merge_and_finalize_run(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -664,6 +739,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "worker_prefix": "worker",
                         "mode": "deterministic",
                         "execute_merge": True,
+                        "auto_retry": True,
                         "emit_route_governance_metrics_report": True,
                         "acceptance_boundary": {
                             "semantic_claim_source": "accepted_evidence_binding",
@@ -720,6 +796,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ["demo-first", "demo-second"],
             )
             self.assertEqual(result["run_plan"]["merge_execution"]["final_gate_status"], "passed")
+            self.assertEqual(result["run_plan"]["auto_retry"], {"enabled": True, "retried_worker_count": 0})
             self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
             route_report_ref = result["route_governance_metrics_report"]
             route_report_path = REPO_ROOT / route_report_ref["path"]
@@ -1057,6 +1134,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "max",
             "--opencode-skip-permissions",
             "--execute-merge",
+            "--auto-retry",
         ]
 
         with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
@@ -1081,6 +1159,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-worker")
         self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
         self.assertTrue(runner.call_args.kwargs["execute_merge"])
+        self.assertTrue(runner.call_args.kwargs["auto_retry"])
 
     def test_plan_source_file_direct_script_cli_runs_from_repo_root(self) -> None:
         with temp_repo_dir() as tmp:

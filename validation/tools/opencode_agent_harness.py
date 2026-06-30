@@ -113,6 +113,7 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
     run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
     run_plan_parser.add_argument("--execute-merge", action="store_true")
+    run_plan_parser.add_argument("--auto-retry", action="store_true")
 
     batch_profile_parser = subcommands.add_parser("run-batch-profile")
     batch_profile_parser.add_argument("--profile", type=Path, required=True)
@@ -245,6 +246,7 @@ def main() -> int:
             opencode_skip_permissions=args.opencode_skip_permissions,
             opencode_preflight_report=args.opencode_preflight_report,
             execute_merge=args.execute_merge,
+            auto_retry=args.auto_retry,
         )
     elif args.command == "run-batch-profile":
         result = run_batch_profile(
@@ -852,6 +854,7 @@ def run_batch_profile(
         opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
         opencode_preflight_report=opencode_preflight_report,
         execute_merge=profile_bool(profile, "execute_merge", default=False),
+        auto_retry=profile_bool(profile, "auto_retry", default=False),
         command_runner=command_runner,
         repo_root=repo_root,
     )
@@ -1320,6 +1323,7 @@ def run_plan(
     opencode_skip_permissions: bool = False,
     opencode_preflight_report: Path | None = None,
     execute_merge: bool = False,
+    auto_retry: bool = False,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -1364,6 +1368,59 @@ def run_plan(
             "report_path": result.get("report_path"),
             "recorded": bool(result.get("recorded")),
         }
+        retry_results = []
+        if auto_retry and worker_result["exit_code"] != 0:
+            hint_id = None
+            repair_hint = result.get("repair_hint")
+            if isinstance(repair_hint, dict) and isinstance(repair_hint.get("hint_id"), str):
+                hint_id = repair_hint["hint_id"]
+            while True:
+                retry_result = retry_worker(
+                    db_path=db_path,
+                    run_id=run_id,
+                    worker_id=unit["worker_id"],
+                    hint_id=hint_id,
+                    mode=mode,
+                    opencode_command=opencode_command,
+                    opencode_model=opencode_model,
+                    opencode_agent=opencode_agent,
+                    opencode_variant=opencode_variant,
+                    opencode_skip_permissions=opencode_skip_permissions,
+                    opencode_preflight_report=opencode_preflight_report,
+                    command_runner=command_runner,
+                    repo_root=repo_root,
+                    keep_open_on_failure=True,
+                )
+                retry_results.append(
+                    {
+                        "exit_code": int(retry_result.get("exit_code", 1)),
+                        "summary_status": retry_result.get("summary_status"),
+                        "hint_id": retry_result.get("hint_id", hint_id),
+                        "hint_status": retry_result.get("hint_status"),
+                        "report_path": retry_result.get("report_path"),
+                    }
+                )
+                if retry_result.get("hint_id"):
+                    hint_id = str(retry_result["hint_id"])
+                if int(retry_result.get("exit_code", 1)) == 0:
+                    worker_result.update(
+                        {
+                            "exit_code": 0,
+                            "summary_status": retry_result.get("summary_status"),
+                            "summary_path": retry_result.get("summary_path"),
+                            "report_path": retry_result.get("report_path"),
+                            "recorded": bool(retry_result.get("recorded")),
+                        }
+                    )
+                    break
+                if retry_result.get("status") == "retry_limit_exceeded":
+                    break
+        if retry_results:
+            worker_result["auto_retry"] = {
+                "attempt_count": len(retry_results),
+                "attempts": retry_results,
+                "final_hint_status": retry_results[-1].get("hint_status"),
+            }
         if worker_result["exit_code"] != 0:
             failed_workers += 1
         if worker_result["recorded"] and worker_result["summary_path"]:
@@ -1407,6 +1464,10 @@ def run_plan(
         "plan_path": repo_relative(plan_path, repo_root=repo_root),
         "worker_count": len(worker_results),
         "failed_workers": failed_workers,
+        "auto_retry": {
+            "enabled": auto_retry,
+            "retried_worker_count": sum(1 for worker in worker_results if isinstance(worker.get("auto_retry"), dict)),
+        },
         "exit_code": 0 if failed_workers == 0 and not merge_failed else 1,
         "elapsed_seconds": int(time.monotonic() - started),
         "workers": worker_results,
@@ -2002,6 +2063,7 @@ def retry_worker(
     opencode_preflight_report: Path | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
+    keep_open_on_failure: bool = False,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     with closing(connect(db_path)) as connection:
@@ -2046,7 +2108,7 @@ def retry_worker(
         mark_repair_hint_revalidated(
             connection,
             hint_id=str(hint["hint_id"]),
-            status=hint_status,
+            status=("open" if keep_open_on_failure and hint_status != "revalidated_passed" else hint_status),
             result=result,
         )
         if hint_status == "revalidated_passed":

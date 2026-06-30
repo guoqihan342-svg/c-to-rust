@@ -21,6 +21,7 @@
   "worker_prefix": "demo-worker",
   "mode": "deterministic",
   "execute_merge": true,
+  "auto_retry": true,
   "emit_route_governance_metrics_report": true,
   "emit_before_after_exhibit_report": true,
   "acceptance_boundary": {

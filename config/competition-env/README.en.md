@@ -41,7 +41,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `env.sh`: shell environment entrypoint for the competition host, including local clang auto-detection.
 - `toolchain-check.sh`: competition host self-check script.
 - `smoke.sh`: lightweight Linux/WSL/CI smoke entrypoint; it calls `run_competition_smoke.py` and emits a proof-classed summary.
-- `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile.
+- `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile, and can enable `run-plan --auto-retry` when `auto_retry=true`.
 - `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
 
 ## Clang Policy: Project-Local Vendored Binary
@@ -125,7 +125,7 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
   --out-root target/competition-out
 ```
 
-This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate.
+This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate. The committed judge-facing profiles set `auto_retry=true`; that only lets failed workers consume persisted repair hints and retry up to the five-round cap before final aggregation, and it never replaces the validator.
 
 Judge-facing before/after demo profile:
 
@@ -139,7 +139,7 @@ python -B validation/tools/validate_competition_run_summary.py \
   --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
 ```
 
-This profile generates `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` and binds `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json`. It demonstrates accepted-evidence before/after artifacts, unsafe 3 -> 0, and the harness five-stage contract; `generated_draft_semantic_pass=false`, and it does not increase `translation_coverage_numerator`.
+This profile generates `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` and binds `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json`. It demonstrates accepted-evidence before/after artifacts, unsafe 3 -> 0, `auto_retry=true`, and the harness five-stage contract; `generated_draft_semantic_pass=false`, and it does not increase `translation_coverage_numerator`.
 
 The clang typed-IR competition lane is explicit opt-in:
 

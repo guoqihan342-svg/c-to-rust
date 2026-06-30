@@ -120,6 +120,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-worker --mode deterministic` invokes the same repo-local wrapper and writes stdout/stderr, return code, summary path, record status, and final task status to `workers/<worker-id>/harness/run-worker-report.json`. If the child process fails, the summary is missing, or the summary `final_gate.status` is not `passed`, the worker task must be recorded as failed and final aggregation must not treat it as passed.
 
+`run-plan --auto-retry` connects the worker failure path to the persisted `repair_hints` ledger. A failed worker can be retried with the same assignment until it revalidates or reaches `REPAIR_ROUND_CAP=5`; failed intermediate attempts stay audit-visible, while semantic acceptance still comes only from the worker summary, final aggregation, and validators.
+
 When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
 
 ```bash
