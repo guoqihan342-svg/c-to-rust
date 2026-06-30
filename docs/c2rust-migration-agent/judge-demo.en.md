@@ -10,6 +10,12 @@ The primary path is the current scoring story for core translation capability pl
 ## Real FlashDB One-Command Path
 
 ```bash
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+```
+
+Audit-expanded form:
+
+```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
 python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json
 python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
@@ -17,6 +23,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 Key FlashDB artifacts:
 
+- `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
@@ -35,6 +42,12 @@ Boundary: the baseline is a reviewed unsafe Rust baseline derived from the real 
 ## Fallback Demo One-Command Path
 
 ```bash
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
+```
+
+Audit-expanded form:
+
+```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
 python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
 python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json
@@ -42,6 +55,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 Fallback demo artifacts:
 
+- `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json`
@@ -58,6 +72,7 @@ The fallback demo shows unsafe 3 -> 0 for `demo/store-add-one`.
 
 ## Claim Boundary
 
+- `judge-demo-report.json` is the one-command aggregate report. It binds the paths and sha256 values for `competition-run-summary.json`, `workflow-metrics.json`, `before-after-exhibit.json`, and `milestone-release-report.json`.
 - `before-after-exhibit.json` is the judge-facing exhibit entrypoint. It proves artifact binding, unsafe delta, and the harness contract; it does not replace `competition-run-summary.json`, `workflow-metrics.json`, or the evidence validator.
 - `translation_coverage_numerator` does not increase because of these exhibits; the coverage numerator may only count translator-generated candidates that pass the corresponding gate for a named slice.
 - All public paths must remain repo-relative. Do not put local absolute paths or WSL host paths into public claims.

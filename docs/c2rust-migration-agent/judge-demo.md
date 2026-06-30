@@ -10,6 +10,12 @@
 ## 真实 FlashDB 一键路径
 
 ```bash
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+```
+
+审计展开版：
+
+```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
 python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json
 python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
@@ -17,6 +23,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 关键 FlashDB artifacts：
 
+- `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
@@ -35,6 +42,12 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 ## 保底 Demo 一键路径
 
 ```bash
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
+```
+
+审计展开版：
+
+```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
 python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
 python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json
@@ -42,6 +55,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 保底 demo artifacts：
 
+- `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json`
@@ -58,6 +72,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 ## Claim 边界
 
+- `judge-demo-report.json` 是一条命令入口的总报告，绑定 `competition-run-summary.json`、`workflow-metrics.json`、`before-after-exhibit.json` 和 `milestone-release-report.json` 的路径与 sha256。
 - `before-after-exhibit.json` 是评委展示入口，证明 artifact binding、unsafe delta 和 harness contract；它不替代 `competition-run-summary.json`、`workflow-metrics.json` 或 evidence validator。
 - `translation_coverage_numerator` 不会因为这些 exhibit 增加；coverage numerator 只能统计通过对应 gate 的 translator-generated named slice。
 - 所有公开路径必须保持 repo-relative；不要把本机绝对路径或 WSL host path 写进公开 claim。

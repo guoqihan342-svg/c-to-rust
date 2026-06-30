@@ -102,7 +102,7 @@
 - OpenCode harness 已有最小执行器：`python -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
 - OpenCode 包装入口已接好：`run-worker --mode opencode --opencode-variant max` 执行同一份 assignment request；OpenCode/LLM 输出仍不是 evidence。
 - accepted evidence 复用链路已接好：`assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` 可在 worker 隔离目录下验证已提交 evidence。
-- 评委 before/after demo 入口：`docs/c2rust-migration-agent/judge-demo.md`。它用 `config/competition-env/planned-batches/demo-store-add-one-before-after.json` 生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 和 `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`，展示 baseline unsafe Rust → final safe Rust、accepted patch、oracle evidence、unsafe 3→0，以及 planner/worker/verifier/repairer/reporter 五阶段 contract。该 demo 绑定 accepted-evidence before/after artifact，但不增加 `translation_coverage_numerator`。
+- 评委 before/after demo 入口：`docs/c2rust-migration-agent/judge-demo.md`。首选真实 FlashDB profile 生成 `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`，并绑定 competition summary、workflow metrics、before/after exhibit 与 milestone report 的路径和 sha256；保底 demo profile 仍生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 和 `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`。二者展示 baseline unsafe Rust → final safe Rust、accepted patch、oracle evidence、unsafe reduction，以及 planner/worker/verifier/repairer/reporter 五阶段 contract；accepted-evidence before/after artifact 不增加 `translation_coverage_numerator`。
 - FlashDB 当前已通过语义证据绑定的切片：`real-fdb-calc-crc32`、`real-fdb-blob-make`。二者均是 L4 accepted-evidence authoritative，generated draft 仍不是 semantic pass。
 - FlashDB 当前阻塞切片：`real-fdb-kv-set`。其 direct callees 已有 signature/source provenance，但 `strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` 的 shim/model/oracle 语义尚未关闭。
 
@@ -157,9 +157,10 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 # Harness worker accepted-evidence 复用 smoke
 python -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
 
-# 评委 before/after demo
-python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json --run-id competition-demo-before-after-exhibit --out-root target/competition-out-demo-before-after-exhibit
-python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json
+# 评委 before/after demo（首选真实 FlashDB 路径）
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+# 输出: target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json
+# 保底 demo 输出: target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json
 
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
