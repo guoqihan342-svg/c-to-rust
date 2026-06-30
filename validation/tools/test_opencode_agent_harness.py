@@ -1171,9 +1171,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["run_id"], "run-profile")
             self.assertEqual(context_pack["entrypoints"]["primary_report"], result["report_path"])
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], result["report_path"])
+            self.assertEqual(context_pack["entrypoints"]["route_governance_metrics_report"], route_report_ref["path"])
             self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
             self.assertEqual(context_pack["source"]["require_source_commit"], "abc123")
             self.assertEqual(context_pack["acceptance_boundary"]["profile"], result["acceptance_boundary"])
+            self.assertEqual(context_pack["report_artifacts"]["route_governance_metrics_report"], route_report_ref)
+            self.assertEqual(agent_index["reports"]["route_governance_metrics_report"], route_report_ref)
             self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], [unit["worker_id"] for unit in result["plan"]["units"]])
             self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], [unit["worker_id"] for unit in result["plan"]["units"]])
             self.assertEqual(sorted(agent_index["agents_by_worker_id"]), [unit["worker_id"] for unit in result["plan"]["units"]])
@@ -1185,9 +1188,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 self.assertIn("report_path", indexed_agent)
             context_rows = fetch_rows(
                 Path(REPO_ROOT / result["db_path"]),
-                "select context_pack_id, artifact_path, artifact_sha256 from context_packs",
+                "select context_pack_id, artifact_path, artifact_sha256, payload_json from context_packs",
             )
-            self.assertEqual(context_rows, [("run-profile-context-pack", result["context_pack"]["path"], result["context_pack"]["sha256"])])
+            self.assertEqual(len(context_rows), 1)
+            self.assertEqual(
+                context_rows[0][:3],
+                ("run-profile-context-pack", result["context_pack"]["path"], result["context_pack"]["sha256"]),
+            )
+            self.assertEqual(json.loads(context_rows[0][3]), context_pack)
             artifact_rows = fetch_rows(
                 Path(REPO_ROOT / result["db_path"]),
                 """
@@ -1213,6 +1221,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 context_pack["entrypoints"]["worker_plan"],
                 context_pack["entrypoints"]["merge_plan"],
                 context_pack["entrypoints"]["merge_summary"],
+                context_pack["entrypoints"]["route_governance_metrics_report"],
             ]:
                 self.assert_repo_relative_posix_path(path_value)
 
@@ -1879,6 +1888,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["status"], "completed")
             self.assertEqual(worker_attempts, 2)
             self.assertEqual(result["run_plan"]["auto_retry"]["retried_worker_count"], 1)
+            exhibit_ref = result["before_after_exhibit_report"]
             exhibit = json.loads((out_root / "summary" / "before-after-exhibit.json").read_text(encoding="utf-8"))
             repairer = exhibit["stage_contracts"]["repairer"]
             self.assertEqual(repairer["status"], "verified")
@@ -1897,6 +1907,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             summary_metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(summary_metrics["translation_before_after"]["status"], "bound")
             self.assertEqual(summary_metrics["per_unit_statuses"][0]["repair_history"], repair_history)
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["entrypoints"]["before_after_exhibit_report"], exhibit_ref["path"])
+            self.assertEqual(context_pack["report_artifacts"]["before_after_exhibit_report"], exhibit_ref)
+            self.assertEqual(agent_index["reports"]["before_after_exhibit_report"], exhibit_ref)
 
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
@@ -1926,6 +1941,115 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         )
         self.assertEqual(runner.call_args.kwargs["run_id"], "run-profile")
         self.assertEqual(runner.call_args.kwargs["out_root"], Path("target/competition-out-profile"))
+
+    def test_evaluate_cli_dispatches_h1_h5_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "evaluate",
+            "--run-id",
+            "run-evaluate-cli",
+            "--target-id",
+            "flashdb",
+            "--source-repo-root",
+            "sources/FlashDB",
+            "--source-repository",
+            "https://gitcode.com/xwxf/FlashDB.git",
+            "--source-branch",
+            "competition",
+            "--source-file",
+            "src/fdb_utils.c",
+            "--function",
+            "fdb_calc_crc32",
+            "--function",
+            "fdb_blob_make",
+            "--source-commit",
+            "abc123",
+            "--require-source-commit",
+            "abc123",
+            "--slice-spec",
+            "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+            "--compiler-command-source",
+            "compile_commands.json",
+            "--include-path",
+            "inc",
+            "--define",
+            "FDB_USING_KVDB",
+            "--reuse-accepted-evidence",
+            "--accepted-evidence-root",
+            "validation/evidence",
+            "--out-root",
+            "target/competition-out-evaluate",
+            "--slice-id-prefix",
+            "flashdb-fdb-utils",
+            "--worker-prefix",
+            "flashdb-worker",
+            "--limit",
+            "2",
+            "--proof-class",
+            "local-simulation",
+            "--mode",
+            "opencode",
+            "--opencode-command",
+            "opencode",
+            "--opencode-model",
+            "gpt-5",
+            "--opencode-agent",
+            "build",
+            "--opencode-variant",
+            "max",
+            "--opencode-skip-permissions",
+            "--opencode-preflight-report",
+            "target/opencode-preflight/harness/opencode-preflight-report.json",
+            "--no-execute-merge",
+            "--no-auto-retry",
+            "--max-workers",
+            "4",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "evaluate",
+            return_value={"status": "completed", "exit_code": 0},
+        ) as runner:
+            self.assertEqual(harness.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "completed")
+        runner.assert_called_once()
+        kwargs = runner.call_args.kwargs
+        self.assertEqual(kwargs["run_id"], "run-evaluate-cli")
+        self.assertEqual(kwargs["target_id"], "flashdb")
+        self.assertEqual(kwargs["source_repo_root"], Path("sources/FlashDB"))
+        self.assertEqual(kwargs["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+        self.assertEqual(kwargs["source_branch"], "competition")
+        self.assertEqual(kwargs["source_file"], "src/fdb_utils.c")
+        self.assertEqual(kwargs["functions"], ["fdb_calc_crc32", "fdb_blob_make"])
+        self.assertEqual(kwargs["source_commit"], "abc123")
+        self.assertEqual(kwargs["require_source_commit"], "abc123")
+        self.assertEqual(kwargs["slice_specs"], ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"])
+        self.assertEqual(kwargs["compiler_command_source"], "compile_commands.json")
+        self.assertEqual(kwargs["include_paths"], ["inc"])
+        self.assertEqual(kwargs["defines"], ["FDB_USING_KVDB"])
+        self.assertTrue(kwargs["reuse_accepted_evidence"])
+        self.assertEqual(kwargs["accepted_evidence_root"], "validation/evidence")
+        self.assertEqual(kwargs["out_root"], Path("target/competition-out-evaluate"))
+        self.assertEqual(kwargs["slice_id_prefix"], "flashdb-fdb-utils")
+        self.assertEqual(kwargs["worker_prefix"], "flashdb-worker")
+        self.assertEqual(kwargs["limit"], 2)
+        self.assertEqual(kwargs["proof_class"], "local-simulation")
+        self.assertEqual(kwargs["mode"], "opencode")
+        self.assertEqual(kwargs["opencode_command"], "opencode")
+        self.assertEqual(kwargs["opencode_model"], "gpt-5")
+        self.assertEqual(kwargs["opencode_agent"], "build")
+        self.assertEqual(kwargs["opencode_variant"], "max")
+        self.assertTrue(kwargs["opencode_skip_permissions"])
+        self.assertEqual(
+            kwargs["opencode_preflight_report"],
+            Path("target/opencode-preflight/harness/opencode-preflight-report.json"),
+        )
+        self.assertFalse(kwargs["execute_merge"])
+        self.assertFalse(kwargs["auto_retry"])
+        self.assertEqual(kwargs["max_workers"], 4)
 
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [

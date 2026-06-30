@@ -975,6 +975,11 @@ def run_batch_profile(
         result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_artifacts: dict[str, dict[str, Any]] = {}
+    if route_metrics_artifact is not None:
+        report_artifacts["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        report_artifacts["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
     context_refs = write_context_pack_and_agent_index(
         db_path=db_path,
         run_id=run_id,
@@ -987,6 +992,7 @@ def run_batch_profile(
         primary_report_path=report_path,
         report_entrypoint="batch_profile_report",
         acceptance_boundary=acceptance_boundary,
+        report_artifacts=report_artifacts,
         repo_root=repo_root,
     )
     result.update(context_refs)
@@ -1351,6 +1357,7 @@ def write_context_pack_and_agent_index(
     primary_report_path: Path,
     report_entrypoint: str,
     acceptance_boundary: dict[str, Any] | None = None,
+    report_artifacts: dict[str, dict[str, Any]] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     db_path = repo_path(db_path, repo_root=repo_root)
@@ -1415,6 +1422,12 @@ def write_context_pack_and_agent_index(
         agents.append(agent_entry)
     graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
     context_pack_id = f"{run_id}-context-pack"
+    report_artifacts = report_artifacts or {}
+    report_entrypoints = {
+        name: artifact.get("path")
+        for name, artifact in report_artifacts.items()
+        if isinstance(artifact, dict) and isinstance(artifact.get("path"), str)
+    }
     context_pack = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "context-pack",
@@ -1447,6 +1460,7 @@ def write_context_pack_and_agent_index(
             if isinstance(run_result.get("merge_execution"), dict)
             else None,
             "agent_index": repo_relative(agent_index_path, repo_root=repo_root),
+            **report_entrypoints,
         },
         "graph": graph,
         "parallelism": run_result.get("parallelism"),
@@ -1459,6 +1473,8 @@ def write_context_pack_and_agent_index(
     }
     if acceptance_boundary is not None:
         context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
+    if report_artifacts:
+        context_pack["report_artifacts"] = report_artifacts
     agents_by_worker_id = {
         str(agent["worker_id"]): agent
         for agent in agents
@@ -1483,6 +1499,8 @@ def write_context_pack_and_agent_index(
             "merge_execution": run_result.get("merge_execution"),
         },
     }
+    if report_artifacts:
+        agent_index["reports"] = report_artifacts
     context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
