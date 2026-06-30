@@ -41,6 +41,8 @@ The bound real slice is `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32` at comm
 
 Boundary: the baseline is a reviewed unsafe Rust baseline derived from the real C slice signature. C2Rust baseline output remains skipped, so do not claim that this baseline came from real C2Rust output. `generated_draft_semantic_pass=false`, and this exhibit still does not increase `translation_coverage_numerator`.
 
+Harness self-repair exhibit: the `flashdb-fdb-utils-before-after` profile now declares `attempt_evidence_policy.mode=baseline_repair_gate`. Worker attempt 1 writes a failed baseline unsafe gate summary with root cause `unsafe_baseline_requires_repair`; attempt 2 must carry the repair hint before revalidating accepted safe evidence. Both `harness/context-pack.json` and `harness/agent-index.json` index this policy and the two-attempt timeline.
+
 ## Fallback Demo One-Command Path
 
 ```bash

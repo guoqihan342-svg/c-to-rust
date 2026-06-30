@@ -68,7 +68,7 @@ openspec instructions apply --change "design-c2rust-migration-agent" --json
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
 
-当前评委展示路径见 `judge-demo.md`，它从 `config/competition-env/planned-batches/demo-store-add-one-before-after.json` 生成 before/after exhibit 和 milestone release report。
+当前评委展示路径见 `judge-demo.md`，首选从 `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` 生成真实 FlashDB before/after exhibit、judge report、context pack、agent index 和 milestone release report。该 profile 已接入 `real-fdb-calc-crc32` 的真实 `baseline_repair_gate`：第 1 轮记录 `unsafe_baseline_requires_repair`，第 2 轮携带 repair hint 复验 accepted safe evidence；repo-local demo profile 仅作为保底路径。
 
 ## 运行原则
 

@@ -65,7 +65,7 @@ Then run the Agent phase, for example:
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
 
-The current judge-facing demo path is `judge-demo.md`; it uses `config/competition-env/planned-batches/demo-store-add-one-before-after.json` to produce the before/after exhibit and milestone release report.
+The current judge-facing demo path is `judge-demo.md`; the preferred route uses `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` to produce the FlashDB before/after exhibit, judge report, context pack, agent index, and milestone release report. That profile now exercises a real `baseline_repair_gate` for `real-fdb-calc-crc32`: attempt 1 records `unsafe_baseline_requires_repair`, and retry attempt 2 revalidates accepted safe evidence with the repair hint. The repo-local demo profile remains a fallback.
 
 ## Operating Principles
 
