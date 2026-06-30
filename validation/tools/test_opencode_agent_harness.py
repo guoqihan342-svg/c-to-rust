@@ -292,6 +292,118 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ],
             )
 
+    def test_plan_source_file_filters_functions_and_binds_slice_specs(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_path = Path(tmp) / "slice-specs" / "second-unit.json"
+            spec_path.parent.mkdir(parents=True)
+            spec_path.write_text(
+                json.dumps(
+                    {
+                        "target_id": "flashdb",
+                        "slice_id": "real-demo-second-unit",
+                        "function_name": "second_unit",
+                        "source_commit": "abc123",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                reuse_accepted_evidence=True,
+                accepted_evidence_root="validation/evidence",
+                out_root=out_root,
+                slice_id_prefix="wrong-prefix",
+                worker_prefix="worker",
+                functions=["second_unit"],
+                slice_specs=[repo_rel(spec_path)],
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual([unit["function"] for unit in plan["units"]], ["second_unit"])
+            self.assertEqual([unit["slice_id"] for unit in plan["units"]], ["real-demo-second-unit"])
+            self.assertEqual(plan["units"][0]["slice_spec"], repo_rel(spec_path))
+            request_path = out_root / "harness" / "assignments" / "worker-001-second-unit-request.json"
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            self.assertEqual(request["function"], "second_unit")
+            self.assertEqual(request["slice_id"], "real-demo-second-unit")
+            self.assertIs(request["reuse_accepted_evidence"], True)
+            self.assertEqual(request["accepted_evidence_root"], "validation/evidence")
+            self.assertEqual(request["slice_specs"], [repo_rel(spec_path)])
+            rows = fetch_rows(db_path, "select slice_id, function_name, slice_spec_path from slices")
+            self.assertEqual(rows, [("real-demo-second-unit", "second_unit", repo_rel(spec_path))])
+
+    def test_plan_source_file_rejects_mismatched_slice_spec_binding(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int second_unit(int value) { return value + 2; }\n", encoding="utf-8")
+            spec_path = Path(tmp) / "slice-specs" / "second-unit.json"
+            spec_path.parent.mkdir(parents=True)
+            spec_path.write_text(
+                json.dumps(
+                    {
+                        "target_id": "other-target",
+                        "slice_id": "real-demo-second-unit",
+                        "function_name": "second_unit",
+                        "source_commit": "abc123",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                harness.plan_source_file(
+                    db_path=db_path,
+                    run_id="run-test",
+                    target_id="flashdb",
+                    source_repo_root=source_root,
+                    source_file="src/demo.c",
+                    source_commit="abc123",
+                    out_root=out_root,
+                    slice_id_prefix="real-demo",
+                    functions=["second_unit"],
+                    slice_specs=[repo_rel(spec_path)],
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertIn("slice spec target_id mismatch", str(raised.exception))
+
     def test_run_plan_executes_planned_workers_and_writes_merge_plan(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -526,10 +638,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "competition",
             "--source-file",
             "src/fdb_utils.c",
+            "--function",
+            "fdb_calc_crc32",
             "--source-commit",
             "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
             "--require-source-commit",
             "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "--slice-spec",
+            "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
             "--compiler-command-source",
             "compile_commands.json",
             "--include-path",
@@ -566,6 +682,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(planner.call_args.kwargs["slice_id_prefix"], "real-fdb-utils")
         self.assertEqual(planner.call_args.kwargs["worker_prefix"], "flashdb-worker")
         self.assertEqual(planner.call_args.kwargs["limit"], 2)
+        self.assertEqual(planner.call_args.kwargs["functions"], ["fdb_calc_crc32"])
+        self.assertEqual(
+            planner.call_args.kwargs["slice_specs"],
+            ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"],
+        )
 
     def test_run_plan_cli_dispatches_batch_flags(self) -> None:
         argv = [

@@ -77,8 +77,10 @@ def main() -> int:
     plan_parser.add_argument("--source-repository")
     plan_parser.add_argument("--source-branch")
     plan_parser.add_argument("--source-file", required=True)
+    plan_parser.add_argument("--function", action="append", dest="functions", default=[])
     plan_parser.add_argument("--source-commit", required=True)
     plan_parser.add_argument("--require-source-commit")
+    plan_parser.add_argument("--slice-spec", action="append", dest="slice_specs", default=[])
     plan_parser.add_argument("--compiler-command-source")
     plan_parser.add_argument("--include-path", action="append", default=[])
     plan_parser.add_argument("--define", action="append", default=[])
@@ -189,8 +191,10 @@ def main() -> int:
             source_repository=args.source_repository,
             source_branch=args.source_branch,
             source_file=args.source_file,
+            functions=args.functions,
             source_commit=args.source_commit,
             require_source_commit=args.require_source_commit,
+            slice_specs=args.slice_specs,
             compiler_command_source=args.compiler_command_source,
             include_paths=args.include_path,
             defines=args.define,
@@ -572,6 +576,8 @@ def plan_source_file(
     defines: list[str] | None = None,
     reuse_accepted_evidence: bool = False,
     accepted_evidence_root: str | None = None,
+    functions: list[str] | None = None,
+    slice_specs: list[str] | None = None,
     out_root: Path,
     slice_id_prefix: str,
     worker_prefix: str = "worker",
@@ -585,19 +591,38 @@ def plan_source_file(
     source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
     source_file_rel = checked_relative_path(source_file).as_posix()
     source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
-    functions = discover_top_level_function_names(source_path.read_text(encoding="utf-8"))
+    discovered_functions = discover_top_level_function_names(source_path.read_text(encoding="utf-8"))
+    slice_specs_by_function = load_slice_specs_by_function(
+        slice_specs or [],
+        target_id=target_id,
+        source_commit=source_commit,
+        repo_root=repo_root,
+    )
+    requested_functions = list(functions or [])
+    if requested_functions:
+        missing_functions = [function for function in requested_functions if function not in discovered_functions]
+        if missing_functions:
+            raise SystemExit(
+                f"requested functions not discovered in {source_file_rel}: {', '.join(missing_functions)}"
+            )
+        planned_functions = requested_functions
+    elif slice_specs_by_function:
+        planned_functions = [function for function in discovered_functions if function in slice_specs_by_function]
+    else:
+        planned_functions = discovered_functions
     if limit is not None:
         if limit < 1:
             raise SystemExit("plan-source-file --limit must be positive")
-        functions = functions[:limit]
-    if not functions:
+        planned_functions = planned_functions[:limit]
+    if not planned_functions:
         raise SystemExit(f"no top-level function definitions discovered in {source_file_rel}")
 
     units: list[dict[str, str]] = []
-    for index, function in enumerate(functions, start=1):
+    for index, function in enumerate(planned_functions, start=1):
         function_slug = slug_id(function)
         worker_id = f"{worker_prefix}-{index:03d}-{function_slug}"
-        slice_id = f"{slice_id_prefix}-{function_slug}"
+        slice_spec = slice_specs_by_function.get(function)
+        slice_id = str(slice_spec["slice_id"]) if slice_spec else f"{slice_id_prefix}-{function_slug}"
         worker_out_root = out_root / "workers" / worker_id
         assign_slice(
             db_path=db_path,
@@ -617,6 +642,7 @@ def plan_source_file(
             defines=defines,
             reuse_accepted_evidence=reuse_accepted_evidence,
             accepted_evidence_root=accepted_evidence_root,
+            slice_spec=str(slice_spec["path"]) if slice_spec else None,
             out_root=worker_out_root,
             lease_ttl_seconds=lease_ttl_seconds,
             repo_root=repo_root,
@@ -632,6 +658,8 @@ def plan_source_file(
                 "request_path": repo_relative(request_path, repo_root=repo_root),
             }
         )
+        if slice_spec:
+            units[-1]["slice_spec"] = str(slice_spec["path"])
 
     plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(Path(source_file_rel).stem)}-workers.json"
     plan = {
@@ -670,6 +698,38 @@ def plan_source_file(
         record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
         connection.commit()
     return plan
+
+
+def load_slice_specs_by_function(
+    slice_specs: list[str],
+    *,
+    target_id: str,
+    source_commit: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    specs_by_function: dict[str, dict[str, str]] = {}
+    for slice_spec in slice_specs:
+        slice_spec_rel = checked_relative_path(slice_spec).as_posix()
+        spec = load_json(repo_path(Path(slice_spec_rel), repo_root=repo_root))
+        function = spec.get("function_name")
+        if not isinstance(function, str) or not function:
+            raise SystemExit(f"slice spec missing function_name: {slice_spec_rel}")
+        spec_target_id = spec.get("target_id")
+        if spec_target_id != target_id:
+            raise SystemExit(f"slice spec target_id mismatch for {function}: {spec_target_id or 'missing'} != {target_id}")
+        source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+        spec_source_commit = spec.get("source_commit") or source_block.get("source_commit")
+        if spec_source_commit != source_commit:
+            raise SystemExit(
+                f"slice spec source_commit mismatch for {function}: {spec_source_commit or 'missing'} != {source_commit}"
+            )
+        slice_id = spec.get("slice_id")
+        if not isinstance(slice_id, str) or not slice_id:
+            raise SystemExit(f"slice spec missing slice_id: {slice_spec_rel}")
+        if function in specs_by_function:
+            raise SystemExit(f"duplicate slice spec for function {function}: {slice_spec_rel}")
+        specs_by_function[function] = {"path": slice_spec_rel, "slice_id": slice_id}
+    return specs_by_function
 
 
 def run_plan(

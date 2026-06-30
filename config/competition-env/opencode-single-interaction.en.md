@@ -73,7 +73,11 @@ python -m validation.tools.opencode_agent_harness plan-source-file \
   --target-id <target> \
   --source-repo-root <repo-relative-c-source-root> \
   --source-file <repo-relative-c-file> \
+  --function <function> \
   --source-commit <commit> \
+  --slice-spec <repo-relative-maintained-slice-spec> \
+  --reuse-accepted-evidence \
+  --accepted-evidence-root validation/evidence \
   --slice-id-prefix <slice-prefix> \
   --worker-prefix worker \
   --out-root target/competition-out
