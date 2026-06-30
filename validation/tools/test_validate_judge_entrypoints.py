@@ -160,7 +160,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
 
         self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["entrypoint_count"], 2)
+        self.assertEqual(result["entrypoint_count"], 3)
         self.assertEqual(result["proof_class_contract"]["proof_class_default"], "local-simulation")
         self.assertEqual(result["source_pin_contract"]["canonical_commit"], "f9d0421315c564fb890a1b14eee77b290e0d7bbe")
         self.assertIn(
@@ -173,13 +173,114 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertEqual(
             [entry["id"] for entry in result["entrypoints"]],
-            ["before_after_judge_demo", "multi_worker_evaluate_profile"],
+            [
+                "before_after_judge_demo",
+                "multi_worker_evaluate_profile",
+                "opencode_multi_worker_evaluate_profile",
+            ],
         )
         for entry in result["entrypoints"]:
             self.assertEqual(entry["status"], "passed")
             self.assertEqual(entry["profile"]["status"], "present")
             self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
+
+    def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "report_kind": "judge-evidence-index",
+            "status": "completed",
+            "claim_boundary": {
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "index_is_semantic_gate": False,
+            },
+            "harness_architecture": {
+                "architecture_contracts": {
+                    "context_management": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                    "agent_coordination": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                        "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                    },
+                },
+            },
+            "opencode_agent_runtime": {
+                "runtime": "opencode",
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "worker_count": 1,
+                "contract_status_counts": {"not-executed": 1},
+                "all_contracts_executed": False,
+                "failed_or_missing_contract_workers": ["worker-a"],
+                "opencode_preflight_report": {
+                    "path": "target/out/harness/opencode-preflight-report.json",
+                    "sha256": "a" * 64,
+                    "status": "passed",
+                    "contract_status": "executed",
+                },
+                "workers": [
+                    {
+                        "worker_id": "worker-a",
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                        "summary": {"path": "target/out/workers/worker-a/summary/competition-run-summary.json", "sha256": "b" * 64},
+                        "worker_report": {"path": "target/out/workers/worker-a/harness/run-worker-report.json", "sha256": "c" * 64},
+                        "logs": {
+                            "stdout": {"path": "target/out/workers/worker-a/logs/stdout.log", "sha256": "d" * 64},
+                            "stderr": {"path": "target/out/workers/worker-a/logs/stderr.log", "sha256": "e" * 64},
+                        },
+                        "handoff_contract": {"path": "target/out/workers/worker-a/harness/opencode-handoff-contract.json", "sha256": "f" * 64},
+                        "opencode_session_evidence": {"path": "target/out/workers/worker-a/logs/opencode-session-evidence.json", "sha256": "1" * 64},
+                        "opencode_preflight_report": {
+                            "path": "target/out/harness/opencode-preflight-report.json",
+                            "sha256": "a" * 64,
+                            "status": "passed",
+                            "contract_status": "executed",
+                        },
+                        "contract_verification_status": "not-executed",
+                        "opencode_contract_verification": {"status": "not-executed"},
+                    },
+                ],
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "opencode_agent_runtime.all_contracts_executed must be true"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_judge_evidence_index_requires_opencode_runtime_for_opencode_mode(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "report_kind": "judge-evidence-index",
+            "status": "completed",
+            "mode": "opencode",
+            "claim_boundary": {
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "index_is_semantic_gate": False,
+            },
+            "harness_architecture": {
+                "architecture_contracts": {
+                    "context_management": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                    "agent_coordination": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                        "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                    },
+                },
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "opencode_agent_runtime is required when judge_evidence_index.mode is opencode"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
 
     def test_require_local_artifacts_checks_expected_artifact_presence(self) -> None:
         config = load_default_config()

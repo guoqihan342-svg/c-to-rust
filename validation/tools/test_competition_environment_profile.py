@@ -383,7 +383,11 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         entrypoints = {entry["id"]: entry for entry in config["entrypoints"]}
         self.assertEqual(
             set(entrypoints),
-            {"before_after_judge_demo", "multi_worker_evaluate_profile"},
+            {
+                "before_after_judge_demo",
+                "multi_worker_evaluate_profile",
+                "opencode_multi_worker_evaluate_profile",
+            },
         )
         contract = config["test_contract"]
         self.assertEqual(set(contract["required_entrypoint_ids"]), set(entrypoints))
@@ -459,8 +463,39 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "agent_index",
             "run_plan_report",
             "merge_plan",
+            "worker_plan",
         ]:
             self.assertIn(artifact, multi_worker["expected_artifacts"])
+
+        opencode_multi_worker = entrypoints["opencode_multi_worker_evaluate_profile"]
+        self.assertEqual(opencode_multi_worker["priority"], 3)
+        self.assertEqual(opencode_multi_worker["purpose"], "harness-architecture-opencode-multi-worker-evaluate")
+        self.assertIn("validation.tools.opencode_agent_harness evaluate", opencode_multi_worker["command"])
+        self.assertIn(
+            "--profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            opencode_multi_worker["command"],
+        )
+        self.assertIn("--run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701", opencode_multi_worker["command"])
+        self.assertIn(
+            "--out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+            opencode_multi_worker["command"],
+        )
+        for artifact in [
+            "competition_summary",
+            "workflow_metrics",
+            "route_governance_metrics_report",
+            "evaluate_report",
+            "judge_evidence_index",
+            "batch_profile_report",
+            "context_pack",
+            "agent_index",
+            "run_plan_report",
+            "merge_plan",
+            "worker_plan",
+        ]:
+            self.assertIn(artifact, opencode_multi_worker["expected_artifacts"])
+        self.assertIn("opencode preflight", " ".join(opencode_multi_worker["judge_focus"]))
+        self.assertIn("runtime contract", " ".join(opencode_multi_worker["judge_focus"]))
 
         for entry in config["entrypoints"]:
             self.assertEqual(entry["proof_class"], "local-simulation")

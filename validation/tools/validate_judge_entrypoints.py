@@ -668,7 +668,182 @@ def validate_agent_coordination_contract(
     }
 
 
-def validate_judge_evidence_index_contract(payload: dict[str, Any], *, path_text: str) -> dict[str, Any]:
+def validate_sha256_hex(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError(f"{label} must be a sha256 hex string")
+    return value
+
+
+def validate_artifact_binding_shape(
+    value: Any,
+    label: str,
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, str]:
+    binding = require_object(value, label)
+    path_text = require_string(binding.get("path"), f"{label}.path")
+    assert_repo_relative_posix(path_text)
+    sha256 = validate_sha256_hex(binding.get("sha256"), f"{label}.sha256")
+    if repo_root is not None:
+        validate_ref({"path": path_text, "sha256": sha256}, repo_root=repo_root)
+    return {"path": path_text, "sha256": sha256}
+
+
+def validate_opencode_preflight_binding(
+    value: Any,
+    label: str,
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    binding = require_object(value, label)
+    result = validate_artifact_binding_shape(binding, label, repo_root=repo_root)
+    if binding.get("status") != "passed":
+        raise ValueError(f"{label}.status must be passed")
+    if binding.get("contract_status") != "executed":
+        raise ValueError(f"{label}.contract_status must be executed")
+    result.update({"status": "passed", "contract_status": "executed"})
+    if repo_root is not None:
+        preflight_payload = load_json(repo_path(result["path"], repo_root=repo_root))
+        if preflight_payload.get("status") != "passed":
+            raise ValueError(f"{label} file status must be passed")
+        if preflight_payload.get("marker_exists") is not True:
+            raise ValueError(f"{label} file marker_exists must be true")
+        verification = require_object(preflight_payload.get("contract_verification"), f"{label}.contract_verification")
+        if verification.get("status") != "executed":
+            raise ValueError(f"{label}.contract_verification.status must be executed")
+        for field in ("first_shell_command_matches_worker_command", "worker_command_seen", "summary_exists"):
+            if verification.get(field) is not True:
+                raise ValueError(f"{label}.contract_verification.{field} must be true")
+        if verification.get("tools_before_first_shell") != []:
+            raise ValueError(f"{label}.contract_verification.tools_before_first_shell must be []")
+    return result
+
+
+def validate_opencode_worker_runtime(
+    value: Any,
+    *,
+    index: int,
+    expected_preflight: dict[str, Any],
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    label = f"opencode_agent_runtime.workers[{index}]"
+    worker = require_object(value, label)
+    worker_id = require_string(worker.get("worker_id"), f"{label}.worker_id")
+    if worker.get("chat_output_is_evidence") is not False:
+        raise ValueError(f"{label}.chat_output_is_evidence must be false")
+    if worker.get("semantic_gate") is not False:
+        raise ValueError(f"{label}.semantic_gate must be false")
+    if worker.get("contract_verification_status") != "executed":
+        raise ValueError(f"{label}.contract_verification_status must be executed")
+
+    bindings = {
+        "summary": validate_artifact_binding_shape(worker.get("summary"), f"{label}.summary", repo_root=repo_root),
+        "worker_report": validate_artifact_binding_shape(
+            worker.get("worker_report"),
+            f"{label}.worker_report",
+            repo_root=repo_root,
+        ),
+        "handoff_contract": validate_artifact_binding_shape(
+            worker.get("handoff_contract"),
+            f"{label}.handoff_contract",
+            repo_root=repo_root,
+        ),
+        "opencode_session_evidence": validate_artifact_binding_shape(
+            worker.get("opencode_session_evidence"),
+            f"{label}.opencode_session_evidence",
+            repo_root=repo_root,
+        ),
+    }
+    logs = require_object(worker.get("logs"), f"{label}.logs")
+    bindings["logs_stdout"] = validate_artifact_binding_shape(logs.get("stdout"), f"{label}.logs.stdout", repo_root=repo_root)
+    bindings["logs_stderr"] = validate_artifact_binding_shape(logs.get("stderr"), f"{label}.logs.stderr", repo_root=repo_root)
+    worker_preflight = validate_opencode_preflight_binding(
+        worker.get("opencode_preflight_report"),
+        f"{label}.opencode_preflight_report",
+        repo_root=repo_root,
+    )
+    if worker_preflight["path"] != expected_preflight["path"] or worker_preflight["sha256"] != expected_preflight["sha256"]:
+        raise ValueError(f"{label}.opencode_preflight_report must match opencode_agent_runtime.opencode_preflight_report")
+
+    verification = require_object(worker.get("opencode_contract_verification"), f"{label}.opencode_contract_verification")
+    if verification.get("status") != "executed":
+        raise ValueError(f"{label}.opencode_contract_verification.status must be executed")
+    for field in ("first_shell_command_matches_worker_command", "worker_command_seen", "summary_exists"):
+        if verification.get(field) is not True:
+            raise ValueError(f"{label}.opencode_contract_verification.{field} must be true")
+    if verification.get("tools_before_first_shell") != []:
+        raise ValueError(f"{label}.opencode_contract_verification.tools_before_first_shell must be []")
+    command_count = verification.get("executed_shell_command_count")
+    if not isinstance(command_count, int) or command_count < 1:
+        raise ValueError(f"{label}.opencode_contract_verification.executed_shell_command_count must be >= 1")
+    executed_commands = verification.get("executed_shell_commands")
+    if not isinstance(executed_commands, list) or not executed_commands or not all(isinstance(item, str) for item in executed_commands):
+        raise ValueError(f"{label}.opencode_contract_verification.executed_shell_commands must be a non-empty string list")
+    for command in executed_commands:
+        assert_no_local_absolute_path(command)
+
+    return {
+        "worker_id": worker_id,
+        "status": "passed",
+        "contract_verification_status": "executed",
+        "bindings": bindings,
+    }
+
+
+def validate_opencode_agent_runtime_contract(
+    value: Any,
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    runtime = require_object(value, "opencode_agent_runtime")
+    if runtime.get("runtime") != "opencode":
+        raise ValueError("opencode_agent_runtime.runtime must be opencode")
+    if runtime.get("chat_output_is_evidence") is not False:
+        raise ValueError("opencode_agent_runtime.chat_output_is_evidence must be false")
+    if runtime.get("semantic_gate") is not False:
+        raise ValueError("opencode_agent_runtime.semantic_gate must be false")
+    workers = runtime.get("workers")
+    if not isinstance(workers, list) or not workers:
+        raise ValueError("opencode_agent_runtime.workers must be a non-empty list")
+    worker_count = runtime.get("worker_count")
+    if not isinstance(worker_count, int) or worker_count != len(workers):
+        raise ValueError("opencode_agent_runtime.worker_count must match workers length")
+    preflight = validate_opencode_preflight_binding(
+        runtime.get("opencode_preflight_report"),
+        "opencode_agent_runtime.opencode_preflight_report",
+        repo_root=repo_root,
+    )
+    if runtime.get("all_contracts_executed") is not True:
+        raise ValueError("opencode_agent_runtime.all_contracts_executed must be true")
+    if runtime.get("failed_or_missing_contract_workers") != []:
+        raise ValueError("opencode_agent_runtime.failed_or_missing_contract_workers must be []")
+    counts = require_object(runtime.get("contract_status_counts"), "opencode_agent_runtime.contract_status_counts")
+    if counts != {"executed": worker_count}:
+        raise ValueError("opencode_agent_runtime.contract_status_counts must equal {'executed': worker_count}")
+
+    worker_results = [
+        validate_opencode_worker_runtime(worker, index=index, expected_preflight=preflight, repo_root=repo_root)
+        for index, worker in enumerate(workers)
+    ]
+    worker_ids = [worker["worker_id"] for worker in worker_results]
+    if len(set(worker_ids)) != len(worker_ids):
+        raise ValueError("opencode_agent_runtime.workers worker_id values must be unique")
+    return {
+        "status": "passed",
+        "runtime": "opencode",
+        "worker_count": worker_count,
+        "contract_status_counts": {"executed": worker_count},
+        "opencode_preflight_report": preflight,
+        "worker_ids": worker_ids,
+    }
+
+
+def validate_judge_evidence_index_contract(
+    payload: dict[str, Any],
+    *,
+    path_text: str,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
     if payload.get("report_kind") != "judge-evidence-index":
         raise ValueError(f"judge_evidence_index report_kind must be judge-evidence-index: {path_text}")
     boundary = require_object(payload.get("claim_boundary"), "judge_evidence_index.claim_boundary")
@@ -692,14 +867,30 @@ def validate_judge_evidence_index_contract(payload: dict[str, Any], *, path_text
     roles = agent_contract.get("roles")
     if not isinstance(roles, list) or set(roles) != set(REQUIRED_AGENT_ROLES):
         raise ValueError("judge_evidence_index.agent_coordination.roles must list all required roles")
+    opencode_runtime_result = None
+    evidence_refs = payload.get("evidence_artifact_refs")
+    has_opencode_runtime_signal = (
+        payload.get("mode") == "opencode"
+        or (isinstance(evidence_refs, dict) and "opencode_preflight_report" in evidence_refs)
+    )
+    if has_opencode_runtime_signal and "opencode_agent_runtime" not in payload:
+        raise ValueError("opencode_agent_runtime is required when judge_evidence_index.mode is opencode")
+    if "opencode_agent_runtime" in payload:
+        opencode_runtime_result = validate_opencode_agent_runtime_contract(
+            payload.get("opencode_agent_runtime"),
+            repo_root=repo_root,
+        )
     local_path_scan = validate_local_absolute_path_policy(payload, label=f"judge_evidence_index {path_text}")
 
-    return {
+    result = {
         "path": path_text,
         "status": "passed",
         "architecture_contracts": "passed",
         "local_absolute_path_scan": local_path_scan,
     }
+    if opencode_runtime_result is not None:
+        result["opencode_agent_runtime"] = opencode_runtime_result
+    return result
 
 
 def worker_ids_from_entries(entries: Any, *, label: str) -> set[str]:
@@ -1005,6 +1196,7 @@ def validate_harness_artifact_contracts(
         result["judge_evidence_index"] = validate_judge_evidence_index_contract(
             load_json(judge_index_path),
             path_text=str(artifacts["judge_evidence_index"]),
+            repo_root=repo_root,
         )
     return result
 

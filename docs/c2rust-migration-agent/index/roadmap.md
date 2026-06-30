@@ -10,7 +10,7 @@
 ## 评委 Demo / Milestone
 
 当前公开 before/after 入口是 `../judge-demo.md`。
-机器可读的评委入口目录是 `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`，其中集中绑定 FlashDB before/after demo、显式多 worker evaluate profile、预期 artifacts、tracked manifests 和 claim boundary。
+机器可读的评委入口目录是 `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`，其中集中绑定 FlashDB before/after demo、普通显式多 worker evaluate profile、OpenCode 显式多 worker evaluate profile、预期 artifacts（含 `worker_plan`）、tracked manifests 和 claim boundary。
 
 首选真实 FlashDB 运行路径：
 
@@ -48,6 +48,14 @@ python -B -m validation.tools.opencode_agent_harness evaluate --profile config/c
 ```
 
 该路径会复用完整 batch-profile pipeline，并额外产出 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`；二者只索引已验证的 batch artifacts、summary validator 和 context/index，不是新的语义接受门禁。
+
+OpenCode 显式多 worker 评委入口：
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701
+```
+
+该路径额外绑定 OpenCode preflight、`opencode_agent_runtime`、worker handoff/session/log、`worker_plan`、`context-pack.json`、`agent-index.json` 和 `judge-evidence-index.json`；`validate_judge_entrypoints --require-local-artifacts` 会校验 runtime contract 与 sha256。边界：OpenCode chat/session 不是语义证据，也不是新的 semantic gate。
 
 保底 repo-local demo：
 

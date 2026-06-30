@@ -18,7 +18,7 @@ The Chinese source currently contains these major headings:
 ## Judge Demo / Milestone
 
 The current public before/after demo entrypoint is `../judge-demo.md`.
-The machine-readable judge entrypoint directory is `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`; it binds the FlashDB before/after demo, explicit multi-worker evaluate profile, expected artifacts, tracked manifests, and claim boundaries in one place.
+The machine-readable judge entrypoint directory is `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`; it binds the FlashDB before/after demo, deterministic explicit multi-worker evaluate profile, OpenCode explicit multi-worker evaluate profile, expected artifacts including `worker_plan`, tracked manifests, and claim boundaries in one place.
 
 Primary real FlashDB run:
 
@@ -54,6 +54,14 @@ python -B -m validation.tools.opencode_agent_harness evaluate --profile config/c
 ```
 
 This path reuses the full batch-profile pipeline and additionally emits a `harness/evaluate-report.json` wrapper plus `harness/judge-evidence-index.json`. These only index verified batch artifacts, summary validation, and context/index entrypoints; they are not a new semantic acceptance gate.
+
+OpenCode explicit multi-worker judge entrypoint:
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701
+```
+
+This path additionally binds OpenCode preflight, `opencode_agent_runtime`, worker handoff/session/log evidence, `worker_plan`, `context-pack.json`, `agent-index.json`, and `judge-evidence-index.json`; `validate_judge_entrypoints --require-local-artifacts` checks the runtime contract and sha256 bindings. Boundary: OpenCode chat/session output is not semantic evidence and is not a new semantic gate.
 
 This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation; `context_management_contract` / `agent_coordination_contract` make the plan -> worker fan-out -> verify/merge -> repair loop -> report roles, resume protocol, and `chat_output_is_evidence=false` boundary machine-readable.
 
