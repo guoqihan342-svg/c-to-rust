@@ -3956,6 +3956,334 @@ fn typed_ir_emits_discarded_pointer_return_call_with_opaque_void_arg() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_blob_make_pointer_return_as_direct_call_argument() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "len".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_void_ptr_ty),
+                            ir_var("len", usize_ty),
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit fdb_blob_make pointer return as direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("return fdb_kv_set_blob(fdb_blob_make(&mut blob, value, len));"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-blob-make-pointer-return-direct-call-arg",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "assert_eq!(call_kv_set_blob(core::ptr::null(), 5usize), 5i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_strlen".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: const_u8_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_u8_ptr_ty.clone()),
+                            IrExpr::Call {
+                                callee: "strlen".to_string(),
+                                args: vec![ir_var("value", const_u8_ptr_ty)],
+                                ty: usize_ty,
+                                source_span: None,
+                            },
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit fdb_blob_make strlen leaf as direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn call_kv_set_blob_strlen(value: &[u8]) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return fdb_kv_set_blob(fdb_blob_make(&mut blob, value.as_ptr() as *const core::ffi::c_void, value.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")));"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-blob-make-pointer-return-strlen-leaf",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "assert_eq!(call_kv_set_blob_strlen(b\"abc\\0\"), 3i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_top_level_blob_make_pointer_return_expression() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "return_blob_make_as_i32".to_string(),
+        return_type: i32_ty,
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "len".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_blob_make".to_string(),
+                    args: vec![
+                        IrExpr::AddrOf {
+                            operand: Box::new(ir_var("blob", blob_ty)),
+                            ty: blob_ptr_ty.clone(),
+                            source_span: None,
+                        },
+                        ir_var("value", const_void_ptr_ty),
+                        ir_var("len", usize_ty),
+                    ],
+                    ty: blob_ptr_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("top-level pointer-return call must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("return expr has pointer type struct fdb_blob * is unsupported"),
+        "{:?}",
+        error.reason
+    );
+    assert!(
+        error.reason.contains("struct fdb_blob *"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_blob_make_pointer_return_argument_with_unmodeled_nested_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_with_bad_nested_len".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: const_void_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_void_ptr_ty.clone()),
+                            IrExpr::Call {
+                                callee: "helper_len".to_string(),
+                                args: vec![ir_var("value", const_void_ptr_ty)],
+                                ty: usize_ty,
+                                source_span: None,
+                            },
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("unmodeled nested constructor arg must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("nested call expressions are outside the bounded call subset"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg() {
     let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
     let usize_ty = ir_usize();

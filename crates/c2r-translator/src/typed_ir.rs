@@ -3164,6 +3164,11 @@ fn emit_call_arg_expr(
         IrExpr::FunctionToPointerDecay { target, expr, .. } => {
             emit_function_pointer_decay_call_arg(target, expr)
         }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if mutable_record_pointer_pointee_type(ty).is_some() => {
+            emit_record_pointer_return_call_arg_expr(callee, args, ty, symbols, context)
+        }
         IrExpr::Var { name, ty, .. } if emit_opaque_void_pointer_type(ty).is_some() => {
             emit_opaque_pointer_call_arg_var(name, symbols, context)
         }
@@ -3171,6 +3176,43 @@ fn emit_call_arg_expr(
             emit_local_record_address_call_arg(operand, ty, symbols)
         }
         _ => emit_expr(arg, symbols, context),
+    }
+}
+
+fn emit_record_pointer_return_call_arg_expr(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    validate_record_pointer_return_nested_call_arg(callee, args, ty)?;
+    let callee = emit_identifier(callee, "record pointer return call argument callee")?;
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            emit_record_pointer_return_call_inner_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("record pointer return call arg[{index}] {detail}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(format!("{callee}({args})"))
+}
+
+fn emit_record_pointer_return_call_inner_arg_expr(
+    arg: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    match arg {
+        IrExpr::Var { name, ty, .. } if is_readonly_8_bit_pointer_type(ty) => {
+            emit_readonly_byte_pointer_const_void_call_arg_var(name, symbols)
+        }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if callee == "strlen" => emit_c_strlen_call_expr(args, ty, symbols, context),
+        _ => emit_call_arg_expr(arg, symbols, context),
     }
 }
 
@@ -3203,6 +3245,19 @@ fn emit_opaque_pointer_call_arg_var(
         ));
     }
     emit_identifier(name, "opaque pointer call argument")
+}
+
+fn emit_readonly_byte_pointer_const_void_call_arg_var(
+    name: &str,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "readonly byte pointer call argument {name} is not declared"
+        ));
+    }
+    let name = emit_identifier(name, "readonly byte pointer call argument")?;
+    Ok(format!("{name}.as_ptr() as *const core::ffi::c_void"))
 }
 
 fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
@@ -3895,12 +3950,77 @@ fn validate_bounded_nested_call_arg(
         validate_c_memcmp_call_shape(args, ty)?;
         return Ok(());
     }
+    if mutable_record_pointer_pointee_type(ty).is_some() {
+        return validate_record_pointer_return_nested_call_arg(callee, args, ty);
+    }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
     for (index, arg) in args.iter().enumerate() {
         validate_bounded_call_arg(arg, false)
             .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
     }
     Ok(())
+}
+
+fn validate_record_pointer_return_nested_call_arg(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+) -> Result<(), String> {
+    emit_identifier(callee, "record pointer return nested call callee")?;
+    let return_pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+        format!(
+            "record pointer return nested call result {} must be a mutable record pointer",
+            type_label(ty)
+        )
+    })?;
+    let Some(first_arg) = args.first() else {
+        return Err(
+            "record pointer return nested call requires an address-of local record first argument"
+                .to_string(),
+        );
+    };
+    let IrExpr::AddrOf {
+        operand,
+        ty: first_arg_ty,
+        ..
+    } = first_arg
+    else {
+        return Err(
+            "record pointer return nested call first argument must be address-of local record"
+                .to_string(),
+        );
+    };
+    let first_pointee = mutable_record_pointer_pointee_type(first_arg_ty).ok_or_else(|| {
+        format!(
+            "record pointer return nested call first argument target {} must be a mutable record pointer",
+            type_label(first_arg_ty)
+        )
+    })?;
+    validate_record_value_type_matches(
+        first_pointee,
+        return_pointee,
+        "record pointer return nested call first argument",
+    )?;
+    validate_local_record_address_call_arg(operand, first_arg_ty)
+        .map_err(|detail| format!("record pointer return nested call first argument {detail}"))?;
+    for (index, arg) in args.iter().enumerate().skip(1) {
+        if validate_record_pointer_return_call_inner_arg(arg).is_ok() {
+            continue;
+        }
+        validate_bounded_call_arg(arg, false)
+            .map_err(|detail| format!("record pointer return nested call arg[{index}] {detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_record_pointer_return_call_inner_arg(arg: &IrExpr) -> Result<(), String> {
+    match arg {
+        IrExpr::Var { ty, .. } if is_readonly_8_bit_pointer_type(ty) => Ok(()),
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if callee == "strlen" => validate_c_strlen_call_shape(args, ty).map(|_| ()),
+        _ => Err("not a record pointer return call inner special case".to_string()),
+    }
 }
 
 fn find_call_callee(expr: &IrExpr) -> Option<&str> {
@@ -8399,6 +8519,10 @@ fn mutable_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
 
 fn record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
     readonly_record_pointer_pointee_type(ty).or_else(|| mutable_record_pointer_pointee_type(ty))
+}
+
+fn is_readonly_8_bit_pointer_type(ty: &IrType) -> bool {
+    matches!(readonly_pointer_slice_element_type(ty), Some(pointee) if is_8_bit_integer_type(pointee))
 }
 
 fn is_supported_nullable_pointer_type(ty: &IrType) -> bool {

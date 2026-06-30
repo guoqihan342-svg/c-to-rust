@@ -1764,6 +1764,9 @@
         "pointer value call argument/return fail-closed",
         "local complete record address-of direct-call argument candidate",
         "discarded pointer-return direct-call statement with opaque void pointer argument candidate",
+        "record-pointer-return nested direct-call argument candidate with local record address first argument",
+        "readonly 8-bit pointer argument cast to const void pointer inside record-pointer constructor call arguments",
+        "modeled C strlen(const char *) as the only admitted deeper leaf inside record-pointer constructor call arguments",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -1848,6 +1851,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "bounded_call_args_allow_record_pointer_constructor_with_strlen_leaf",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1902,6 +1909,14 @@
             {
               "name": "typed_ir_emits_discarded_pointer_return_call_with_opaque_void_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_blob_make_pointer_return_as_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1946,6 +1961,14 @@
             },
             {
               "name": "typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_top_level_blob_make_pointer_return_expression",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_blob_make_pointer_return_argument_with_unmodeled_nested_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2032,6 +2055,14 @@
             {
               "name": "typed_ir_emits_discarded_pointer_return_call_with_opaque_void_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_blob_make_pointer_return_as_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2091,6 +2122,10 @@
         },
         {
           "name": "expr_skeleton_from_ast_lowers_direct_call_with_record_address_arg",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "bounded_call_args_allow_record_pointer_constructor_with_strlen_leaf",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
@@ -2172,6 +2207,14 @@
         {
           "name": "typed_ir_emits_discarded_pointer_return_call_with_opaque_void_arg",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_blob_make_pointer_return_as_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -2224,6 +2267,16 @@
           "name": "typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "discarded pointer-return direct-call statements only admit opaque void pointer pass-through; ordinary pointer arguments still require ownership/lifetime/ABI lowering"
+        },
+        {
+          "name": "typed_ir_rejects_top_level_blob_make_pointer_return_expression",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "record-pointer-return calls are admitted only as bounded direct-call arguments, not as top-level pointer value expressions"
+        },
+        {
+          "name": "typed_ir_rejects_blob_make_pointer_return_argument_with_unmodeled_nested_arg",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "record-pointer-return nested call arguments only admit modeled strlen as a deeper leaf; arbitrary nested calls remain fail-closed"
         },
         {
           "name": "typed_ir_rejects_pointer_value_return_with_explicit_boundary",
