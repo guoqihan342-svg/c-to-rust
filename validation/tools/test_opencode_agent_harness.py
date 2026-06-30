@@ -20,6 +20,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class OpenCodeAgentHarnessTest(unittest.TestCase):
+    def assert_repo_relative_posix_path(self, value: str) -> None:
+        self.assertIsInstance(value, str)
+        self.assertTrue(value)
+        self.assertNotIn("\\", value)
+        self.assertFalse(value.startswith("/"))
+        self.assertFalse(value.startswith("~"))
+        self.assertFalse(len(value) >= 2 and value[1] == ":")
+        self.assertNotIn("..", Path(value).parts)
+
     def test_init_run_creates_sqlite_ledger_with_run_and_profile(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -933,6 +942,147 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["report_path"], result["report_path"])
             self.assertEqual(report["acceptance_boundary"], result["acceptance_boundary"])
             self.assertEqual(report["route_governance_metrics_report"], route_report_ref)
+
+    def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            worker_run_ids: list[str] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    worker_run_ids.append(str(request["run_id"]))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-evaluate", status="passed", failed=0, semantic_pass=2)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.evaluate(
+                run_id="run-evaluate",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=["first_unit", "second_unit"],
+                source_commit="abc123",
+                out_root=out_root,
+                proof_class="local-simulation",
+                slice_id_prefix="eval-demo",
+                worker_prefix="eval-worker",
+                execute_merge=True,
+                auto_retry=True,
+                max_workers=2,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["entrypoint"], "evaluate")
+            self.assertEqual(result["run_plan"]["parallelism"], {"max_workers": 2, "effective_workers": 2})
+            self.assertEqual(result["run_plan"]["graph"]["runtime"], "opencode-harness-langgraph-inspired")
+            self.assertEqual(len(worker_run_ids), 2)
+            self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
+            context_pack_path = REPO_ROOT / result["context_pack"]["path"]
+            agent_index_path = REPO_ROOT / result["agent_index"]["path"]
+            context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
+            agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["run_id"], "run-evaluate")
+            self.assertEqual(context_pack["graph"]["runtime"], "opencode-harness-langgraph-inspired")
+            self.assertEqual(context_pack["entrypoints"]["evaluate_report"], result["report_path"])
+            self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
+            self.assertEqual(context_pack["entrypoints"]["merge_summary"], result["run_plan"]["merge_execution"]["summary_path"])
+            self.assertEqual(len(context_pack["workers"]), 2)
+            self.assertEqual(agent_index["run_id"], "run-evaluate")
+            planned_worker_ids = [unit["worker_id"] for unit in result["plan"]["units"]]
+            self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], planned_worker_ids)
+            self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], planned_worker_ids)
+            db_path = Path(REPO_ROOT / result["db_path"])
+            context_rows = fetch_rows(
+                db_path,
+                """
+                select context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+                       artifact_path, artifact_sha256, payload_json
+                from context_packs
+                """,
+            )
+            self.assertEqual(len(context_rows), 1)
+            context_row = context_rows[0]
+            self.assertEqual(context_row[:8], ("run-evaluate-context-pack", "run-evaluate", "flashdb", None, 1, 20000, result["context_pack"]["path"], result["context_pack"]["sha256"]))
+            self.assertEqual(json.loads(context_row[8]), context_pack)
+            artifact_rows = fetch_rows(
+                db_path,
+                """
+                select kind, agent_id, repo_rel_path, sha256, semantic_role
+                from artifacts
+                where kind in ('context-pack', 'agent-index', 'evaluate-report')
+                order by kind
+                """,
+            )
+            self.assertEqual(
+                artifact_rows,
+                [
+                    ("agent-index", "planner", result["agent_index"]["path"], result["agent_index"]["sha256"], "agent-index"),
+                    ("context-pack", "planner", result["context_pack"]["path"], result["context_pack"]["sha256"], "agent-context-pack"),
+                    ("evaluate-report", "planner", result["report_path"], harness.sha256_file(REPO_ROOT / result["report_path"]), "evaluate-report"),
+                ],
+            )
+            event_rows = fetch_rows(db_path, "select event_type from events where run_id=? order by event_id", ("run-evaluate",))
+            self.assertIn(("context_pack_written",), event_rows)
+            self.assertIn(("evaluate_executed",), event_rows)
+            paths_to_check = [
+                result["db_path"],
+                result["report_path"],
+                result["context_pack"]["path"],
+                result["agent_index"]["path"],
+                context_pack["entrypoints"]["evaluate_report"],
+                context_pack["entrypoints"]["run_plan_report"],
+                context_pack["entrypoints"]["worker_plan"],
+                context_pack["entrypoints"]["merge_plan"],
+                context_pack["entrypoints"]["merge_summary"],
+                context_pack["entrypoints"]["agent_index"],
+            ]
+            for worker in context_pack["workers"]:
+                paths_to_check.extend(
+                    [
+                        worker["out_root"],
+                        worker["assignment_path"],
+                        worker["request_path"],
+                        worker["summary_path"],
+                        worker["report_path"],
+                    ]
+                )
+            for agent in agent_index["agents"]:
+                paths_to_check.extend(
+                    [
+                        agent["isolated_out_root"],
+                        agent["assignment_path"],
+                        agent["request_path"],
+                        agent["summary_path"],
+                        agent["report_path"],
+                    ]
+                )
+            for path_value in paths_to_check:
+                if path_value is None:
+                    continue
+                self.assert_repo_relative_posix_path(path_value)
 
     def test_run_batch_profile_binds_before_after_exhibit_report(self) -> None:
         with temp_repo_dir() as tmp:

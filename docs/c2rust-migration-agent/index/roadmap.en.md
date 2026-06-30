@@ -38,6 +38,14 @@ Key artifacts:
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 
+Current harness-first development entrypoint:
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
+```
+
+This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation.
+
 Fallback repo-local demo:
 
 ```bash

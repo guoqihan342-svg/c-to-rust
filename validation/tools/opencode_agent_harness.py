@@ -122,6 +122,42 @@ def main() -> int:
     batch_profile_parser.add_argument("--run-id", required=True)
     batch_profile_parser.add_argument("--out-root", type=Path, required=True)
 
+    evaluate_parser = subcommands.add_parser("evaluate")
+    evaluate_parser.add_argument("--run-id", required=True)
+    evaluate_parser.add_argument("--target-id", required=True)
+    evaluate_parser.add_argument("--source-repo-root", type=Path, required=True)
+    evaluate_parser.add_argument("--source-repository")
+    evaluate_parser.add_argument("--source-branch")
+    evaluate_parser.add_argument("--source-file", required=True)
+    evaluate_parser.add_argument("--function", action="append", dest="functions", default=[])
+    evaluate_parser.add_argument("--source-commit", required=True)
+    evaluate_parser.add_argument("--require-source-commit")
+    evaluate_parser.add_argument("--slice-spec", action="append", dest="slice_specs", default=[])
+    evaluate_parser.add_argument("--compiler-command-source")
+    evaluate_parser.add_argument("--include-path", action="append", default=[])
+    evaluate_parser.add_argument("--define", action="append", default=[])
+    evaluate_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    evaluate_parser.add_argument("--accepted-evidence-root")
+    evaluate_parser.add_argument("--out-root", type=Path, required=True)
+    evaluate_parser.add_argument("--slice-id-prefix")
+    evaluate_parser.add_argument("--worker-prefix", default="worker")
+    evaluate_parser.add_argument("--limit", type=int)
+    evaluate_parser.add_argument(
+        "--proof-class",
+        required=True,
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
+    evaluate_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    evaluate_parser.add_argument("--opencode-command", default="opencode")
+    evaluate_parser.add_argument("--opencode-model")
+    evaluate_parser.add_argument("--opencode-agent")
+    evaluate_parser.add_argument("--opencode-variant", default="max")
+    evaluate_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    evaluate_parser.add_argument("--opencode-preflight-report", type=Path)
+    evaluate_parser.add_argument("--no-execute-merge", action="store_true")
+    evaluate_parser.add_argument("--no-auto-retry", action="store_true")
+    evaluate_parser.add_argument("--max-workers", type=int, default=1)
+
     preflight_parser = subcommands.add_parser("opencode-preflight")
     preflight_parser.add_argument("--run-id", required=True)
     preflight_parser.add_argument("--out-root", type=Path, required=True)
@@ -257,6 +293,39 @@ def main() -> int:
             run_id=args.run_id,
             out_root=args.out_root,
         )
+    elif args.command == "evaluate":
+        result = evaluate(
+            run_id=args.run_id,
+            target_id=args.target_id,
+            source_repo_root=args.source_repo_root,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
+            source_file=args.source_file,
+            functions=args.functions,
+            source_commit=args.source_commit,
+            require_source_commit=args.require_source_commit,
+            slice_specs=args.slice_specs,
+            compiler_command_source=args.compiler_command_source,
+            include_paths=args.include_path,
+            defines=args.define,
+            reuse_accepted_evidence=args.reuse_accepted_evidence,
+            accepted_evidence_root=args.accepted_evidence_root,
+            out_root=args.out_root,
+            slice_id_prefix=args.slice_id_prefix,
+            worker_prefix=args.worker_prefix,
+            limit=args.limit,
+            proof_class=args.proof_class,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
+            execute_merge=not args.no_execute_merge,
+            auto_retry=not args.no_auto_retry,
+            max_workers=args.max_workers,
+        )
     elif args.command == "opencode-preflight":
         result = run_opencode_preflight(
             out_root=args.out_root,
@@ -323,7 +392,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile", "opencode-preflight"} else 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile", "evaluate", "opencode-preflight"} else 0
 
 
 def init_run(
@@ -948,6 +1017,341 @@ def run_batch_profile(
         record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
         connection.commit()
     return result
+
+
+def evaluate(
+    *,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    out_root: Path,
+    proof_class: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    functions: list[str] | None = None,
+    require_source_commit: str | None = None,
+    slice_specs: list[str] | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    slice_id_prefix: str | None = None,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
+    execute_merge: bool = True,
+    auto_retry: bool = True,
+    max_workers: int = 1,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+        raise SystemExit(f"unsupported proof_class: {proof_class}")
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode: {mode}")
+    out_root = repo_path(out_root, repo_root=repo_root)
+    if slice_id_prefix is None:
+        slice_id_prefix = f"{slug_id(target_id)}-{slug_id(Path(source_file).stem)}"
+    db_path = init_run(
+        out_root=out_root,
+        run_id=run_id,
+        proof_class=proof_class,
+        repo_root=repo_root,
+    )
+    plan = plan_source_file(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        source_repo_root=source_repo_root,
+        source_repository=source_repository,
+        source_branch=source_branch,
+        source_file=source_file,
+        functions=functions or [],
+        source_commit=source_commit,
+        require_source_commit=require_source_commit,
+        slice_specs=slice_specs or [],
+        compiler_command_source=compiler_command_source,
+        include_paths=include_paths or [],
+        defines=defines or [],
+        reuse_accepted_evidence=reuse_accepted_evidence,
+        accepted_evidence_root=accepted_evidence_root,
+        out_root=out_root,
+        slice_id_prefix=slice_id_prefix,
+        worker_prefix=worker_prefix,
+        limit=limit,
+        repo_root=repo_root,
+    )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        opencode_preflight_report=opencode_preflight_report,
+        execute_merge=execute_merge,
+        auto_retry=auto_retry,
+        max_workers=max_workers,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "entrypoint": "evaluate",
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "target_id": target_id,
+        "source_repo_root": repo_relative(repo_path(source_repo_root, repo_root=repo_root), repo_root=repo_root),
+        "source_file": source_file,
+        "source_commit": source_commit,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if source_repository:
+        result["source_repository"] = source_repository
+    if source_branch:
+        result["source_branch"] = source_branch
+    report_path = out_root / "harness" / "evaluate-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        evaluate_report_path=report_path,
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="evaluate-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="evaluate-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="evaluate_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def write_context_pack_and_agent_index(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    proof_class: str,
+    mode: str,
+    out_root: Path,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    evaluate_report_path: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    harness_dir = out_root / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    context_pack_path = harness_dir / "context-pack.json"
+    agent_index_path = harness_dir / "agent-index.json"
+    worker_results_by_id = {
+        str(worker.get("worker_id")): worker
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict) and worker.get("worker_id")
+    }
+    workers = []
+    agents = []
+    for unit in plan.get("units", []):
+        if not isinstance(unit, dict):
+            continue
+        worker_id = str(unit.get("worker_id", ""))
+        worker_result = worker_results_by_id.get(worker_id, {})
+        worker_entry = {
+            "worker_id": worker_id,
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "slice_spec": unit.get("slice_spec"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "summary_status": worker_result.get("summary_status"),
+            "exit_code": int(worker_result.get("exit_code", 1)),
+            "recorded": bool(worker_result.get("recorded")),
+        }
+        if isinstance(worker_result.get("auto_retry"), dict):
+            worker_entry["auto_retry"] = worker_result["auto_retry"]
+        workers.append(worker_entry)
+        agents.append(
+            {
+                "worker_id": worker_id,
+                "role": "slice-worker",
+                "runtime": mode,
+                "status": worker_entry["summary_status"] or "missing-summary",
+                "slice_id": unit.get("slice_id"),
+                "function": unit.get("function"),
+                "isolated_out_root": unit.get("out_root"),
+                "assignment_path": unit.get("assignment_path"),
+                "request_path": unit.get("request_path"),
+                "summary_path": worker_result.get("summary_path"),
+                "report_path": worker_result.get("report_path"),
+                "exit_code": worker_entry["exit_code"],
+                "recorded": worker_entry["recorded"],
+            }
+        )
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    context_pack_id = f"{run_id}-context-pack"
+    context_pack = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "context-pack",
+        "context_pack_id": context_pack_id,
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        "mode": mode,
+        "status": run_result.get("status"),
+        "budget": {
+            "depth": 1,
+            "max_tokens": 20000,
+        },
+        "source": {
+            "repo_root": plan.get("source_repo_root"),
+            "source_file": plan.get("source_file"),
+            "source_commit": plan.get("source_commit"),
+            "source_repository": plan.get("source_repository"),
+            "source_branch": plan.get("source_branch"),
+            "source_sha256": plan.get("source_sha256"),
+        },
+        "entrypoints": {
+            "evaluate_report": repo_relative(evaluate_report_path, repo_root=repo_root),
+            "run_plan_report": run_result.get("report_path"),
+            "worker_plan": plan.get("plan_path"),
+            "merge_plan": run_result.get("merge_plan", {}).get("path") if isinstance(run_result.get("merge_plan"), dict) else None,
+            "merge_summary": run_result.get("merge_execution", {}).get("summary_path")
+            if isinstance(run_result.get("merge_execution"), dict)
+            else None,
+            "agent_index": repo_relative(agent_index_path, repo_root=repo_root),
+        },
+        "graph": graph,
+        "parallelism": run_result.get("parallelism"),
+        "retry_policy": graph.get("retry_policy"),
+        "workers": workers,
+        "acceptance_boundary": {
+            "semantic_acceptance": "final verification and worker summaries decide acceptance; this pack is an index only",
+            "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
+        },
+    }
+    agent_index = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "agent-index",
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        "checkpoint_backend": graph.get("checkpoint_backend", "sqlite"),
+        "planner": {
+            "plan_path": plan.get("plan_path"),
+            "worker_count": len(workers),
+        },
+        "agents": agents,
+        "merge": {
+            "status": run_result.get("status"),
+            "merge_plan": run_result.get("merge_plan"),
+            "merge_execution": run_result.get("merge_execution"),
+        },
+    }
+    context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
+    agent_index_ref = {"path": repo_relative(agent_index_path, repo_root=repo_root), "sha256": sha256_file(agent_index_path)}
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(context_pack_id) do update set
+              artifact_path=excluded.artifact_path,
+              artifact_sha256=excluded.artifact_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                context_pack_id,
+                run_id,
+                target_id,
+                None,
+                int(context_pack["budget"]["depth"]),
+                int(context_pack["budget"]["max_tokens"]),
+                context_pack_ref["path"],
+                context_pack_ref["sha256"],
+                json.dumps(context_pack, sort_keys=True),
+            ),
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="context-pack",
+            path=context_pack_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-context-pack",
+            payload=context_pack,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="agent-index",
+            path=agent_index_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-index",
+            payload=agent_index,
+            repo_root=repo_root,
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="context_pack_written",
+            payload={"context_pack": context_pack_ref, "agent_index": agent_index_ref},
+        )
+        connection.commit()
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref}
 
 
 def write_route_governance_metrics_profile_report(
@@ -3566,6 +3970,7 @@ def write_merge_plan(
     merge_plan = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
+        "path": repo_relative(out_root / "harness" / "merge-plan.json", repo_root=repo_root),
         "worker_summaries": summaries,
         "argv": argv,
         "validator": "validation/tools/validate_competition_run_summary.py",

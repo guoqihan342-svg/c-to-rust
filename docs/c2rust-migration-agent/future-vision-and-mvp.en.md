@@ -37,6 +37,26 @@ Phase 2/3/4 describe capability maturity stages. P0/P1/P2 is the default executi
 - **Handoff docs must stay short and auditable**: `CONTEXT.md` is only for current state, latest verification, and next-step handoff. Long session logs should be split or archived under `docs/c2rust-migration-agent/archive/`, and must not become release documentation, an external evaluation entrypoint, or capability proof.
 - **Docs must stay bilingual**: maintained Chinese documentation must start with the repository-standard first line that points to its sibling `.en.md` mirror, and that mirror must exist in the same directory. Run `python -B -m unittest validation.tools.test_doc_mirror_contract` whenever documentation is added or edited. Update the Chinese original `future-vision-and-mvp.md` and this English mirror together.
 
+## 1.2. 10-Day Harness-First Active Queue
+
+The active queue is reordered around the fact that judges primarily score core translation capability and harness architecture. P0 keeps only work that directly improves one-command evaluation, OpenCode multi-agent orchestration, context indexing, repair/retry, and the before/after proof chain.
+
+Active items:
+
+- [ ] H1 One-command `evaluate` entrypoint: one command performs `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`, and emits `context-pack.json`, `agent-index.json`, and a SQLite `context_packs` index.
+- [ ] H2 Multi-worker fan-out/fan-in: `run-plan --max-workers` merges in planner order, every worker uses isolated output, SQLite uses a busy timeout, and the OpenCode wrapper can run independent slices in parallel.
+- [ ] H3 Precise repair self-healing: failed workers must write `repair_hints` and retry the same assignment automatically for at most 5 rounds; every failed attempt, rollback, and final accept/refuse decision must be report-visible.
+- [ ] H4 Before/after scoring exhibit: the preferred FlashDB path must show the raw unsafe baseline, agent safety patch, oracle pass, unsafe reduction, repair/retry trace, reproduction command, and artifact hashes.
+- [ ] H5 Context management: `context-pack.json` is the next-agent and judge entrypoint and must include the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`.
+- [ ] H6 Evaluation reports: `judge_demo`, `run-batch-profile`, `milestone-release-report`, and `evaluate-report` must explain both harness architecture and core translation quality, not only governance percentages.
+
+Frozen/deferred items:
+
+- Do not expand handwritten-emitter C syntax coverage unless it directly blocks a real H1-H6 sample.
+- Do not split `typed_ir.rs`, `clang_frontend.rs`, or other large files unless a small harness-required fix needs it.
+- Do not add features after D7; after D7 only fix, verify, document, and polish the demo.
+- Phase 2/3/4 work such as CFG/relooper, union, general pointer graphs, multi-TU, complete function pointers, and industrial-grade coverage remains on the long-term roadmap, but it must not displace the current 10-day mainline.
+
 ## 2. IR Layering Design (Recommended Industrial Standard)
 
 Key principle: **IR must not "decide how Rust should be written"; it must only "describe what C is"**. Correctness comes from C oracle; IR is the intermediate representation that faithfully describes C semantics.

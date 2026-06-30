@@ -30,6 +30,14 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 
+当前 harness-first 开发入口：
+
+```bash
+python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
+```
+
+该入口会产出 `harness/evaluate-report.json`、`harness/context-pack.json`、`harness/agent-index.json` 和 SQLite `context_packs` 索引，用于评委审计和下一轮 OpenCode 多 agent 续跑。
+
 保底 repo-local demo：
 
 ```bash

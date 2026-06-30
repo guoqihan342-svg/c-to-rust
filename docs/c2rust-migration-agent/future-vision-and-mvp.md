@@ -39,6 +39,26 @@
 - **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档到 `docs/c2rust-migration-agent/archive/`，不能作为 release 文档、外部评估入口或能力证明。
 - **文档要双语同步**：维护型中文文档首行必须按格式写成：英文镜像见 `<对应文件>.en.md`。同目录必须有英文镜像；新增或修改文档时同步运行 `python -B -m unittest validation.tools.test_doc_mirror_contract`。本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
 
+## 1.2. 10 天 harness-first 活跃队列
+
+当前执行队列按“评委主要看核心翻译功能和 harness 架构”重排。P0 只保留能直接增强一键评测、OpenCode 多 agent 编排、上下文索引、repair/retry 和 before/after 证明链的事项。
+
+活跃项：
+
+- [ ] H1 一键 `evaluate` 入口：一次命令完成 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`，并产出 `context-pack.json`、`agent-index.json` 和 SQLite `context_packs` 索引。
+- [ ] H2 多 worker fan-out/fan-in：`run-plan --max-workers` 固定按 planner 顺序汇总，所有 worker 隔离输出，SQLite 开启 busy timeout，OpenCode wrapper 可以并行跑互不依赖的 slice。
+- [ ] H3 精准 repair 自愈：失败 worker 必须落 `repair_hints`，同一 assignment 最多自动重试 5 轮；每次失败、回滚和最终接受/拒绝都要进入报告。
+- [ ] H4 before/after 评分展品：FlashDB 首选路径必须展示 raw unsafe baseline、agent safety patch、oracle 通过、unsafe 下降、repair/retry 轨迹、复现命令和 artifact hash。
+- [ ] H5 上下文管理：`context-pack.json` 是下一轮 agent 和评委的入口，必须包含 source pin、graph、entrypoints、worker summary、merge summary、acceptance boundary；`agent-index.json` 必须按 worker_id 索引 assignment/request/summary/report。
+- [ ] H6 评测报告：`judge_demo`、`run-batch-profile`、`milestone-release-report` 和 `evaluate-report` 的字段要能说明 harness 架构与核心翻译质量，不只说明治理百分比。
+
+冻结/后置项：
+
+- 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H6 的真实样例。
+- 不做 `typed_ir.rs` / `clang_frontend.rs` 等大文件拆分，除非是 harness 必需的小修。
+- 不在 D7 后新增功能；D7 后只修复、验证、写文档和打磨演示。
+- Phase 2/3/4 的 CFG/relooper、union、一般指针图、多 TU、完整 function pointer 和工业级 coverage 继续保留为长期路线，但不再抢占当前 10 天主线。
+
 ## 2. IR 分层设计（推荐工业标准）
 
 关键原则：**IR 不能"决定 Rust 怎么写"，只能"描述 C 是什么"**。正确性来自 C oracle，IR 是忠实描述 C semantics 的中间表达。
