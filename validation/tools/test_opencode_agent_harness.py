@@ -683,7 +683,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
                 merge_calls.append(argv)
                 summary_path = out_root / "summary" / "competition-run-summary.json"
-                write_worker_summary(summary_path, "run-profile", status="passed", failed=0, semantic_pass=1)
+                write_worker_summary(
+                    summary_path,
+                    "run-profile",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=1,
+                    workflow_metrics=measured_unsafe_worker_metrics("run-profile"),
+                )
                 return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
 
             result = harness.run_batch_profile(
@@ -721,6 +728,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(route_report["report_kind"], "route-governance-metrics")
             self.assertEqual(route_report["status"], "passed")
             self.assertIn("translation_coverage_numerator", route_report["metrics"])
+            self.assertEqual(route_report["metrics"]["s2_workflow_metrics"]["run_count"], 1)
+            self.assertEqual(route_report_ref["s2_workflow_run_count"], 1)
+            self.assertEqual(route_report_ref["s2_unsafe_reduction_status"], "measured")
             artifact_rows = fetch_rows(
                 result["db_path"],
                 "select kind, repo_rel_path, semantic_role from artifacts where kind='route-governance-metrics-report'",

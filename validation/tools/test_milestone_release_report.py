@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -67,6 +68,58 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             self.assertEqual(report["metrics"]["capability_delta_ledger"]["accepted_evidence_semantic_pass_count"], 1)
             self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
             self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_summarizes_bound_s2_workflow_metrics_without_semantic_expansion(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            self._write_competition_summary_with_metrics(summary_path, self._measured_workflow_metrics())
+
+            report = milestone_release_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                competition_summary_paths=[summary_path],
+            )
+
+            s2 = report["metrics"]["s2_workflow_metrics"]
+            self.assertEqual(s2["run_count"], 1)
+            self.assertEqual(s2["units_total"], 2)
+            self.assertEqual(s2["units_converged"], 2)
+            self.assertEqual(s2["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(s2["unsafe_reduction"]["baseline_total_unsafe"], 5)
+            self.assertEqual(s2["unsafe_reduction"]["current_total_unsafe"], 2)
+            self.assertEqual(s2["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(s2["avg_repair_rounds"], 1.5)
+            self.assertEqual(s2["auto_recovery_rate"], 0.5)
+            self.assertEqual(s2["repair_history_unit_count"], 1)
+            self.assertEqual(s2["auto_recovered_units"], 1)
+            self.assertEqual(s2["root_cause_counts"], {"rustc_compile_error": 1})
+            self.assertEqual(report["release_note_inputs"]["s2_workflow_metrics"], s2)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_rejects_competition_summary_workflow_metrics_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            self._write_competition_summary_with_metrics(
+                summary_path,
+                self._measured_workflow_metrics(),
+                metrics_sha256="0" * 64,
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                )
+
+            self.assertIn("workflow_metrics.sha256", str(raised.exception))
 
     def test_translation_coverage_numerator_uses_canonical_translator_generated_count(self) -> None:
         with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
@@ -238,6 +291,130 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             },
             "claim_boundary": "translator coverage matrix records representative regression evidence only.",
         }
+
+    def _write_competition_summary_with_metrics(
+        self,
+        summary_path: Path,
+        workflow_metrics: dict,
+        *,
+        metrics_sha256: str | None = None,
+    ) -> None:
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        self._write_bound_patch_events(summary_path, workflow_metrics)
+        metrics_path = summary_path.parent / "workflow-metrics.json"
+        metrics_path.write_text(json.dumps(workflow_metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        summary_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "run_id": workflow_metrics["run_id"],
+                    "proof_class": workflow_metrics["proof_class"],
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "profile_sha256": "0" * 64,
+                    "clang_source": "missing",
+                    "cargo_mirror_activation": {
+                        "method": "CARGO_HOME",
+                        "path": "config/competition-env/cargo",
+                        "config_file": "config/competition-env/cargo/config.toml",
+                    },
+                    "elapsed_seconds": workflow_metrics["wall_clock_seconds"],
+                    "translator_version": "test",
+                    "slices": {
+                        "attempted": workflow_metrics["units_total"],
+                        "typed_ir_generated": workflow_metrics["units_converged"],
+                        "compiled": workflow_metrics["units_total"],
+                        "semantic_pass": workflow_metrics["units_converged"],
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                    "unsafe_budget": {
+                        "status": "passed",
+                        "total_first_party_non_test_unsafe": workflow_metrics["unsafe_reduction"][
+                            "current_total_unsafe"
+                        ],
+                        "ratio": workflow_metrics["unsafe_reduction"]["ratio"],
+                    },
+                    "workflow_metrics": {
+                        "path": "workflow-metrics.json",
+                        "sha256": metrics_sha256 or sha256_file(metrics_path),
+                    },
+                    "artifact_roots": [
+                        "target/competition-out/evidence",
+                        "target/competition-out/summary",
+                        "target/competition-out/logs",
+                    ],
+                    "final_gate": {
+                        "status": "passed",
+                        "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def _write_bound_patch_events(self, summary_path: Path, workflow_metrics: dict) -> None:
+        for unit in workflow_metrics.get("per_unit_statuses", []):
+            repair_history = unit.get("repair_history") if isinstance(unit, dict) else None
+            if not isinstance(repair_history, dict):
+                continue
+            patch_events_path = summary_path.parent / repair_history["patch_events_path"]
+            patch_events_path.write_text('{"status":"verified"}\n', encoding="utf-8")
+            repair_history["patch_events_sha256"] = sha256_file(patch_events_path)
+
+    def _measured_workflow_metrics(self) -> dict:
+        return {
+            "schema_version": 1,
+            "run_id": "run-measured",
+            "proof_class": "local-simulation",
+            "units_total": 2,
+            "units_converged": 2,
+            "units_baseline_only": 0,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 5,
+                "current_total_unsafe": 2,
+                "reduced_by": 3,
+                "ratio": 0.4,
+            },
+            "avg_repair_rounds": 1.5,
+            "auto_recovery_rate": 0.5,
+            "human_interventions": 0,
+            "always_compiles": True,
+            "always_equivalent": True,
+            "fail_closed_count": 0,
+            "root_cause_counts": {"rustc_compile_error": 1},
+            "wall_clock_seconds": 12,
+            "llm_calls": 4,
+            "per_unit_statuses": [
+                {
+                    "unit_id": "demo/a",
+                    "status": "converged",
+                    "repair_rounds": 2,
+                    "auto_recovered": True,
+                    "repair_history": {
+                        "patch_events_path": "retry-repair-history-a.jsonl",
+                        "patch_events_sha256": "1" * 64,
+                        "statuses": ["failed", "verified"],
+                        "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback.json"],
+                        "verified": True,
+                    },
+                    "root_cause_key": "rustc_compile_error",
+                },
+                {
+                    "unit_id": "demo/b",
+                    "status": "converged",
+                    "auto_recovered": False,
+                },
+            ],
+        }
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -15,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import translator_coverage_matrix
+from validation.tools import validate_competition_run_summary
 
 
 REFUSED_STATUSES = {"refused"}
@@ -28,11 +30,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--coverage-report", type=Path)
+    parser.add_argument("--competition-summary", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
     repo_root = args.repo_root.resolve()
-    report = build_report(repo_root, coverage_report_path=args.coverage_report)
+    report = build_report(
+        repo_root,
+        coverage_report_path=args.coverage_report,
+        competition_summary_paths=args.competition_summary,
+    )
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
         output = args.output if args.output.is_absolute() else repo_root / args.output
@@ -42,9 +49,19 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -> dict[str, Any]:
+def build_report(
+    repo_root: Path,
+    *,
+    coverage_report_path: Path | None = None,
+    competition_summary_paths: list[Path] | None = None,
+) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     coverage_report = load_coverage_report(repo_root, coverage_report_path=coverage_report_path)
+    workflow_metrics_inputs = load_competition_workflow_metrics(
+        repo_root,
+        competition_summary_paths=competition_summary_paths or [],
+    )
+    s2_workflow_metrics = summarize_s2_workflow_metrics(workflow_metrics_inputs)
 
     require(coverage_report.get("schema_version") == 1, "coverage report schema_version must be 1")
     require(coverage_report.get("status") == "passed", "coverage report status must be passed")
@@ -99,6 +116,7 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
         "metrics": {
             "translation_coverage_numerator": translator_generated_semantic_pass_count,
             "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+            "s2_workflow_metrics": s2_workflow_metrics,
             "tracked_capability_delta_ledgers": ledger_count,
             "tracked_capability_delta_count": delta_count,
             "native_build_catalogue_included_in_translation_coverage": False,
@@ -124,6 +142,7 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
         },
         "release_note_inputs": {
             "capability_delta_ledger": ledger,
+            "s2_workflow_metrics": s2_workflow_metrics,
             "coverage_claim_boundary": coverage_report.get("claim_boundary"),
             "must_not_claim": [
                 "native build catalogue as translated Rust coverage",
@@ -136,7 +155,7 @@ def build_report(repo_root: Path, *, coverage_report_path: Path | None = None) -
                 "competition-exact clang lane without exact-host evidence",
             ],
         },
-        "claim_boundary": "Milestone release metrics are not semantic acceptance evidence; capability_delta_ledger entries are not semantic acceptance evidence unless the shared validation gates prove semantic_pass for translator-generated Rust drafts.",
+        "claim_boundary": "Milestone release metrics are not semantic acceptance evidence; capability_delta_ledger entries and S2 workflow metrics are not semantic acceptance evidence unless the shared validation gates prove semantic_pass for translator-generated Rust drafts.",
     }
 
 
@@ -190,6 +209,227 @@ def load_coverage_report(repo_root: Path, *, coverage_report_path: Path | None) 
         return translator_coverage_matrix.build_report(repo_root)
     path = coverage_report_path if coverage_report_path.is_absolute() else repo_root / coverage_report_path
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_competition_workflow_metrics(
+    repo_root: Path,
+    *,
+    competition_summary_paths: list[Path],
+) -> list[dict[str, Any]]:
+    metrics = []
+    for summary_path in competition_summary_paths:
+        summary_abs = summary_path if summary_path.is_absolute() else repo_root / summary_path
+        summary_abs = summary_abs.resolve()
+        require(summary_abs.exists(), f"competition summary does not exist: {summary_path}")
+        validate_competition_run_summary.validate_summary(summary_abs, repo_root=repo_root)
+        summary = json.loads(summary_abs.read_text(encoding="utf-8-sig"))
+        require(isinstance(summary, dict), f"competition summary must be an object: {summary_path}")
+        binding = summary.get("workflow_metrics")
+        require(isinstance(binding, dict), f"competition summary workflow_metrics binding is required: {summary_path}")
+        metrics_ref = binding.get("path")
+        expected_sha = binding.get("sha256")
+        require(
+            isinstance(metrics_ref, str) and isinstance(expected_sha, str),
+            f"competition summary workflow_metrics.path and workflow_metrics.sha256 are required: {summary_path}",
+        )
+        metrics_path = resolve_bound_summary_artifact(metrics_ref, summary_path=summary_abs, repo_root=repo_root)
+        require(metrics_path is not None, f"competition summary workflow_metrics.path does not exist: {metrics_ref}")
+        require(
+            sha256_file(metrics_path) == expected_sha,
+            f"competition summary workflow_metrics.sha256 does not match artifact: {summary_path}",
+        )
+        payload = json.loads(metrics_path.read_text(encoding="utf-8-sig"))
+        require(isinstance(payload, dict), f"workflow metrics artifact must be an object: {metrics_ref}")
+        if isinstance(summary.get("run_id"), str):
+            require(
+                payload.get("run_id") == summary["run_id"],
+                f"workflow metrics run_id must match competition summary: {summary_path}",
+            )
+        if isinstance(summary.get("proof_class"), str):
+            require(
+                payload.get("proof_class") == summary["proof_class"],
+                f"workflow metrics proof_class must match competition summary: {summary_path}",
+            )
+        metrics.append(
+            {
+                "summary_path": rel(repo_root, summary_abs),
+                "metrics_path": rel(repo_root, metrics_path),
+                "metrics_sha256": expected_sha,
+                "metrics": payload,
+            }
+        )
+    return metrics
+
+
+def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    metrics = [item["metrics"] for item in workflow_metrics_inputs if isinstance(item.get("metrics"), dict)]
+    units_total = sum(nonnegative_int(metric.get("units_total")) for metric in metrics)
+    units_converged = sum(nonnegative_int(metric.get("units_converged")) for metric in metrics)
+    units_baseline_only = sum(nonnegative_int(metric.get("units_baseline_only")) for metric in metrics)
+    fail_closed_count = sum(nonnegative_int(metric.get("fail_closed_count")) for metric in metrics)
+    human_interventions = sum(nonnegative_int(metric.get("human_interventions")) for metric in metrics)
+    llm_calls = sum(nonnegative_int(metric.get("llm_calls")) for metric in metrics)
+    wall_clock_seconds = sum(nonnegative_int(metric.get("wall_clock_seconds")) for metric in metrics)
+    avg_repair_rounds = weighted_metric(metrics, "avg_repair_rounds", units_total)
+    auto_recovery_rate = weighted_metric(metrics, "auto_recovery_rate", units_total)
+    per_unit_statuses = [
+        unit
+        for metric in metrics
+        for unit in list_or_empty(metric.get("per_unit_statuses"))
+        if isinstance(unit, dict)
+    ]
+    root_cause_counts: dict[str, int] = {}
+    for metric in metrics:
+        for key, value in require_count_mapping(metric.get("root_cause_counts")).items():
+            root_cause_counts[key] = root_cause_counts.get(key, 0) + value
+    repair_history_unit_count = sum(1 for unit in per_unit_statuses if isinstance(unit.get("repair_history"), dict))
+    auto_recovered_units = sum(1 for unit in per_unit_statuses if unit.get("auto_recovered") is True)
+    measured_unsafe_run_count = sum(
+        1
+        for metric in metrics
+        if isinstance(metric.get("unsafe_reduction"), dict)
+        and metric["unsafe_reduction"].get("status") == "measured"
+    )
+    return {
+        "run_count": len(metrics),
+        "input_summaries": [
+            {
+                "summary_path": item["summary_path"],
+                "workflow_metrics_path": item["metrics_path"],
+                "workflow_metrics_sha256": item["metrics_sha256"],
+            }
+            for item in workflow_metrics_inputs
+        ],
+        "units_total": units_total,
+        "units_converged": units_converged,
+        "units_baseline_only": units_baseline_only,
+        "unsafe_reduction": summarize_unsafe_reduction(metrics),
+        "measured_unsafe_reduction_run_count": measured_unsafe_run_count,
+        "avg_repair_rounds": avg_repair_rounds,
+        "auto_recovery_rate": auto_recovery_rate,
+        "human_interventions": human_interventions,
+        "fail_closed_count": fail_closed_count,
+        "root_cause_counts": root_cause_counts,
+        "wall_clock_seconds": wall_clock_seconds,
+        "llm_calls": llm_calls,
+        "repair_history_unit_count": repair_history_unit_count,
+        "auto_recovered_units": auto_recovered_units,
+        "claim_boundary": (
+            "S2 workflow metrics summarize bound competition-run workflow metrics only; they do not prove "
+            "semantic acceptance or unsafe reduction unless the underlying metrics already mark unsafe_reduction "
+            "as measured with baseline/current counts."
+        ),
+    }
+
+
+def summarize_unsafe_reduction(metrics: list[dict[str, Any]]) -> dict[str, Any]:
+    if not metrics:
+        return {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": None,
+            "reduced_by": None,
+            "ratio": None,
+        }
+    baseline_total = 0
+    current_total = 0
+    for metric in metrics:
+        unsafe_reduction = metric.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            return {
+                "status": "not_measured",
+                "baseline_total_unsafe": None,
+                "current_total_unsafe": None,
+                "reduced_by": None,
+                "ratio": None,
+            }
+        baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+        current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+        reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+        if baseline is None or current is None or reduced_by is None or baseline - current != reduced_by:
+            raise SystemExit("measured unsafe_reduction requires consistent baseline/current/reduced_by counts")
+        baseline_total += baseline
+        current_total += current
+    return {
+        "status": "measured",
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": baseline_total - current_total,
+        "ratio": 0.0 if baseline_total == 0 else current_total / baseline_total,
+    }
+
+
+def resolve_bound_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
+    checked_relative_artifact_path(value)
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(repo_root.resolve())
+        except ValueError:
+            continue
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def checked_relative_artifact_path(value: str) -> None:
+    candidate = Path(value)
+    require(not candidate.is_absolute(), f"artifact path must be relative: {value}")
+    require(candidate.drive == "", f"artifact path must not include a drive: {value}")
+    require("\\" not in value, f"artifact path must use POSIX separators: {value}")
+    require("~" not in candidate.parts, f"artifact path must not include ~: {value}")
+    require(".." not in candidate.parts, f"artifact path must not include ..: {value}")
+
+
+def weighted_metric(metrics: list[dict[str, Any]], key: str, units_total: int) -> float:
+    if units_total <= 0:
+        return 0.0
+    numerator = 0.0
+    for metric in metrics:
+        value = metric.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            numerator += float(value) * nonnegative_int(metric.get("units_total"))
+    return numerator / units_total
+
+
+def require_count_mapping(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    for key, count in value.items():
+        if isinstance(key, str) and isinstance(count, int) and count >= 0:
+            result[key] = count
+    return result
+
+
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def nonnegative_int(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def nonnegative_count(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def rel(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def require_int(payload: dict[str, Any], key: str) -> int:

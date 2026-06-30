@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--coverage-report", type=Path)
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_EVIDENCE_ROOT)
+    parser.add_argument("--competition-summary", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
@@ -34,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         repo_root,
         coverage_report_path=args.coverage_report,
         evidence_root=args.evidence_root,
+        competition_summary_paths=args.competition_summary,
     )
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
@@ -49,6 +51,7 @@ def build_report(
     *,
     coverage_report_path: Path | None = None,
     evidence_root: Path = DEFAULT_EVIDENCE_ROOT,
+    competition_summary_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     coverage_report = milestone_release_report.load_coverage_report(
@@ -63,6 +66,12 @@ def build_report(
     candidate_inventory = require_dict(inventory, "candidate_generation")
     evidence_dir = evidence_root if evidence_root.is_absolute() else repo_root / evidence_root
     slice_gate_contexts = build_slice_gate_contexts(repo_root, evidence_dir)
+    s2_workflow_metrics = milestone_release_report.summarize_s2_workflow_metrics(
+        milestone_release_report.load_competition_workflow_metrics(
+            repo_root,
+            competition_summary_paths=competition_summary_paths or [],
+        )
+    )
 
     return {
         "schema_version": 1,
@@ -89,6 +98,7 @@ def build_report(
                 candidate_inventory.get("route_decision_artifact_count", 0),
                 "candidate_generation.route_decision_artifact_count",
             ),
+            "s2_workflow_metrics": s2_workflow_metrics,
             "candidate_generation_inventory": candidate_inventory,
             "tracked_slice_gate_contexts": len(slice_gate_contexts),
             "slice_gate_contexts": slice_gate_contexts,
@@ -99,6 +109,7 @@ def build_report(
             "slice_gate_contexts": "one row per validation/evidence/<target>/auto-translation/<slice> directory with route/profile/final gate evidence",
             "translation_coverage_numerator": "translator-generated Rust drafts with semantic-pass status backed by L3 accepted/passed route evidence",
             "accepted_evidence_semantic_pass_count": "accepted external evidence contexts reported separately and excluded from translation_coverage_numerator",
+            "s2_workflow_metrics": "S2 repair, retry, and unsafe-reduction workflow metrics loaded from hash-bound competition-run summaries when provided",
         },
         "claim_boundary": (
             "Route governance metrics are not semantic acceptance evidence; capability_delta_ledger entries "

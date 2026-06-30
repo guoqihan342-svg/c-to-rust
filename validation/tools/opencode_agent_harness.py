@@ -932,11 +932,18 @@ def write_route_governance_metrics_profile_report(
         repo_root,
         coverage_report_path=Path(coverage_report_text) if coverage_report_text is not None else None,
         evidence_root=Path(evidence_root_text or "validation/evidence"),
+        competition_summary_paths=route_governance_competition_summary_paths(out_root),
     )
     report_path = out_root / "summary" / "route-governance-metrics-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    s2_workflow_metrics = metrics.get("s2_workflow_metrics") if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
+    unsafe_reduction = (
+        s2_workflow_metrics.get("unsafe_reduction")
+        if isinstance(s2_workflow_metrics.get("unsafe_reduction"), dict)
+        else {}
+    )
     binding = {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
@@ -945,9 +952,19 @@ def write_route_governance_metrics_profile_report(
         "translation_coverage_numerator": int(metrics.get("translation_coverage_numerator", 0)),
         "accepted_evidence_semantic_pass_count": int(metrics.get("accepted_evidence_semantic_pass_count", 0)),
         "tracked_slice_gate_contexts": int(metrics.get("tracked_slice_gate_contexts", 0)),
+        "s2_workflow_run_count": int(s2_workflow_metrics.get("run_count", 0)),
+        "s2_unsafe_reduction_status": str(unsafe_reduction.get("status", "not_measured")),
         "claim_boundary": str(payload.get("claim_boundary", "")),
     }
     return {"binding": binding, "payload": payload}
+
+
+def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    if not summary_path.exists():
+        return []
+    summary = load_json(summary_path)
+    return [summary_path] if isinstance(summary.get("workflow_metrics"), dict) else []
 
 
 def profile_required_string(profile: dict[str, Any], field: str) -> str:

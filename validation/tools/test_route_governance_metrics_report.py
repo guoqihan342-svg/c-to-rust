@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -186,6 +187,31 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
 
             self.assertIn("coverage report status must be passed", str(raised.exception))
 
+    def test_report_exposes_s2_workflow_metrics_from_competition_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="route-governance-metrics-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            self._write_competition_summary_with_metrics(summary_path)
+
+            report = route_governance_metrics_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                evidence_root=Path("validation/evidence"),
+                competition_summary_paths=[summary_path],
+            )
+
+            s2 = report["metrics"]["s2_workflow_metrics"]
+            self.assertEqual(s2["run_count"], 1)
+            self.assertEqual(s2["units_total"], 1)
+            self.assertEqual(s2["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(s2["unsafe_reduction"]["reduced_by"], 2)
+            self.assertEqual(s2["avg_repair_rounds"], 1.0)
+            self.assertEqual(s2["auto_recovery_rate"], 1.0)
+            self.assertEqual(s2["repair_history_unit_count"], 1)
+            self.assertIn("S2 repair", report["denominators"]["s2_workflow_metrics"])
+
     def test_core_ci_runs_route_governance_metrics_report_gate(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 
@@ -234,6 +260,111 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
     def _write_json(self, path: Path, payload: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _write_competition_summary_with_metrics(self, summary_path: Path) -> None:
+        metrics = {
+            "schema_version": 1,
+            "run_id": "run-measured",
+            "proof_class": "local-simulation",
+            "units_total": 1,
+            "units_converged": 1,
+            "units_baseline_only": 0,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 3,
+                "current_total_unsafe": 1,
+                "reduced_by": 2,
+                "ratio": 1 / 3,
+            },
+            "avg_repair_rounds": 1.0,
+            "auto_recovery_rate": 1.0,
+            "human_interventions": 0,
+            "always_compiles": True,
+            "always_equivalent": True,
+            "fail_closed_count": 0,
+            "root_cause_counts": {},
+            "wall_clock_seconds": 8,
+            "llm_calls": 2,
+            "per_unit_statuses": [
+                {
+                    "unit_id": "demo/demo-add-one",
+                    "status": "converged",
+                    "repair_rounds": 1,
+                    "auto_recovered": True,
+                    "repair_history": {
+                        "patch_events_path": "retry-repair-history-demo.jsonl",
+                        "patch_events_sha256": "2" * 64,
+                        "statuses": ["failed", "verified"],
+                        "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback.json"],
+                        "verified": True,
+                    },
+                }
+            ],
+        }
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        for unit in metrics["per_unit_statuses"]:
+            repair_history = unit.get("repair_history")
+            if not isinstance(repair_history, dict):
+                continue
+            patch_events_path = summary_path.parent / repair_history["patch_events_path"]
+            patch_events_path.write_text('{"status":"verified"}\n', encoding="utf-8")
+            repair_history["patch_events_sha256"] = sha256_file(patch_events_path)
+        metrics_path = summary_path.parent / "workflow-metrics.json"
+        metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        summary_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "run_id": "run-measured",
+                    "proof_class": "local-simulation",
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "profile_sha256": "0" * 64,
+                    "clang_source": "missing",
+                    "cargo_mirror_activation": {
+                        "method": "CARGO_HOME",
+                        "path": "config/competition-env/cargo",
+                        "config_file": "config/competition-env/cargo/config.toml",
+                    },
+                    "elapsed_seconds": metrics["wall_clock_seconds"],
+                    "translator_version": "test",
+                    "slices": {
+                        "attempted": metrics["units_total"],
+                        "typed_ir_generated": metrics["units_converged"],
+                        "compiled": metrics["units_total"],
+                        "semantic_pass": metrics["units_converged"],
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                    "unsafe_budget": {
+                        "status": "passed",
+                        "total_first_party_non_test_unsafe": metrics["unsafe_reduction"]["current_total_unsafe"],
+                        "ratio": metrics["unsafe_reduction"]["ratio"],
+                    },
+                    "workflow_metrics": {
+                        "path": "workflow-metrics.json",
+                        "sha256": sha256_file(metrics_path),
+                    },
+                    "artifact_roots": [
+                        "target/competition-out/evidence",
+                        "target/competition-out/summary",
+                        "target/competition-out/logs",
+                    ],
+                    "final_gate": {
+                        "status": "passed",
+                        "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 if __name__ == "__main__":
