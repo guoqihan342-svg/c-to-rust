@@ -541,6 +541,44 @@ def record_worker_summary(
     return {"status": "recorded", "summary": summary_rel, "sha256": summary_hash}
 
 
+def record_artifact(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    kind: str,
+    path: Path,
+    status: str,
+    semantic_role: str,
+    payload: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    artifact_rel = repo_relative(path, repo_root=repo_root)
+    artifact_sha = sha256_file(path)
+    connection.execute(
+        """
+        insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(repo_rel_path) do update set
+          sha256=excluded.sha256,
+          status=excluded.status,
+          payload_json=excluded.payload_json
+        """,
+        (
+            run_id,
+            worker_id,
+            kind,
+            artifact_rel,
+            artifact_sha,
+            status,
+            semantic_role,
+            json.dumps(payload, sort_keys=True),
+            now_text(),
+        ),
+    )
+    return {"path": artifact_rel, "sha256": artifact_sha}
+
+
 def run_worker(
     *,
     db_path: Path,
@@ -604,7 +642,9 @@ def run_worker(
     if mode == "deterministic":
         argv = worker_command
         runner_kind = "repo-local-c2rust-migrator"
+        handoff_contract = None
     elif mode == "opencode":
+        handoff_contract_path = report_dir / "opencode-handoff-contract.json"
         argv = build_opencode_run_argv(
             opencode_command=opencode_command,
             opencode_model=opencode_model,
@@ -614,9 +654,21 @@ def run_worker(
             worker_command=worker_command,
             request_path=request_path,
             summary_path=summary_path,
+            handoff_contract_path=handoff_contract_path,
             repo_root=repo_root,
         )
         runner_kind = "opencode-run"
+        handoff_contract = write_opencode_handoff_contract(
+            run_id=run_id,
+            worker_id=worker_id,
+            attempt_number=attempt_number,
+            request_path=request_path,
+            summary_path=summary_path,
+            contract_path=handoff_contract_path,
+            worker_command=worker_command,
+            opencode_argv=argv,
+            repo_root=repo_root,
+        )
     else:
         raise SystemExit(f"unsupported worker mode: {mode}")
 
@@ -640,6 +692,15 @@ def run_worker(
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
     stdout_path.write_text(completed.stdout or "", encoding="utf-8")
     stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    opencode_session_evidence = None
+    if mode == "opencode":
+        opencode_session_evidence = write_opencode_session_evidence(
+            completed=completed,
+            evidence_path=logs_dir / "opencode-session-evidence.json",
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+        )
 
     recorded: dict[str, Any] | None = None
     summary_status = "missing-summary"
@@ -682,6 +743,8 @@ def run_worker(
             attempt_number=attempt_number,
             retry_of=retry_of,
             rollback_evidence=rollback_evidence,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
         )
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -702,6 +765,10 @@ def run_worker(
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
     }
+    if handoff_contract is not None:
+        report["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        report["opencode_session_evidence"] = opencode_session_evidence
     if retry_of:
         report["retry_of"] = retry_of
     if rollback_evidence is not None:
@@ -737,6 +804,32 @@ def run_worker(
             event_payload["retry_of"] = retry_of
         if rollback_evidence is not None:
             event_payload["rollback_evidence"] = rollback_evidence
+        if handoff_contract is not None:
+            event_payload["handoff_contract"] = handoff_contract
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-handoff-contract",
+                path=repo_path(Path(handoff_contract["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-command-contract",
+                payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_session_evidence is not None:
+            event_payload["opencode_session_evidence"] = opencode_session_evidence
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-session-evidence",
+                path=repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-session-evidence",
+                payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
         record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
         if repair_hint is not None:
             record_repair_hint(connection, hint=repair_hint)
@@ -835,6 +928,8 @@ def worker_repair_hint_payload(
     attempt_number: int,
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
+    handoff_contract: dict[str, Any] | None = None,
+    opencode_session_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     target_id = str(request.get("target_id", "unknown"))
     slice_id = str(request.get("slice_id", "unknown"))
@@ -852,7 +947,7 @@ def worker_repair_hint_payload(
         "--hint-id",
         hint_id,
     ]
-    return {
+    hint = {
         "schema_version": SCHEMA_VERSION,
         "hint_id": hint_id,
         "run_id": run_id,
@@ -889,6 +984,11 @@ def worker_repair_hint_payload(
         "retry_command": retry_command,
         "revalidate_gate": "competition-run-summary.final_gate.status == passed",
     }
+    if handoff_contract is not None:
+        hint["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        hint["opencode_session_evidence"] = opencode_session_evidence
+    return hint
 
 
 def repair_attempt_payload(
@@ -1105,24 +1205,31 @@ def build_opencode_run_argv(
     request_path: Path,
     summary_path: Path,
     repo_root: Path,
+    handoff_contract_path: Path | None = None,
 ) -> list[str]:
     if not opencode_command:
         raise SystemExit("opencode command must not be empty")
     command_line = subprocess.list2cmdline(worker_command)
-    prompt = "\n".join(
-        [
-            "Execute this assigned C-to-Rust worker exactly once.",
-            "Do not inspect an existing summary before running the command.",
-            "Delete the expected summary file if it already exists, then execute the command exactly once.",
-            "Run the repo-local deterministic command below, then stop.",
-            "Do not run substitute diagnostics instead of the command.",
-            "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
-            f"Command: {json.dumps(worker_command)}",
-            f"Command line: {command_line}",
-            f"Request: {repo_relative(request_path, repo_root=repo_root)}",
-            f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
-        ]
-    )
+    prompt_lines = [
+        "Execute this assigned C-to-Rust worker exactly once.",
+        "Do not inspect an existing summary before running the command.",
+        "Delete the expected summary file if it already exists, then execute the command exactly once.",
+        "Run the repo-local deterministic command below, then stop.",
+        "Do not run substitute diagnostics instead of the command.",
+        "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
+        f"Command: {json.dumps(worker_command)}",
+        f"Command line: {command_line}",
+        f"Request: {repo_relative(request_path, repo_root=repo_root)}",
+        f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
+    ]
+    if handoff_contract_path is not None:
+        prompt_lines.extend(
+            [
+                "Read the handoff contract before running the command.",
+                f"Handoff contract: {repo_relative(handoff_contract_path, repo_root=repo_root)}",
+            ]
+        )
+    prompt = "\n".join(prompt_lines)
     argv = [
         opencode_command,
         "run",
@@ -1141,6 +1248,97 @@ def build_opencode_run_argv(
         argv.append("--dangerously-skip-permissions")
     argv.append(prompt)
     return argv
+
+
+def write_opencode_handoff_contract(
+    *,
+    run_id: str,
+    worker_id: str,
+    attempt_number: int,
+    request_path: Path,
+    summary_path: Path,
+    contract_path: Path,
+    worker_command: list[str],
+    opencode_argv: list[str],
+    repo_root: Path,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "runner_kind": "opencode-run",
+        "request_path": repo_relative(request_path, repo_root=repo_root),
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_command": worker_command,
+        "worker_command_line": subprocess.list2cmdline(worker_command),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
+    }
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_session_evidence(
+    *,
+    completed: subprocess.CompletedProcess[str],
+    evidence_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+) -> dict[str, str]:
+    stdout = completed.stdout or ""
+    evidence: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "process_returncode": int(completed.returncode),
+        "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
+        "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
+    }
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        events = []
+        jsonl_error = None
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as line_error:
+                jsonl_error = line_error
+                break
+        if events and jsonl_error is None:
+            evidence.update(
+                {
+                    "parsed": True,
+                    "format": "jsonl",
+                    "session_events": events,
+                }
+            )
+        else:
+            evidence.update(
+                {
+                    "parsed": False,
+                    "parse_error": str(jsonl_error or error),
+                    "raw_output": stdout[:20000],
+                }
+            )
+    else:
+        evidence.update(
+            {
+                "parsed": True,
+                "format": "json",
+                "session": parsed,
+            }
+        )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
 
 
 def write_merge_plan(

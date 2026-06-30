@@ -59,6 +59,7 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - `run-worker` must delete any stale expected summary before execution and then accept only the assigned `<isolated_out_root>/summary/competition-run-summary.json`.
 - `record-worker-summary` must reject summaries outside that assigned expected summary path, even when the path stays inside the repository.
 - If an OpenCode process exits 0 but does not write the expected summary, record `missing-summary` repair evidence; do not treat process success or chat text as acceptance.
+- In `--mode opencode`, require `run-worker` to write a machine-readable handoff contract and OpenCode session evidence, and bind both from the worker report, event stream, repair hint, and artifact index.
 - `retry-worker` must reuse the same worker, ledger assignment, out-root, and repair hint; the revalidation result comes only from the newly written final gate.
 - `retry-worker` may count a retry as revalidated only from the newly written final gate; repair history, rollback ids, or an OpenCode process exit code are audit signals, not semantic acceptance.
 - The SQLite ledger is scheduling, lease, recovery, and artifact index state. Semantic evidence still comes only from on-disk summaries, evidence, workflow metrics, and validators.

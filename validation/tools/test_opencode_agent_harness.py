@@ -610,6 +610,115 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(hint_rows, [("demo", "demo-add-one", "worker_process_failed", "open")])
 
+    def test_opencode_run_worker_writes_machine_readable_handoff_contract(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(argv, 0, stdout="opencode did not write summary\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["summary_status"], "missing-summary")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            contract_binding = report["handoff_contract"]
+            contract_path = REPO_ROOT / contract_binding["path"]
+            self.assertTrue(contract_path.exists())
+            self.assertRegex(contract_binding["sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(contract_binding["sha256"], harness.sha256_file(contract_path))
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            self.assertEqual(contract["runner_kind"], "opencode-run")
+            self.assertEqual(contract["request_path"], repo_rel(out_root / "harness" / "assignments" / "worker-a-request.json"))
+            self.assertEqual(
+                contract["expected_summary_path"],
+                repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
+            )
+            self.assertEqual(contract["worker_command"][1:4], ["scripts/c2rust-migrator.py", "--phase", "migrate"])
+            self.assertEqual(contract["opencode_argv"], result["argv"])
+            self.assertIn("Read the handoff contract before running the command.", contract["prompt"])
+            self.assertIn(contract_binding["path"], contract["prompt"])
+            session_binding = report["opencode_session_evidence"]
+            session_path = REPO_ROOT / session_binding["path"]
+            self.assertTrue(session_path.exists())
+            self.assertEqual(session_binding["sha256"], harness.sha256_file(session_path))
+            session = json.loads(session_path.read_text(encoding="utf-8"))
+            self.assertIs(session["parsed"], False)
+            self.assertEqual(session["process_returncode"], 0)
+            self.assertIn("opencode did not write summary", session["raw_output"])
+            hint_payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints")[0][0])
+            self.assertEqual(hint_payload["handoff_contract"], contract_binding)
+            self.assertEqual(hint_payload["opencode_session_evidence"], session_binding)
+            event_payload = json.loads(
+                fetch_rows(db_path, "select payload_json from events where event_type='worker_executed'")[-1][0]
+            )
+            self.assertEqual(event_payload["handoff_contract"], contract_binding)
+            self.assertEqual(event_payload["opencode_session_evidence"], session_binding)
+            artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
+            self.assertIn(
+                ("opencode-handoff-contract", contract_binding["path"], "agent-command-contract"),
+                artifact_rows,
+            )
+            self.assertIn(
+                ("opencode-session-evidence", session_binding["path"], "agent-session-evidence"),
+                artifact_rows,
+            )
+
+    def test_opencode_session_evidence_parses_json_lines_stdout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            logs_dir = out_root / "workers" / "worker-a" / "logs"
+            logs_dir.mkdir(parents=True)
+            stdout_path = logs_dir / "stdout.log"
+            stderr_path = logs_dir / "stderr.log"
+            stdout = "\n".join(
+                [
+                    json.dumps({"type": "step_start", "sessionID": "session-1"}),
+                    json.dumps({"type": "text", "part": {"text": "done"}}),
+                    "",
+                ]
+            )
+            stdout_path.write_text(stdout, encoding="utf-8")
+            stderr_path.write_text("", encoding="utf-8")
+
+            binding = harness.write_opencode_session_evidence(
+                completed=subprocess.CompletedProcess(["opencode"], 0, stdout, ""),
+                evidence_path=logs_dir / "opencode-session-evidence.json",
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                repo_root=REPO_ROOT,
+            )
+
+            evidence = json.loads((REPO_ROOT / binding["path"]).read_text(encoding="utf-8"))
+            self.assertIs(evidence["parsed"], True)
+            self.assertEqual(evidence["format"], "jsonl")
+            self.assertEqual([event["type"] for event in evidence["session_events"]], ["step_start", "text"])
+
     def test_opencode_worker_prompt_forces_exact_command_and_fresh_summary(self) -> None:
         argv = harness.build_opencode_run_argv(
             opencode_command="opencode",

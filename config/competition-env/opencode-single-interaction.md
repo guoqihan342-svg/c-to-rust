@@ -102,6 +102,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --mode opencode \
   --opencode-variant max
 
+`--mode opencode` 会在 worker 隔离目录写出 `harness/opencode-handoff-contract.json` 和 `logs/opencode-session-evidence.json`，并由 `harness/run-worker-report.json`、SQLite event、repair hint 和 artifact index 绑定。前者记录 exact deterministic worker command、request、expected summary 和 OpenCode prompt；后者解析 OpenCode `--format json` 的 JSON/JSONL 输出，解析失败时也保留 raw fallback。二者只证明 agent 执行审计链路，不替代 `competition-run-summary.json`、final gate 或 validator。
+
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \

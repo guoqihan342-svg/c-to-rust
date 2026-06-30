@@ -100,6 +100,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --mode opencode \
   --opencode-variant max
 
+`--mode opencode` writes `harness/opencode-handoff-contract.json` and `logs/opencode-session-evidence.json` under the isolated worker directory, then binds both from `harness/run-worker-report.json`, the SQLite event stream, the repair hint, and the artifact index. The contract records the exact deterministic worker command, request, expected summary, and OpenCode prompt; the session evidence parses OpenCode `--format json` JSON/JSONL output and keeps a raw fallback when parsing fails. These artifacts prove the agent audit chain only; they do not replace `competition-run-summary.json`, the final gate, or validators.
+
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
