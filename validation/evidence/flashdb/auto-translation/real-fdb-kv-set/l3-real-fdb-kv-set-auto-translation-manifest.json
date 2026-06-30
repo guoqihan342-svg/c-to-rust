@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
+    "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
     "status": "skipped"
   },
   "cache": {
@@ -17,7 +17,7 @@
     },
     "build_profile_hash": "c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
     "c2rust_baseline_identity": {
-      "sha256": "249e98ede63e665cafbeb34906820b8ded13d9756bab2f0e9a0e4e3e3d74d675",
+      "sha256": "c1ceb5c9f558d2834b1547ab51a2b8838368e2b0eb4ade825d1278567d29d60f",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -76,6 +76,7 @@
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-kv-set.json",
+      "--emit-clang-dry-run",
       "--emit-clang-lowering-report"
     ],
     "competition_environment_identity": {
@@ -86,19 +87,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
+        "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "f8af1b3ec515d97d4e66793805fb9f79594c3a7ea895a2f73144e3c2c338d03c",
+        "sha256": "a3b571ab5f200a9840a0a14c91cbc2bacff82bfb5e1e8a7fb5a50a8c79df5972",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "0c9c15a99f18f57247446fba6e4a5a8755816d75efe47e7b431f6a2fba606b64",
+        "sha256": "32a1b0ff1a8bf4b66b85d46b6532b492bd7dba503918a2f6ec2ad54cae3db351",
         "status": "blocked"
       }
     },
@@ -143,7 +144,7 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "1770b4ab69e8b48178bbcf8b4d76cc77057b567cc8e77739644943c3c782dd5b",
+      "sha256": "9f3558e3f7cb77397ee76b987f83991cca8e71f2c960cd4d9340971dfd20dc5b",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -173,12 +174,13 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_feature_set": [
+      "clang-frontend",
       "clang-lowering-report"
     ],
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "58beb37c0c872d23c9ce69eb34bf1a50d06ddfe46f4c5b83a5842f29d2951cf1",
+      "sha256": "8b0b400ce6dbdd6178580bd9f5644dca2cdeb291fad5ab7db46311295cfe5d63",
       "status": "blocked"
     }
   },
@@ -193,8 +195,8 @@
       "risk_level": "none"
     },
     "external_callee_scope": {
-      "blocked_count": 2,
-      "declared_count": 2,
+      "blocked_count": 0,
+      "declared_count": 4,
       "declared_spec_count": 4,
       "declared_spec_names": [
         "fdb_blob_make",
@@ -203,7 +205,7 @@
         "strlen"
       ],
       "semantics_verified": false,
-      "status": "blocked",
+      "status": "compile_context_only",
       "stub_kind": "mixed_context"
     },
     "generated_draft_semantic_pass": false,
@@ -278,32 +280,14 @@
         "-o",
         "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
       ],
-      "attempted": true,
-      "compiler_candidates": [
-        "cc",
-        "gcc",
-        "clang"
-      ],
-      "compiler_name": "cc",
-      "compiler_path": "/usr/bin/cc",
+      "attempted": false,
       "diagnostics": [
-        "C oracle compile command failed; no oracle evidence accepted."
+        "C oracle compile execution skipped by --skip-c-oracle."
       ],
-      "execution_argv": [
-        "C:\\WINDOWS\\system32\\wsl.exe",
-        "-e",
-        "sh",
-        "-lc",
-        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc -I/mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
-      ],
-      "requested_compiler": "cc",
-      "returncode": 1,
       "semantic_pass": false,
-      "status": "compile_failed",
-      "stderr": "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:1: error: unknown type name \u2018fdb_err_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      | ^~~~~~~~~\n/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:22: error: unknown type name \u2018fdb_kvdb_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      |                      ^~~~~~~~~~\ncc1: fatal error: /mnt/f/agent/crustpaper/0630/external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c: No such file or directory\ncompilation terminated.\n",
-      "stdout": "",
-      "toolchain_adapter": "wsl",
-      "toolchain_status_after_attempt": "COMPILE_FAILED",
+      "status": "skipped_by_flag",
+      "toolchain_adapter": "not_executed",
+      "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -357,9 +341,9 @@
     "schema_version": 1,
     "semantic_pass": false,
     "slice_id": "real-fdb-kv-set",
-    "status": "DRAFT_GENERATED",
+    "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
     "target_id": "flashdb",
-    "toolchain_status": "COMPILE_FAILED"
+    "toolchain_status": "DRAFT_NOT_EXECUTED"
   },
   "patch": {
     "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
@@ -393,16 +377,11 @@
         "human_action_required": true,
         "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
         "ir_feature_gap": {
-          "blocked_callees": [
-            "fdb_kv_del",
-            "fdb_kv_set_blob"
-          ],
           "evidence_refs": [
-            "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-            "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json"
+            "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
           ],
-          "kind": "external_direct_callee_context",
-          "source": "auto_translation_plan.translation_summary.external_direct_callee_blocks"
+          "kind": "blocked_artifact",
+          "source": "route_decision.rationale"
         },
         "oracle_fixture_gap": {
           "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
@@ -411,9 +390,9 @@
         "repair_id": "repair-route-refused-1",
         "route_decision": "L4",
         "smallest_next_test": {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
-          "expected_gate": "external direct callees are declared, stubbed, or kept blocked before candidate acceptance",
-          "kind": "external_callee_context_regression"
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+          "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
+          "kind": "route_refusal_regression"
         },
         "source_span": {
           "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
@@ -464,7 +443,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
+    "repo_commit": "d0833e6148d06c71459898694d5ef31b0503d57a",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
@@ -520,46 +499,15 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "f8af1b3ec515d97d4e66793805fb9f79594c3a7ea895a2f73144e3c2c338d03c",
+    "sha256": "a3b571ab5f200a9840a0a14c91cbc2bacff82bfb5e1e8a7fb5a50a8c79df5972",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-_3_tir8p F:\\agent\\crustpaper\\0630\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
-    "error_count": 0,
+    "command": null,
     "errors": [],
     "external_callee_context": {
-      "blocked_callees": [
-        {
-          "definition_status": "real_source_bound",
-          "name": "fdb_kv_del",
-          "reason": "unsupported_external_direct_callee_signature",
-          "semantics_verified": false,
-          "signature_ref": "sig-fdb-kv-del",
-          "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
-          "stub_kind": "none",
-          "unsupported_reasons": [
-            "unsupported_parameter_type:db",
-            "unsupported_parameter_type:key",
-            "unsupported_return_type"
-          ]
-        },
-        {
-          "definition_status": "real_source_bound",
-          "name": "fdb_kv_set_blob",
-          "reason": "unsupported_external_direct_callee_signature",
-          "semantics_verified": false,
-          "signature_ref": "sig-fdb-kv-set-blob",
-          "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
-          "stub_kind": "none",
-          "unsupported_reasons": [
-            "unsupported_parameter_type:blob",
-            "unsupported_parameter_type:db",
-            "unsupported_parameter_type:key",
-            "unsupported_return_type"
-          ]
-        }
-      ],
-      "blocked_count": 2,
+      "blocked_callees": [],
+      "blocked_count": 0,
       "declared_callees": [
         {
           "name": "fdb_blob_make",
@@ -568,13 +516,25 @@
           "stub_kind": "accepted_named_slice_evidence"
         },
         {
+          "name": "fdb_kv_del",
+          "semantics_verified": false,
+          "signature_ref": "sig-fdb-kv-del",
+          "stub_kind": "compile_only"
+        },
+        {
+          "name": "fdb_kv_set_blob",
+          "semantics_verified": false,
+          "signature_ref": "sig-fdb-kv-set-blob",
+          "stub_kind": "compile_only"
+        },
+        {
           "name": "strlen",
           "semantics_verified": false,
           "signature_ref": "sig-stdlib-strlen",
           "stub_kind": "compile_only"
         }
       ],
-      "declared_count": 2,
+      "declared_count": 4,
       "declared_spec_count": 4,
       "declared_spec_names": [
         "fdb_blob_make",
@@ -582,15 +542,10 @@
         "fdb_kv_set_blob",
         "strlen"
       ],
-      "status": "blocked"
+      "status": "recorded"
     },
     "schema_version": 1,
-    "self_healing": {
-      "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
-      "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-patch-events.jsonl",
-      "status": "none"
-    },
-    "status": "passed"
+    "status": "skipped"
   },
   "schema_version": 1,
   "semantic_pass": false,
@@ -618,7 +573,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "0c9c15a99f18f57247446fba6e4a5a8755816d75efe47e7b431f6a2fba606b64",
+    "sha256": "32a1b0ff1a8bf4b66b85d46b6532b492bd7dba503918a2f6ec2ad54cae3db351",
     "status": "blocked"
   }
 }

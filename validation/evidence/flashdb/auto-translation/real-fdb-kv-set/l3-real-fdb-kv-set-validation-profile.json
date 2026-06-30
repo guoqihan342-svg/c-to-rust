@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
+        "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -41,7 +41,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
+          "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -256,8 +256,8 @@
   },
   "profile": "L4-dev",
   "required_gate_status": {
-    "c_oracle_diff": "DRAFT_GENERATED",
-    "compile": "passed"
+    "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "compile": "skipped"
   },
   "required_gates": [
     "compile",
@@ -295,8 +295,12 @@
       "reason": "route_refused"
     },
     {
+      "gate": "compile",
+      "reason": "skipped"
+    },
+    {
       "gate": "c_oracle_diff",
-      "reason": "DRAFT_GENERATED"
+      "reason": "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
     }
   ],
   "slice_id": "real-fdb-kv-set",

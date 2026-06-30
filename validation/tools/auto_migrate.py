@@ -334,6 +334,74 @@ def is_modeled_strlen_contract(
     return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
 
 
+def is_flashdb_kv_external_context_callee(spec: dict[str, Any], name: str) -> bool:
+    return (
+        spec.get("target_id") == "flashdb"
+        and spec.get("slice_id") == "real-fdb-kv-set"
+        and name in {"fdb_kv_del", "fdb_kv_set_blob"}
+    )
+
+
+def is_const_char_pointer_type(c_type: str) -> bool:
+    return compact_c_type(c_type) in {"constchar*", "charconst*"}
+
+
+def is_flashdb_kv_external_context_signature(
+    spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    if not is_flashdb_kv_external_context_callee(spec, name):
+        return False
+    definition_status = item.get("definition_status") or signature.get("definition_status")
+    if definition_status != "real_source_bound":
+        return False
+    source_ref = str(item.get("source_ref") or signature.get("source_ref") or "")
+    if source_ref != f"src/fdb_kvdb.c#{name}":
+        return False
+    if compact_c_type(return_type) != "fdb_err_t":
+        return False
+    if name == "fdb_kv_del":
+        return (
+            len(parameters) == 2
+            and parameters[0]["name"] == "db"
+            and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
+            and parameters[1]["name"] == "key"
+            and is_const_char_pointer_type(parameters[1]["c_type"])
+        )
+    return (
+        len(parameters) == 3
+        and parameters[0]["name"] == "db"
+        and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
+        and parameters[1]["name"] == "key"
+        and is_const_char_pointer_type(parameters[1]["c_type"])
+        and parameters[2]["name"] == "blob"
+        and compact_c_type(parameters[2]["c_type"]) == "fdb_blob_t"
+    )
+
+
+def flashdb_kv_external_context_rust_type(
+    spec: dict[str, Any],
+    name: str,
+    c_type: str,
+) -> str | None:
+    primitive = primitive_rust_type(c_type)
+    if primitive is not None:
+        return primitive
+    if not is_flashdb_kv_external_context_callee(spec, name):
+        return None
+    return {
+        "fdb_err_t": "i32",
+        "fdb_kvdb_t": "*mut core::ffi::c_void",
+        "constchar*": "*const core::ffi::c_char",
+        "charconst*": "*const core::ffi::c_char",
+        "fdb_blob_t": "*mut core::ffi::c_void",
+    }.get(compact_c_type(c_type))
+
+
 def accepted_named_slice_evidence_for_callee(spec: dict[str, Any], name: str) -> dict[str, Any] | None:
     if spec.get("target_id") != "flashdb" or name != "fdb_blob_make":
         return None
@@ -415,14 +483,17 @@ def external_callee_descriptor(
 ) -> dict[str, Any]:
     name = str(item.get("name") or signature.get("function") or "")
     signature_ref = str(item.get("signature_ref") or signature.get("id") or name)
-    parameters = [
-        {
-            "name": str(param.get("name") or f"arg{index + 1}"),
-            "c_type": str(param.get("c_type") or param.get("type") or ""),
-        }
-        for index, param in enumerate(signature.get("parameters", []))
-    ]
+    parameters = []
+    for index, param in enumerate(signature.get("parameters", [])):
+        c_type = str(param.get("c_type") or param.get("type") or "")
+        parameters.append(
+            {
+                "name": str(param.get("name") or f"arg{index + 1}"),
+                "c_type": c_type,
+            }
+        )
     return_type = str(signature.get("return_type") or signature.get("returns") or "")
+    return_rust_type = None
     unsupported_reasons: list[str] = []
     if not signature:
         unsupported_reasons.append("missing_signature")
@@ -439,6 +510,21 @@ def external_callee_descriptor(
     accepted_named_slice = accepted_named_slice_evidence_for_callee(spec, name)
     if accepted_named_slice:
         unsupported_reasons = []
+    flashdb_external_compile_context = is_flashdb_kv_external_context_signature(
+        spec,
+        item,
+        signature,
+        name,
+        return_type,
+        parameters,
+    )
+    if flashdb_external_compile_context:
+        unsupported_reasons = []
+        return_rust_type = flashdb_kv_external_context_rust_type(spec, name, return_type)
+        for param in parameters:
+            rust_type = flashdb_kv_external_context_rust_type(spec, name, param["c_type"])
+            if rust_type is not None:
+                param["rust_type"] = rust_type
     stub_kind = "compile_only"
     stub_boundary = item.get("stub_boundary", "compile_only")
     stub_generation = "generated_compile_only"
@@ -447,6 +533,10 @@ def external_callee_descriptor(
         stub_boundary = "stdlib_readonly_string_model"
         stub_generation = "not_emitted_modeled_stdlib"
         model_contract = "strlen_readonly_nul_terminated"
+    if flashdb_external_compile_context:
+        stub_boundary = "flashdb_external_direct_callee_context_only"
+        stub_generation = "not_emitted_flashdb_signature_context"
+        model_contract = "flashdb_external_direct_callee_signature_context"
     if accepted_named_slice:
         stub_kind = "accepted_named_slice_evidence"
         stub_boundary = "accepted_named_slice_context_only"
@@ -469,6 +559,8 @@ def external_callee_descriptor(
         "supported": not unsupported_reasons,
         "unsupported_reasons": sorted(set(unsupported_reasons)),
     }
+    if return_rust_type is not None:
+        descriptor["return_rust_type"] = return_rust_type
     if accepted_named_slice:
         descriptor["accepted_named_slice_evidence"] = accepted_named_slice
     return descriptor
@@ -738,15 +830,24 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
         if callee.get("stub_generation") in {
             "not_emitted_modeled_stdlib",
             "not_emitted_named_slice_evidence",
+            "not_emitted_flashdb_signature_context",
         }:
             continue
         name = rust_identifier(callee["name"])
         params = []
         for index, param in enumerate(callee.get("parameters", [])):
             param_name = rust_identifier(param.get("name") or f"arg{index + 1}")
-            rust_type = primitive_rust_type(param.get("c_type", "")) or "i32"
+            rust_type = (
+                param.get("rust_type")
+                or primitive_rust_type(param.get("c_type", ""))
+                or "i32"
+            )
             params.append(f"{param_name}: {rust_type}")
-        return_type = primitive_rust_type(callee.get("return_type", "")) or "i32"
+        return_type = (
+            callee.get("return_rust_type")
+            or primitive_rust_type(callee.get("return_type", ""))
+            or "i32"
+        )
         signature = f"fn {name}({', '.join(params)}) -> {return_type}"
         if signature in text:
             continue

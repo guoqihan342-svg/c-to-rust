@@ -2,15 +2,10 @@
   "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
   "capability_delta": [
     {
-      "blocked_callees": [
-        "fdb_kv_del",
-        "fdb_kv_set_blob"
-      ],
-      "construct_id": "external_direct_callee_context",
-      "delta_id": "cap-real-fdb-kv-set-external_direct_callee_context",
+      "blocked_callees": [],
+      "construct_id": "blocked_artifact",
+      "delta_id": "cap-real-fdb-kv-set-blocked_artifact",
       "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
       ],
@@ -18,8 +13,8 @@
       "kind": "refusal_classification",
       "negative_coverage": [
         {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
-          "kind": "external_callee_context_regression"
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+          "kind": "route_refusal_regression"
         }
       ],
       "real_c_slice": "real-fdb-kv-set",
@@ -29,11 +24,9 @@
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "external_direct_callee_context",
-      "delta_id": "gov-real-fdb-kv-set-external_direct_callee_context-evidence",
+      "construct_id": "blocked_artifact",
+      "delta_id": "gov-real-fdb-kv-set-blocked_artifact-evidence",
       "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
       ],
@@ -47,6 +40,6 @@
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim"
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
   ]
 }

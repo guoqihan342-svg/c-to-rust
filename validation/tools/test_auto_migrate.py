@@ -3412,14 +3412,14 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertEqual(context_pack["direct_call_edges"], [])
             external_context = plan["inputs"]["external_callee_context"]
-            self.assertEqual(external_context["status"], "blocked")
-            self.assertEqual(external_context["declared_count"], 2)
+            self.assertEqual(external_context["status"], "recorded")
+            self.assertEqual(external_context["declared_count"], 4)
             self.assertEqual(external_context["declared_spec_count"], 4)
             self.assertEqual(
                 set(external_context["declared_spec_names"]),
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
-            self.assertEqual(external_context["blocked_count"], 2)
+            self.assertEqual(external_context["blocked_count"], 0)
             self.assertEqual(
                 {
                     item["name"]
@@ -3427,18 +3427,15 @@ class AutoMigrateTests(unittest.TestCase):
                 },
                 {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
             )
-            blocked_callees = {
-                item["name"]
-                for item in plan["translation_summary"]["external_direct_callee_blocks"]
-            }
-            self.assertEqual(
-                blocked_callees,
-                {"fdb_kv_set_blob", "fdb_kv_del"},
-            )
+            self.assertEqual(plan["translation_summary"]["external_direct_callee_blocks"], [])
             modeled_callees = {
                 item["name"]: item
                 for item in plan["translation_summary"]["external_direct_callees"]
             }
+            self.assertEqual(
+                set(modeled_callees),
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
             self.assertIn("strlen", modeled_callees)
             self.assertEqual(modeled_callees["strlen"]["stub_kind"], "compile_only")
             self.assertEqual(modeled_callees["strlen"]["stub_boundary"], "stdlib_readonly_string_model")
@@ -3460,52 +3457,89 @@ class AutoMigrateTests(unittest.TestCase):
                     "flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"
                 )
             )
-            self.assertEqual(
-                {
-                    item["reason"]
-                    for item in plan["translation_summary"]["external_direct_callee_blocks"]
-                },
-                {"unsupported_external_direct_callee_signature"},
-            )
+            for name in ("fdb_kv_del", "fdb_kv_set_blob"):
+                self.assertEqual(modeled_callees[name]["stub_kind"], "compile_only")
+                self.assertEqual(
+                    modeled_callees[name]["stub_boundary"],
+                    "flashdb_external_direct_callee_context_only",
+                )
+                self.assertEqual(
+                    modeled_callees[name]["model_contract"],
+                    "flashdb_external_direct_callee_signature_context",
+                )
+                self.assertFalse(modeled_callees[name]["semantics_verified"])
+                self.assertEqual(modeled_callees[name]["unsupported_reasons"], [])
+                self.assertEqual(
+                    modeled_callees[name]["stub_generation"],
+                    "not_emitted_flashdb_signature_context",
+                )
             self.assertEqual(route["level"], "L4")
             self.assertEqual(route["status"], "refused")
             self.assertFalse(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(route["rationale"][0]["feature"], "blocked_artifact")
             self.assertEqual(profile["status"], "blocked")
             self.assertFalse(profile["generated_draft_semantic_pass"])
             self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
             repair = blocked["blocked_repairs"][0]
-            self.assertEqual(repair["ir_feature_gap"]["kind"], "external_direct_callee_context")
-            self.assertEqual(
-                sorted(repair["ir_feature_gap"]["blocked_callees"]),
-                sorted(blocked_callees),
-            )
-            self.assertEqual(repair["smallest_next_test"]["kind"], "external_callee_context_regression")
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "blocked_artifact")
+            self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
             self.assertEqual(capability["status"], "recorded")
             self.assertEqual(json.loads(validation_result.stdout)["status"], "passed")
             self.assertEqual(capability["slice_id"], "real-fdb-kv-set")
-            self.assertEqual(capability["capability_delta"][0]["construct_id"], "external_direct_callee_context")
+            self.assertEqual(capability["capability_delta"][0]["construct_id"], "blocked_artifact")
             self.assertEqual(capability["capability_delta"][0]["generated_candidate_status"], "refused")
             self.assertFalse(capability["capability_delta"][0]["semantic_pass"])
-            self.assertEqual(
-                set(capability["capability_delta"][0]["blocked_callees"]),
-                {"fdb_kv_set_blob", "fdb_kv_del"},
-            )
+            self.assertEqual(capability["capability_delta"][0]["blocked_callees"], [])
             self.assertTrue(capability["capability_delta"][0]["negative_coverage"])
             governance = capability["governance_delta"][0]
-            self.assertEqual(governance["construct_id"], "external_direct_callee_context")
+            self.assertEqual(governance["construct_id"], "blocked_artifact")
             self.assertTrue(
                 any(
                     ref.endswith(
-                        "flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json"
+                        "flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
                     )
                     for ref in governance["evidence_refs"]
                 )
             )
             self.assertIn(
-                "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
+                "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
                 capability["verification_commands"],
             )
+
+    def test_real_fdb_kv_set_external_callees_accept_compile_context_only_signatures(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+
+        context = module.external_direct_callee_context(spec, None)
+
+        self.assertEqual(context["status"], "recorded")
+        self.assertEqual(context["declared_spec_count"], 4)
+        self.assertEqual(context["declared_count"], 4)
+        self.assertEqual(context["blocked_count"], 0)
+        declared = {item["name"]: item for item in context["declared"]}
+        self.assertEqual(
+            set(declared),
+            {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+        )
+        for name in ("fdb_kv_del", "fdb_kv_set_blob"):
+            self.assertEqual(declared[name]["stub_kind"], "compile_only")
+            self.assertEqual(
+                declared[name]["stub_boundary"],
+                "flashdb_external_direct_callee_context_only",
+            )
+            self.assertEqual(
+                declared[name]["model_contract"],
+                "flashdb_external_direct_callee_signature_context",
+            )
+            self.assertFalse(declared[name]["semantics_verified"])
+            self.assertEqual(declared[name]["unsupported_reasons"], [])
+            self.assertEqual(
+                declared[name]["stub_generation"],
+                "not_emitted_flashdb_signature_context",
+            )
+            self.assertNotIn("accepted_named_slice_evidence", declared[name])
 
     def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
         module = load_auto_migrate_module()
@@ -3533,6 +3567,26 @@ class AutoMigrateTests(unittest.TestCase):
                             "stub_generation": "generated_compile_only",
                             "semantics_verified": False,
                         },
+                        {
+                            "name": "fdb_kv_del",
+                            "parameters": [
+                                {
+                                    "name": "db",
+                                    "c_type": "fdb_kvdb_t",
+                                    "rust_type": "*mut core::ffi::c_void",
+                                },
+                                {
+                                    "name": "key",
+                                    "c_type": "const char*",
+                                    "rust_type": "*const core::ffi::c_char",
+                                },
+                            ],
+                            "return_type": "fdb_err_t",
+                            "return_rust_type": "i32",
+                            "stub_kind": "compile_only",
+                            "stub_generation": "not_emitted_flashdb_signature_context",
+                            "semantics_verified": False,
+                        },
                     ]
                 },
             )
@@ -3542,6 +3596,8 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn("fn helper_add_one(value: i32) -> i32", text)
             self.assertNotIn("fn strlen", text)
             self.assertNotIn("s: i32", text)
+            self.assertNotIn("fn fdb_kv_del", text)
+            self.assertNotIn("db: i32", text)
 
     def test_real_fdb_blob_make_generates_typed_ir_candidate_without_semantic_claim(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-blob-make.json"

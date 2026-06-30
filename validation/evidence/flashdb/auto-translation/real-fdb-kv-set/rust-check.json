@@ -1,45 +1,14 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4e968ec4ec182864733143dfcc852454bcb9d173faff4d5cff7e59bdfcaf8daa",
+    "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
     "status": "skipped"
   },
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-_3_tir8p F:\\agent\\crustpaper\\0630\\validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
-  "error_count": 0,
+  "command": null,
   "errors": [],
   "external_callee_context": {
-    "blocked_callees": [
-      {
-        "definition_status": "real_source_bound",
-        "name": "fdb_kv_del",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-fdb-kv-del",
-        "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:db",
-          "unsupported_parameter_type:key",
-          "unsupported_return_type"
-        ]
-      },
-      {
-        "definition_status": "real_source_bound",
-        "name": "fdb_kv_set_blob",
-        "reason": "unsupported_external_direct_callee_signature",
-        "semantics_verified": false,
-        "signature_ref": "sig-fdb-kv-set-blob",
-        "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
-        "stub_kind": "none",
-        "unsupported_reasons": [
-          "unsupported_parameter_type:blob",
-          "unsupported_parameter_type:db",
-          "unsupported_parameter_type:key",
-          "unsupported_return_type"
-        ]
-      }
-    ],
-    "blocked_count": 2,
+    "blocked_callees": [],
+    "blocked_count": 0,
     "declared_callees": [
       {
         "name": "fdb_blob_make",
@@ -48,13 +17,25 @@
         "stub_kind": "accepted_named_slice_evidence"
       },
       {
+        "name": "fdb_kv_del",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-del",
+        "stub_kind": "compile_only"
+      },
+      {
+        "name": "fdb_kv_set_blob",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-set-blob",
+        "stub_kind": "compile_only"
+      },
+      {
         "name": "strlen",
         "semantics_verified": false,
         "signature_ref": "sig-stdlib-strlen",
         "stub_kind": "compile_only"
       }
     ],
-    "declared_count": 2,
+    "declared_count": 4,
     "declared_spec_count": 4,
     "declared_spec_names": [
       "fdb_blob_make",
@@ -62,25 +43,20 @@
       "fdb_kv_set_blob",
       "strlen"
     ],
-    "status": "blocked"
+    "status": "recorded"
   },
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "f8af1b3ec515d97d4e66793805fb9f79594c3a7ea895a2f73144e3c2c338d03c",
+    "sha256": "a3b571ab5f200a9840a0a14c91cbc2bacff82bfb5e1e8a7fb5a50a8c79df5972",
     "status": "refused"
   },
   "schema_version": 1,
-  "self_healing": {
-    "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
-    "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-patch-events.jsonl",
-    "status": "none"
-  },
-  "status": "passed",
+  "status": "skipped",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "0c9c15a99f18f57247446fba6e4a5a8755816d75efe47e7b431f6a2fba606b64",
+    "sha256": "32a1b0ff1a8bf4b66b85d46b6532b492bd7dba503918a2f6ec2ad54cae3db351",
     "status": "blocked"
   }
 }

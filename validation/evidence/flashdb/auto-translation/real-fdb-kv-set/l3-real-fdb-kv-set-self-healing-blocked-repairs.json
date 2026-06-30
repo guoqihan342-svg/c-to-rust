@@ -29,16 +29,11 @@
       "human_action_required": true,
       "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
       "ir_feature_gap": {
-        "blocked_callees": [
-          "fdb_kv_del",
-          "fdb_kv_set_blob"
-        ],
         "evidence_refs": [
-          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json"
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
         ],
-        "kind": "external_direct_callee_context",
-        "source": "auto_translation_plan.translation_summary.external_direct_callee_blocks"
+        "kind": "blocked_artifact",
+        "source": "route_decision.rationale"
       },
       "oracle_fixture_gap": {
         "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
@@ -47,9 +42,9 @@
       "repair_id": "repair-route-refused-1",
       "route_decision": "L4",
       "smallest_next_test": {
-        "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
-        "expected_gate": "external direct callees are declared, stubbed, or kept blocked before candidate acceptance",
-        "kind": "external_callee_context_regression"
+        "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+        "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
+        "kind": "route_refusal_regression"
       },
       "source_span": {
         "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",

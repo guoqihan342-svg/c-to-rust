@@ -93,9 +93,10 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         ledger = report["capability_delta_ledger"]
         self.assertGreaterEqual(ledger["ledger_count"], 1)
         self.assertGreaterEqual(
-            ledger["by_construct"]["external_direct_callee_context"]["refused"],
+            ledger["by_construct"]["blocked_artifact"]["refused"],
             1,
         )
+        self.assertEqual(ledger["blocked_callee_count"], 0)
         self.assertEqual(ledger["translator_generated_semantic_pass_count"], 0)
         self.assertEqual(ledger["semantic_pass_count"], 0)
         self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 2)
