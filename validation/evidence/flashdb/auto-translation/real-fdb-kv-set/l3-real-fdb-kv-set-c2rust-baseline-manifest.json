@@ -38,7 +38,7 @@
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5"
+    "sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "skipped",
@@ -56,7 +56,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-30T02:19:54Z"
+    "probed_at": "2026-06-30T02:41:57Z"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

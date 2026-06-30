@@ -313,7 +313,24 @@
     "fixture_id": "real-fdb-kv-set-fixture",
     "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
     "hash": "real-fdb-kv-set-fixture",
-    "cases": [],
+    "cases": [
+      {
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-set-value",
+        "input_ref": "cases[0]"
+      },
+      {
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-delete-null",
+        "input_ref": "cases[1]"
+      }
+    ],
     "observable_outputs": [
       "return_code"
     ],

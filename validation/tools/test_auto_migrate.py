@@ -3600,6 +3600,79 @@ class AutoMigrateTests(unittest.TestCase):
             for path in ("src/fdb_utils.c", "src/fdb.c", "src/fdb_file.c"):
                 self.assertIn(path, argv_text)
 
+    def test_real_fdb_kv_set_oracle_harness_binds_uninitialized_return_code_cases(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture_path = tmp_path / "real-fdb-kv-set.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "uninit-set-value",
+                                "db_state": "uninitialized_named",
+                                "db_name": "unit-kv",
+                                "key": "boot_count",
+                                "value": "123",
+                                "return_code": 7,
+                            },
+                            {
+                                "id": "uninit-delete-null",
+                                "db_state": "uninitialized_named",
+                                "db_name": "unit-kv",
+                                "key": "boot_count",
+                                "value": None,
+                                "return_code": 7,
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec["fixture_contract"] = {
+                **spec["fixture_contract"],
+                "path": fixture_ref,
+                "cases": [
+                    {
+                        "id": "uninit-set-value",
+                        "input_ref": "cases[0]",
+                        "expected_ref": fixture_ref,
+                    },
+                    {
+                        "id": "uninit-delete-null",
+                        "input_ref": "cases[1]",
+                        "expected_ref": fixture_ref,
+                    },
+                ],
+            }
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+
+            module.generate_oracle_harness_draft(spec, evidence_dir, skip=True)
+
+            harness = (evidence_dir / "l3-real-fdb-kv-set-c-oracle-harness-draft.c").read_text(
+                encoding="utf-8"
+            )
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("TODO: fixture case", harness)
+            self.assertIn("struct fdb_kvdb uninit_set_value_db = {0};", harness)
+            self.assertIn("uninit_set_value_db.parent.name", harness)
+            self.assertIn("fdb_kv_set(&uninit_set_value_db, uninit_set_value_key, uninit_set_value_value)", harness)
+            self.assertIn("fdb_kv_set(&uninit_delete_null_db, uninit_delete_null_key, NULL)", harness)
+            self.assertIn("fixture case uninit-set-value return_code matched", harness)
+            self.assertIn("fixture case uninit-delete-null return_code matched", harness)
+            self.assertEqual(oracle["fixture_binding"]["case_count"], 2)
+            self.assertEqual(
+                oracle["fixture_binding"]["expected_output_status"],
+                "declared_not_executed",
+            )
+
     def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-stdlib-stub-") as tmp:

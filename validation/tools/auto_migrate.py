@@ -1945,6 +1945,8 @@ def oracle_fixture_execution_source(
     signature = c_function_signature(spec)
     if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):
         return c_oracle_fdb_blob_make_execution_source(spec, fixture_binding)
+    if c_oracle_signature_supports_fdb_kv_set_call(spec, signature):
+        return c_oracle_fdb_kv_set_execution_source(spec, fixture_binding)
     if not c_oracle_signature_supports_return_code_call(spec, signature):
         return {"declarations": "", "statements": ""}
 
@@ -2011,6 +2013,105 @@ def c_oracle_signature_supports_fdb_blob_make_call(
         for item in parameters
     ]
     return actual == expected
+
+
+def c_oracle_signature_supports_fdb_kv_set_call(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+) -> bool:
+    if required_str(spec, "function_name") != "fdb_kv_set":
+        return False
+    if normalize_c_type(str(signature.get("return_type") or "")) != "fdb_err_t":
+        return False
+    if behavior_fields(spec) != ["return_code"]:
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 3:
+        return False
+    expected = [
+        ("db", "fdb_kvdb_t"),
+        ("key", "const char *"),
+        ("value", "const char *"),
+    ]
+    actual = [
+        (str(item.get("name") or ""), normalize_c_type(str(item.get("c_type") or "")))
+        for item in parameters
+    ]
+    return actual == expected
+
+
+def c_oracle_fdb_kv_set_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_fdb_kv_set_case_execution_source(spec, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this fdb_kv_set draft generator. */\n"
+            )
+            continue
+        statements.append(case_source["statements"])
+    return {"declarations": "", "statements": "".join(statements)}
+
+
+def c_oracle_fdb_kv_set_case_execution_source(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    if not is_uint32_value(expected_return):
+        return None
+    if case_payload.get("db_state") != "uninitialized_named":
+        return None
+
+    key = case_payload.get("key")
+    value = case_payload.get("value")
+    db_name = case_payload.get("db_name", "kvdb")
+    if not isinstance(key, str) or not isinstance(db_name, str):
+        return None
+    if value is not None and not isinstance(value, str):
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    db_name_ident = f"{case_ident}_db"
+    key_name = f"{case_ident}_key"
+    value_name = f"{case_ident}_value"
+    actual_name = f"actual_{case_ident}_return_code"
+    expected_literal = c_integer_literal("fdb_err_t", int(expected_return))
+    value_expr = value_name if value is not None else "NULL"
+    value_declaration = (
+        f"  static const char {value_name}[] = {c_string_literal(value)};\n"
+        if value is not None
+        else ""
+    )
+    statements = (
+        f"  struct fdb_kvdb {db_name_ident} = {{0}};\n"
+        f"  {db_name_ident}.parent.name = {c_string_literal(db_name)};\n"
+        f"  static const char {key_name}[] = {c_string_literal(key)};\n"
+        f"{value_declaration}"
+        f"  fdb_err_t {actual_name} = {function_name}(&{db_name_ident}, {key_name}, {value_expr});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %d\n')}, "
+        f"(int){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": "", "statements": statements}
 
 
 def c_oracle_fdb_blob_make_execution_source(

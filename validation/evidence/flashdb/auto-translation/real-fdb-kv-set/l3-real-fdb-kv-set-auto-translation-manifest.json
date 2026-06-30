@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
+    "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
     "status": "skipped"
   },
   "cache": {
@@ -17,12 +17,12 @@
     },
     "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "c2rust_baseline_identity": {
-      "sha256": "d9d465a4a4e91c1c2053358f31154d6a124435766c16736495a1a885920e6487",
+      "sha256": "b83cccb5e7f579e1bbfd691a5310edc6a45be77d50b60577ceabb25e9cd679a7",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "ac7ab01c9293590f73b77d58fcf0adc02140added3fafc75d0fa1ae79c2f7464",
+      "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -62,19 +62,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
+        "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
+        "sha256": "359dea7788ea1c1c1bf0f56a9509e030f320a2bb089f314e9c845bcd9481f518",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
+        "sha256": "3d66282ba16cc92ae9760ecc18b51f9edd52f2d2455c39740bc4064478336810",
         "status": "blocked"
       }
     },
@@ -115,11 +115,11 @@
       "summary"
     ],
     "oracle_boundary_contract_identity": {
-      "sha256": "cbf236e2b15ea7f0f14d2e5fadf243312a3856bb0a5ca1b2a528ac7b22e679e8",
+      "sha256": "660f4cd0044d5c0749cfcccfeee02d3cefeee31918b48c34256d8dbb47c04b8c",
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "bb12366f2b2430c59b56b185125594a7b05c87324f85fbaf8962a0ae746fef56",
+      "sha256": "261ab81d91b77b9fab56ed56a5738f18ba943f6288a9e771293e028862f89306",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -136,7 +136,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
+    "slice_spec_sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -151,7 +151,7 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "b2cbc530420a96f5bf409d91b4804a6fafc279d7a3aa93215ceba14da582895f",
+      "sha256": "c1f6d471c4c28bb7ec06cfd94e6418a3b0c4b45989f170196b4c994b974f11ac",
       "status": "blocked"
     }
   },
@@ -318,22 +318,28 @@
             "return_code"
           ],
           "diagnostics": [
-            "C oracle harness output gate has no supported fixture stdout markers to compare."
+            "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
           ],
-          "expected_stdout_fragments": [],
-          "fixture_expected_output_status": "missing_or_empty",
+          "expected_stdout_fragments": [
+            "fixture case uninit-set-value return_code matched",
+            "fixture case uninit-delete-null return_code matched"
+          ],
+          "fixture_expected_output_status": "declared_not_executed",
           "gate": "c_oracle_harness_output",
-          "matched_stdout_fragments": [],
+          "matched_stdout_fragments": [
+            "fixture case uninit-set-value return_code matched",
+            "fixture case uninit-delete-null return_code matched"
+          ],
           "missing_stdout_fragments": [],
           "schema_version": 1,
           "semantic_pass": false,
-          "status": "unsupported_not_oracle"
+          "status": "matched_not_oracle"
         },
         "returncode": 0,
         "semantic_pass": false,
         "status": "exited_zero_not_oracle",
         "stderr": "",
-        "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n",
+        "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-set-value return_code matched\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-delete-null return_code matched\n",
         "timeout_seconds": 30,
         "toolchain_adapter": "wsl",
         "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
@@ -353,10 +359,37 @@
       "behavior_fields": [
         "return_code"
       ],
-      "binding_status": "missing_or_empty",
-      "case_bindings": [],
-      "case_count": 0,
-      "expected_output_status": "missing_or_empty",
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-set-value",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-delete-null",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        }
+      ],
+      "case_count": 2,
+      "expected_output_status": "declared_not_executed",
       "observable_outputs": [
         "return_code"
       ],
@@ -368,10 +401,37 @@
         "behavior_fields": [
           "return_code"
         ],
-        "binding_status": "missing_or_empty",
-        "case_bindings": [],
-        "case_count": 0,
-        "expected_output_status": "missing_or_empty",
+        "binding_status": "declared_not_executed",
+        "case_bindings": [
+          {
+            "binding_status": "declared_not_executed",
+            "expected_outputs": {
+              "return_code": 7
+            },
+            "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+            "id": "uninit-set-value",
+            "input_ref": "cases[0]",
+            "missing_observable_outputs": [],
+            "observable_outputs": [
+              "return_code"
+            ]
+          },
+          {
+            "binding_status": "declared_not_executed",
+            "expected_outputs": {
+              "return_code": 7
+            },
+            "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+            "id": "uninit-delete-null",
+            "input_ref": "cases[1]",
+            "missing_observable_outputs": [],
+            "observable_outputs": [
+              "return_code"
+            ]
+          }
+        ],
+        "case_count": 2,
+        "expected_output_status": "declared_not_executed",
         "observable_outputs": [
           "return_code"
         ],
@@ -395,7 +455,7 @@
     "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "ac7ab01c9293590f73b77d58fcf0adc02140added3fafc75d0fa1ae79c2f7464",
+      "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
       "status": "draft"
     },
     "required_final_status": "C_ORACLE_GENERATED",
@@ -473,7 +533,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec_sha256=9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
+      "slice_spec_sha256=f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
       "fixture_hash=real-fdb-kv-set-fixture",
       "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
       "translator_version=0.1.0",
@@ -504,12 +564,12 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "1f290849f594002108f13c6791c50ce30566368a",
+    "repo_commit": "01b0d1c76f74afe30d39b4dd847d7335cb400283",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
         "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-replay-test-draft.rs",
-        "file_hash": "1f46a655e7be9a6c23f76d667872db1597d1f962188b5863e0da4d22f2490d0e",
+        "file_hash": "20b781bd000af92160cb2aa7cadf25fbc9d42397675091253004a115e8ea1271",
         "framework": "cargo test",
         "test_names": [
           "replay_real_fdb_kv_set_fixture_contract"
@@ -523,7 +583,7 @@
       "fixtures": [
         {
           "hash": "real-fdb-kv-set-fixture",
-          "operation_count": 0,
+          "operation_count": 2,
           "path": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
           "source_kind": "fixture"
         }
@@ -560,11 +620,11 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
+    "sha256": "359dea7788ea1c1c1bf0f56a9509e030f320a2bb089f314e9c845bcd9481f518",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-d3kyeqnx validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ux8u76kp validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {
@@ -638,7 +698,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
+    "sha256": "3d66282ba16cc92ae9760ecc18b51f9edd52f2d2455c39740bc4064478336810",
     "status": "blocked"
   }
 }

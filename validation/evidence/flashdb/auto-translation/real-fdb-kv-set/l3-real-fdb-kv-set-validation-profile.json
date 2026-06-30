@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
+        "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -38,7 +38,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
+          "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -192,14 +192,13 @@
     },
     "fixture_representativeness": {
       "case_source": "fixture_contract",
-      "declared_case_count": 0,
+      "declared_case_count": 2,
       "fixture_hash": "real-fdb-kv-set-fixture",
       "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
       "limitations": [],
       "representativeness": "bounded_fixture_contract"
     },
     "insufficient_reasons": [
-      "fixture_declared_case_count_missing",
       "fixture_accepted_oracle_case_count_missing"
     ],
     "observable_outputs": [

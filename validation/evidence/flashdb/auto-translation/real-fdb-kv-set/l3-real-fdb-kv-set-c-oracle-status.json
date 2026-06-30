@@ -109,22 +109,28 @@
           "return_code"
         ],
         "diagnostics": [
-          "C oracle harness output gate has no supported fixture stdout markers to compare."
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
         ],
-        "expected_stdout_fragments": [],
-        "fixture_expected_output_status": "missing_or_empty",
+        "expected_stdout_fragments": [
+          "fixture case uninit-set-value return_code matched",
+          "fixture case uninit-delete-null return_code matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
         "gate": "c_oracle_harness_output",
-        "matched_stdout_fragments": [],
+        "matched_stdout_fragments": [
+          "fixture case uninit-set-value return_code matched",
+          "fixture case uninit-delete-null return_code matched"
+        ],
         "missing_stdout_fragments": [],
         "schema_version": 1,
         "semantic_pass": false,
-        "status": "unsupported_not_oracle"
+        "status": "matched_not_oracle"
       },
       "returncode": 0,
       "semantic_pass": false,
       "status": "exited_zero_not_oracle",
       "stderr": "",
-      "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n",
+      "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-set-value return_code matched\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-delete-null return_code matched\n",
       "timeout_seconds": 30,
       "toolchain_adapter": "wsl",
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
@@ -144,10 +150,37 @@
     "behavior_fields": [
       "return_code"
     ],
-    "binding_status": "missing_or_empty",
-    "case_bindings": [],
-    "case_count": 0,
-    "expected_output_status": "missing_or_empty",
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-set-value",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-delete-null",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      }
+    ],
+    "case_count": 2,
+    "expected_output_status": "declared_not_executed",
     "observable_outputs": [
       "return_code"
     ],
@@ -159,10 +192,37 @@
       "behavior_fields": [
         "return_code"
       ],
-      "binding_status": "missing_or_empty",
-      "case_bindings": [],
-      "case_count": 0,
-      "expected_output_status": "missing_or_empty",
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-set-value",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-delete-null",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        }
+      ],
+      "case_count": 2,
+      "expected_output_status": "declared_not_executed",
       "observable_outputs": [
         "return_code"
       ],
@@ -186,7 +246,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-    "sha256": "ac7ab01c9293590f73b77d58fcf0adc02140added3fafc75d0fa1ae79c2f7464",
+    "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
     "status": "draft"
   },
   "required_final_status": "C_ORACLE_GENERATED",

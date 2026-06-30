@@ -1,0 +1,53 @@
+{
+  "case_count": 2,
+  "cases": [
+    {
+      "coverage_kind": "uninitialized-db-set-value",
+      "db_name": "unit-kv",
+      "db_state": "uninitialized_named",
+      "expected_outputs": {
+        "return_code": 7
+      },
+      "id": "uninit-set-value",
+      "key": "boot_count",
+      "return_code": 7,
+      "status": "draft_expected_from_flashdb_init_guard",
+      "value": "123"
+    },
+    {
+      "coverage_kind": "uninitialized-db-delete-null",
+      "db_name": "unit-kv",
+      "db_state": "uninitialized_named",
+      "expected_outputs": {
+        "return_code": 7
+      },
+      "id": "uninit-delete-null",
+      "key": "boot_count",
+      "return_code": 7,
+      "status": "draft_expected_from_flashdb_init_guard",
+      "value": null
+    }
+  ],
+  "compared_fields": [
+    "return_code"
+  ],
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "real-fdb-kv-set",
+  "source_boundary": {
+    "files": [
+      "src/fdb_kvdb.c",
+      "src/fdb_utils.c",
+      "inc/fdb_def.h",
+      "inc/flashdb.h"
+    ],
+    "functions": [
+      "fdb_kv_set"
+    ],
+    "signature": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)"
+  },
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "fixture_only",
+  "target_id": "flashdb",
+  "toolchain_status": "C_ORACLE_DRAFT_FIXTURE_ONLY"
+}
