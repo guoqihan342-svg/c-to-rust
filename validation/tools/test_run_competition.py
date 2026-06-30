@@ -96,6 +96,15 @@ def write_final_verification(
     )
 
 
+def write_patch_events(evidence_root: Path, target_id: str, slice_id: str, events: list[dict]) -> None:
+    evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / f"l3-{slice_id}-patch-events.jsonl").write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+
 def write_worker_summary(
     root: Path,
     worker_id: str,
@@ -317,6 +326,42 @@ class RunCompetitionTests(unittest.TestCase):
                     }
                 ],
             )
+
+    def test_runner_counts_direct_slice_self_healing_repair_metrics(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "keyword-param")
+            write_final_verification(out_root / "evidence", "demo", "keyword-param", semantic_pass=True)
+            write_patch_events(
+                out_root / "evidence",
+                "demo",
+                "keyword-param",
+                [
+                    {"round": 1, "status": "applied"},
+                    {"round": 2, "status": "applied"},
+                    {"round": 3, "status": "applied"},
+                    {"round": 3, "status": "verified"},
+                ],
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["avg_repair_rounds"], 3.0)
+            self.assertEqual(metrics["auto_recovery_rate"], 1.0)
+            self.assertEqual(metrics["per_unit_statuses"][0]["repair_rounds"], 3)
+            self.assertTrue(metrics["per_unit_statuses"][0]["auto_recovered"])
 
     def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
         module = load_runner_module()

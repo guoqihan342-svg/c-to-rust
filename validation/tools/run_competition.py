@@ -240,6 +240,7 @@ def run_competition(
             else:
                 slice_failures += 1
         typed_ir_generated += 1
+        repair_metrics = self_healing_repair_metrics(slice_evidence_root, target_id, slice_id, semantic_unit)
         unit_statuses.append(
             workflow_unit_status(
                 target_id=target_id,
@@ -251,6 +252,8 @@ def run_competition(
                 refused=final_status == "refused",
                 blocked=final_status == "blocked",
                 failed=not semantic_unit and final_status not in {"refused", "blocked"},
+                repair_rounds=repair_metrics["repair_rounds"],
+                auto_recovered=repair_metrics["auto_recovered"],
             )
         )
 
@@ -513,8 +516,10 @@ def workflow_unit_status(
     refused: bool,
     blocked: bool,
     failed: bool,
+    repair_rounds: int = 0,
+    auto_recovered: bool = False,
 ) -> dict[str, Any]:
-    return {
+    status_payload = {
         "unit_id": f"{target_id}/{slice_id}",
         "source": source,
         "status": status,
@@ -524,6 +529,10 @@ def workflow_unit_status(
         "blocked": blocked,
         "failed": failed,
     }
+    if repair_rounds > 0:
+        status_payload["repair_rounds"] = repair_rounds
+        status_payload["auto_recovered"] = auto_recovered
+    return status_payload
 
 
 def workflow_status_from_final(*, final_status: str, semantic_pass: bool) -> str:
@@ -573,8 +582,20 @@ def build_workflow_metrics(
     blocked = int(slices["blocked"])
     failed = int(slices["failed"])
     unsafe_budget = summary["unsafe_budget"]
-    repair_rounds = weighted_worker_metric(worker_workflow_metrics, "avg_repair_rounds", attempted)
-    auto_recovery_rate = weighted_worker_metric(worker_workflow_metrics, "auto_recovery_rate", attempted)
+    repair_rounds = weighted_metric_with_direct_units(
+        worker_workflow_metrics,
+        "avg_repair_rounds",
+        unit_statuses,
+        "repair_rounds",
+        attempted,
+    )
+    auto_recovery_rate = weighted_metric_with_direct_units(
+        worker_workflow_metrics,
+        "auto_recovery_rate",
+        unit_statuses,
+        "auto_recovered",
+        attempted,
+    )
     return {
         "schema_version": 1,
         "run_id": summary["run_id"],
@@ -610,6 +631,25 @@ def weighted_worker_metric(metrics: list[dict[str, Any]], key: str, denominator:
         value = metric.get(key)
         if isinstance(value, (int, float)) and value >= 0:
             numerator += float(value) * units
+    return numerator / denominator
+
+
+def weighted_metric_with_direct_units(
+    metrics: list[dict[str, Any]],
+    worker_key: str,
+    unit_statuses: list[dict[str, Any]],
+    unit_key: str,
+    denominator: int,
+) -> float:
+    if denominator <= 0:
+        return 0.0
+    numerator = weighted_worker_metric(metrics, worker_key, denominator) * denominator
+    for unit in unit_statuses:
+        value = unit.get(unit_key)
+        if isinstance(value, bool):
+            numerator += 1.0 if value else 0.0
+        elif isinstance(value, (int, float)) and value >= 0:
+            numerator += float(value)
     return numerator / denominator
 
 
@@ -837,6 +877,42 @@ def load_final_verification(evidence_root: Path, target_id: str, slice_id: str) 
     if not path.exists():
         return {"status": "failed", "semantic_pass": False, "rust_check_status": "missing"}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def self_healing_repair_metrics(
+    evidence_root: Path,
+    target_id: str,
+    slice_id: str,
+    semantic_pass: bool,
+) -> dict[str, Any]:
+    events_path = (
+        evidence_root
+        / target_id
+        / "auto-translation"
+        / slice_id
+        / f"l3-{slice_id}-patch-events.jsonl"
+    )
+    if not events_path.exists():
+        return {"repair_rounds": 0, "auto_recovered": False}
+    repair_rounds = 0
+    verified = False
+    for line in events_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        round_value = event.get("round")
+        if not isinstance(round_value, int) or round_value < 1:
+            continue
+        status = event.get("status")
+        if status == "applied":
+            repair_rounds = max(repair_rounds, round_value)
+        elif status == "verified":
+            verified = True
+            repair_rounds = max(repair_rounds, round_value)
+    return {"repair_rounds": repair_rounds, "auto_recovered": repair_rounds > 0 and verified and semantic_pass}
 
 
 def required_str(data: dict[str, Any], key: str) -> str:
