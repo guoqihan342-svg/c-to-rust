@@ -662,6 +662,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "worker_prefix": "worker",
                         "mode": "deterministic",
                         "execute_merge": True,
+                        "emit_route_governance_metrics_report": True,
                         "acceptance_boundary": {
                             "semantic_claim_source": "accepted_evidence_binding",
                             "generated_draft_semantic_pass": False,
@@ -711,9 +712,32 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(result["run_plan"]["merge_execution"]["final_gate_status"], "passed")
             self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
+            route_report_ref = result["route_governance_metrics_report"]
+            route_report_path = REPO_ROOT / route_report_ref["path"]
+            self.assertTrue(route_report_path.exists())
+            self.assertEqual(route_report_ref["sha256"], harness.sha256_file(route_report_path))
+            route_report = json.loads(route_report_path.read_text(encoding="utf-8"))
+            self.assertEqual(route_report["report_kind"], "route-governance-metrics")
+            self.assertEqual(route_report["status"], "passed")
+            self.assertIn("translation_coverage_numerator", route_report["metrics"])
+            artifact_rows = fetch_rows(
+                result["db_path"],
+                "select kind, repo_rel_path, semantic_role from artifacts where kind='route-governance-metrics-report'",
+            )
+            self.assertEqual(
+                artifact_rows,
+                [
+                    (
+                        "route-governance-metrics-report",
+                        route_report_ref["path"],
+                        "route-governance-metrics",
+                    )
+                ],
+            )
             report = json.loads((out_root / "harness" / "batch-profile-report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["report_path"], result["report_path"])
             self.assertEqual(report["acceptance_boundary"], result["acceptance_boundary"])
+            self.assertEqual(report["route_governance_metrics_report"], route_report_ref)
 
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [

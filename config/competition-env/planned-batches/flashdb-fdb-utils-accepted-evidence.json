@@ -21,6 +21,7 @@
   "worker_prefix": "flashdb-worker",
   "mode": "deterministic",
   "execute_merge": true,
+  "emit_route_governance_metrics_report": true,
   "acceptance_boundary": {
     "semantic_claim_source": "accepted_evidence_binding",
     "generated_draft_semantic_pass": false

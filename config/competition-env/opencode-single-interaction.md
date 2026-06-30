@@ -54,7 +54,7 @@
 
 对 FlashDB crc32（已通过的案例）：typed IR 候选生成到 validation profile 生成约 5-8 分钟。
 
-**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。可复用文件级批量优先用 `run-batch-profile` 固化输入；调试展开时用 `plan-source-file` 生成 plan，再用 `run-plan --mode deterministic --execute-merge` 顺序执行已规划 worker 并运行最终 worker-summary 聚合；这只是围绕最终 runner/validator 的确定性 batch 调度，不替代它。若任何 planned worker 缺少已记录 summary，最终 merge 会 fail-closed 跳过。
+**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。可复用文件级批量优先用 `run-batch-profile` 固化输入；调试展开时用 `plan-source-file` 生成 plan，再用 `run-plan --mode deterministic --execute-merge` 顺序执行已规划 worker 并运行最终 worker-summary 聚合；这只是围绕最终 runner/validator 的确定性 batch 调度，不替代它。profile 可设置 `emit_route_governance_metrics_report=true`，让 batch 同步产出并绑定 `summary/route-governance-metrics-report.json`，用于公开叙述边界和能力/拒绝率指标，不替代 semantic gate。若任何 planned worker 缺少已记录 summary，最终 merge 会 fail-closed 跳过。
 
 ## OpenCode Harness 多 Agent + SQLite 流程
 
@@ -186,7 +186,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、执行 planned workers 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-preflight-report <report>`。worker summary 仍必须通过 final runner 和 common summary validator 收敛；缺少 planned worker summary 时最终 merge 会 fail-closed 跳过。
+9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、执行 planned workers 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-preflight-report <report>`。worker summary 仍必须通过 final runner 和 common summary validator 收敛；缺少 planned worker summary 时最终 merge 会 fail-closed 跳过。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。

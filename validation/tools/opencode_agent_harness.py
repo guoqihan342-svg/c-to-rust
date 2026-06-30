@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools.extract_source_slice import find_matching, mask_comments_and_strings
+from validation.tools import route_governance_metrics_report
 
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 DB_REL_PATH = Path("state") / "opencode-agent-harness.sqlite3"
@@ -852,6 +853,11 @@ def run_batch_profile(
         command_runner=command_runner,
         repo_root=repo_root,
     )
+    route_metrics_artifact = write_route_governance_metrics_profile_report(
+        profile=profile,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
     result = {
         "schema_version": SCHEMA_VERSION,
         "status": run_result["status"],
@@ -871,6 +877,8 @@ def run_batch_profile(
     }
     if acceptance_boundary is not None:
         result["acceptance_boundary"] = acceptance_boundary
+    if route_metrics_artifact is not None:
+        result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -888,9 +896,58 @@ def run_batch_profile(
             payload=result,
             repo_root=repo_root,
         )
+        if route_metrics_artifact is not None:
+            binding = route_metrics_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="route-governance-metrics-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="route-governance-metrics",
+                payload=route_metrics_artifact["payload"],
+                repo_root=repo_root,
+            )
         record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
         connection.commit()
     return result
+
+
+def write_route_governance_metrics_profile_report(
+    *,
+    profile: dict[str, Any],
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    if not profile_bool(profile, "emit_route_governance_metrics_report", default=False):
+        return None
+    coverage_report_text = profile_string(profile, "route_governance_metrics_coverage_report")
+    evidence_root_text = profile_string(
+        profile,
+        "route_governance_metrics_evidence_root",
+        default="validation/evidence",
+    )
+    payload = route_governance_metrics_report.build_report(
+        repo_root,
+        coverage_report_path=Path(coverage_report_text) if coverage_report_text is not None else None,
+        evidence_root=Path(evidence_root_text or "validation/evidence"),
+    )
+    report_path = out_root / "summary" / "route-governance-metrics-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    binding = {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": str(payload.get("status", "unknown")),
+        "report_kind": str(payload.get("report_kind", "route-governance-metrics")),
+        "translation_coverage_numerator": int(metrics.get("translation_coverage_numerator", 0)),
+        "accepted_evidence_semantic_pass_count": int(metrics.get("accepted_evidence_semantic_pass_count", 0)),
+        "tracked_slice_gate_contexts": int(metrics.get("tracked_slice_gate_contexts", 0)),
+        "claim_boundary": str(payload.get("claim_boundary", "")),
+    }
+    return {"binding": binding, "payload": payload}
 
 
 def profile_required_string(profile: dict[str, Any], field: str) -> str:
