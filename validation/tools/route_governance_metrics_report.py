@@ -109,7 +109,7 @@ def build_report(
             "slice_gate_contexts": "one row per validation/evidence/<target>/auto-translation/<slice> directory with route/profile/final gate evidence",
             "translation_coverage_numerator": "translator-generated Rust drafts with semantic-pass status backed by L3 accepted/passed route evidence",
             "accepted_evidence_semantic_pass_count": "accepted external evidence contexts reported separately and excluded from translation_coverage_numerator",
-            "s2_workflow_metrics": "S2 repair, retry, and unsafe-reduction workflow metrics loaded from hash-bound competition-run summaries when provided",
+            "s2_workflow_metrics": "S2 repair, retry, unsafe-reduction, and before/after artifact-binding workflow metrics loaded from hash-bound competition-run summaries when provided",
         },
         "claim_boundary": (
             "Route governance metrics are not semantic acceptance evidence; capability_delta_ledger entries "

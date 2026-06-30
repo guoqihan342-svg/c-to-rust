@@ -111,6 +111,7 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
         "units_converged",
         "units_baseline_only",
         "unsafe_reduction",
+        "translation_before_after",
         "avg_repair_rounds",
         "auto_recovery_rate",
         "human_interventions",
@@ -142,8 +143,43 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
         raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
     if len(metrics["per_unit_statuses"]) != int(metrics["units_total"]):
         raise SystemExit("workflow metrics artifact per_unit_statuses count does not match units_total")
+    validate_translation_before_after_summary(metrics)
     validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
     validate_root_cause_counts(metrics)
+
+
+def validate_translation_before_after_summary(metrics: dict[str, Any]) -> None:
+    summary = metrics.get("translation_before_after")
+    if not isinstance(summary, dict):
+        raise SystemExit("workflow metrics artifact translation_before_after must be an object")
+    status = summary.get("status")
+    if status not in {"bound", "not_provided"}:
+        raise SystemExit("workflow metrics artifact translation_before_after.status is invalid")
+    unit_count = summary.get("unit_count")
+    measured_count = summary.get("measured_unsafe_unit_count")
+    patch_count = summary.get("accepted_patch_unit_count")
+    if not isinstance(unit_count, int) or unit_count < 0:
+        raise SystemExit("workflow metrics artifact translation_before_after.unit_count must be nonnegative")
+    if not isinstance(measured_count, int) or measured_count < 0:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.measured_unsafe_unit_count must be nonnegative"
+        )
+    if not isinstance(patch_count, int) or patch_count < 0:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.accepted_patch_unit_count must be nonnegative"
+        )
+    units = summary.get("units")
+    if not isinstance(units, list) or len(units) != unit_count:
+        raise SystemExit("workflow metrics artifact translation_before_after.units count must match unit_count")
+    actual_count = sum(
+        1 for unit in metrics["per_unit_statuses"] if isinstance(unit, dict) and isinstance(unit.get("translation_before_after"), dict)
+    )
+    if actual_count != unit_count:
+        raise SystemExit("workflow metrics artifact translation_before_after.unit_count does not match per-unit evidence")
+    if status == "not_provided" and unit_count != 0:
+        raise SystemExit("workflow metrics artifact translation_before_after not_provided status requires zero units")
+    if status == "bound" and unit_count == 0:
+        raise SystemExit("workflow metrics artifact translation_before_after bound status requires units")
 
 
 def validate_per_unit_statuses(
@@ -165,6 +201,15 @@ def validate_per_unit_statuses(
                     f"workflow metrics per_unit_statuses[{index}].opencode_contract_verification.status "
                     "must be a string"
                 )
+        before_after = unit.get("translation_before_after")
+        if before_after is not None:
+            validate_translation_before_after_unit(
+                before_after,
+                unit=unit,
+                index=index,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            )
         if "repair_rounds" not in unit:
             continue
         repair_rounds = unit["repair_rounds"]
@@ -213,6 +258,131 @@ def validate_per_unit_statuses(
             raise SystemExit(
                 f"workflow metrics per_unit_statuses[{index}] auto_recovered requires verified repair history"
             )
+
+
+def validate_translation_before_after_unit(
+    evidence: Any,
+    *,
+    unit: dict[str, Any],
+    index: int,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if not isinstance(evidence, dict):
+        raise SystemExit(f"workflow metrics per_unit_statuses[{index}].translation_before_after must be an object")
+    status = evidence.get("status")
+    if status != "bound":
+        raise SystemExit(f"workflow metrics per_unit_statuses[{index}].translation_before_after.status must be bound")
+    for key in ["baseline", "final", "oracle_evidence", "accepted_patch"]:
+        validate_before_after_artifact_ref(
+            evidence.get(key),
+            key=key,
+            unit=unit,
+            index=index,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    patch_log = evidence.get("patch_log")
+    if patch_log is not None:
+        validate_before_after_artifact_ref(
+            patch_log,
+            key="patch_log",
+            unit=unit,
+            index=index,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    unsafe_reduction = evidence.get("unsafe_reduction")
+    if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.unsafe_reduction "
+            "must be measured"
+        )
+    baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+    current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+    reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+    if baseline is None or current is None or reduced_by is None:
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.unsafe_reduction "
+            "requires nonnegative baseline/current/reduced_by"
+        )
+    if baseline - current != reduced_by or reduced_by <= 0:
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.unsafe_reduction "
+            "must strictly reduce unsafe"
+        )
+
+
+def validate_before_after_artifact_ref(
+    artifact: Any,
+    *,
+    key: str,
+    unit: dict[str, Any],
+    index: int,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if not isinstance(artifact, dict):
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key} must be an object"
+        )
+    artifact_ref = artifact.get("path")
+    artifact_sha = artifact.get("sha256")
+    if not isinstance(artifact_ref, str) or not is_repo_relative_posix_path(artifact_ref):
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.path "
+            "must be repo-relative POSIX"
+        )
+    if not isinstance(artifact_sha, str) or len(artifact_sha) != 64:
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.sha256 must be sha256"
+        )
+    artifact_path = resolve_unit_artifact(
+        artifact_ref,
+        unit=unit,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if artifact_path is None:
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.path "
+            f"does not exist: {artifact_ref}"
+        )
+    if sha256(artifact_path) != artifact_sha:
+        raise SystemExit(
+            f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.sha256 does not match"
+        )
+
+
+def resolve_unit_artifact(
+    value: str,
+    *,
+    unit: dict[str, Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> Path | None:
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    worker_summary = unit.get("worker_summary_path")
+    if isinstance(worker_summary, str) and is_repo_relative_posix_path(worker_summary):
+        worker_summary_path = resolve_summary_artifact(worker_summary, summary_path=summary_path, repo_root=repo_root)
+        if worker_summary_path is not None:
+            candidates.extend([worker_summary_path.parent / value, worker_summary_path.parent.parent / value])
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(repo_root.resolve())
+        except ValueError:
+            try:
+                resolved.relative_to(summary_path.parent.parent.resolve())
+            except ValueError:
+                continue
+        if resolved.exists():
+            return resolved
+    return None
 
 
 def validate_root_cause_counts(metrics: dict[str, Any]) -> None:
@@ -325,6 +495,12 @@ def validate_worker_summary_path(value: str, *, index: int, seen_paths: set[str]
     if value in seen_paths:
         raise SystemExit(f"competition run summary duplicate worker summary path: {value}")
     seen_paths.add(value)
+
+
+def nonnegative_count(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    return value if isinstance(value, int) and value >= 0 else None
 
 
 def repo_relative(path: Path, repo_root: Path) -> str:

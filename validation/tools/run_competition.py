@@ -809,6 +809,7 @@ def build_workflow_metrics(
         "units_converged": semantic_pass,
         "units_baseline_only": max(0, compiled - semantic_pass),
         "unsafe_reduction": aggregate_unsafe_reduction(worker_workflow_metrics, unsafe_budget, attempted=attempted),
+        "translation_before_after": summarize_translation_before_after(unit_statuses),
         "avg_repair_rounds": repair_rounds,
         "auto_recovery_rate": auto_recovery_rate,
         "human_interventions": sum_worker_int_metric(worker_workflow_metrics, "human_interventions"),
@@ -820,6 +821,41 @@ def build_workflow_metrics(
         "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls")
         + sum_unit_int_metric(direct_unit_statuses, "llm_calls"),
         "per_unit_statuses": unit_statuses,
+    }
+
+
+def summarize_translation_before_after(unit_statuses: list[dict[str, Any]]) -> dict[str, Any]:
+    bound_units = []
+    measured_unsafe_unit_count = 0
+    accepted_patch_unit_count = 0
+    for unit in unit_statuses:
+        if not isinstance(unit, dict):
+            continue
+        evidence = unit.get("translation_before_after")
+        if not isinstance(evidence, dict):
+            continue
+        unsafe_reduction = evidence.get("unsafe_reduction")
+        if isinstance(unsafe_reduction, dict) and unsafe_reduction.get("status") == "measured":
+            baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+            current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+            reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+            if baseline is not None and current is not None and reduced_by is not None and baseline > current:
+                measured_unsafe_unit_count += 1
+        if isinstance(evidence.get("accepted_patch"), dict) or isinstance(evidence.get("patch_log"), dict):
+            accepted_patch_unit_count += 1
+        bound_units.append(
+            {
+                "unit_id": unit.get("unit_id", "unknown"),
+                "status": evidence.get("status", "bound"),
+                "unsafe_reduction": unsafe_reduction if isinstance(unsafe_reduction, dict) else {},
+            }
+        )
+    return {
+        "status": "bound" if bound_units else "not_provided",
+        "unit_count": len(bound_units),
+        "measured_unsafe_unit_count": measured_unsafe_unit_count,
+        "accepted_patch_unit_count": accepted_patch_unit_count,
+        "units": bound_units,
     }
 
 

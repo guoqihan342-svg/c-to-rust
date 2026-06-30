@@ -304,6 +304,7 @@ def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]])
         "units_converged": units_converged,
         "units_baseline_only": units_baseline_only,
         "unsafe_reduction": summarize_unsafe_reduction(metrics),
+        "translation_before_after": summarize_translation_before_after(metrics),
         "measured_unsafe_reduction_run_count": measured_unsafe_run_count,
         "avg_repair_rounds": avg_repair_rounds,
         "auto_recovery_rate": auto_recovery_rate,
@@ -317,8 +318,33 @@ def summarize_s2_workflow_metrics(workflow_metrics_inputs: list[dict[str, Any]])
         "claim_boundary": (
             "S2 workflow metrics summarize bound competition-run workflow metrics only; they do not prove "
             "semantic acceptance or unsafe reduction unless the underlying metrics already mark unsafe_reduction "
-            "as measured with baseline/current counts."
+            "as measured with baseline/current counts; before/after bindings are artifact references, not semantic "
+            "acceptance by themselves."
         ),
+    }
+
+
+def summarize_translation_before_after(metrics: list[dict[str, Any]]) -> dict[str, Any]:
+    unit_count = 0
+    measured_unsafe_unit_count = 0
+    accepted_patch_unit_count = 0
+    input_run_count = 0
+    for metric in metrics:
+        before_after = metric.get("translation_before_after")
+        if not isinstance(before_after, dict):
+            continue
+        count = nonnegative_int(before_after.get("unit_count"))
+        unit_count += count
+        measured_unsafe_unit_count += nonnegative_int(before_after.get("measured_unsafe_unit_count"))
+        accepted_patch_unit_count += nonnegative_int(before_after.get("accepted_patch_unit_count"))
+        if count > 0:
+            input_run_count += 1
+    return {
+        "status": "bound" if unit_count > 0 else "not_provided",
+        "input_run_count": input_run_count,
+        "unit_count": unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_unit_count,
+        "accepted_patch_unit_count": accepted_patch_unit_count,
     }
 
 

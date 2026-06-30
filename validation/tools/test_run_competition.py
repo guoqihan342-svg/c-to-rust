@@ -166,6 +166,38 @@ def write_worker_summary(
     return path
 
 
+def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> dict:
+    evidence_dir = worker_root / worker_id / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = {
+        "baseline": evidence_dir / "baseline-unsafe.rs",
+        "final": evidence_dir / "final-safe.rs",
+        "oracle_evidence": evidence_dir / "oracle-diff.json",
+        "accepted_patch": evidence_dir / "accepted.patch",
+        "patch_log": evidence_dir / "safety-step-log.jsonl",
+    }
+    for name, path in artifacts.items():
+        path.write_text(f"{name}\n", encoding="utf-8")
+    return {
+        "schema_version": 1,
+        "status": "bound",
+        **{
+            name: {
+                "path": f"evidence/{path.name}",
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for name, path in artifacts.items()
+        },
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 6,
+            "current_total_unsafe": 2,
+            "reduced_by": 4,
+            "ratio": 2 / 6,
+        },
+    }
+
+
 class FakeCommandRunner:
     def __init__(
         self,
@@ -1157,6 +1189,96 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 7)
             self.assertEqual(metrics["unsafe_reduction"]["reduced_by"], 5)
             self.assertAlmostEqual(metrics["unsafe_reduction"]["ratio"], 7 / 12)
+
+    def test_runner_preserves_worker_translation_before_after_evidence(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            before_after = write_worker_before_after_artifacts(worker_root, "worker-a")
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 6,
+                        "current_total_unsafe": 2,
+                        "reduced_by": 4,
+                        "ratio": 2 / 6,
+                    },
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                        "units": [
+                            {
+                                "unit_id": "flashdb/real-fdb-calc-crc32",
+                                "status": "bound",
+                                "unsafe_reduction": before_after["unsafe_reduction"],
+                            }
+                        ],
+                    },
+                    "avg_repair_rounds": 1.0,
+                    "auto_recovery_rate": 1.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 5,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "source": "opencode-worker",
+                            "status": "converged",
+                            "compiled": True,
+                            "semantic_pass": True,
+                            "refused": False,
+                            "blocked": False,
+                            "failed": False,
+                            "translation_before_after": before_after,
+                        }
+                    ],
+                },
+            )
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(metrics["translation_before_after"]["unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["measured_unsafe_unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["accepted_patch_unit_count"], 1)
+            unit = metrics["per_unit_statuses"][0]
+            self.assertEqual(unit["worker_summary_path"], "workers/worker-a/summary/competition-run-summary.json")
+            self.assertEqual(unit["translation_before_after"]["baseline"]["path"], "evidence/baseline-unsafe.rs")
 
     def test_unsafe_reduction_aggregation_requires_full_measured_worker_coverage(self) -> None:
         module = load_runner_module()

@@ -5,16 +5,17 @@ description: Repo-owned workflow for C-to-Rust migration harness work in this re
 
 # C2Rust Migration
 
-Use this skill when working on C-to-Rust migration slices in this repository. The competition-facing priority is the harness / agent / workflow loop, not broad handwritten transpiler coverage.
+Use this skill when working on C-to-Rust migration slices in this repository. The competition-facing priorities are core translation capability and harness architecture. Core translation capability is demonstrated by a real before/after: C2Rust or another candidate baseline, verified unsafe baseline, accepted safety-refactoring patch, oracle-equivalence evidence, and measured unsafe reduction. Harness architecture is demonstrated by the automated planner/worker/verifier/repairer/reporter loop that proves, repairs, rolls back, measures, and reproduces that before/after.
 
 ## Mainline
 
 1. Start from a real C unit or slice spec.
 2. Produce or inspect the C2Rust/raw candidate baseline.
 3. Compile the Rust candidate or record the compile failure as evidence.
-4. Run C oracle / Rust replay / schema-aware diff when the slice supports it.
-5. Record unsafe ledger, route decision, validation profile, and workflow metrics.
-6. Only accept semantic progress when current evidence proves equivalence for the declared slice boundary.
+4. Promote the candidate to a verified unsafe baseline only through C oracle / Rust replay / schema-aware diff evidence.
+5. Run the safety-refactoring loop against that baseline: one minimal patch per round, oracle/diff/unsafe gates after each patch, rollback on failure, and repair hints from the concrete stack or diff.
+6. Record unsafe ledger, route decision, validation profile, workflow trace, before/after artifacts, and workflow metrics.
+7. Only accept semantic progress when current evidence proves equivalence for the declared slice boundary and the accepted patch strictly improves unsafe count or compile status.
 
 Typed IR and generic emitter work is supporting infrastructure: use it for trivial fast paths, candidate diagnostics, and fail-closed feature gaps. Do not let typed-IR coverage expansion displace the verified harness loop.
 
@@ -22,14 +23,15 @@ Typed IR and generic emitter work is supporting infrastructure: use it for trivi
 
 Use this order for judge-facing work:
 
-1. Select a real C unit with a pinned source commit, slice spec, source span, compile flags, and input hashes.
+1. Select one real C unit that can converge quickly and is judge-readable. Default to the FlashDB competition-pinned `fdb_calc_crc32`; switch to zlib-ng `adler32` if C2Rust/toolchain setup blocks the D1-D2 safety-loop risk check.
 2. Produce C2Rust baseline context or record a fail-closed skipped/blocked baseline with version, flags, environment, reason, and `output_ref=null`.
 3. Compile the Rust candidate or record the rustc error stack as evidence.
 4. Run C oracle, Rust replay, schema-aware diff, negative diff, and unsafe ledger before claiming semantic progress.
 5. Run the agent safety loop only against a verified unsafe baseline; each patch must target one unsafe site or one compile blocker.
-6. Emit repair patch events, workflow trace, final verification, and `workflow-metrics.json` bound by `competition-run-summary.json`.
+6. Accept at least one patch only when oracle/diff remains green and unsafe strictly decreases, then emit the original unsafe Rust, final Rust, accepted patch, step log, repair history, rollback evidence, final verification, and `workflow-metrics.json` bound by `competition-run-summary.json`.
+7. Package the same artifact as a harness architecture exhibit: planner, worker, verifier, repairer, reporter contracts plus a one-command reproduction path.
 
-Do not spend a development round on docs, schemas, refactors, or route metadata unless the change removes a harness blocker, improves repair/retry convergence, improves unsafe monotonicity evidence, advances a real slice state, adds a fail-closed classification, or removes a competition reproduction blocker.
+Do not spend a development round on docs, schemas, refactors, or route metadata unless the change removes a before/after harness blocker, improves repair/retry convergence, improves unsafe monotonicity evidence, advances a real slice state, adds a fail-closed classification, or removes a competition reproduction blocker.
 
 ## Repair Loop
 
@@ -95,6 +97,7 @@ Before handing work back or starting another slice, leave these facts current:
 - When reporting S2 repair/unsafe progress, pass hash-bound `competition-run-summary.json` files via `--competition-summary`; report tools must verify the bound `workflow-metrics.json` path and sha256 before summarizing repair rounds, auto recovery, unsafe reduction, root causes, wall clock, or LLM calls.
 - For harness runs, require `competition-run-summary.json` to bind `workflow_metrics.path` and `sha256`; the referenced `workflow-metrics.json` must include units, convergence, fail-closed count, unsafe-reduction status, repair/auto-recovery placeholders or measurements, wall clock, LLM calls, and per-unit status.
 - Mark `unsafe_reduction.status=measured` only when every bound worker workflow metrics artifact provides measured baseline/current unsafe counts and their `units_total` covers the parent attempted units. Aggregate baseline/current counts, compute `reduced_by`, and use `ratio=current_total_unsafe / baseline_total_unsafe`; otherwise keep `unsafe_reduction.status=not_measured`.
+- Mark `translation_before_after.status=bound` only when per-unit metrics bind real original/final Rust artifacts, accepted patch or patch log, oracle evidence, and measured unsafe before/after with matching repo-relative paths and sha256 hashes. If the run only reuses accepted evidence, route-refused artifacts, or current unsafe scans, keep `translation_before_after.status=not_provided`.
 - For competition environment work, make tool assumptions explicit; do not silently depend on locally installed Windows tools.
 - Do not claim full verifier/runtime completion unless the current validation profile, oracle/replay/diff evidence, unsafe ledger, and final gates prove it.
 

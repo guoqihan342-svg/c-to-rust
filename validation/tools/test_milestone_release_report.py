@@ -91,6 +91,8 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             self.assertEqual(s2["unsafe_reduction"]["baseline_total_unsafe"], 5)
             self.assertEqual(s2["unsafe_reduction"]["current_total_unsafe"], 2)
             self.assertEqual(s2["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(s2["translation_before_after"]["status"], "not_provided")
+            self.assertEqual(s2["translation_before_after"]["unit_count"], 0)
             self.assertEqual(s2["avg_repair_rounds"], 1.5)
             self.assertEqual(s2["auto_recovery_rate"], 0.5)
             self.assertEqual(s2["repair_history_unit_count"], 1)
@@ -379,6 +381,13 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 "current_total_unsafe": 2,
                 "reduced_by": 3,
                 "ratio": 0.4,
+            },
+            "translation_before_after": {
+                "status": "not_provided",
+                "unit_count": 0,
+                "measured_unsafe_unit_count": 0,
+                "accepted_patch_unit_count": 0,
+                "units": [],
             },
             "avg_repair_rounds": 1.5,
             "auto_recovery_rate": 0.5,

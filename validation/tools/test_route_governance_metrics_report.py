@@ -276,6 +276,13 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                 "reduced_by": 2,
                 "ratio": 1 / 3,
             },
+            "translation_before_after": {
+                "status": "not_provided",
+                "unit_count": 0,
+                "measured_unsafe_unit_count": 0,
+                "accepted_patch_unit_count": 0,
+                "units": [],
+            },
             "avg_repair_rounds": 1.0,
             "auto_recovery_rate": 1.0,
             "human_interventions": 0,

@@ -16,9 +16,10 @@
 
 本文的 Phase 2/3/4 描述能力成熟阶段；P0/P1/P2 是默认执行队列。实际开工时以 P0/P1/P2 为准，遇到 Phase 条目和 P 队列交叉时，把对应能力拆成最小可验证切片执行。
 
-**2026-06-30 评分导向 pivot**：当前比赛主要看 harness / agent / workflow 的 AI 应用质量，而不是手写 transpiler 的 C 语法覆盖率。P0 主线因此改为：`c2rust` 提供广度，OpenCode/LLM worker 提供安全化智能，现有 C oracle / Rust replay / diff / unsafe ledger / evidence chain 提供 ground-truth 闭环。typed IR / generic emitter 从主战场降级为 trivial fast path、诊断对照和受限候选来源；Phase 2/3/4 中的 CFG、union、switch/goto、组合式表达式、完整 IR 分层等仍是技术债和长期能力项，但不再抢占当前 P0 harness 闭环。
+**2026-06-30 评分导向 pivot**：当前比赛最主要看两件事：核心翻译功能和 harness 架构。这里的“核心翻译功能”不再等同于手写 transpiler 的 C 语法覆盖率，而是系统实际把 C 变成 Rust 的质量：`c2rust`/候选 baseline → verified unsafe baseline → agent 安全化 before/after → oracle 等价证明 → unsafe 计数下降。harness 架构负责把这条链自动编排、修复、回滚、度量和复现。P0 主线因此改为：`c2rust` 提供广度，OpenCode/LLM worker 提供安全化智能，现有 C oracle / Rust replay / diff / unsafe ledger / evidence chain 提供 ground-truth 闭环。typed IR / generic emitter 从主战场降级为 trivial fast path、诊断对照和受限候选来源；Phase 2/3/4 中的 CFG、union、switch/goto、组合式表达式、完整 IR 分层等仍是技术债和长期能力项，但不再抢占当前 P0 双主线。
 
-- **先跑通评委可见闭环，再扩翻译器覆盖**：新增 schema、manifest、gate 或 typed-IR 规则前，必须能说明它如何推动端到端 harness：真实 C 输入 → c2rust/候选 → oracle 等价验证 → agent 安全化 patch → repair/retry → workflow metrics/evidence。
+- **先跑通评委可见 before/after，再扩翻译器覆盖**：新增 schema、manifest、gate 或 typed-IR 规则前，必须能说明它如何推动端到端 harness：真实 C 输入 → c2rust/候选 baseline → oracle 等价验证 → agent 安全化 patch → repair/retry → unsafe reduction/workflow metrics/evidence。
+- **核心翻译功能和 harness 架构必须同一份证据说清楚**：只展示 harness 账本、route report 或治理百分比不够；只展示一次翻译结果也不够。公开里程碑必须同时给出原始 unsafe Rust、最终 Rust、接受的 patch/step log、C/Rust diff 通过证据、unsafe before/after、repair/retry 轨迹和复现命令。
 - **治理必须绑定 workflow 或能力增量**：每轮治理、文档、schema、evidence 或 OpenSpec 工作都必须同时绑定至少一个可验证收益：端到端 harness 阻塞被解除、c2rust baseline 可追溯性增强、agent repair/retry 收敛性增强、unsafe 单调下降证据增强、真实 C named slice 的 candidate/accepted 状态推进、明确的 fail-closed 分类，或比赛环境复现阻塞被解除。纯治理清理只能在固定 WIP/时间盒内做，不能替代 P0 harness 闭环和真实运行 artifact。
 - **FlashDB 只是用例**：可以继续用 FlashDB 做回归样本，但不能写 FlashDB 专用 recognizer、模板或特判路径。
 - **候选生成不等于语义接受**：typed IR、C2Rust、LLM 和手写规则都只是 candidate source；语义通过只由 C oracle、Rust replay、diff、negative diff、unsafe ledger 和 final verification 决定。
@@ -109,7 +110,7 @@
    └─ 辅助通道：clang AST dump → typed IR → bounded Rust candidate / fail-closed diagnostics
 ```
 
-当前 P0 以评分主线为准：先证明真实单元能得到 verified unsafe baseline，再证明 agent 能在 oracle 始终为绿的前提下降低 unsafe。typed IR 通道继续提供受限 candidate、诊断、负例和能力账本，但不再作为默认 P0 覆盖率目标。
+当前 P0 以评分双主线为准：先证明真实单元能得到 verified unsafe baseline，再证明 agent 能在 oracle 始终为绿的前提下降低 unsafe，并把这次 before/after 翻译质量提升包装成可复现 harness artifact。typed IR 通道继续提供受限 candidate、诊断、负例和能力账本，但不再作为默认 P0 覆盖率目标。
 
 ### Phase 1: 当前已完成
 
@@ -164,17 +165,18 @@
 
 ## 4. P0/P1/P2 待办（默认执行顺序）
 
-### P0: 先把 harness / agent / workflow 闭环跑通
+### P0: 核心翻译功能 × harness 架构
 
-P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件或治理工作更容易就绕开评分主线：
+P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件或治理工作更容易就绕开评分主线。每个 externally assessable 里程碑都必须同时回答两个问题：翻译结果是否比 baseline 更安全/更可读且语义等价，harness 是否能自动证明、修复、回滚并复现这个过程。
 
-1. 先跑通一个真实单元的 c2rust → compile → C oracle/Rust replay/diff verified unsafe baseline。没有 verified unsafe baseline，就没有可展示的 harness 鲁棒性。
-2. 再跑通 agent 安全化回路：OpenCode/LLM worker 每轮只提出一个最小 unsafe-reduction patch，随后自动 apply、compile、oracle diff、unsafe delta；不通过则回退 last-good 并用 repair hint 重试，最多 5 轮。
-3. 然后扩到 planner + 多 worker：从真实 C 文件拆单元、排序、生成 plan 后用 `run-plan` 执行 deterministic workers、隔离 out-root、生成 merge plan；需要一条命令完成最终聚合时显式使用 `run-plan --execute-merge`，部分收敛时保留 verified unsafe baseline，不能空手或产出未验证结果。
-4. 同步产出 workflow metrics artifact，替代旧的勾选框百分比：`units_total`、`units_converged`、`units_baseline_only`、`unsafe_reduction`、`avg_repair_rounds`、`auto_recovery_rate`、`human_interventions`、`always_compiles`、`always_equivalent`、`fail_closed_count`、wall clock、LLM calls 和 per-unit 状态。
-5. typed IR / generic emitter 只作为辅助：用于 trivial fast path、诊断对照、bounded candidate 或解除 harness 当前 blocker；不再为了覆盖率本身扩 Phase 2/3/4。大文件拆分、OpenSpec/evidence 清理、release tag/review gate 最后做，并设置 WIP/时间盒。
+1. 先选一个最容易收敛且评委可理解的真实单元，默认优先 FlashDB competition-pin 的 `fdb_calc_crc32`，若 c2rust/toolchain 阻塞则立即切到 zlib-ng `adler32` 作为安全化演示单元。目标不是扩大函数集，而是尽快得到一份真实 before/after。
+2. 跑通该单元的 c2rust → compile → C oracle/Rust replay/diff verified unsafe baseline。没有 verified unsafe baseline，就没有可展示的翻译正确性或 harness 鲁棒性。
+3. 跑通 agent 安全化回路：OpenCode/LLM worker 每轮只提出一个最小 unsafe-reduction patch，随后自动 apply、compile、oracle diff、unsafe delta；不通过则回退 last-good 并用 repair hint 重试，最多 5 轮。第一目标是至少接受 1 个语义等价且 unsafe 严格下降的 patch。
+4. 把这次 before/after 固化成 harness 架构展品：planner/worker/verifier/repairer/reporter 五阶段契约、workflow trace、repair history、rollback evidence、最终 summary 和复现命令必须能串起来说明系统如何自主修正。
+5. 同步产出 workflow metrics artifact，替代旧的勾选框百分比：`units_total`、`units_converged`、`units_baseline_only`、`unsafe_reduction`、`avg_repair_rounds`、`auto_recovery_rate`、`human_interventions`、`always_compiles`、`always_equivalent`、`fail_closed_count`、wall clock、LLM calls 和 per-unit 状态。
+6. typed IR / generic emitter 只作为辅助：用于 trivial fast path、诊断对照、bounded candidate 或解除当前 before/after harness blocker；不再为了覆盖率本身扩 Phase 2/3/4。planner + 多 worker 只在第一个单元已收敛后扩展；大文件拆分、OpenSpec/evidence 清理、release tag/review gate 最后做，并设置 WIP/时间盒。
 
-- [ ] S1 端到端骨架：在比赛环境约束下跑通一个真实单元的 c2rust baseline，记录 c2rust version/flags/input hashes/output hash，并让 Rust 产物可编译。进展：`auto_migrate.py` 已补上显式开启的 C2Rust baseline 生成路径；当 `C2RUST_BASELINE_GENERATION=1`、PATH 上存在 `c2rust`/`c2rust-transpile` 且 `build_profile.compiler_command_source` 能解析到 `compile_commands.json` 时，会执行受控 argv 命令、记录 stdout/stderr/timeout/returncode，并把实际生成的 Rust 输出汇总为带 path/status/sha256 的 `candidate_context_only` manifest output。剩余：仍需在 Linux/WSL/competition 环境对真实 slice 运行并证明 Rust 产物可编译。
+- [ ] S1 端到端骨架：在比赛环境约束下跑通一个真实单元的 c2rust baseline，记录 c2rust version/flags/input hashes/output hash，并让 Rust 产物可编译；优先选择 FlashDB `fdb_calc_crc32`，若工具链阻塞则用 zlib-ng `adler32` 保证 D1-D2 能看到安全化闭环是否收敛。进展：`auto_migrate.py` 已补上显式开启的 C2Rust baseline 生成路径；当 `C2RUST_BASELINE_GENERATION=1`、PATH 上存在 `c2rust`/`c2rust-transpile` 且 `build_profile.compiler_command_source` 能解析到 `compile_commands.json` 时，会执行受控 argv 命令、记录 stdout/stderr/timeout/returncode，并把实际生成的 Rust 输出汇总为带 path/status/sha256 的 `candidate_context_only` manifest output。剩余：仍需在 Linux/WSL/competition 环境对真实 slice 运行并证明 Rust 产物可编译。
 - [ ] S1 verifier：复用现有 C oracle/Rust replay/diff gate，把该 c2rust baseline 升级为 `verified-unsafe-baseline`；失败时 fail-closed 记录 fixture、observable diff 和下一步。
 - [ ] S2 安全化回路：在同一单元上接入 OpenCode/LLM worker，要求每轮只输出一个 unified diff、安全化理由和目标 unsafe site；compile/diff/unsafe delta 全绿且 unsafe 严格下降才接受。
 - [ ] S2 repair/retry：把 compile error stack、oracle diff、unsafe delta 结构化为 repair hint，`retry-worker` 消费 hint 重新执行，默认最多 5 轮；每次失败都回退到 last-good。
@@ -182,7 +184,8 @@ P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件�
 - [ ] S3 planner + 多 worker：给一个真实 C 文件自动拆成有序 units，生成 assignment/request，隔离 worker out-root，并通过 `run_competition.py --worker-summary ...` 聚合。进展：`opencode_agent_harness.py plan-source-file` 已能扫描单个 repo 内 C 源文件的 top-level function definitions，按源码顺序生成稳定 `worker_id`/`slice_id`、隔离 `workers/<worker-id>` out-root、assignment/request JSON 和 planner artifact，并复用现有 `assign-slice` / `scripts/c2rust-migrator.py --phase migrate --input ...` direct extraction request 合同；它现在也支持显式 `--function` 过滤和重复 `--slice-spec` 输入，每个 slice spec 按其中的 `function_name` 绑定到 planned worker，避免靠文件顺序 `--limit` 碰巧选中目标函数。`run-plan` 现在可以读取 planner artifact，按计划顺序执行已分配 worker（默认 deterministic，也可用 opencode 包装单 worker）、记录每个 worker report/summary、写出 `harness/run-plan-report.json`，并调用 `write-merge-plan` 生成聚合输入。带 `--execute-merge` 时，它会执行生成的 `run_competition.py --worker-summary ...` argv、记录 stdout/stderr、从最终 summary finalize SQLite run；若任何 planned worker 没有已记录 summary，则 fail-closed 跳过最终聚合。smoke 证据：本地 `target/competition-out-planned-smoke` 已用 `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32`、`validation/slice-specs/flashdb-real-fdb-calc-crc32.json`、`--reuse-accepted-evidence` 和 `--execute-merge` 跑通，聚合 final gate passed，1 个 unit converged，并绑定 `workflow-metrics.json`。边界：这证明 `local-simulation` 下 planned batch 可以复用已提交 accepted evidence 并走到最终聚合；它仍不替代最终 validator，不证明并行收敛、不证明 generated Rust draft semantic pass，也不证明 unsafe reduction measured。
   本轮补充：新增 `config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json` 和 `run-batch-profile` 一键入口，把 `init-run`、`plan-source-file`、`run-plan --execute-merge` 固化为 repo-local profile；`target/competition-out-profile-smoke` 已用该 profile 在 `local-simulation` 下跑通，final gate passed，`semantic_pass=1`，`workers=1`，`workflow_units_converged=1`，并在 `batch-profile-report.json` 绑定 profile sha256 与 `acceptance_boundary.generated_draft_semantic_pass=false`。该 profile 现在启用 `emit_route_governance_metrics_report=true`，`run-batch-profile` 会写出并绑定 `summary/route-governance-metrics-report.json`，记录 translator-generated numerator、accepted-evidence semantic pass、slice gate contexts 和 claim boundary。边界：profile 当前只包含与 FlashDB competition pin 对齐的 `fdb_calc_crc32`；`fdb_blob_make` 的维护版 spec/evidence 仍绑定旧 source commit，不能混入该 competition-pin batch；route governance metrics report 是公开叙述约束和能力/拒绝率指标，不是新的 semantic acceptance gate。
 - [ ] S4 workflow metrics artifact：每次 harness run 生成 machine-readable 指标，取代 `33.7%` 这类 transpiler checklist 百分比；milestone/release 只引用该指标和落盘 evidence。
-- [ ] S4 演示里程碑：优先选择 zlib-ng `adler32` 或 FlashDB 一个真实文件，产出可复现命令、workflow trace、verified unsafe baseline、安全化 step log、unsafe reduction、repair 记录和最终 evidence manifest。
+  本轮补充：`workflow-metrics.json` 现在包含 `translation_before_after` 摘要，per-unit 可绑定原始 unsafe Rust、最终 Rust、accepted patch、patch log、oracle evidence 和 measured unsafe before/after，并由 `validate_competition_run_summary.py` 校验 repo-relative path 与 sha256；没有真实安全化 artifact 时必须输出 `status=not_provided`，不能把 accepted-evidence-authoritative、route-refused 或当前 unsafe scan 包装成 measured safety-refactor 成果。`milestone_release_report.py` / `route_governance_metrics_report.py` 会从 hash-bound competition summary 汇总该状态。
+- [ ] S4 演示里程碑：优先把 FlashDB `fdb_calc_crc32` 或 zlib-ng `adler32` 做成 before/after 展示中心，产出可复现命令、原始 unsafe Rust、最终 Rust、workflow trace、verified unsafe baseline、安全化 step log、unsafe reduction、repair 记录、harness 五阶段契约和最终 evidence manifest。
 
 - [ ] 继续收敛 `crates/c2r-translator/src/lib.rs`：crate root 已经缩成较小的 public orchestration 入口，但仍要把 CLI/manifest、旧字符串 translator、typed IR route、artifact 写入、unsafe/metadata 统计等责任继续拆到子模块；已完成公开 model schema 拆分、artifact/IO leaf helper 私有模块（`artifact_io.rs`：`write_json_file`、`write_text_file`、`translation_events_jsonl`）拆分、core translation artifact writer helper（`write_core_translation_artifacts`）拆分、feature-gated clang dry-run artifact writer（`write_clang_dry_run_artifact`）拆分、clang lowering report artifact writer cluster（`write_clang_lowering_report_artifact`、`typed_ir_candidate_evidence`、`readonly_global_summary`）拆分、clang-lowered translation/evidence 私有模块（`clang_lowered_translation.rs`）拆分、legacy string translator 私有模块（`legacy_translation.rs`）拆分，以及 `write_translation_artifacts` public orchestration 拆分，crate root API 保持兼容；仍待 CLI/manifest orchestration、generic typed IR route、unsafe/metadata 统计、parser/evidence builder/emitter 的后续拆分；拆分提交必须保持现有测试通过。
 - [ ] 拆分 `typed_ir.rs` / `clang_frontend.rs` 巨文件：先做行为保持拆分，把 IR 数据类型、类型/definite-assignment validation、emitter、side-effect helpers、clang AST skeleton、clang-to-IR lowering、report/evidence builder 分到稳定子模块；每一刀必须保持 feature matrix、public API、bounded tests、fixture replay 和 `git diff --check` 通过。
