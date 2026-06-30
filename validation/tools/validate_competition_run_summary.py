@@ -309,13 +309,13 @@ def validate_worker_summary_path(value: str, *, index: int, seen_paths: set[str]
         and parts[2] == "summary"
         and parts[3] == "competition-run-summary.json"
     )
-    repo_relative = (
-        len(parts) == 6
-        and parts[0:3] == ("target", "competition-out", "workers")
-        and parts[4] == "summary"
-        and parts[5] == "competition-run-summary.json"
+    nested_run_relative = (
+        len(parts) >= 5
+        and parts[-4] == "workers"
+        and parts[-2] == "summary"
+        and parts[-1] == "competition-run-summary.json"
     )
-    if not worker_relative and not repo_relative:
+    if not worker_relative and not nested_run_relative:
         raise SystemExit(
             "competition run summary worker summary path must match "
             "workers/<worker-id>/summary/competition-run-summary.json"

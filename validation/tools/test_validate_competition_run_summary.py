@@ -169,6 +169,39 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
 
+    def test_accepts_worker_summary_under_custom_run_out_root(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 1,
+            "summaries": [
+                {
+                    "path": "target/opencode-real-smoke-20260630-003/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "wsl-local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            result = module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+
     def test_rejects_unknown_proof_class(self) -> None:
         module = load_validator_module()
         summary = valid_summary()
