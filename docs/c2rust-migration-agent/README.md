@@ -47,7 +47,7 @@
 
 ## 文档地图
 
-- 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，机器可读状态见 `baseline-record.json`。
+- 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，评委 before/after 演示入口是 `judge-demo.md` / `judge-demo.en.md`，机器可读状态见 `baseline-record.json`。
 - 架构与合约：见 `index/architecture.md`。覆盖 `agent-contract.md`、`baseline-and-versioning.md`、`context-store-and-self-healing.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`、`l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`。
 - 运行与验证：见 `index/operations.md`。覆盖 `quickstart.md` / `quickstart.en.md`、`opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`、`build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
 - 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
@@ -67,6 +67,8 @@ openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```bash
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
+
+当前评委展示路径见 `judge-demo.md`，它从 `config/competition-env/planned-batches/demo-store-add-one-before-after.json` 生成 before/after exhibit 和 milestone release report。
 
 ## 运行原则
 

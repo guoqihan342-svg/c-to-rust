@@ -129,6 +129,20 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
 
 该 profile 只是把 `init-run`、`plan-source-file`、`run-plan --execute-merge` 固化为一条命令；语义接受仍只看最终 `competition-run-summary.json`、workflow metrics 和 validator。当前 FlashDB profile 复用已提交 accepted evidence binding，明确记录 `generated_draft_semantic_pass=false`，不能解读为重新生成 Rust draft 自身通过 semantic gate。
 
+评委 before/after demo profile：
+
+```bash
+python -B -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json \
+  --run-id competition-demo-before-after-exhibit \
+  --out-root target/competition-out-demo-before-after-exhibit
+
+python -B validation/tools/validate_competition_run_summary.py \
+  --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
+```
+
+该 profile 会生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`，并绑定 `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json`。它展示 accepted-evidence before/after artifact、unsafe 3→0 和 harness 五阶段 contract；`generated_draft_semantic_pass=false`，且不会增加 `translation_coverage_numerator`。
+
 clang typed-IR 比赛路线是显式 opt-in：
 
 ```bash

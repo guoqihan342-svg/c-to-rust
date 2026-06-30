@@ -127,6 +127,20 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
 
 This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate.
 
+Judge-facing before/after demo profile:
+
+```bash
+python -B -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json \
+  --run-id competition-demo-before-after-exhibit \
+  --out-root target/competition-out-demo-before-after-exhibit
+
+python -B validation/tools/validate_competition_run_summary.py \
+  --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
+```
+
+This profile generates `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` and binds `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json`. It demonstrates accepted-evidence before/after artifacts, unsafe 3 -> 0, and the harness five-stage contract; `generated_draft_semantic_pass=false`, and it does not increase `translation_coverage_numerator`.
+
 The clang typed-IR competition lane is explicit opt-in:
 
 ```bash

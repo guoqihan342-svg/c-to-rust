@@ -45,7 +45,7 @@
 
 ## Document Map
 
-- Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; machine-readable status lives in `baseline-record.json`.
+- Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; the judge-facing before/after demo entrypoint is `judge-demo.md` / `judge-demo.en.md`; machine-readable status lives in `baseline-record.json`.
 - Architecture and contracts: see `index/architecture.md`. Covers `agent-contract.md`, `baseline-and-versioning.md`, `context-store-and-self-healing.md`, `core-translation-architecture.md` / `core-translation-architecture.en.md`, and `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`.
 - Operations and validation: see `index/operations.md`. Covers `quickstart.md` / `quickstart.en.md`, `opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`, `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
 - Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
@@ -64,6 +64,8 @@ Then run the Agent phase, for example:
 ```bash
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
+
+The current judge-facing demo path is `judge-demo.md`; it uses `config/competition-env/planned-batches/demo-store-add-one-before-after.json` to produce the before/after exhibit and milestone release report.
 
 ## Operating Principles
 

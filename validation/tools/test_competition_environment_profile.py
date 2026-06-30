@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tomllib
 import unittest
@@ -22,6 +23,10 @@ RUST_MANIFESTS = [
 
 def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def direct_rust_dependencies(manifest: Path) -> set[str]:
@@ -177,6 +182,53 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(slice_spec["target_id"], batch["target_id"])
         self.assertEqual(slice_spec["function_name"], "fdb_calc_crc32")
         self.assertEqual(slice_spec["source_commit"], commit)
+
+    def test_demo_before_after_public_judge_profile_contract(self) -> None:
+        batch = load_json(PROFILE_DIR / "planned-batches" / "demo-store-add-one-before-after.json")
+
+        self.assertEqual(batch["schema_version"], 1)
+        self.assertEqual(batch["profile_id"], "demo-store-add-one-before-after")
+        self.assertEqual(batch["proof_class"], "local-simulation")
+        self.assertEqual(batch["mode"], "deterministic")
+        self.assertTrue(batch["execute_merge"])
+        self.assertTrue(batch["emit_before_after_exhibit_report"])
+        self.assertTrue(batch["emit_route_governance_metrics_report"])
+        self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertIs(batch["acceptance_boundary"]["generated_draft_semantic_pass"], False)
+        self.assertEqual(
+            batch["acceptance_boundary"]["translation_before_after"],
+            "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json",
+        )
+
+        for readme_path in [PROFILE_DIR / "README.md", PROFILE_DIR / "README.en.md"]:
+            text = readme_path.read_text(encoding="utf-8")
+            with self.subTest(readme=readme_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("demo-store-add-one-before-after.json", text)
+                self.assertIn("python -B -m validation.tools.opencode_agent_harness run-batch-profile", text)
+                self.assertIn("python -B validation/tools/validate_competition_run_summary.py", text)
+                self.assertIn("target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json", text)
+                self.assertIn("generated_draft_semantic_pass=false", text)
+                self.assertIn("translation_coverage_numerator", text)
+
+        before_after = load_json(REPO_ROOT / batch["acceptance_boundary"]["translation_before_after"])
+        self.assertEqual(before_after["status"], "bound")
+        self.assertEqual(before_after["unsafe_reduction"]["status"], "measured")
+        self.assertEqual(before_after["unsafe_reduction"]["baseline_total_unsafe"], 3)
+        self.assertEqual(before_after["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertEqual(before_after["unsafe_reduction"]["reduced_by"], 3)
+        for key in [
+            "baseline",
+            "final",
+            "oracle_evidence",
+            "accepted_patch",
+            "patch_log",
+            "unsafe_scan_evidence",
+        ]:
+            artifact = before_after[key]
+            artifact_path = REPO_ROOT / artifact["path"]
+            with self.subTest(artifact=key):
+                self.assertTrue(artifact_path.exists())
+                self.assertEqual(artifact["sha256"], sha256_file(artifact_path))
 
     def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
