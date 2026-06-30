@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 from typing import Any
 
 
@@ -81,6 +82,44 @@ def assert_no_local_absolute_path(text: str) -> None:
         raise ValueError(f"text contains local absolute path: {text}")
 
 
+def json_path(parts: tuple[str, ...]) -> str:
+    return "$" + "".join(f".{part}" for part in parts)
+
+
+def is_allowed_host_trace_path(parts: tuple[str, ...]) -> bool:
+    return any(part == "argv" and index > 0 and parts[index - 1] == "merge_execution" for index, part in enumerate(parts))
+
+
+def validate_local_absolute_path_policy(payload: Any, *, label: str) -> dict[str, Any]:
+    allowed: list[str] = []
+    forbidden: list[str] = []
+
+    def visit(value: Any, parts: tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                visit(child, (*parts, str(key)))
+            return
+        if isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, (*parts, str(index)))
+            return
+        if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+            location = json_path(parts)
+            if is_allowed_host_trace_path(parts):
+                allowed.append(location)
+            else:
+                forbidden.append(location)
+
+    visit(payload, ())
+    if forbidden:
+        raise ValueError(f"{label} contains forbidden local absolute path at {forbidden}")
+    return {
+        "status": "passed",
+        "host_trace_allowed_count": len(allowed),
+        "host_trace_allowed_locations": allowed,
+    }
+
+
 def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     path_text = ref.get("path")
     expected_sha = ref.get("sha256")
@@ -115,6 +154,27 @@ def validate_expected_artifacts(
             raise ValueError(f"expected artifact is missing: {path_text}")
         result[str(name)] = artifact
     return result
+
+
+def parsed_command_flags(command: str) -> dict[str, str]:
+    flags: dict[str, str] = {}
+    parts = shlex.split(command, posix=True)
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        if part.startswith("--") and index + 1 < len(parts) and not parts[index + 1].startswith("--"):
+            flags[part] = parts[index + 1]
+            index += 2
+            continue
+        index += 1
+    return flags
+
+
+def require_command_flag(flags: dict[str, str], flag: str, label: str) -> str:
+    value = flags.get(flag)
+    if not value:
+        raise ValueError(f"{label} command must include {flag}")
+    return value
 
 
 def validate_claim_boundary(config: dict[str, Any]) -> dict[str, Any]:
@@ -265,6 +325,127 @@ def validate_entrypoint_profile_contract(
         "profile_id": profile.get("profile_id"),
         "proof_class": profile.get("proof_class"),
         "observed_commits": sorted(observed_commits),
+        "status": "passed",
+    }
+
+
+def manifest_profile_payload(manifest: dict[str, Any]) -> dict[str, Any]:
+    for field in ("profile", "competition_profile"):
+        value = manifest.get(field)
+        if isinstance(value, dict):
+            return value
+    raise ValueError("tracked manifest must include profile or competition_profile")
+
+
+def expected_manifest_reproduction_command_key(entry: dict[str, Any]) -> str:
+    command = require_string(entry.get("command"), f"{entry.get('id')}.command")
+    if "validation.tools.judge_demo" in command:
+        return "judge_demo_command"
+    if "validation.tools.opencode_agent_harness evaluate" in command:
+        return "evaluate_profile_command"
+    if "validation.tools.opencode_agent_harness run-batch-profile" in command:
+        return "run_batch_profile_command"
+    raise ValueError(f"{entry.get('id')} command is not a supported judge entrypoint command")
+
+
+def manifest_source_commits(manifest: dict[str, Any]) -> list[str]:
+    commits: set[str] = set()
+    source = manifest.get("source")
+    if isinstance(source, dict):
+        for field in ("source_commit", "require_source_commit"):
+            value = source.get(field)
+            if isinstance(value, str):
+                commits.add(value)
+    workers = manifest.get("workers")
+    if isinstance(workers, list):
+        for worker in workers:
+            if not isinstance(worker, dict):
+                continue
+            for field in ("source_commit", "require_source_commit"):
+                value = worker.get(field)
+                if isinstance(value, str):
+                    commits.add(value)
+    return sorted(commits)
+
+
+def validate_expected_artifacts_under_out_root(entry: dict[str, Any], *, out_root: str) -> list[str]:
+    assert_repo_relative_posix(out_root)
+    out_root_prefix = out_root.rstrip("/") + "/"
+    artifacts = require_object(entry.get("expected_artifacts"), f"{entry.get('id')}.expected_artifacts")
+    artifact_paths: list[str] = []
+    for name, value in sorted(artifacts.items()):
+        path_text = require_string(value, f"{entry.get('id')}.expected_artifacts.{name}")
+        assert_repo_relative_posix(path_text)
+        if not path_text.startswith(out_root_prefix):
+            raise ValueError(f"{entry.get('id')} expected_artifacts.{name} must be under reproduction --out-root")
+        artifact_paths.append(path_text)
+    return artifact_paths
+
+
+def validate_tracked_manifest_contract(
+    entry: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    claim_boundary: dict[str, Any],
+    source_pin_contract: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    manifest_ref = require_object(entry.get("tracked_manifest"), f"{entry.get('id')}.tracked_manifest")
+    manifest_path = require_string(manifest_ref.get("path"), f"{entry.get('id')}.tracked_manifest.path")
+    manifest = load_json(repo_path(manifest_path, repo_root=repo_root))
+    if manifest.get("status") != "passed":
+        raise ValueError(f"{entry.get('id')} tracked manifest status must be passed")
+    if manifest.get("target_id") != config.get("target_id"):
+        raise ValueError(f"{entry.get('id')} tracked manifest target_id must match judge target_id")
+    if manifest.get("proof_class") != entry.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} tracked manifest proof_class must match entrypoint")
+
+    environment_ref = require_object(config.get("environment_profile"), "environment_profile")
+    environment = require_object(manifest.get("environment_profile"), f"{entry.get('id')} tracked manifest environment_profile")
+    for field in ("path", "sha256"):
+        if environment.get(field) != environment_ref.get(field):
+            raise ValueError(f"{entry.get('id')} tracked manifest environment_profile.{field} must match judge config")
+
+    manifest_boundary = require_object(manifest.get("claim_boundary"), f"{entry.get('id')} tracked manifest claim_boundary")
+    for field in ("semantic_claim_source", "generated_draft_semantic_pass", "translation_coverage_numerator"):
+        if manifest_boundary.get(field) != claim_boundary.get(field):
+            raise ValueError(f"{entry.get('id')} tracked manifest claim_boundary.{field} must match judge config")
+
+    if source_pin_contract:
+        allowed_commits = set(source_pin_contract["allowed_commits"])
+        disallowed = sorted(commit for commit in manifest_source_commits(manifest) if commit not in allowed_commits)
+        if disallowed:
+            raise ValueError(f"{entry.get('id')} tracked manifest uses commits outside source_pin_policy: {disallowed}")
+
+    profile_ref = require_object(entry.get("profile"), f"{entry.get('id')}.profile")
+    profile = manifest_profile_payload(manifest)
+    if profile.get("path") != profile_ref.get("path"):
+        raise ValueError(f"{entry.get('id')} tracked manifest profile path must match entrypoint profile")
+    if profile.get("sha256") != profile_ref.get("sha256"):
+        raise ValueError(f"{entry.get('id')} tracked manifest profile sha256 must match entrypoint profile")
+
+    reproduction = require_object(manifest.get("reproduction"), f"{entry.get('id')} tracked manifest reproduction")
+    command_key = expected_manifest_reproduction_command_key(entry)
+    manifest_command = require_string(reproduction.get(command_key), f"{entry.get('id')} tracked manifest reproduction.{command_key}")
+    if manifest_command != entry.get("command"):
+        raise ValueError(f"{entry.get('id')} tracked manifest reproduction command must match entrypoint command")
+    flags = parsed_command_flags(manifest_command)
+    profile_path = require_command_flag(flags, "--profile", f"{entry.get('id')} tracked manifest reproduction.{command_key}")
+    run_id = require_command_flag(flags, "--run-id", f"{entry.get('id')} tracked manifest reproduction.{command_key}")
+    out_root = require_command_flag(flags, "--out-root", f"{entry.get('id')} tracked manifest reproduction.{command_key}")
+    if profile_path != profile_ref.get("path"):
+        raise ValueError(f"{entry.get('id')} tracked manifest reproduction --profile must match entrypoint profile")
+    if run_id != entry.get("run_id"):
+        raise ValueError(f"{entry.get('id')} tracked manifest reproduction --run-id must match entrypoint run_id")
+    expected_artifact_paths = validate_expected_artifacts_under_out_root(entry, out_root=out_root)
+    validate_local_absolute_path_policy(reproduction, label=f"{entry.get('id')} tracked manifest reproduction")
+    return {
+        "path": manifest_path,
+        "manifest_kind": manifest.get("manifest_kind"),
+        "reproduction_command_key": command_key,
+        "reproduction_out_root": out_root,
+        "expected_artifact_count": len(expected_artifact_paths),
+        "source_commits": manifest_source_commits(manifest),
         "status": "passed",
     }
 
@@ -473,6 +654,7 @@ def validate_agent_coordination_contract(
             raise ValueError(f"agents_by_worker_id key must match worker_id: {worker_id}")
         for field in ("assignment_path", "request_path", "summary_path", "report_path", "isolated_out_root"):
             assert_repo_relative_posix(require_string(agent_payload.get(field), f"{worker_id}.{field}"))
+    local_path_scan = validate_local_absolute_path_policy(payload, label=f"agent_index {path_text}")
 
     return {
         "path": path_text,
@@ -480,6 +662,7 @@ def validate_agent_coordination_contract(
         "roles": list(REQUIRED_AGENT_ROLES),
         "worker_count": len(agents_by_worker_id),
         "repair_round_cap": 5,
+        "local_absolute_path_scan": local_path_scan,
     }
 
 
@@ -507,8 +690,14 @@ def validate_judge_evidence_index_contract(payload: dict[str, Any], *, path_text
     roles = agent_contract.get("roles")
     if not isinstance(roles, list) or set(roles) != set(REQUIRED_AGENT_ROLES):
         raise ValueError("judge_evidence_index.agent_coordination.roles must list all required roles")
+    local_path_scan = validate_local_absolute_path_policy(payload, label=f"judge_evidence_index {path_text}")
 
-    return {"path": path_text, "status": "passed", "architecture_contracts": "passed"}
+    return {
+        "path": path_text,
+        "status": "passed",
+        "architecture_contracts": "passed",
+        "local_absolute_path_scan": local_path_scan,
+    }
 
 
 def worker_ids_from_entries(entries: Any, *, label: str) -> set[str]:
@@ -645,6 +834,33 @@ def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[
     return {"status": "passed", "checked_workers": checked_workers, "repair_round_cap": 5}
 
 
+def validate_expected_json_local_path_policy(
+    artifacts: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    scanned: list[str] = []
+    allowed_locations: list[str] = []
+    for name, value in sorted(artifacts.items()):
+        path_text = require_string(value, f"expected_artifacts.{name}")
+        if not path_text.endswith(".json"):
+            continue
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            continue
+        scan = validate_local_absolute_path_policy(load_json(path), label=f"expected_artifacts.{name} {path_text}")
+        scanned.append(path_text)
+        for location in scan["host_trace_allowed_locations"]:
+            allowed_locations.append(f"{path_text}{location}")
+    return {
+        "status": "passed",
+        "scanned_count": len(scanned),
+        "scanned_artifacts": scanned,
+        "host_trace_allowed_count": len(allowed_locations),
+        "host_trace_allowed_locations": allowed_locations,
+    }
+
+
 def validate_harness_artifact_contracts(
     artifacts: dict[str, Any],
     *,
@@ -656,6 +872,7 @@ def validate_harness_artifact_contracts(
     result: dict[str, Any] = {"status": "passed"}
     context_payload: dict[str, Any] | None = None
     agent_payload: dict[str, Any] | None = None
+    result["expected_json_local_path_policy"] = validate_expected_json_local_path_policy(artifacts, repo_root=repo_root)
     if "context_pack" in artifacts:
         context_path = repo_path(str(artifacts["context_pack"]), repo_root=repo_root)
         context_payload = load_json(context_path)
@@ -765,6 +982,13 @@ def validate_config(
                         else {"status": "skipped", "reason": "source_pin_contract_failed"}
                     ),
                     "tracked_manifest": validate_ref(entry["tracked_manifest"], repo_root=repo_root),
+                    "tracked_manifest_contract": validate_tracked_manifest_contract(
+                        entry,
+                        config=config,
+                        claim_boundary=claim_boundary,
+                        source_pin_contract=source_pin_contract,
+                        repo_root=repo_root,
+                    ),
                     "expected_artifacts": validate_expected_artifacts(
                         expected_artifacts,
                         require_local_artifacts=require_local_artifacts,

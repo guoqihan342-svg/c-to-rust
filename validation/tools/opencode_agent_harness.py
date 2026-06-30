@@ -5391,7 +5391,7 @@ def write_merge_plan(
             repo_relative(repo_path(Path(summary), repo_root=repo_root), repo_root=repo_root)
             for summary in worker_summary_paths
         ]
-    argv = [sys.executable, "validation/tools/run_competition.py"]
+    argv = ["python", "-B", "validation/tools/run_competition.py"]
     for summary in summaries:
         argv.extend(["--worker-summary", summary])
     argv.extend(["--out-root", repo_relative(out_root, repo_root=repo_root), "--proof-class", proof_class, "--run-id", run_id])

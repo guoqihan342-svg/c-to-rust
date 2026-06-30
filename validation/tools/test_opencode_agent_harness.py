@@ -3006,7 +3006,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 merge_plan["worker_summaries"],
                 [repo_rel(summary_path)],
             )
-            self.assertEqual(merge_plan["argv"][0], sys.executable)
+            self.assertEqual(merge_plan["argv"][:3], ["python", "-B", "validation/tools/run_competition.py"])
             self.assertIn("--worker-summary", merge_plan["argv"])
             self.assertIn("--run-id", merge_plan["argv"])
             run_id_idx = merge_plan["argv"].index("--run-id")

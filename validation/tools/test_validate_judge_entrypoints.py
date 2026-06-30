@@ -31,6 +31,25 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def temp_json_ref(path: Path, payload: dict) -> dict:
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def bind_entrypoint_to_out_root(config: dict, temp_config: Path, *, entry_index: int, out_root: Path) -> Path:
+    entry = config["entrypoints"][entry_index]
+    flags = validator.parsed_command_flags(entry["command"])
+    old_out_root = flags["--out-root"]
+    new_out_root = repo_relative(out_root)
+    entry["command"] = entry["command"].replace(f"--out-root {old_out_root}", f"--out-root {new_out_root}")
+    manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+    command_key = validator.expected_manifest_reproduction_command_key(entry)
+    manifest["reproduction"][command_key] = entry["command"]
+    manifest_path = temp_config.parent / f"{entry['id']}-tracked-manifest.json"
+    entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+    return out_root
+
+
 class JudgeEntrypointsValidatorTests(unittest.TestCase):
     def test_default_flashdb_judge_entrypoints_passes(self) -> None:
         result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
@@ -60,14 +79,19 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
     def test_require_local_artifacts_checks_expected_artifact_presence(self) -> None:
         config = load_default_config()
         config["entrypoints"] = [config["entrypoints"][0]]
+        temp_config = write_temp_config(config)
+        out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_config.parent / "out")
+        artifact = out_root / "harness" / "validator.txt"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("validator\n", encoding="utf-8")
         config["entrypoints"][0]["expected_artifacts"] = {
-            "validator": "validation/tools/validate_judge_entrypoints.py"
+            "validator": repo_relative(artifact)
         }
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         config["test_contract"]["required_expected_artifacts"] = ["validator"]
-        path = write_temp_config(config)
+        write_json(temp_config, config)
 
-        result = validator.validate_config(path, require_local_artifacts=True, repo_root=REPO_ROOT)
+        result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
 
         self.assertEqual(result["status"], "passed")
         artifacts = result["entrypoints"][0]["expected_artifacts"]
@@ -80,14 +104,15 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
-        context_pack = temp_dir / "context-pack.json"
-        agent_index = temp_dir / "agent-index.json"
-        competition_summary = temp_dir / "competition-run-summary.json"
-        workflow_metrics = temp_dir / "workflow-metrics.json"
-        ledger = temp_dir / "opencode-agent-harness.sqlite3"
-        worker_root = temp_dir / "workers" / "worker-001"
-        assignment = temp_dir / "assignments" / "worker-001.json"
-        request = temp_dir / "assignments" / "worker-001-request.json"
+        out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_dir / "out")
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        competition_summary = out_root / "summary" / "competition-run-summary.json"
+        workflow_metrics = out_root / "summary" / "workflow-metrics.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
         summary = worker_root / "summary" / "competition-run-summary.json"
         report = worker_root / "harness" / "run-worker-report.json"
 
@@ -247,14 +272,15 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
-        context_pack = temp_dir / "context-pack.json"
-        agent_index = temp_dir / "agent-index.json"
-        placeholder = temp_dir / "placeholder.json"
-        request = temp_dir / "assignments" / "worker-001-request.json"
-        other_request = temp_dir / "assignments" / "worker-001-other-request.json"
-        assignment = temp_dir / "assignments" / "worker-001.json"
-        summary = temp_dir / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
-        report = temp_dir / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_dir / "out")
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        placeholder = out_root / "summary" / "placeholder.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        other_request = out_root / "harness" / "assignments" / "worker-001-other-request.json"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        summary = out_root / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        report = out_root / "workers" / "worker-001" / "harness" / "run-worker-report.json"
         for artifact in [placeholder, request, other_request, assignment, summary, report]:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("{}\n", encoding="utf-8")
@@ -327,7 +353,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "agents_by_worker_id": {
                     "worker-001": {
                         **drifted_worker,
-                        "isolated_out_root": repo_relative(temp_dir / "workers" / "worker-001"),
+                        "isolated_out_root": repo_relative(out_root / "workers" / "worker-001"),
                     }
                 },
             },
@@ -347,9 +373,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
-        context_pack = temp_dir / "context-pack.json"
-        agent_index = temp_dir / "agent-index.json"
-        placeholder = temp_dir / "placeholder.json"
+        out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_dir / "out")
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        placeholder = out_root / "summary" / "placeholder.json"
+        placeholder.parent.mkdir(parents=True, exist_ok=True)
         placeholder.write_text("{}\n", encoding="utf-8")
         config["entrypoints"][0]["expected_artifacts"] = {
             "competition_summary": repo_relative(placeholder),
@@ -453,6 +481,119 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             any("profile uses commits outside source_pin_policy" in error for error in result["errors"]),
             result["errors"],
         )
+
+    def test_tracked_manifest_reproduction_command_must_match_entrypoint_command(self) -> None:
+        config = load_default_config()
+        temp_config = write_temp_config(config)
+        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest["reproduction"]["evaluate_profile_command"] = manifest["reproduction"]["evaluate_profile_command"].replace(
+            "--run-id harness-flashdb-explicit-workers-evaluate-profile-20260701",
+            "--run-id wrong-evaluate-run",
+        )
+        manifest_path = temp_config.parent / "drifted-explicit-workers-manifest.json"
+        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        write_json(temp_config, config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("tracked manifest reproduction command must match entrypoint command" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_tracked_manifest_claim_boundary_must_match_judge_config(self) -> None:
+        config = load_default_config()
+        temp_config = write_temp_config(config)
+        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest["claim_boundary"]["semantic_claim_source"] = "generated_draft"
+        manifest_path = temp_config.parent / "drifted-claim-boundary-manifest.json"
+        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        write_json(temp_config, config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("tracked manifest claim_boundary.semantic_claim_source must match judge config" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_tracked_manifest_source_commits_must_follow_source_pin_policy(self) -> None:
+        config = load_default_config()
+        temp_config = write_temp_config(config)
+        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest["workers"][0]["source_commit"] = "bad-commit"
+        manifest_path = temp_config.parent / "drifted-source-commit-manifest.json"
+        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        write_json(temp_config, config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("tracked manifest uses commits outside source_pin_policy" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_tracked_manifest_reproduction_out_root_bounds_expected_artifacts(self) -> None:
+        config = load_default_config()
+        config["entrypoints"][1]["expected_artifacts"]["merge_plan"] = "target/outside-harness/merge-plan.json"
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("expected_artifacts.merge_plan must be under reproduction --out-root" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_merge_plan_argv_rejects_local_absolute_paths(self) -> None:
+        with self.assertRaisesRegex(ValueError, "local absolute path"):
+            validator.validate_local_absolute_path_policy(
+                {"merge_plan": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},
+                label="merge-plan",
+            )
+
+    def test_merge_execution_argv_allows_host_trace(self) -> None:
+        result = validator.validate_local_absolute_path_policy(
+            {"merge_execution": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},
+            label="merge-execution",
+        )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["host_trace_allowed_locations"], ["$.merge_execution.argv.0"])
+
+    def test_judge_evidence_reproduction_commands_reject_local_absolute_paths(self) -> None:
+        payload = {
+            "report_kind": "judge-evidence-index",
+            "claim_boundary": {
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "index_is_semantic_gate": False,
+            },
+            "harness_architecture": {
+                "architecture_contracts": {
+                    "context_management": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                    "agent_coordination": {
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                        "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                    },
+                }
+            },
+            "reproduction_commands": {
+                "evaluate_profile": "C:\\Python314\\python.exe -m validation.tools.opencode_agent_harness evaluate"
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "local absolute path"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/judge-evidence-index.json")
 
     def test_core_validation_ci_runs_judge_entrypoints_validator_tests(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
