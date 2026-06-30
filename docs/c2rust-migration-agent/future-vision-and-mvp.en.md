@@ -43,11 +43,11 @@ The active queue is reordered around the fact that judges primarily score core t
 
 Active items:
 
-- [ ] H1 One-command `evaluate` entrypoint: one command performs `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`, and emits `context-pack.json`, `agent-index.json`, and a SQLite `context_packs` index.
+- [x] H1 One-command `evaluate` entrypoint: one command performs `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`, and emits `context-pack.json`, `agent-index.json`, and a SQLite `context_packs` index. Acceptance: the `harness-h1-evaluate-verify` FlashDB smoke passed, and `context_packs.payload_json` matches the on-disk context pack.
 - [ ] H2 Multi-worker fan-out/fan-in: `run-plan --max-workers` merges in planner order, every worker uses isolated output, SQLite uses a busy timeout, and the OpenCode wrapper can run independent slices in parallel.
 - [ ] H3 Precise repair self-healing: failed workers must write `repair_hints` and retry the same assignment automatically for at most 5 rounds; every failed attempt, rollback, and final accept/refuse decision must be report-visible.
 - [ ] H4 Before/after scoring exhibit: the preferred FlashDB path must show the raw unsafe baseline, agent safety patch, oracle pass, unsafe reduction, repair/retry trace, reproduction command, and artifact hashes.
-- [ ] H5 Context management: both `evaluate` and `run-batch-profile` must emit `context-pack.json` as the next-agent and judge entrypoint, including the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`.
+- [x] H5 Context management: both `evaluate` and `run-batch-profile` must emit `context-pack.json` as the next-agent and judge entrypoint, including the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`. Acceptance: both `evaluate` and `run-batch-profile` write SQLite `context_packs`, `agent-index.json` indexes workers by worker_id, and batch contexts also index route-governance and before/after exhibit reports.
 - [ ] H6 Evaluation reports: `judge_demo`, `run-batch-profile`, `milestone-release-report`, and `evaluate-report` must explain both harness architecture and core translation quality, not only governance percentages.
 
 Frozen/deferred items:
