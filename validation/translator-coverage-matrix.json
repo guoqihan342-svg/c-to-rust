@@ -1293,6 +1293,7 @@
         "DeclRefExpr to EnumConstantDecl in readonly static const integer global initializer",
         "target-ABI-bound i32 enum scalar params/returns",
         "target-ABI-bound i32 enum local scalar declaration/branch/assignment/return",
+        "anonymous typedef enum alias scalar params/returns with target ABI",
         "implicit enum value fail-closed",
         "implicit enum global initializer fail-closed",
         "implicit enum typed function fail-closed",
@@ -1320,6 +1321,10 @@
             },
             {
               "name": "clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1377,6 +1382,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -1414,6 +1423,10 @@
         },
         {
           "name": "clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

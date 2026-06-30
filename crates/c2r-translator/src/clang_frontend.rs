@@ -1091,6 +1091,7 @@ fn enum_type_inventory_from_ast(
 ) -> EnumTypeInventory {
     let mut inventory = EnumTypeInventory::default();
     collect_enum_type_inventory_from_ast(ast, target_abi, &mut inventory);
+    collect_typedef_enum_type_inventory_from_ast(ast, ast, target_abi, &mut inventory);
     inventory
 }
 
@@ -1119,6 +1120,80 @@ fn collect_enum_type_inventory_from_ast(
     for child in inner(node) {
         collect_enum_type_inventory_from_ast(child, target_abi, inventory);
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn collect_typedef_enum_type_inventory_from_ast(
+    node: &Value,
+    ast: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+    inventory: &mut EnumTypeInventory,
+) {
+    if string_field(node, "kind").as_deref() == Some("TypedefDecl")
+        && node.get("isImplicit").and_then(Value::as_bool) != Some(true)
+    {
+        if let Some((alias, enum_decl)) = typedef_enum_alias_decl(node, ast) {
+            let entry = enum_type_from_decl(enum_decl, &alias, target_abi);
+            insert_enum_type_inventory_entry(inventory, alias, entry);
+        }
+    }
+    for child in inner(node) {
+        collect_typedef_enum_type_inventory_from_ast(child, ast, target_abi, inventory);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn insert_enum_type_inventory_entry(
+    inventory: &mut EnumTypeInventory,
+    name: String,
+    entry: Result<ClangTypeSkeleton, String>,
+) {
+    match inventory.by_name.entry(name) {
+        std::collections::btree_map::Entry::Vacant(slot) => {
+            slot.insert(entry);
+        }
+        std::collections::btree_map::Entry::Occupied(mut slot) => {
+            let _previous = slot.insert(Err(
+                "duplicate enum type name in clang AST; enum type lowering requires unique declaration provenance"
+                    .to_string(),
+            ));
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn typedef_enum_alias_decl<'a>(
+    typedef_decl: &'a Value,
+    ast: &'a Value,
+) -> Option<(String, &'a Value)> {
+    let alias = string_field(typedef_decl, "name")?;
+    if !is_simple_c_identifier(&alias) {
+        return None;
+    }
+    let enum_decl_id = inner(typedef_decl)
+        .iter()
+        .find(|child| string_field(child, "kind").as_deref() == Some("EnumType"))
+        .and_then(|enum_type| enum_type.get("decl"))
+        .and_then(|decl| {
+            if string_field(decl, "kind").as_deref() == Some("EnumDecl") {
+                string_field(decl, "id")
+            } else {
+                None
+            }
+        })?;
+    find_decl_by_id(ast, &enum_decl_id)
+        .filter(|decl| string_field(decl, "kind").as_deref() == Some("EnumDecl"))
+        .map(|decl| (alias, decl))
+}
+
+#[cfg(feature = "typed-ir")]
+fn find_decl_by_id<'a>(node: &'a Value, id: &str) -> Option<&'a Value> {
+    if string_field(node, "id").as_deref() == Some(id) {
+        return Some(node);
+    }
+    inner(node)
+        .iter()
+        .find_map(|child| find_decl_by_id(child, id))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1584,24 +1659,55 @@ fn rewrite_supported_enum_type(
     ty: &mut ClangTypeSkeleton,
     inventory: &EnumTypeInventory,
 ) -> Result<(), ClangFrontendError> {
+    let candidates = enum_type_inventory_candidates(ty);
+    if candidates.is_empty() {
+        return Ok(());
+    }
+
+    for name in &candidates {
+        if let Some(entry) = inventory.by_name.get(name) {
+            match entry {
+                Ok(mapped) => {
+                    *ty = mapped.clone();
+                    return Ok(());
+                }
+                Err(reason) => {
+                    return Err(ClangFrontendError {
+                        kind: "unsupported_clang_type".to_string(),
+                        message: format!("enum {name}: {reason}"),
+                    });
+                }
+            }
+        }
+    }
+
     let Some(name) = direct_enum_type_name(ty) else {
         return Ok(());
     };
-    let entry = inventory.by_name.get(&name).ok_or_else(|| ClangFrontendError {
+    Err(ClangFrontendError {
         kind: "unsupported_clang_type".to_string(),
         message: format!(
             "enum {name} is not present in the clang enum type inventory; enum type lowering requires a complete EnumDecl"
         ),
-    })?;
-    match entry {
-        Ok(mapped) => {
-            *ty = mapped.clone();
-            Ok(())
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_inventory_candidates(ty: &ClangTypeSkeleton) -> Vec<String> {
+    let mut candidates = Vec::new();
+    push_enum_type_inventory_candidate(&mut candidates, &ty.spelled);
+    push_enum_type_inventory_candidate(&mut candidates, &ty.canonical);
+    candidates
+}
+
+#[cfg(feature = "typed-ir")]
+fn push_enum_type_inventory_candidate(candidates: &mut Vec<String>, spelling: &str) {
+    if let Some(name) = direct_enum_name_from_spelling(spelling)
+        .or_else(|| direct_typedef_enum_alias_from_spelling(spelling))
+    {
+        if !candidates.contains(&name) {
+            candidates.push(name);
         }
-        Err(reason) => Err(ClangFrontendError {
-            kind: "unsupported_clang_type".to_string(),
-            message: format!("enum {name}: {reason}"),
-        }),
     }
 }
 
@@ -1616,6 +1722,16 @@ fn direct_enum_name_from_spelling(spelling: &str) -> Option<String> {
     let name = spelling.trim().strip_prefix("enum ")?.trim();
     if is_simple_c_identifier(name) {
         Some(name.to_string())
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_typedef_enum_alias_from_spelling(spelling: &str) -> Option<String> {
+    let alias = spelling.trim();
+    if is_simple_c_identifier(alias) {
+        Some(alias.to_string())
     } else {
         None
     }
