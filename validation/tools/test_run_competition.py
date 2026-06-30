@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import io
 import importlib.util
 import json
@@ -11,12 +12,22 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validation" / "tools" / "run_competition.py"
+SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
 
 
 def load_runner_module():
     spec = importlib.util.spec_from_file_location("run_competition_under_test", RUNNER)
     if spec is None or spec.loader is None:
         raise AssertionError("could not load run_competition module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_summary_validator_module():
+    spec = importlib.util.spec_from_file_location("validate_competition_run_summary_under_test", SUMMARY_VALIDATOR)
+    if spec is None or spec.loader is None:
+        raise AssertionError("could not load validate_competition_run_summary module")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -93,52 +104,56 @@ def write_worker_summary(
     semantic_pass: int,
     failed: int = 0,
     final_gate_status: str = "passed",
+    workflow_metrics: dict | None = None,
 ) -> Path:
     path = root / worker_id / "summary" / "competition-run-summary.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "run_id": f"run-{worker_id}",
-                "proof_class": "local-simulation",
-                "profile_id": "huawei-competition-ubuntu-24.04",
-                "profile_sha256": "a" * 64,
-                "clang_source": "missing",
-                "cargo_mirror_activation": {
-                    "method": "CARGO_HOME",
-                    "path": "config/competition-env/cargo",
-                    "config_file": "config/competition-env/cargo/config.toml",
-                },
-                "elapsed_seconds": 1,
-                "translator_version": "0.1.0",
-                "slices": {
-                    "attempted": attempted,
-                    "typed_ir_generated": semantic_pass,
-                    "compiled": semantic_pass,
-                    "semantic_pass": semantic_pass,
-                    "refused": 0,
-                    "blocked": 0,
-                    "failed": failed,
-                },
-                "unsafe_budget": {
-                    "status": "passed",
-                    "total_first_party_non_test_unsafe": 0,
-                    "ratio": 0.0,
-                },
-                "artifact_roots": [
-                    f"target/competition-out/{worker_id}/evidence",
-                    f"target/competition-out/{worker_id}/summary",
-                    f"target/competition-out/{worker_id}/logs",
-                ],
-                "final_gate": {
-                    "status": final_gate_status,
-                    "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    summary = {
+        "schema_version": 1,
+        "run_id": f"run-{worker_id}",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": 1,
+        "translator_version": "0.1.0",
+        "slices": {
+            "attempted": attempted,
+            "typed_ir_generated": semantic_pass,
+            "compiled": semantic_pass,
+            "semantic_pass": semantic_pass,
+            "refused": 0,
+            "blocked": 0,
+            "failed": failed,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "artifact_roots": [
+            f"target/competition-out/{worker_id}/evidence",
+            f"target/competition-out/{worker_id}/summary",
+            f"target/competition-out/{worker_id}/logs",
+        ],
+        "final_gate": {
+            "status": final_gate_status,
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
+    }
+    if workflow_metrics is not None:
+        metrics_path = path.parent / "workflow-metrics.json"
+        metrics_path.write_text(json.dumps(workflow_metrics, sort_keys=True), encoding="utf-8")
+        summary["workflow_metrics"] = {
+            "path": "workflow-metrics.json",
+            "sha256": hashlib.sha256(metrics_path.read_bytes()).hexdigest(),
+        }
+    path.write_text(json.dumps(summary), encoding="utf-8")
     return path
 
 
@@ -750,6 +765,91 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["workers"]["summaries"][0]["status"], "passed")
             self.assertEqual(summary["workers"]["summaries"][1]["status"], "failed")
             self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_aggregates_worker_workflow_metrics_into_parent_artifact(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=2,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 2,
+                    "units_converged": 1,
+                    "units_baseline_only": 1,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 1.5,
+                    "auto_recovery_rate": 0.5,
+                    "human_interventions": 1,
+                    "always_compiles": True,
+                    "always_equivalent": False,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 9,
+                    "llm_calls": 3,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-b",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 4,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [],
+                },
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            summary = json.loads(parent_summary_path.read_text(encoding="utf-8"))
+            self.assertNotIn("workflow_metrics", summary["workers"]["summaries"][0])
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["units_total"], 3)
+            self.assertEqual(metrics["units_converged"], 2)
+            self.assertEqual(metrics["units_baseline_only"], 0)
+            self.assertEqual(metrics["avg_repair_rounds"], 1.0)
+            self.assertAlmostEqual(metrics["auto_recovery_rate"], 1.0 / 3.0)
+            self.assertEqual(metrics["human_interventions"], 1)
+            self.assertEqual(metrics["llm_calls"], 4)
 
     def test_runner_keeps_global_gate_failure_out_of_slice_failure_counts(self) -> None:
         module = load_runner_module()

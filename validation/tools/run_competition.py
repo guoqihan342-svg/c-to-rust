@@ -146,6 +146,9 @@ def run_competition(
     blocked = 0
     worker_statuses = load_worker_summary_statuses(worker_summaries, repo_root=repo_root, out_root=out_root)
     unit_statuses = [workflow_unit_status_from_worker(worker) for worker in worker_statuses]
+    worker_workflow_metrics = [
+        worker["workflow_metrics"] for worker in worker_statuses if isinstance(worker.get("workflow_metrics"), dict)
+    ]
     for worker in worker_statuses:
         worker_slices = worker["slices"]
         typed_ir_generated += worker_slices["typed_ir_generated"]
@@ -335,11 +338,12 @@ def run_competition(
     if worker_statuses:
         summary["workers"] = {
             "count": len(worker_statuses),
-            "summaries": worker_statuses,
+            "summaries": [public_worker_summary_status(worker) for worker in worker_statuses],
         }
     summary_path = write_summary_with_workflow_metrics(
         summary,
         unit_statuses=unit_statuses,
+        worker_workflow_metrics=worker_workflow_metrics,
         out_root=out_root,
         repo_root=repo_root,
     )
@@ -358,6 +362,7 @@ def run_competition(
         summary_path = write_summary_with_workflow_metrics(
             summary,
             unit_statuses=unit_statuses,
+            worker_workflow_metrics=worker_workflow_metrics,
             out_root=out_root,
             repo_root=repo_root,
         )
@@ -390,6 +395,12 @@ def load_worker_summary_statuses(
     for path in worker_summaries:
         resolved = path if path.is_absolute() else repo_root / path
         summary = json.loads(resolved.read_text(encoding="utf-8"))
+        workflow_metrics = load_bound_workflow_metrics(
+            summary,
+            summary_path=resolved,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
         slices = summary.get("slices", {})
         final_gate = summary.get("final_gate", {})
         status = final_gate.get("status") if isinstance(final_gate, dict) else "failed"
@@ -416,9 +427,64 @@ def load_worker_summary_statuses(
                 "semantic_pass": worker_slices["semantic_pass"],
                 "failed": worker_slices["failed"],
                 "slices": worker_slices,
+                "workflow_metrics": workflow_metrics,
             }
         )
     return statuses
+
+
+def load_bound_workflow_metrics(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any] | None:
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return None
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        return None
+    metrics_path = resolve_bound_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root, out_root=out_root)
+    if metrics_path is None or sha256(metrics_path) != expected_sha:
+        return None
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    return metrics if isinstance(metrics, dict) else None
+
+
+def public_worker_summary_status(worker: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in worker.items() if key != "workflow_metrics"}
+
+
+def resolve_bound_artifact(
+    value: str,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> Path | None:
+    if not is_safe_posix_relative(value):
+        return None
+    candidates = [
+        repo_root / value,
+        out_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def is_safe_posix_relative(value: str) -> bool:
+    if not value or "\\" in value or value.startswith("/") or value.startswith("~"):
+        return False
+    if len(value) >= 2 and value[1] == ":":
+        return False
+    return ".." not in Path(value).parts
 
 
 def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
@@ -472,12 +538,17 @@ def write_summary_with_workflow_metrics(
     summary: dict[str, Any],
     *,
     unit_statuses: list[dict[str, Any]],
+    worker_workflow_metrics: list[dict[str, Any]],
     out_root: Path,
     repo_root: Path,
 ) -> Path:
     summary_dir = out_root / "summary"
     workflow_metrics_path = summary_dir / "workflow-metrics.json"
-    metrics = build_workflow_metrics(summary, unit_statuses=unit_statuses)
+    metrics = build_workflow_metrics(
+        summary,
+        unit_statuses=unit_statuses,
+        worker_workflow_metrics=worker_workflow_metrics,
+    )
     workflow_metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     summary["workflow_metrics"] = {
         "path": summary_reference_path(workflow_metrics_path, repo_root=repo_root, out_root=out_root),
@@ -488,7 +559,12 @@ def write_summary_with_workflow_metrics(
     return summary_path
 
 
-def build_workflow_metrics(summary: dict[str, Any], *, unit_statuses: list[dict[str, Any]]) -> dict[str, Any]:
+def build_workflow_metrics(
+    summary: dict[str, Any],
+    *,
+    unit_statuses: list[dict[str, Any]],
+    worker_workflow_metrics: list[dict[str, Any]],
+) -> dict[str, Any]:
     slices = summary["slices"]
     attempted = int(slices["attempted"])
     compiled = int(slices["compiled"])
@@ -497,6 +573,8 @@ def build_workflow_metrics(summary: dict[str, Any], *, unit_statuses: list[dict[
     blocked = int(slices["blocked"])
     failed = int(slices["failed"])
     unsafe_budget = summary["unsafe_budget"]
+    repair_rounds = weighted_worker_metric(worker_workflow_metrics, "avg_repair_rounds", attempted)
+    auto_recovery_rate = weighted_worker_metric(worker_workflow_metrics, "auto_recovery_rate", attempted)
     return {
         "schema_version": 1,
         "run_id": summary["run_id"],
@@ -511,16 +589,35 @@ def build_workflow_metrics(summary: dict[str, Any], *, unit_statuses: list[dict[
             "reduced_by": None,
             "ratio": unsafe_budget["ratio"],
         },
-        "avg_repair_rounds": 0.0,
-        "auto_recovery_rate": 0.0,
-        "human_interventions": 0,
+        "avg_repair_rounds": repair_rounds,
+        "auto_recovery_rate": auto_recovery_rate,
+        "human_interventions": sum_worker_int_metric(worker_workflow_metrics, "human_interventions"),
         "always_compiles": attempted > 0 and compiled == attempted and failed == 0,
         "always_equivalent": attempted > 0 and semantic_pass == attempted and failed == 0,
         "fail_closed_count": refused + blocked,
         "wall_clock_seconds": summary["elapsed_seconds"],
-        "llm_calls": 0,
+        "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls"),
         "per_unit_statuses": unit_statuses,
     }
+
+
+def weighted_worker_metric(metrics: list[dict[str, Any]], key: str, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    numerator = 0.0
+    for metric in metrics:
+        units = nonnegative_int(metric.get("units_total"))
+        value = metric.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            numerator += float(value) * units
+    return numerator / denominator
+
+
+def sum_worker_int_metric(metrics: list[dict[str, Any]], key: str) -> int:
+    total = 0
+    for metric in metrics:
+        total += nonnegative_int(metric.get(key))
+    return total
 
 
 def nonnegative_int(value: Any) -> int:
