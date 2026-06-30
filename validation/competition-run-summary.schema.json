@@ -221,6 +221,61 @@
                 "type": "string",
                 "minLength": 1
               },
+              "worker_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assignment_request": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "slice_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "function": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_repo_root": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_repository": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_branch": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_file": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_commit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "require_source_commit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "slice_specs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
               "status": {
                 "type": "string",
                 "enum": [

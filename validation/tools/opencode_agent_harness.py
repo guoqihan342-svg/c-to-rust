@@ -123,14 +123,15 @@ def main() -> int:
     batch_profile_parser.add_argument("--out-root", type=Path, required=True)
 
     evaluate_parser = subcommands.add_parser("evaluate")
+    evaluate_parser.add_argument("--profile", type=Path)
     evaluate_parser.add_argument("--run-id", required=True)
-    evaluate_parser.add_argument("--target-id", required=True)
-    evaluate_parser.add_argument("--source-repo-root", type=Path, required=True)
+    evaluate_parser.add_argument("--target-id")
+    evaluate_parser.add_argument("--source-repo-root", type=Path)
     evaluate_parser.add_argument("--source-repository")
     evaluate_parser.add_argument("--source-branch")
-    evaluate_parser.add_argument("--source-file", required=True)
+    evaluate_parser.add_argument("--source-file")
     evaluate_parser.add_argument("--function", action="append", dest="functions", default=[])
-    evaluate_parser.add_argument("--source-commit", required=True)
+    evaluate_parser.add_argument("--source-commit")
     evaluate_parser.add_argument("--require-source-commit")
     evaluate_parser.add_argument("--slice-spec", action="append", dest="slice_specs", default=[])
     evaluate_parser.add_argument("--compiler-command-source")
@@ -144,7 +145,6 @@ def main() -> int:
     evaluate_parser.add_argument("--limit", type=int)
     evaluate_parser.add_argument(
         "--proof-class",
-        required=True,
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
     )
     evaluate_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
@@ -294,38 +294,58 @@ def main() -> int:
             out_root=args.out_root,
         )
     elif args.command == "evaluate":
-        result = evaluate(
-            run_id=args.run_id,
-            target_id=args.target_id,
-            source_repo_root=args.source_repo_root,
-            source_repository=args.source_repository,
-            source_branch=args.source_branch,
-            source_file=args.source_file,
-            functions=args.functions,
-            source_commit=args.source_commit,
-            require_source_commit=args.require_source_commit,
-            slice_specs=args.slice_specs,
-            compiler_command_source=args.compiler_command_source,
-            include_paths=args.include_path,
-            defines=args.define,
-            reuse_accepted_evidence=args.reuse_accepted_evidence,
-            accepted_evidence_root=args.accepted_evidence_root,
-            out_root=args.out_root,
-            slice_id_prefix=args.slice_id_prefix,
-            worker_prefix=args.worker_prefix,
-            limit=args.limit,
-            proof_class=args.proof_class,
-            mode=args.mode,
-            opencode_command=args.opencode_command,
-            opencode_model=args.opencode_model,
-            opencode_agent=args.opencode_agent,
-            opencode_variant=args.opencode_variant,
-            opencode_skip_permissions=args.opencode_skip_permissions,
-            opencode_preflight_report=args.opencode_preflight_report,
-            execute_merge=not args.no_execute_merge,
-            auto_retry=not args.no_auto_retry,
-            max_workers=args.max_workers,
-        )
+        if args.profile:
+            result = run_batch_profile(
+                profile_path=args.profile,
+                run_id=args.run_id,
+                out_root=args.out_root,
+            )
+        else:
+            missing = [
+                flag
+                for flag, value in [
+                    ("--target-id", args.target_id),
+                    ("--source-repo-root", args.source_repo_root),
+                    ("--source-file", args.source_file),
+                    ("--source-commit", args.source_commit),
+                    ("--proof-class", args.proof_class),
+                ]
+                if value is None
+            ]
+            if missing:
+                parser.error("evaluate requires " + ", ".join(missing) + " unless --profile is provided")
+            result = evaluate(
+                run_id=args.run_id,
+                target_id=args.target_id,
+                source_repo_root=args.source_repo_root,
+                source_repository=args.source_repository,
+                source_branch=args.source_branch,
+                source_file=args.source_file,
+                functions=args.functions,
+                source_commit=args.source_commit,
+                require_source_commit=args.require_source_commit,
+                slice_specs=args.slice_specs,
+                compiler_command_source=args.compiler_command_source,
+                include_paths=args.include_path,
+                defines=args.define,
+                reuse_accepted_evidence=args.reuse_accepted_evidence,
+                accepted_evidence_root=args.accepted_evidence_root,
+                out_root=args.out_root,
+                slice_id_prefix=args.slice_id_prefix,
+                worker_prefix=args.worker_prefix,
+                limit=args.limit,
+                proof_class=args.proof_class,
+                mode=args.mode,
+                opencode_command=args.opencode_command,
+                opencode_model=args.opencode_model,
+                opencode_agent=args.opencode_agent,
+                opencode_variant=args.opencode_variant,
+                opencode_skip_permissions=args.opencode_skip_permissions,
+                opencode_preflight_report=args.opencode_preflight_report,
+                execute_merge=not args.no_execute_merge,
+                auto_retry=not args.no_auto_retry,
+                max_workers=args.max_workers,
+            )
     elif args.command == "opencode-preflight":
         result = run_opencode_preflight(
             out_root=args.out_root,
@@ -469,6 +489,7 @@ def assign_slice(
     source_file: str,
     function: str,
     source_commit: str,
+    source_sha256: str | None = None,
     require_source_commit: str | None = None,
     compiler_command_source: str | None = None,
     include_paths: list[str] | None = None,
@@ -530,6 +551,8 @@ def assign_slice(
         assignment["slice"]["source_branch"] = source_branch
     if require_source_commit:
         assignment["slice"]["require_source_commit"] = require_source_commit
+    if source_sha256:
+        assignment["slice"]["source_sha256"] = source_sha256
     if include_path_values:
         assignment["slice"]["include_paths"] = include_path_values
     if define_values:
@@ -556,6 +579,8 @@ def assign_slice(
         request["source_branch"] = source_branch
     if require_source_commit:
         request["require_source_commit"] = require_source_commit
+    if source_sha256:
+        request["source_sha256"] = source_sha256
     if compiler_command_source_rel:
         request["compiler_command_source"] = compiler_command_source_rel
     if include_path_values:
@@ -739,6 +764,7 @@ def plan_source_file(
     if not planned_functions:
         raise SystemExit(f"no top-level function definitions discovered in {source_file_rel}")
 
+    source_sha256 = sha256_file(source_path)
     units: list[dict[str, str]] = []
     for index, function in enumerate(planned_functions, start=1):
         function_slug = slug_id(function)
@@ -758,6 +784,7 @@ def plan_source_file(
             source_file=source_file_rel,
             function=function,
             source_commit=source_commit,
+            source_sha256=source_sha256,
             require_source_commit=require_source_commit,
             compiler_command_source=compiler_command_source,
             include_paths=include_paths,
@@ -778,8 +805,18 @@ def plan_source_file(
                 "out_root": repo_relative(worker_out_root, repo_root=repo_root),
                 "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
                 "request_path": repo_relative(request_path, repo_root=repo_root),
+                "source_repo_root": source_repo_root_rel,
+                "source_file": source_file_rel,
+                "source_commit": source_commit,
+                "source_sha256": source_sha256,
             }
         )
+        if require_source_commit:
+            units[-1]["require_source_commit"] = require_source_commit
+        if source_repository:
+            units[-1]["source_repository"] = source_repository
+        if source_branch:
+            units[-1]["source_branch"] = source_branch
         if slice_spec:
             units[-1]["slice_spec"] = str(slice_spec["path"])
 
@@ -791,7 +828,7 @@ def plan_source_file(
         "target_id": target_id,
         "source_repo_root": source_repo_root_rel,
         "source_file": source_file_rel,
-        "source_sha256": sha256_file(source_path),
+        "source_sha256": source_sha256,
         "source_commit": source_commit,
         "slice_id_prefix": slice_id_prefix,
         "worker_prefix": worker_prefix,
@@ -820,6 +857,158 @@ def plan_source_file(
             repo_root=repo_root,
         )
         record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
+        connection.commit()
+    return plan
+
+
+def plan_explicit_workers(
+    *,
+    db_path: Path,
+    run_id: str,
+    profile: dict[str, Any],
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    target_id = profile_required_string(profile, "target_id")
+    workers = profile_worker_list(profile)
+    units: list[dict[str, Any]] = []
+    seen_worker_ids: set[str] = set()
+    for worker in workers:
+        worker_id = profile_required_string(worker, "worker_id")
+        if worker_id in seen_worker_ids:
+            raise SystemExit(f"duplicate explicit worker_id in batch profile: {worker_id}")
+        seen_worker_ids.add(worker_id)
+        worker_target_id = profile_string(worker, "target_id", default=target_id)
+        if worker_target_id != target_id:
+            raise SystemExit(f"explicit worker target_id mismatch for {worker_id}: {worker_target_id} != {target_id}")
+        slice_id = profile_required_string(worker, "slice_id")
+        function = profile_required_string(worker, "function")
+        source_commit = profile_required_string(worker, "source_commit")
+        worker_out_root_text = profile_string(worker, "out_root")
+        worker_out_root = repo_path(Path(worker_out_root_text), repo_root=repo_root) if worker_out_root_text else out_root / "workers" / worker_id
+        source_repo_root = Path(profile_required_string(worker, "source_repo_root"))
+        source_file = profile_required_string(worker, "source_file")
+        source_repo_root_path = repo_path(source_repo_root, repo_root=repo_root)
+        source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
+        source_file_rel = checked_relative_path(source_file).as_posix()
+        source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
+        if not source_path.exists():
+            raise SystemExit(f"explicit worker source file not found for {worker_id}: {source_repo_root_rel}/{source_file_rel}")
+        source_sha256 = sha256_file(source_path)
+        source_repository = profile_string(worker, "source_repository", default=profile_string(profile, "source_repository"))
+        source_branch = profile_string(worker, "source_branch", default=profile_string(profile, "source_branch"))
+        slice_spec = profile_string(worker, "slice_spec")
+        if slice_spec:
+            slice_spec = load_explicit_worker_slice_spec(
+                slice_spec,
+                target_id=target_id,
+                slice_id=slice_id,
+                function=function,
+                source_commit=source_commit,
+                source_file=source_file_rel,
+                source_sha256=source_sha256,
+                source_repository=source_repository,
+                source_branch=source_branch,
+                repo_root=repo_root,
+            )
+        require_source_commit = profile_string(worker, "require_source_commit")
+        compiler_command_source = profile_string(worker, "compiler_command_source")
+        include_paths = profile_string_list(worker, "include_paths")
+        defines = profile_string_list(worker, "defines")
+        assign_slice(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            target_id=target_id,
+            slice_id=slice_id,
+            source_repo_root=source_repo_root,
+            source_repository=source_repository,
+            source_branch=source_branch,
+            source_file=source_file_rel,
+            function=function,
+            source_commit=source_commit,
+            source_sha256=source_sha256,
+            require_source_commit=require_source_commit,
+            compiler_command_source=compiler_command_source,
+            include_paths=include_paths,
+            defines=defines,
+            reuse_accepted_evidence=profile_bool(
+                worker,
+                "reuse_accepted_evidence",
+                default=profile_bool(profile, "reuse_accepted_evidence", default=False),
+            ),
+            accepted_evidence_root=profile_string(
+                worker,
+                "accepted_evidence_root",
+                default=profile_string(profile, "accepted_evidence_root"),
+            ),
+            slice_spec=slice_spec,
+            out_root=worker_out_root,
+            lease_ttl_seconds=profile_int(worker, "lease_ttl_seconds", default=profile_int(profile, "lease_ttl_seconds", default=3600)) or 3600,
+            repo_root=repo_root,
+        )
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        unit: dict[str, Any] = {
+            "worker_id": worker_id,
+            "slice_id": slice_id,
+            "function": function,
+            "out_root": repo_relative(worker_out_root, repo_root=repo_root),
+            "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
+            "request_path": repo_relative(request_path, repo_root=repo_root),
+            "source_repo_root": source_repo_root_rel,
+            "source_file": source_file_rel,
+            "source_commit": source_commit,
+            "source_sha256": source_sha256,
+        }
+        if source_repository:
+            unit["source_repository"] = source_repository
+        if source_branch:
+            unit["source_branch"] = source_branch
+        if require_source_commit:
+            unit["require_source_commit"] = require_source_commit
+        if compiler_command_source:
+            unit["compiler_command_source"] = compiler_command_source
+        if include_paths:
+            unit["include_paths"] = include_paths
+        if defines:
+            unit["defines"] = defines
+        if slice_spec:
+            unit["slice_spec"] = slice_spec
+        units.append(unit)
+
+    plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(profile_required_string(profile, 'profile_id'))}-workers.json"
+    plan = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "planned",
+        "planning_mode": "explicit_workers",
+        "run_id": run_id,
+        "target_id": target_id,
+        "worker_prefix": profile_string(profile, "worker_prefix", default="worker"),
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "units": units,
+    }
+    if profile.get("source_repository"):
+        plan["source_repository"] = profile_string(profile, "source_repository")
+    if profile.get("source_branch"):
+        plan["source_branch"] = profile_string(profile, "source_branch")
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="explicit-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="explicit_workers_planned", payload=plan)
         connection.commit()
     return plan
 
@@ -854,6 +1043,68 @@ def load_slice_specs_by_function(
             raise SystemExit(f"duplicate slice spec for function {function}: {slice_spec_rel}")
         specs_by_function[function] = {"path": slice_spec_rel, "slice_id": slice_id}
     return specs_by_function
+
+
+def load_explicit_worker_slice_spec(
+    slice_spec: str,
+    *,
+    target_id: str,
+    slice_id: str,
+    function: str,
+    source_commit: str,
+    source_file: str,
+    source_sha256: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> str:
+    slice_spec_rel = checked_relative_path(slice_spec).as_posix()
+    spec = load_json(repo_path(Path(slice_spec_rel), repo_root=repo_root))
+    spec_target_id = spec.get("target_id")
+    if spec_target_id != target_id:
+        raise SystemExit(f"slice spec target_id mismatch for {function}: {spec_target_id or 'missing'} != {target_id}")
+    spec_function = spec.get("function_name")
+    if spec_function != function:
+        raise SystemExit(f"slice spec function_name mismatch for {function}: {spec_function or 'missing'} != {function}")
+    source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+    spec_source_commit = spec.get("source_commit") or source_block.get("source_commit")
+    if spec_source_commit != source_commit:
+        raise SystemExit(
+            f"slice spec source_commit mismatch for {function}: {spec_source_commit or 'missing'} != {source_commit}"
+        )
+    spec_repository = source_block.get("source_repository")
+    if source_repository and isinstance(spec_repository, str) and spec_repository != source_repository:
+        raise SystemExit(f"slice spec source_repository mismatch for {function}: {spec_repository} != {source_repository}")
+    spec_branch = source_block.get("source_branch")
+    if source_branch and isinstance(spec_branch, str) and spec_branch != source_branch:
+        raise SystemExit(f"slice spec source_branch mismatch for {function}: {spec_branch} != {source_branch}")
+    spec_source_sha256 = explicit_worker_slice_spec_source_sha256(spec, source_file)
+    if spec_source_sha256 is not None and spec_source_sha256 != source_sha256:
+        raise SystemExit(
+            f"slice spec source file sha256 mismatch for {function}: {spec_source_sha256} != {source_sha256}"
+        )
+    spec_slice_id = spec.get("slice_id")
+    if spec_slice_id != slice_id:
+        raise SystemExit(f"slice spec slice_id mismatch for {function}: {spec_slice_id or 'missing'} != {slice_id}")
+    return slice_spec_rel
+
+
+def explicit_worker_slice_spec_source_sha256(spec: dict[str, Any], source_file: str) -> str | None:
+    source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+    source_file_hashes = source_block.get("source_file_hashes")
+    if isinstance(source_file_hashes, dict):
+        value = source_file_hashes.get(source_file)
+        if isinstance(value, str) and value:
+            return value
+    c_boundary = spec.get("c_boundary") if isinstance(spec.get("c_boundary"), dict) else {}
+    files = c_boundary.get("files")
+    if isinstance(files, list):
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            if item.get("path") == source_file and isinstance(item.get("sha256"), str) and item["sha256"]:
+                return str(item["sha256"])
+    return None
 
 
 def run_batch_profile(
@@ -893,30 +1144,39 @@ def run_batch_profile(
         proof_class=proof_class,
         repo_root=repo_root,
     )
-    plan = plan_source_file(
-        db_path=db_path,
-        run_id=run_id,
-        target_id=profile_required_string(profile, "target_id"),
-        source_repo_root=Path(profile_required_string(profile, "source_repo_root")),
-        source_repository=profile_string(profile, "source_repository"),
-        source_branch=profile_string(profile, "source_branch"),
-        source_file=profile_required_string(profile, "source_file"),
-        functions=profile_string_list(profile, "functions"),
-        source_commit=profile_required_string(profile, "source_commit"),
-        require_source_commit=profile_string(profile, "require_source_commit"),
-        slice_specs=profile_string_list(profile, "slice_specs"),
-        compiler_command_source=profile_string(profile, "compiler_command_source"),
-        include_paths=profile_string_list(profile, "include_paths"),
-        defines=profile_string_list(profile, "defines"),
-        reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
-        accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
-        out_root=out_root,
-        slice_id_prefix=profile_required_string(profile, "slice_id_prefix"),
-        worker_prefix=profile_string(profile, "worker_prefix", default="worker"),
-        limit=profile_int(profile, "limit"),
-        lease_ttl_seconds=profile_int(profile, "lease_ttl_seconds", default=3600),
-        repo_root=repo_root,
-    )
+    if profile.get("workers") is not None:
+        plan = plan_explicit_workers(
+            db_path=db_path,
+            run_id=run_id,
+            profile=profile,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+    else:
+        plan = plan_source_file(
+            db_path=db_path,
+            run_id=run_id,
+            target_id=profile_required_string(profile, "target_id"),
+            source_repo_root=Path(profile_required_string(profile, "source_repo_root")),
+            source_repository=profile_string(profile, "source_repository"),
+            source_branch=profile_string(profile, "source_branch"),
+            source_file=profile_required_string(profile, "source_file"),
+            functions=profile_string_list(profile, "functions"),
+            source_commit=profile_required_string(profile, "source_commit"),
+            require_source_commit=profile_string(profile, "require_source_commit"),
+            slice_specs=profile_string_list(profile, "slice_specs"),
+            compiler_command_source=profile_string(profile, "compiler_command_source"),
+            include_paths=profile_string_list(profile, "include_paths"),
+            defines=profile_string_list(profile, "defines"),
+            reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
+            accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
+            out_root=out_root,
+            slice_id_prefix=profile_required_string(profile, "slice_id_prefix"),
+            worker_prefix=profile_string(profile, "worker_prefix", default="worker"),
+            limit=profile_int(profile, "limit"),
+            lease_ttl_seconds=profile_int(profile, "lease_ttl_seconds", default=3600),
+            repo_root=repo_root,
+        )
     run_result = run_plan(
         db_path=db_path,
         run_id=run_id,
@@ -1303,7 +1563,14 @@ def build_judge_summary(
         "mode": mode,
         "harness_architecture": {
             "entrypoint": entrypoint,
-            "pipeline": ["init-run", "plan-source-file", "run-plan", "merge", "report"],
+            "planning_mode": plan.get("planning_mode", "source_file"),
+            "pipeline": [
+                "init-run",
+                "plan-explicit-workers" if plan.get("planning_mode") == "explicit_workers" else "plan-source-file",
+                "run-plan",
+                "merge",
+                "report",
+            ],
             "graph_runtime": graph.get("runtime"),
             "graph_nodes": graph.get("nodes", []),
             "parallelism": run_result.get("parallelism"),
@@ -1444,6 +1711,13 @@ def write_context_pack_and_agent_index(
             "assignment_path": unit.get("assignment_path"),
             "request_path": unit.get("request_path"),
             "slice_spec": unit.get("slice_spec"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
             "summary_path": worker_result.get("summary_path"),
             "report_path": worker_result.get("report_path"),
             "summary_status": worker_result.get("summary_status"),
@@ -1464,6 +1738,13 @@ def write_context_pack_and_agent_index(
             "isolated_out_root": unit.get("out_root"),
             "assignment_path": unit.get("assignment_path"),
             "request_path": unit.get("request_path"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
             "summary_path": worker_result.get("summary_path"),
             "report_path": worker_result.get("report_path"),
             "exit_code": worker_entry["exit_code"],
@@ -1500,6 +1781,7 @@ def write_context_pack_and_agent_index(
             "max_tokens": 20000,
         },
         "source": {
+            "planning_mode": plan.get("planning_mode", "source_file"),
             "repo_root": plan.get("source_repo_root"),
             "source_file": plan.get("source_file"),
             "source_commit": plan.get("source_commit"),
@@ -1507,6 +1789,22 @@ def write_context_pack_and_agent_index(
             "source_repository": plan.get("source_repository"),
             "source_branch": plan.get("source_branch"),
             "source_sha256": plan.get("source_sha256"),
+            "worker_sources": [
+                {
+                    "worker_id": worker.get("worker_id"),
+                    "slice_id": worker.get("slice_id"),
+                    "function": worker.get("function"),
+                    "source_repo_root": worker.get("source_repo_root"),
+                    "source_file": worker.get("source_file"),
+                    "source_commit": worker.get("source_commit"),
+                    "require_source_commit": worker.get("require_source_commit"),
+                    "source_repository": worker.get("source_repository"),
+                    "source_branch": worker.get("source_branch"),
+                    "source_sha256": worker.get("source_sha256"),
+                }
+                for worker in workers
+                if isinstance(worker, dict) and worker.get("source_commit")
+            ],
         },
         "entrypoints": {
             "primary_report": repo_relative(primary_report_path, repo_root=repo_root),
@@ -1978,6 +2276,18 @@ def profile_string_list(profile: dict[str, Any], field: str) -> list[str]:
     if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
         raise SystemExit(f"batch profile field must be a list of non-empty strings: {field}")
     return list(value)
+
+
+def profile_worker_list(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    value = profile.get("workers")
+    if not isinstance(value, list) or not value:
+        raise SystemExit("batch profile field must be a non-empty array: workers")
+    workers: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise SystemExit(f"batch profile workers[{index}] must be an object")
+        workers.append(item)
+    return workers
 
 
 def profile_bool(profile: dict[str, Any], field: str, *, default: bool) -> bool:

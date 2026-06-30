@@ -106,6 +106,8 @@
 - FlashDB 当前已通过语义证据绑定的切片：`real-fdb-calc-crc32`、`real-fdb-blob-make`。二者均是 L4 accepted-evidence authoritative，generated draft 仍不是 semantic pass。
 - FlashDB 当前阻塞切片：`real-fdb-kv-set`。其 direct callees 已有 signature/source provenance，但 `strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` 的 shim/model/oracle 语义尚未关闭。
 
+- **显式多 worker profile smoke**: `config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json` 会 fan-out 两个带 source pin 的 worker（`real-fdb-calc-crc32`、`real-fdb-blob-make`），并按 planner 顺序 merge。已验证 run `harness-flashdb-explicit-workers-20260701` 通过，accepted-evidence `semantic_pass=2`；同一 profile 的 `evaluate --profile` 入口也通过。tracked run manifest：`validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json`。
+
 ## 核心目录
 
 | 目录 | 说明 |

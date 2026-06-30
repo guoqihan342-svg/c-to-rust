@@ -471,6 +471,10 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
 def validate_final_gate(summary: dict[str, Any]) -> None:
     status = summary["final_gate"]["status"]
     semantic_pass = int(summary["slices"]["semantic_pass"])
@@ -509,6 +513,18 @@ def validate_workers(summary: dict[str, Any]) -> None:
         for key in ["attempted", "semantic_pass", "failed"]:
             if int(worker[key]) != int(slices[key]):
                 raise SystemExit(f"competition run summary workers.summaries[{index}].{key} does not match slices.{key}")
+        for path_key in ["assignment_request", "source_repo_root", "source_file"]:
+            if path_key in worker and not is_repo_relative_posix_path(worker[path_key]):
+                raise SystemExit(
+                    f"competition run summary workers.summaries[{index}].{path_key} must be repo-relative POSIX"
+                )
+        for spec_index, slice_spec in enumerate(worker.get("slice_specs", [])):
+            if not is_repo_relative_posix_path(slice_spec):
+                raise SystemExit(
+                    f"competition run summary workers.summaries[{index}].slice_specs[{spec_index}] must be repo-relative POSIX"
+                )
+        if "source_sha256" in worker and not is_sha256(str(worker["source_sha256"])):
+            raise SystemExit(f"competition run summary workers.summaries[{index}].source_sha256 must be a sha256")
         if worker["status"] != "passed" and summary["final_gate"]["status"] == "passed":
             raise SystemExit("competition run summary final_gate passed with failed worker summary")
 

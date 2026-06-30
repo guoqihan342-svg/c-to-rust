@@ -1225,6 +1225,292 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             ]:
                 self.assert_repo_relative_posix_path(path_value)
 
+    def test_run_batch_profile_supports_explicit_worker_source_pins(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_root = Path(tmp) / "slice-specs"
+            first_spec = write_slice_spec(spec_root / "first-unit.json", "demo", "demo-first", "first_unit", "commit-one")
+            second_spec = write_slice_spec(spec_root / "second-unit.json", "demo", "demo-second", "second_unit", "commit-two")
+            worker_profiles = [
+                {
+                    "worker_id": "explicit-worker-001-first-unit",
+                    "target_id": "demo",
+                    "source_repo_root": repo_rel(source_root),
+                    "source_repository": "https://gitcode.com/example/FlashDB.git",
+                    "source_branch": "competition",
+                    "source_file": "src/demo.c",
+                    "function": "first_unit",
+                    "slice_id": "demo-first",
+                    "source_commit": "commit-one",
+                    "require_source_commit": "commit-one",
+                    "slice_spec": repo_rel(first_spec),
+                },
+                {
+                    "worker_id": "explicit-worker-002-second-unit",
+                    "target_id": "demo",
+                    "source_repo_root": repo_rel(source_root),
+                    "source_repository": "https://gitcode.com/example/FlashDB.git",
+                    "source_branch": "competition",
+                    "source_file": "src/demo.c",
+                    "function": "second_unit",
+                    "slice_id": "demo-second",
+                    "source_commit": "commit-two",
+                    "require_source_commit": "commit-two",
+                    "slice_spec": repo_rel(second_spec),
+                },
+            ]
+            profile_path = Path(tmp) / "planned-batch-explicit-workers.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-explicit-workers",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repository": "https://gitcode.com/example/FlashDB.git",
+                        "source_branch": "competition",
+                        "reuse_accepted_evidence": True,
+                        "accepted_evidence_root": "validation/evidence",
+                        "worker_prefix": "explicit-worker",
+                        "mode": "deterministic",
+                        "execute_merge": True,
+                        "auto_retry": False,
+                        "max_workers": 2,
+                        "acceptance_boundary": {
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                        },
+                        "workers": worker_profiles,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            merge_calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"{request['function']} ok\n", stderr="")
+                merge_calls.append(argv)
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(
+                    summary_path,
+                    "run-explicit",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=2,
+                    workflow_metrics=measured_unsafe_worker_metrics("run-explicit"),
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-explicit",
+                out_root=out_root,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["worker_count"], 2)
+            self.assertEqual(result["plan"]["planning_mode"], "explicit_workers")
+            self.assertEqual(
+                [unit["worker_id"] for unit in result["plan"]["units"]],
+                ["explicit-worker-001-first-unit", "explicit-worker-002-second-unit"],
+            )
+            self.assertEqual([unit["source_commit"] for unit in result["plan"]["units"]], ["commit-one", "commit-two"])
+            self.assertEqual(
+                [unit["require_source_commit"] for unit in result["plan"]["units"]],
+                ["commit-one", "commit-two"],
+            )
+            self.assertEqual(result["run_plan"]["graph"]["parallel_map"]["effective_workers"], 2)
+            self.assertEqual(result["run_plan"]["graph"]["parallel_map"]["result_order"], "planner_order")
+            self.assertEqual(result["judge_summary"]["harness_architecture"]["planning_mode"], "explicit_workers")
+            self.assertEqual(
+                result["judge_summary"]["harness_architecture"]["pipeline"],
+                ["init-run", "plan-explicit-workers", "run-plan", "merge", "report"],
+            )
+
+            self.assertEqual(len(merge_calls), 1)
+            merge_worker_summaries = [
+                merge_calls[0][index + 1]
+                for index, arg in enumerate(merge_calls[0])
+                if arg == "--worker-summary"
+            ]
+            self.assertEqual(
+                merge_worker_summaries,
+                [worker["summary_path"] for worker in result["run_plan"]["workers"]],
+            )
+
+            for unit in result["plan"]["units"]:
+                request = json.loads((REPO_ROOT / unit["request_path"]).read_text(encoding="utf-8"))
+                self.assertEqual(request["require_source_commit"], unit["require_source_commit"])
+                self.assertEqual(request["source_commit"], unit["source_commit"])
+                self.assertEqual(request["source_sha256"], unit["source_sha256"])
+                self.assertEqual(request["slice_specs"], [unit["slice_spec"]])
+
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["source"]["planning_mode"], "explicit_workers")
+            self.assertEqual(
+                [source["source_commit"] for source in context_pack["source"]["worker_sources"]],
+                ["commit-one", "commit-two"],
+            )
+            self.assertEqual(
+                [worker["require_source_commit"] for worker in context_pack["workers"]],
+                ["commit-one", "commit-two"],
+            )
+            self.assertEqual(
+                [agent["source_commit"] for agent in agent_index["agents"]],
+                ["commit-one", "commit-two"],
+            )
+
+    def test_run_batch_profile_rejects_explicit_worker_slice_spec_mismatch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_root = Path(tmp) / "slice-specs"
+            mismatched_spec = write_slice_spec(
+                spec_root / "first-unit.json",
+                "demo",
+                "demo-first",
+                "first_unit",
+                "commit-one",
+            )
+            profile_path = Path(tmp) / "planned-batch-explicit-workers.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-explicit-workers-bad-spec",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "mode": "deterministic",
+                        "execute_merge": False,
+                        "max_workers": 1,
+                        "workers": [
+                            {
+                                "worker_id": "explicit-worker-001-second-unit",
+                                "target_id": "demo",
+                                "source_repo_root": repo_rel(source_root),
+                                "source_file": "src/demo.c",
+                                "function": "second_unit",
+                                "slice_id": "demo-second",
+                                "source_commit": "commit-one",
+                                "require_source_commit": "commit-one",
+                                "slice_spec": repo_rel(mismatched_spec),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"worker should not run for mismatched slice spec: {argv}")
+
+            with self.assertRaisesRegex(SystemExit, "slice spec function_name mismatch"):
+                harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-explicit-bad-spec",
+                    out_root=out_root,
+                    command_runner=fail_if_called,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_run_batch_profile_rejects_explicit_worker_source_hash_mismatch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_root = Path(tmp) / "slice-specs"
+            spec_path = write_slice_spec(spec_root / "first-unit.json", "demo", "demo-first", "first_unit", "commit-one")
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["source"] = {
+                "source_commit": "commit-one",
+                "source_file_hashes": {
+                    "src/demo.c": "0" * 64,
+                },
+            }
+            spec_path.write_text(json.dumps(spec, sort_keys=True) + "\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch-explicit-workers.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-explicit-workers-bad-source-hash",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "mode": "deterministic",
+                        "execute_merge": False,
+                        "max_workers": 1,
+                        "workers": [
+                            {
+                                "worker_id": "explicit-worker-001-first-unit",
+                                "target_id": "demo",
+                                "source_repo_root": repo_rel(source_root),
+                                "source_file": "src/demo.c",
+                                "function": "first_unit",
+                                "slice_id": "demo-first",
+                                "source_commit": "commit-one",
+                                "require_source_commit": "commit-one",
+                                "slice_spec": repo_rel(spec_path),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"worker should not run for mismatched source hash: {argv}")
+
+            with self.assertRaisesRegex(SystemExit, "source file sha256 mismatch"):
+                harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-explicit-bad-source-hash",
+                    out_root=out_root,
+                    command_runner=fail_if_called,
+                    repo_root=REPO_ROOT,
+                )
+
     def test_run_batch_profile_opencode_passes_preflight_report_to_workers(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -2144,6 +2430,36 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertFalse(kwargs["execute_merge"])
         self.assertFalse(kwargs["auto_retry"])
         self.assertEqual(kwargs["max_workers"], 4)
+
+    def test_evaluate_cli_profile_dispatches_full_batch_profile_path(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "evaluate",
+            "--profile",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+            "--run-id",
+            "run-evaluate-profile",
+            "--out-root",
+            "target/competition-out-evaluate-profile",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_batch_profile",
+            return_value={"status": "completed", "exit_code": 0},
+        ) as batch_runner, patch.object(harness, "evaluate") as direct_evaluate:
+            self.assertEqual(harness.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "completed")
+        batch_runner.assert_called_once()
+        direct_evaluate.assert_not_called()
+        self.assertEqual(
+            batch_runner.call_args.kwargs["profile_path"],
+            Path("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"),
+        )
+        self.assertEqual(batch_runner.call_args.kwargs["run_id"], "run-evaluate-profile")
+        self.assertEqual(batch_runner.call_args.kwargs["out_root"], Path("target/competition-out-evaluate-profile"))
 
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [

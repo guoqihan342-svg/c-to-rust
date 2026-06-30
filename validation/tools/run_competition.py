@@ -451,19 +451,62 @@ def load_worker_summary_statuses(
                 "failed",
             ]
         }
+        worker_id = resolved.relative_to((out_root / "workers").resolve()).parts[0]
+        assignment_metadata = load_worker_assignment_request_metadata(
+            worker_id=worker_id,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+        status_entry = {
+            "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
+            "worker_id": worker_id,
+            "status": status,
+            "proof_class": worker_proof_class,
+            "attempted": worker_slices["attempted"],
+            "semantic_pass": worker_slices["semantic_pass"],
+            "failed": worker_slices["failed"],
+            "slices": worker_slices,
+            "workflow_metrics": workflow_metrics,
+        }
+        status_entry.update(assignment_metadata)
         statuses.append(
-            {
-                "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
-                "status": status,
-                "proof_class": worker_proof_class,
-                "attempted": worker_slices["attempted"],
-                "semantic_pass": worker_slices["semantic_pass"],
-                "failed": worker_slices["failed"],
-                "slices": worker_slices,
-                "workflow_metrics": workflow_metrics,
-            }
+            status_entry
         )
     return statuses
+
+
+def load_worker_assignment_request_metadata(
+    *,
+    worker_id: str,
+    out_root: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    request_path = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+    if not request_path.exists():
+        return {}
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    metadata: dict[str, Any] = {
+        "assignment_request": summary_reference_path(request_path, repo_root=repo_root, out_root=out_root),
+    }
+    for field in [
+        "target_id",
+        "slice_id",
+        "function",
+        "source_repo_root",
+        "source_repository",
+        "source_branch",
+        "source_file",
+        "source_commit",
+        "source_sha256",
+        "require_source_commit",
+    ]:
+        value = request.get(field)
+        if isinstance(value, str) and value:
+            metadata[field] = value
+    slice_specs = request.get("slice_specs")
+    if isinstance(slice_specs, list) and all(isinstance(item, str) and item for item in slice_specs):
+        metadata["slice_specs"] = slice_specs
+    return metadata
 
 
 def resolve_worker_summary_path(path: Path, *, repo_root: Path, out_root: Path) -> Path:

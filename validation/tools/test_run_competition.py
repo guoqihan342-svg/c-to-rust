@@ -166,6 +166,44 @@ def write_worker_summary(
     return path
 
 
+def write_worker_assignment_request(
+    out_root: Path,
+    worker_id: str,
+    *,
+    target_id: str = "demo",
+    slice_id: str = "demo-first",
+    function: str = "first_unit",
+    source_commit: str = "commit-one",
+    source_sha256: str = "a" * 64,
+    require_source_commit: str = "commit-one",
+) -> Path:
+    path = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "run_id": "run-test",
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "function": function,
+                "source_repo_root": "sources/FlashDB",
+                "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+                "source_branch": "competition",
+                "source_file": "src/fdb_utils.c",
+                "source_commit": source_commit,
+                "source_sha256": source_sha256,
+                "require_source_commit": require_source_commit,
+                "slice_specs": [f"validation/slice-specs/{slice_id}.json"],
+                "out_root": f"target/competition-out/workers/{worker_id}",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> dict:
     evidence_dir = worker_root / worker_id / "evidence"
     evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -896,6 +934,15 @@ class RunCompetitionTests(unittest.TestCase):
             out_root = tmp_path / "competition-out"
             worker_root = out_root / "workers"
             worker_a = write_worker_summary(worker_root, "worker-a", attempted=1, semantic_pass=1)
+            write_worker_assignment_request(
+                out_root,
+                "worker-a",
+                target_id="demo",
+                slice_id="demo-first",
+                function="first_unit",
+                source_commit="commit-one",
+                require_source_commit="commit-one",
+            )
             worker_b = write_worker_summary(
                 worker_root,
                 "worker-b",
@@ -926,7 +973,16 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["failed"], 1)
             self.assertEqual(summary["workers"]["count"], 2)
             self.assertEqual(summary["workers"]["summaries"][0]["status"], "passed")
+            self.assertEqual(summary["workers"]["summaries"][0]["worker_id"], "worker-a")
+            self.assertEqual(summary["workers"]["summaries"][0]["function"], "first_unit")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_file"], "src/fdb_utils.c")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_commit"], "commit-one")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_sha256"], "a" * 64)
+            self.assertEqual(summary["workers"]["summaries"][0]["require_source_commit"], "commit-one")
+            self.assertEqual(summary["workers"]["summaries"][0]["slice_specs"], ["validation/slice-specs/demo-first.json"])
             self.assertEqual(summary["workers"]["summaries"][1]["status"], "failed")
+            self.assertEqual(summary["workers"]["summaries"][1]["worker_id"], "worker-b")
+            self.assertNotIn("source_commit", summary["workers"]["summaries"][1])
             self.assertEqual(summary["final_gate"]["status"], "failed")
 
     def test_runner_aggregates_worker_workflow_metrics_into_parent_artifact(self) -> None:
