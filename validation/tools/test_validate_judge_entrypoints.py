@@ -655,6 +655,132 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(contracts["ledger_context_index"]["status"], "passed")
         self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
 
+    def test_worker_plan_units_must_match_context_and_agent_index_workers(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="worker-plan-drift-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        worker_plan = out_root / "harness" / "plans" / "workers.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+
+        for artifact in [assignment, request, summary, report]:
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text("{}\n", encoding="utf-8")
+        common_worker = {
+            "assignment_path": repo_relative(assignment),
+            "function": "demo_unit",
+            "report_path": repo_relative(report),
+            "request_path": repo_relative(request),
+            "slice_id": "demo-unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+            "summary_path": repo_relative(summary),
+            "worker_id": "worker-001",
+        }
+        write_json(
+            context_pack,
+            {
+                "report_kind": "context-pack",
+                "context_management_contract": {
+                    "agent_index": repo_relative(agent_index),
+                    "chat_output_is_evidence": False,
+                    "context_pack": repo_relative(context_pack),
+                    "contract_kind": "context-management",
+                    "evidence_policy": "on-disk-artifacts-only",
+                    "pipeline": [
+                        {"stage": "plan", "role": "planner", "evidence": "entrypoints.worker_plan"},
+                        {"stage": "translate", "role": "worker", "fanout": True},
+                        {"stage": "verify", "role": "verifier", "reduce": "merge"},
+                        {"stage": "repair", "role": "repairer", "max_rounds": 5},
+                    ],
+                    "resume_protocol": {
+                        "checkpoint_backend": "sqlite",
+                        "ledger_path": repo_relative(ledger),
+                        "worker_state_source": "agent-index.agents_by_worker_id",
+                    },
+                    "schema_version": 1,
+                    "semantic_gate": False,
+                },
+                "entrypoints": {"worker_plan": repo_relative(worker_plan)},
+                "workers": [common_worker],
+            },
+        )
+        write_json(
+            agent_index,
+            {
+                "report_kind": "agent-index",
+                "agent_coordination_contract": {
+                    "chat_output_is_evidence": False,
+                    "checkpoint_backend": "sqlite",
+                    "contract_kind": "agent-coordination",
+                    "roles": {
+                        "planner": {},
+                        "worker": {"isolation": "per-worker out_root"},
+                        "repairer": {"round_cap": 5},
+                        "verifier": {},
+                        "reporter": {},
+                    },
+                    "schema_version": 1,
+                    "semantic_gate": False,
+                    "worker_count": 1,
+                },
+                "agents": [common_worker],
+                "agents_by_worker_id": {
+                    "worker-001": {
+                        **common_worker,
+                        "isolated_out_root": repo_relative(worker_root),
+                    }
+                },
+                "planner": {
+                    "plan_path": repo_relative(worker_plan),
+                    "worker_count": 1,
+                },
+            },
+        )
+        write_json(
+            worker_plan,
+            {
+                "schema_version": 1,
+                "planning_mode": "explicit_workers",
+                "status": "planned",
+                "target_id": "flashdb",
+                "run_id": "worker-plan-drift",
+                "plan_path": repo_relative(worker_plan),
+                "units": [
+                    {
+                        **common_worker,
+                        "out_root": repo_relative(worker_root),
+                        "worker_id": "worker-002",
+                    }
+                ],
+            },
+        )
+        write_minimal_context_ledger(
+            ledger,
+            run_id="worker-plan-drift",
+            context_pack_path=context_pack,
+            context_pack_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+            agent_index_path=agent_index,
+        )
+
+        with self.assertRaisesRegex(ValueError, "worker_plan.units worker ids must match context_pack.workers"):
+            validator.validate_harness_artifact_contracts(
+                {
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "worker_plan": repo_relative(worker_plan),
+                },
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
     def test_context_pack_ledger_path_must_exist(self) -> None:
         temp_config = write_temp_config(load_default_config())
         temp_dir = temp_config.parent

@@ -1091,6 +1091,93 @@ def validate_context_agent_index_consistency(
     return {"status": "passed", "worker_count": len(context_worker_ids)}
 
 
+def validate_worker_plan_contract(
+    worker_plan_payload: dict[str, Any],
+    context_payload: dict[str, Any],
+    agent_payload: dict[str, Any],
+    *,
+    path_text: str,
+) -> dict[str, Any]:
+    if worker_plan_payload.get("schema_version") != 1:
+        raise ValueError("worker_plan.schema_version must be 1")
+    if worker_plan_payload.get("status") != "planned":
+        raise ValueError("worker_plan.status must be planned")
+    planning_mode = require_string(worker_plan_payload.get("planning_mode"), "worker_plan.planning_mode")
+    plan_path = require_string(worker_plan_payload.get("plan_path"), "worker_plan.plan_path")
+    assert_repo_relative_posix(plan_path)
+    if plan_path != path_text:
+        raise ValueError("worker_plan.plan_path must match expected_artifacts.worker_plan")
+
+    context_entrypoints = require_object(context_payload.get("entrypoints"), "context_pack.entrypoints")
+    context_worker_plan = context_entrypoints.get("worker_plan")
+    if isinstance(context_worker_plan, str) and context_worker_plan != path_text:
+        raise ValueError("context_pack.entrypoints.worker_plan must match expected_artifacts.worker_plan")
+
+    planner = agent_payload.get("planner")
+    if isinstance(planner, dict):
+        planner_path = planner.get("plan_path")
+        if isinstance(planner_path, str) and planner_path != path_text:
+            raise ValueError("agent_index.planner.plan_path must match expected_artifacts.worker_plan")
+
+    units = worker_plan_payload.get("units")
+    plan_worker_ids = worker_ids_from_entries(units, label="worker_plan.units")
+    context_workers = context_payload.get("workers")
+    agents = agent_payload.get("agents")
+    agents_by_worker_id = require_object(agent_payload.get("agents_by_worker_id"), "agents_by_worker_id")
+    context_worker_ids = worker_ids_from_entries(context_workers, label="context_pack.workers")
+    agent_ids = worker_ids_from_entries(agents, label="agent_index.agents")
+    indexed_ids = set(agents_by_worker_id)
+    if plan_worker_ids != context_worker_ids or plan_worker_ids != agent_ids or plan_worker_ids != indexed_ids:
+        raise ValueError(
+            "worker_plan.units worker ids must match context_pack.workers and agent_index: "
+            f"{sorted(plan_worker_ids)} != {sorted(context_worker_ids)} != {sorted(agent_ids)} != {sorted(indexed_ids)}"
+        )
+
+    units_by_worker_id = entries_by_worker_id(units, label="worker_plan.units")
+    context_by_worker_id = entries_by_worker_id(context_workers, label="context_pack.workers")
+    agents_by_list_id = entries_by_worker_id(agents, label="agent_index.agents")
+    comparable_fields = (
+        "assignment_path",
+        "request_path",
+        "slice_id",
+        "function",
+        "source_commit",
+        "require_source_commit",
+        "source_file",
+        "source_repo_root",
+        "source_repository",
+        "source_branch",
+        "source_sha256",
+    )
+    for worker_id in sorted(plan_worker_ids):
+        unit = units_by_worker_id[worker_id]
+        context_worker = context_by_worker_id[worker_id]
+        listed_agent = agents_by_list_id[worker_id]
+        indexed_agent = require_object(agents_by_worker_id[worker_id], f"agents_by_worker_id.{worker_id}")
+        for field in comparable_fields:
+            values = [payload.get(field) for payload in (unit, context_worker, listed_agent, indexed_agent) if field in payload]
+            if values and any(value != values[0] for value in values[1:]):
+                raise ValueError(f"worker {worker_id} field {field} must match across worker_plan, context_pack, and agent_index")
+        for field in ("assignment_path", "request_path", "out_root", "slice_spec", "source_repo_root", "source_file"):
+            value = unit.get(field)
+            if isinstance(value, str):
+                assert_repo_relative_posix(value)
+        out_root = unit.get("out_root")
+        isolated_out_root = indexed_agent.get("isolated_out_root")
+        if isinstance(out_root, str) and isinstance(isolated_out_root, str) and out_root != isolated_out_root:
+            raise ValueError(f"worker {worker_id} out_root must match agent_index isolated_out_root")
+
+    if isinstance(planner, dict) and planner.get("worker_count") != len(plan_worker_ids):
+        raise ValueError("agent_index.planner.worker_count must match worker_plan.units")
+
+    return {
+        "status": "passed",
+        "path": path_text,
+        "planning_mode": planning_mode,
+        "worker_count": len(plan_worker_ids),
+    }
+
+
 def validate_context_ledger_contract(
     context_payload: dict[str, Any],
     agent_payload: dict[str, Any],
@@ -1316,6 +1403,14 @@ def validate_harness_artifact_contracts(
             context_payload,
             agent_payload,
         )
+        if "worker_plan" in artifacts:
+            worker_plan_path = repo_path(str(artifacts["worker_plan"]), repo_root=repo_root)
+            result["worker_plan"] = validate_worker_plan_contract(
+                load_json(worker_plan_path),
+                context_payload,
+                agent_payload,
+                path_text=str(artifacts["worker_plan"]),
+            )
         result["ledger_context_index"] = validate_context_ledger_contract(
             context_payload,
             agent_payload,
