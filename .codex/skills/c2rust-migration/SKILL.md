@@ -1,6 +1,6 @@
 ---
 name: c2rust-migration
-description: Repo-owned workflow for C-to-Rust migration harness work in this repository. Use when Codex works on FlashDB or other C-to-Rust slices, C2Rust baselines, oracle/replay/diff evidence, unsafe-reduction repair loops, workflow metrics artifacts, typed-IR candidate diagnostics, migration evidence refreshes, or multi-agent worker handoffs.
+description: Repo-owned workflow for C-to-Rust migration harness work in this repository. Use when Codex works on FlashDB or other C-to-Rust slices, C2Rust baselines, oracle/replay/diff evidence, unsafe-reduction repair loops, workflow metrics artifacts, competition scoring checklists, typed-IR candidate diagnostics, migration evidence refreshes, or multi-agent worker handoffs.
 ---
 
 # C2Rust Migration
@@ -18,6 +18,19 @@ Use this skill when working on C-to-Rust migration slices in this repository. Th
 
 Typed IR and generic emitter work is supporting infrastructure: use it for trivial fast paths, candidate diagnostics, and fail-closed feature gaps. Do not let typed-IR coverage expansion displace the verified harness loop.
 
+## Competition Score Path
+
+Use this order for judge-facing work:
+
+1. Select a real C unit with a pinned source commit, slice spec, source span, compile flags, and input hashes.
+2. Produce C2Rust baseline context or record a fail-closed skipped/blocked baseline with version, flags, environment, reason, and `output_ref=null`.
+3. Compile the Rust candidate or record the rustc error stack as evidence.
+4. Run C oracle, Rust replay, schema-aware diff, negative diff, and unsafe ledger before claiming semantic progress.
+5. Run the agent safety loop only against a verified unsafe baseline; each patch must target one unsafe site or one compile blocker.
+6. Emit repair patch events, workflow trace, final verification, and `workflow-metrics.json` bound by `competition-run-summary.json`.
+
+Do not spend a development round on docs, schemas, refactors, or route metadata unless the change removes a harness blocker, improves repair/retry convergence, improves unsafe monotonicity evidence, advances a real slice state, adds a fail-closed classification, or removes a competition reproduction blocker.
+
 ## Repair Loop
 
 - Default repair cap is 5 rounds.
@@ -34,6 +47,25 @@ Typed IR and generic emitter work is supporting infrastructure: use it for trivi
 - Do not share mutable output directories between workers.
 - Require each worker to report commands, artifact paths, status, and blocked reason.
 - Merge worker output only after checking current files and evidence directly.
+- For batch work, split independent units first, then run workers concurrently; do not parallelize edits to the same source, schema, or evidence file.
+- Aggregate only machine-readable worker summaries and bound workflow metrics; treat worker prose as diagnostic context, not evidence.
+
+## Handoff Checklist
+
+Before handing work back or starting another slice, leave these facts current:
+
+- The exact branch, local commit, and remote commit when a push is expected.
+- The focused validation commands that were run and their status.
+- The artifact paths for route/profile/final verification, patch events, workflow trace, workflow metrics, and competition summary.
+- The accepted boundary: generated candidate, verified unsafe baseline, accepted evidence authoritative, semantic pass, blocked, or refused.
+- The next smallest harness step when the slice is not accepted.
+
+## Commit Gate
+
+- Run focused unit or contract tests that cover the changed module before committing.
+- Run `git diff --check` before committing.
+- Commit after validation when the change is ready; do not leave validated goal progress uncommitted.
+- Push the active branch when the user goal includes remote delivery, then verify local `HEAD` and the remote branch point to the same commit.
 
 ## Evidence Rules
 
