@@ -75,6 +75,7 @@ CACHE_INVALIDATED_ARTIFACTS = [
     "auto_translation_manifest",
     "summary",
 ]
+REPAIR_ROUND_LIMIT = 5
 
 
 def main() -> int:
@@ -3585,9 +3586,16 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         patch = write_no_patch_required(spec, evidence_dir, path)
         final = first
         if first["returncode"] != 0:
-            patch = try_safe_self_heal(spec, evidence_dir, path, first)
-            if patch.get("self_heal_applied"):
-                final = rust_check_once(path)
+            final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, first)
+        if final["returncode"] != 0 and patch["status"] != "blocked":
+            patch = write_blocked_patch(
+                spec,
+                evidence_dir,
+                path,
+                final["errors"],
+                round_number=REPAIR_ROUND_LIMIT,
+                append_events=patch.get("self_heal_applied") is True,
+            )
         write_log_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
         write_log_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
         payload = {
@@ -3604,8 +3612,6 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
                 "blocked_repairs": patch["blocked_repairs"],
             },
         }
-        if final["returncode"] != 0 and patch["status"] != "recorded":
-            patch = write_blocked_patch(spec, evidence_dir, path, final["errors"])
     write_json(evidence_dir / "rust-check.json", payload)
     return payload, patch
 
@@ -3683,29 +3689,56 @@ def try_safe_self_heal(
     evidence_dir: Path,
     draft_path: Path,
     first: dict[str, Any],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
 ) -> dict[str, Any]:
     text = draft_path.read_text(encoding="utf-8")
-    params = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*:", text))
-    keyword_params = sorted(params & RUST_KEYWORDS)
-    if not keyword_params:
-        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+    keyword_param = next(
+        (
+            match.group(1)
+            for match in re.finditer(
+                r"(?<![#A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\s*:",
+                text,
+            )
+            if match.group(1) in RUST_KEYWORDS
+        ),
+        None,
+    )
+    if keyword_param is None:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
 
-    patched = text
-    for name in keyword_params:
-        patched = re.sub(rf"(?<!#)\b{re.escape(name)}\b", f"r#{name}", patched)
+    patched = re.sub(
+        rf"(?<![#A-Za-z0-9_]){re.escape(keyword_param)}(?![A-Za-z0-9_])",
+        f"r#{keyword_param}",
+        text,
+    )
     if patched == text:
-        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
 
     draft_path.write_text(patched, encoding="utf-8")
     slice_id = required_str(spec, "slice_id")
     events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
-    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
     base_event = {
         "schema_version": 1,
-        "patch_id": "patch-rust-keyword-identifiers-1",
+        "patch_id": f"patch-rust-keyword-identifiers-{round_number}",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "round": 1,
+        "round": round_number,
         "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
         "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
         "expected_error_delta": {
@@ -3720,25 +3753,83 @@ def try_safe_self_heal(
             "source_slice_boundary",
             "unsafe_budget_policy",
         ],
-        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-1",
+        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-{round_number}",
         "ai_usage": {"used": False},
         "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
     }
-    events = [
-        {**base_event, "status": "applied"},
-        {**base_event, "status": "verified"},
-    ]
-    write_text(events_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
-    blocked = blocked_repairs_payload(spec, [])
-    write_json(blocked_path, blocked)
+    write_patch_events(events_path, [{**base_event, "status": "applied"}], append=append_events)
     return {
         "patch_events": rel(events_path),
-        "blocked_repairs": rel(blocked_path),
-        "blocked_repairs_status": blocked["status"],
-        "blocked_repairs_items": blocked["blocked_repairs"],
-        "status": "recorded",
+        "blocked_repairs": rel(evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"),
+        "blocked_repairs_status": "recorded",
+        "blocked_repairs_items": [],
+        "status": "applied",
         "self_heal_applied": True,
+        "_last_patch_event": base_event,
     }
+
+
+def run_safe_self_heal_loop(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    current = first
+    for round_number in range(1, REPAIR_ROUND_LIMIT + 1):
+        patch = try_safe_self_heal(
+            spec,
+            evidence_dir,
+            draft_path,
+            current,
+            round_number=round_number,
+            append_events=round_number > 1,
+        )
+        if not patch.get("self_heal_applied"):
+            return current, patch
+        current = rust_check_once(draft_path)
+        if current["returncode"] == 0:
+            return current, mark_self_heal_verified(spec, evidence_dir, patch)
+    return current, write_blocked_patch(
+        spec,
+        evidence_dir,
+        draft_path,
+        current["errors"],
+        round_number=REPAIR_ROUND_LIMIT,
+        append_events=True,
+    )
+
+
+def mark_self_heal_verified(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    base_event = patch.get("_last_patch_event")
+    if isinstance(base_event, dict):
+        write_patch_events(events_path, [{**base_event, "status": "verified"}], append=True)
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    visible_patch = dict(patch)
+    visible_patch.pop("_last_patch_event", None)
+    visible_patch.update(
+        {
+            "blocked_repairs": rel(blocked_path),
+            "blocked_repairs_status": blocked["status"],
+            "blocked_repairs_items": blocked["blocked_repairs"],
+            "status": "recorded",
+            "self_heal_applied": True,
+        }
+    )
+    return visible_patch
+
+
+def write_patch_events(events_path: Path, events: list[dict[str, Any]], *, append: bool = False) -> None:
+    previous = events_path.read_text(encoding="utf-8") if append and events_path.exists() else ""
+    write_text(events_path, previous + "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
 
 
 def write_no_patch_required(spec: dict[str, Any], evidence_dir: Path, draft_path: Path | None) -> dict[str, Any]:
@@ -3822,16 +3913,19 @@ def write_blocked_patch(
     evidence_dir: Path,
     draft_path: Path | None,
     errors: list[dict[str, Any]],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
     blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
     event = {
         "schema_version": 1,
-        "patch_id": "patch-blocked-1",
+        "patch_id": f"patch-blocked-{round_number}",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "round": 1,
+        "round": round_number,
         "status": "blocked",
         "files": [{"path": rel(draft_path) if draft_path else "", "spans": [{"line_start": 1, "line_end": 1}]}],
         "reason": "No safe local compile self-healing rule matched this rustc error stack.",
@@ -3847,16 +3941,16 @@ def write_blocked_patch(
             "source_slice_boundary",
             "unsafe_budget_policy",
         ],
-        "rollback_id": f"rollback-{slice_id}-blocked-1",
+        "rollback_id": f"rollback-{slice_id}-blocked-{round_number}",
         "ai_usage": {"used": False},
         "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
     }
-    write_text(events_path, json.dumps(event, sort_keys=True) + "\n")
+    write_patch_events(events_path, [event], append=append_events)
     blocked = blocked_repairs_payload(
         spec,
         [
             {
-                "repair_id": "repair-blocked-1",
+                "repair_id": f"repair-blocked-{round_number}",
                 "blocked_reason": event["reason"],
                 "forbidden_change": "type_uncertainty",
                 "candidate_patch_id": event["patch_id"],
@@ -3873,7 +3967,7 @@ def write_blocked_patch(
         "blocked_repairs_status": blocked["status"],
         "blocked_repairs_items": blocked["blocked_repairs"],
         "status": "blocked",
-        "self_heal_applied": False,
+        "self_heal_applied": append_events,
     }
 
 

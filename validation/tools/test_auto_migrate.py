@@ -5455,6 +5455,106 @@ class AutoMigrateTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
             self.assertIn("r#match", draft)
 
+    def test_keyword_identifier_self_healing_uses_five_repair_rounds(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "five-keyword-param",
+            "source_commit": "1234567",
+            "function_name": "five_keyword_param",
+            "fixture_hash": "fixture",
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            draft_path = evidence_dir / "l3-five-keyword-param-rust-draft.rs"
+            draft_path.write_text(
+                "\n".join(
+                    [
+                        "pub fn five_keyword_param("
+                        "match: i32, type: i32, loop: i32, move: i32, async: i32"
+                        ") -> i32 {",
+                        "    match + type + loop + move + async",
+                        "}",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            rust_check, patch = module.run_rust_check(evidence_dir, False, spec)
+
+            self.assertEqual(rust_check["status"], "passed", rust_check["errors"])
+            self.assertEqual(patch["status"], "recorded")
+            self.assertTrue(patch["self_heal_applied"])
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / "l3-five-keyword-param-patch-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [event["round"] for event in events if event["status"] == "applied"],
+                [1, 2, 3, 4, 5],
+            )
+            self.assertEqual(events[-1]["status"], "verified")
+            self.assertEqual(events[-1]["round"], 5)
+            draft = draft_path.read_text(encoding="utf-8")
+            for name in ("match", "type", "loop", "move", "async"):
+                self.assertIn(f"r#{name}", draft)
+
+    def test_keyword_identifier_self_healing_stops_after_five_repair_rounds(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "six-keyword-param",
+            "source_commit": "1234567",
+            "function_name": "six_keyword_param",
+            "fixture_hash": "fixture",
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            draft_path = evidence_dir / "l3-six-keyword-param-rust-draft.rs"
+            draft_path.write_text(
+                "\n".join(
+                    [
+                        "pub fn six_keyword_param("
+                        "match: i32, type: i32, loop: i32, move: i32, async: i32, while: i32"
+                        ") -> i32 {",
+                        "    match + type + loop + move + async + while",
+                        "}",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            rust_check, patch = module.run_rust_check(evidence_dir, False, spec)
+
+            self.assertEqual(rust_check["status"], "failed")
+            self.assertEqual(patch["status"], "blocked")
+            self.assertTrue(patch["self_heal_applied"])
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / "l3-six-keyword-param-patch-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                [event["round"] for event in events if event["status"] == "applied"],
+                [1, 2, 3, 4, 5],
+            )
+            self.assertEqual(events[-1]["status"], "blocked")
+            self.assertEqual(events[-1]["round"], 5)
+            self.assertEqual(events[-1]["patch_id"], "patch-blocked-5")
+            draft = draft_path.read_text(encoding="utf-8")
+            for name in ("match", "type", "loop", "move", "async"):
+                self.assertIn(f"r#{name}", draft)
+            self.assertIn("while: i32", draft)
+
     def test_cache_drift_invalidates_reusable_translation_artifacts(self) -> None:
         auto_migrate = load_auto_migrate_module()
         previous = {
