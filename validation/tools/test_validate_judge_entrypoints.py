@@ -37,6 +37,12 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["entrypoint_count"], 2)
+        self.assertEqual(result["proof_class_contract"]["proof_class_default"], "local-simulation")
+        self.assertEqual(result["source_pin_contract"]["canonical_commit"], "f9d0421315c564fb890a1b14eee77b290e0d7bbe")
+        self.assertIn(
+            "93d175549da579b8abac07bd175ce4c3f9dde829",
+            result["source_pin_contract"]["allowed_historical_evidence_commits"],
+        )
         self.assertEqual(result["test_contract"]["repair_round_cap"], 5)
         self.assertIn("planner", result["test_contract"]["required_agent_roles"])
         self.assertFalse(result["claim_boundary"]["generated_draft_semantic_pass"])
@@ -48,6 +54,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         for entry in result["entrypoints"]:
             self.assertEqual(entry["status"], "passed")
             self.assertEqual(entry["profile"]["status"], "present")
+            self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
 
     def test_require_local_artifacts_checks_expected_artifact_presence(self) -> None:
@@ -382,6 +389,32 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("generated_draft_semantic_pass must be false" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_entrypoint_proof_class_must_be_allowed(self) -> None:
+        config = load_default_config()
+        config["entrypoints"][0]["proof_class"] = "unlisted-proof"
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("entrypoint proof_class must be allowed" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_historical_profile_commit_must_be_declared_in_source_pin_policy(self) -> None:
+        config = load_default_config()
+        config["source_pin_policy"]["allowed_historical_evidence_commits"] = []
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("profile uses commits outside source_pin_policy" in error for error in result["errors"]),
             result["errors"],
         )
 

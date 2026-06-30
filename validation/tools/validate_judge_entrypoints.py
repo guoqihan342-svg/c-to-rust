@@ -134,6 +134,141 @@ def validate_claim_boundary(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def validate_proof_class_contract(config: dict[str, Any], entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
+    allowed = config.get("allowed_proof_classes")
+    if not isinstance(allowed, list) or not allowed or not all(isinstance(item, str) for item in allowed):
+        raise ValueError("allowed_proof_classes must be a non-empty string list")
+    default = config.get("proof_class_default")
+    if default not in allowed:
+        raise ValueError("proof_class_default must be listed in allowed_proof_classes")
+    entrypoint_classes: dict[str, str] = {}
+    for entry in entrypoints:
+        proof_class = entry.get("proof_class")
+        if proof_class not in allowed:
+            raise ValueError(f"entrypoint proof_class must be allowed: {entry.get('id')}")
+        entrypoint_classes[str(entry.get("id"))] = str(proof_class)
+    return {
+        "proof_class_default": default,
+        "allowed_proof_classes": list(allowed),
+        "entrypoints": entrypoint_classes,
+        "status": "passed",
+    }
+
+
+def validate_source_pin_contract(config: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    target_id = require_string(config.get("target_id"), "target_id")
+    source_pin = require_object(config.get("source_pin"), "source_pin")
+    environment_ref = require_object(config.get("environment_profile"), "environment_profile")
+    environment = load_json(repo_path(require_string(environment_ref.get("path"), "environment_profile.path"), repo_root=repo_root))
+    profile_pin = require_object(
+        require_object(environment.get("source_pins"), "environment.source_pins").get(target_id),
+        f"environment.source_pins.{target_id}",
+    )
+    for field in ("repository", "branch", "commit", "checkout_command"):
+        if source_pin.get(field) != profile_pin.get(field):
+            raise ValueError(f"source_pin.{field} must match environment source pin")
+    if source_pin.get("target_id") != target_id:
+        raise ValueError("source_pin.target_id must match target_id")
+    assert_no_local_absolute_path(require_string(source_pin.get("checkout_command"), "source_pin.checkout_command"))
+
+    policy = require_object(config.get("source_pin_policy"), "source_pin_policy")
+    canonical_commit = require_string(policy.get("canonical_commit"), "source_pin_policy.canonical_commit")
+    if canonical_commit != source_pin.get("commit"):
+        raise ValueError("source_pin_policy.canonical_commit must match source_pin.commit")
+    if policy.get("new_extraction_requires_canonical_commit") is not True:
+        raise ValueError("source_pin_policy.new_extraction_requires_canonical_commit must be true")
+    allowed_historical = policy.get("allowed_historical_evidence_commits", [])
+    if not isinstance(allowed_historical, list):
+        raise ValueError("source_pin_policy.allowed_historical_evidence_commits must be a list")
+    allowed_commits = {canonical_commit}
+    historical_commits: list[str] = []
+    for index, item in enumerate(allowed_historical):
+        item_payload = require_object(item, f"source_pin_policy.allowed_historical_evidence_commits[{index}]")
+        commit = require_string(item_payload.get("commit"), f"source_pin_policy.allowed_historical_evidence_commits[{index}].commit")
+        reason = require_string(item_payload.get("reason"), f"source_pin_policy.allowed_historical_evidence_commits[{index}].reason")
+        scope = item_payload.get("scope")
+        if not isinstance(scope, list) or not scope or not all(isinstance(value, str) and value for value in scope):
+            raise ValueError(f"source_pin_policy.allowed_historical_evidence_commits[{index}].scope must be a non-empty string list")
+        if commit == canonical_commit:
+            raise ValueError("source_pin_policy.allowed_historical_evidence_commits must not repeat canonical commit")
+        if not reason:
+            raise ValueError(f"source_pin_policy.allowed_historical_evidence_commits[{index}].reason must be non-empty")
+        allowed_commits.add(commit)
+        historical_commits.append(commit)
+    return {
+        "target_id": target_id,
+        "repository": source_pin["repository"],
+        "branch": source_pin["branch"],
+        "canonical_commit": canonical_commit,
+        "allowed_commits": sorted(allowed_commits),
+        "allowed_historical_evidence_commits": historical_commits,
+        "status": "passed",
+    }
+
+
+def validate_entrypoint_profile_contract(
+    entry: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    source_pin_contract: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    profile_ref = require_object(entry.get("profile"), f"{entry.get('id')}.profile")
+    profile_path = require_string(profile_ref.get("path"), f"{entry.get('id')}.profile.path")
+    profile = load_json(repo_path(profile_path, repo_root=repo_root))
+    if profile_ref.get("profile_id") != profile.get("profile_id"):
+        raise ValueError(f"{entry.get('id')} profile_id must match profile payload")
+    if entry.get("proof_class") != profile.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} proof_class must match profile proof_class")
+    if profile.get("target_id") != config.get("target_id"):
+        raise ValueError(f"{entry.get('id')} profile target_id must match judge target_id")
+    command = require_string(entry.get("command"), f"{entry.get('id')}.command")
+    run_id = require_string(entry.get("run_id"), f"{entry.get('id')}.run_id")
+    if f"--profile {profile_path}" not in command:
+        raise ValueError(f"{entry.get('id')} command must reference its profile path")
+    if f"--run-id {run_id}" not in command:
+        raise ValueError(f"{entry.get('id')} command must reference its run_id")
+    if "--out-root " not in command:
+        raise ValueError(f"{entry.get('id')} command must include --out-root")
+
+    source_repository = profile.get("source_repository")
+    if source_repository is not None and source_repository != source_pin_contract["repository"]:
+        raise ValueError(f"{entry.get('id')} profile source_repository must match source pin")
+    source_branch = profile.get("source_branch")
+    if source_branch is not None and source_branch != source_pin_contract["branch"]:
+        raise ValueError(f"{entry.get('id')} profile source_branch must match source pin")
+    allowed_commits = set(source_pin_contract["allowed_commits"])
+    observed_commits: set[str] = set()
+    for field in ("source_commit", "require_source_commit"):
+        value = profile.get(field)
+        if isinstance(value, str):
+            observed_commits.add(value)
+    workers = profile.get("workers")
+    if isinstance(workers, list):
+        for index, worker in enumerate(workers):
+            worker_payload = require_object(worker, f"{entry.get('id')}.profile.workers[{index}]")
+            if worker_payload.get("target_id") not in (None, config.get("target_id")):
+                raise ValueError(f"{entry.get('id')} worker target_id must match judge target_id")
+            for field in ("source_repository", "source_branch"):
+                value = worker_payload.get(field)
+                expected = source_pin_contract["repository"] if field == "source_repository" else source_pin_contract["branch"]
+                if value is not None and value != expected:
+                    raise ValueError(f"{entry.get('id')} worker {field} must match source pin")
+            for field in ("source_commit", "require_source_commit"):
+                value = worker_payload.get(field)
+                if isinstance(value, str):
+                    observed_commits.add(value)
+    disallowed = sorted(commit for commit in observed_commits if commit not in allowed_commits)
+    if disallowed:
+        raise ValueError(f"{entry.get('id')} profile uses commits outside source_pin_policy: {disallowed}")
+    return {
+        "profile_id": profile.get("profile_id"),
+        "proof_class": profile.get("proof_class"),
+        "observed_commits": sorted(observed_commits),
+        "status": "passed",
+    }
+
+
 def require_object(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be an object")
@@ -509,6 +644,18 @@ def validate_config(
         errors.append("entrypoints must be a non-empty list")
         entrypoints = []
 
+    dict_entrypoints = [entry for entry in entrypoints if isinstance(entry, dict)]
+    try:
+        proof_class_contract = validate_proof_class_contract(config, dict_entrypoints)
+    except ValueError as error:
+        proof_class_contract = {}
+        errors.append(str(error))
+    try:
+        source_pin_contract = validate_source_pin_contract(config, repo_root=repo_root)
+    except ValueError as error:
+        source_pin_contract = {}
+        errors.append(str(error))
+
     valid_entrypoints: list[dict[str, Any]] = []
     for entry in entrypoints:
         try:
@@ -531,6 +678,16 @@ def validate_config(
                     "status": "passed",
                     "purpose": entry.get("purpose"),
                     "profile": validate_ref(entry["profile"], repo_root=repo_root),
+                    "profile_contract": (
+                        validate_entrypoint_profile_contract(
+                            entry,
+                            config=config,
+                            source_pin_contract=source_pin_contract,
+                            repo_root=repo_root,
+                        )
+                        if source_pin_contract
+                        else {"status": "skipped", "reason": "source_pin_contract_failed"}
+                    ),
                     "tracked_manifest": validate_ref(entry["tracked_manifest"], repo_root=repo_root),
                     "expected_artifacts": validate_expected_artifacts(
                         expected_artifacts,
@@ -560,6 +717,8 @@ def validate_config(
         "entrypoint_count": len(entrypoint_results),
         "entrypoints": entrypoint_results,
         "claim_boundary": claim_boundary,
+        "proof_class_contract": proof_class_contract,
+        "source_pin_contract": source_pin_contract,
         "test_contract": test_contract,
         "require_local_artifacts": require_local_artifacts,
         "errors": errors,

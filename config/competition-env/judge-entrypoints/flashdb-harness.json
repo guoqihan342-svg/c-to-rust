@@ -26,6 +26,19 @@
     "commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "checkout_command": "git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe"
   },
+  "source_pin_policy": {
+    "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "new_extraction_requires_canonical_commit": true,
+    "allowed_historical_evidence_commits": [
+      {
+        "commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+        "scope": [
+          "real-fdb-blob-make"
+        ],
+        "reason": "Existing accepted-evidence slice used only as historical multi-worker harness coverage; new FlashDB competition extraction remains pinned to the canonical source commit."
+      }
+    ]
+  },
   "claim_boundary": {
     "semantic_claim_source": "accepted_evidence_binding",
     "generated_draft_semantic_pass": false,

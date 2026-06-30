@@ -348,6 +348,14 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(config["source_pin"]["commit"], flashdb["commit"])
         self.assertEqual(config["source_pin"]["checkout_command"], flashdb["checkout_command"])
         assert_no_local_absolute_path(self, config["source_pin"]["checkout_command"])
+        source_pin_policy = config["source_pin_policy"]
+        self.assertEqual(source_pin_policy["canonical_commit"], flashdb["commit"])
+        self.assertTrue(source_pin_policy["new_extraction_requires_canonical_commit"])
+        historical_commits = {
+            item["commit"]
+            for item in source_pin_policy["allowed_historical_evidence_commits"]
+        }
+        self.assertEqual(historical_commits, {"93d175549da579b8abac07bd175ce4c3f9dde829"})
 
         claim_boundary = config["claim_boundary"]
         self.assertEqual(claim_boundary["semantic_claim_source"], "accepted_evidence_binding")

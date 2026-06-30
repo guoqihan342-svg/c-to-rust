@@ -44,7 +44,7 @@
 - `toolchain-check.sh`：比赛机环境自检脚本。
 - `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
 - `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
-- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 FlashDB before/after demo 与显式多 worker evaluate profile 的命令、预期 artifacts、tracked manifest、H1-H6 test contract 和 claim boundary，但不替代 semantic gate。可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。
+- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 FlashDB before/after demo 与显式多 worker evaluate profile 的命令、预期 artifacts、tracked manifest、source pin policy、H1-H6 test contract 和 claim boundary，但不替代 semantic gate。可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
 
 ## Clang 策略：vendored 本地分发
