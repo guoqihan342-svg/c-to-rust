@@ -48,5 +48,67 @@
       "unsafe_ledger",
       "rust_verification_tools"
     ]
+  },
+  "oracle_boundary_contract": {
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "out0"
+    ],
+    "fixture_representativeness": {
+      "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+      "fixture_hash": "store-add-one-fixture",
+      "declared_case_count": 6,
+      "accepted_oracle_case_count": 6,
+      "case_source": "fixture_contract",
+      "representativeness": "bounded_fixture_contract",
+      "limitations": [
+        "NULL out pointers are outside the accepted fixture domain",
+        "INT_MAX signed overflow is outside the accepted fixture domain",
+        "Pointer arithmetic beyond out[0] is outside the accepted fixture domain"
+      ]
+    },
+    "compiler": {
+      "command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+      "include_paths": [],
+      "defines": [],
+      "flags": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "word_size_bits": 64
+    },
+    "sanitizer_diagnostics": {
+      "sanitizer_status": "not_run",
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ],
+      "clang_type_extraction_available": false
+    },
+    "ub_and_implementation_defined": {
+      "known_ub": [],
+      "implementation_defined_behavior": [],
+      "scalar_arithmetic_contract": {}
+    },
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "insufficient_reasons": []
   }
 }

@@ -255,6 +255,7 @@ def run_competition(
             repo_root=repo_root,
             out_root=out_root,
         )
+        translation_before_after = load_translation_before_after(slice_evidence_root, target_id, slice_id)
         unit_statuses.append(
             workflow_unit_status(
                 target_id=target_id,
@@ -270,6 +271,7 @@ def run_competition(
                 auto_recovered=repair_metrics["auto_recovered"],
                 repair_history=repair_metrics.get("repair_history"),
                 llm_calls=repair_metrics["llm_calls"],
+                translation_before_after=translation_before_after,
             )
         )
 
@@ -716,6 +718,7 @@ def workflow_unit_status(
     auto_recovered: bool = False,
     repair_history: dict[str, Any] | None = None,
     llm_calls: int = 0,
+    translation_before_after: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     status_payload = {
         "unit_id": f"{target_id}/{slice_id}",
@@ -734,6 +737,8 @@ def workflow_unit_status(
             status_payload["repair_history"] = repair_history
     if llm_calls > 0:
         status_payload["llm_calls"] = llm_calls
+    if translation_before_after is not None:
+        status_payload["translation_before_after"] = translation_before_after
     return status_payload
 
 
@@ -1183,6 +1188,16 @@ def load_final_verification(evidence_root: Path, target_id: str, slice_id: str) 
     if not path.exists():
         return {"status": "failed", "semantic_pass": False, "rust_check_status": "missing"}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_translation_before_after(evidence_root: Path, target_id: str, slice_id: str) -> dict[str, Any] | None:
+    path = evidence_root / target_id / "auto-translation" / slice_id / f"l3-{slice_id}-translation-before-after.json"
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return None
+    return payload
 
 
 def self_healing_repair_metrics(

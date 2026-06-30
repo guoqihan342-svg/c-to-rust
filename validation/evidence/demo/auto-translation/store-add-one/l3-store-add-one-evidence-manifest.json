@@ -34,108 +34,108 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-      "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+      "sha256": "c899ca28bfadf2d6d677986d712cec41076d681e7af30194abaf17f620f6637e",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-status.json",
-      "sha256": "3fe7905be36a48b055fcc482ead6e5b2475ab17e838035d43ccda5d948bbe697",
+      "sha256": "cda30818f1627957dd581bba8c5957e687de286dbddce0956602e74d45bed0ec",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-cache-metadata.json",
-      "sha256": "8060c460b5a7ae74f2cf97c30aefe2c3b4f3fe284e2a273696bb1291922598b2",
+      "sha256": "d58f1a20523b2f7a28566ebfee8f446a8018cdd1a449ed78f801fd75729d1f7d",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-config-profile.json",
       "profile_id": "demo-store-add-one-wsl-gcc",
-      "sha256": "7a95e12450ef9792263eb1e04b4a45285bbca3b540841066a4072aef37452b95",
+      "sha256": "0521827f9ff24d3a189fddaeabaf32ef9c3ec8df83947330bddd90bd0e34fe94",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-context-pack.json",
-      "sha256": "5c0d6d77a09eb50fb5165a5d0b7106f42e211776b3aef28d2283d1196de8b10c",
+      "sha256": "9312e7a5efea450b86b46dc26e2a14718d2950081e1975b2a20e2a6c6600a5ca",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-      "sha256": "77699c69697837fae075ae5d997614cf2df848ed98f2326c22c05ee7993e8ac0",
+      "sha256": "1b0bce64a04c302caaccd4df7cd190d537721fd91fb7e8377f9eae4771d19f21",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-negative-diff.json",
-      "sha256": "ebc9d70588163ad1f46ed43f9bf790ebbe2dce76bc4a1cfbec2a498451b88901",
+      "sha256": "4fd17e9b290845bbbe5979a7be79a2d63898f5628f959c1ec62fc3f375ff4d1c",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "534e0bedb0992c4006b35702a820aa501da83543ea1c5f65e318f67027e98c9e",
+      "sha256": "278d1e7e2601b2fdf9cce8eb071d71ab2e9a2e215be4eb67197038b1981d10af",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
-      "sha256": "fbe02f45941ba886be265890353441dd110bb6b47295811f7ca89eccec5d3272",
+      "sha256": "2000233a77aec8dcc1be2f1d6b81b860b226e31aabd46d235819246484026ef1",
       "status": "recorded"
     },
     "route_decision": {
-      "level": "L1",
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-      "sha256": "5ed2041787e2d6526fd0b5c3b3a25c96975fa62874f7b0dbb339921f3c913185",
-      "status": "recorded"
+      "sha256": "42cada3abe262b69dbae634fd7cf82eb3a010d0700345f998d118d6ca425c28e",
+      "status": "recorded",
+      "level": "L1"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
-      "sha256": "00a69f27c7ec695d9739ca4cc172813dc5e507423dee38fc982cd3294659d2f2",
+      "sha256": "5a45680feb869fe26c71d6899ba1a910182bfa5f5ef9320e83c8fd8d6b2123be",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-report.json",
-      "sha256": "147bbe5572951aa2673eebedd3970c63c6ef482c4618bbe398d65d254bd23914",
+      "sha256": "4dde94aa9c5a9180901b3f0e4df7005555dc90e70c3353491432663224f463cf",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
-      "sha256": "b5c49e2d39713b2d0ca8103c977e9fd1cc2a6548fa29619aabf65067e14bdbe0",
+      "sha256": "db85df697c504d409f6f125a7383d2ab51fbd82221ffacc6d6637881a049f1c8",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-slice-contract.json",
-      "sha256": "886e9eff9cd539960822c8a53b3d42d04cecde7859dc37a0953785adfed998f3",
+      "sha256": "e1d4f585963d4bd4883b1c8be8b7a9d37347c94cb36e006a772aaa77eb9096fd",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-summary.json",
-      "sha256": "dc4c2fc7c62620ca62d94202eaddbdac672b555dba18ea7f8d9b179b2459318e",
+      "sha256": "e2063ecdec61039f00d26b0f06f3bd9c1656531ab54fd4e2c3c77cb246af28f6",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-test-translation-generated.json",
-      "sha256": "2c3ddfe89e742c4589922cd8fd56d324d4e0b845e12de8e5a34bb03079a9eccc",
+      "sha256": "ff72e7ef81f9974cba35242603fe5e8339c84cc0c534119a49d3bdf992ab8878",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-unsafe-ledger.json",
-      "sha256": "10c048fa6e81fe2a456a6d6c6f0fddf9e4a22680b56962fda51bee5c84c2d8bd",
+      "sha256": "86484b4554cb417893b85c5a936df4f7cf9fc102139077b1a37d9c688be0cf06",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-unsafe-scan.json",
-      "sha256": "23a9da8ff328e92a73bf76e4e7a9ac196516a6124d80f2a34790cbd350b78b36",
+      "sha256": "c05fa373c61958f78b21c856a89e3585136d7866bc53a220793dfa9e632e76b9",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
-      "profile": "L1-dev",
-      "sha256": "9efe18ae5ec5a45a3b603b19d296e5ef1b9228c422342178fba343d1c3014149",
-      "status": "passed"
+      "sha256": "0960a93f0037a677cb8f05d8db0aa627f66eae8178c092542fa693bd117ae11b",
+      "status": "passed",
+      "profile": "L1-dev"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-version-manifest.json",
-      "sha256": "72a46ea4fe2bb14c6ee652daa01c6efc49b5ccc880f147c20733a339079c9c18",
+      "sha256": "572e82de04223c3c35300422c2490191b3ad2083b5dbe07cd83a28a652fe449c",
       "status": "recorded"
     }
   },

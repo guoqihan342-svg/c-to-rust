@@ -1258,6 +1258,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 else:
                     payload["route_decision"] = route_ref
                     payload["validation_profile"] = profile_ref
+                if file_name.endswith("auto-translation-manifest.json"):
+                    payload["status"] = "candidate_generated"
                 self._write_json(path, payload)
 
             cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
@@ -1353,6 +1355,9 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     payload["validation_profile"] = profile_ref
                 if file_name.endswith("auto-translation-manifest.json"):
                     payload["status"] = "candidate_refused"
+                    payload.setdefault("generated_artifacts", []).append(
+                        {"kind": "rust_draft", "status": "draft_generated"}
+                    )
                 self._write_json(path, payload)
 
             cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"

@@ -2713,6 +2713,13 @@ def measured_unsafe_worker_metrics(run_id: str) -> dict:
             "reduced_by": 2,
             "ratio": 1 / 3,
         },
+        "translation_before_after": {
+            "status": "not_provided",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+            "units": [],
+        },
         "avg_repair_rounds": 0.0,
         "auto_recovery_rate": 0.0,
         "human_interventions": 0,

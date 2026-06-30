@@ -198,6 +198,43 @@ def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> di
     }
 
 
+def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id: str) -> dict:
+    evidence_dir = out_root / "evidence" / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = {
+        "baseline": evidence_dir / "baseline-unsafe.rs",
+        "final": evidence_dir / "final-safe.rs",
+        "oracle_evidence": evidence_dir / "oracle-diff.json",
+        "accepted_patch": evidence_dir / "accepted.patch",
+        "patch_log": evidence_dir / "safety-step-log.jsonl",
+    }
+    for name, path in artifacts.items():
+        path.write_text(f"{name}\n", encoding="utf-8")
+    manifest = {
+        "schema_version": 1,
+        "status": "bound",
+        **{
+            name: {
+                "path": f"evidence/{target_id}/auto-translation/{slice_id}/{path.name}",
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for name, path in artifacts.items()
+        },
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 3,
+            "current_total_unsafe": 0,
+            "reduced_by": 3,
+            "ratio": 0.0,
+        },
+    }
+    (evidence_dir / f"l3-{slice_id}-translation-before-after.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
 class FakeCommandRunner:
     def __init__(
         self,
@@ -405,6 +442,39 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(repair_history["statuses"], ["applied", "applied", "applied", "verified"])
             self.assertEqual(repair_history["rollback_ids"], [])
             self.assertTrue(repair_history["verified"])
+
+    def test_runner_binds_direct_slice_translation_before_after_manifest(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "keyword-param")
+            write_final_verification(out_root / "evidence", "demo", "keyword-param", semantic_pass=True)
+            before_after = write_direct_before_after_manifest(out_root, "demo", "keyword-param")
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(metrics["translation_before_after"]["unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["measured_unsafe_unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["accepted_patch_unit_count"], 1)
+            unit = metrics["per_unit_statuses"][0]
+            self.assertEqual(unit["translation_before_after"], before_after)
 
     def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
         module = load_runner_module()
