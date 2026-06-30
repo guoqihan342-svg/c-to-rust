@@ -43,7 +43,7 @@
 #[cfg(feature = "typed-ir")]
 use std::process::Command;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     env,
     error::Error,
     fmt,
@@ -5622,7 +5622,12 @@ fn collect_record_inventory_from_ast(
                 entry.insert(fields);
             }
             std::collections::btree_map::Entry::Occupied(mut entry) => {
-                entry.insert(None);
+                match (entry.get(), &fields) {
+                    (Some(existing), Some(new_fields)) if existing == new_fields => {}
+                    _ => {
+                        entry.insert(None);
+                    }
+                }
             }
         }
     }
@@ -5655,22 +5660,106 @@ fn record_inventory_entry_from_record_decl(
     }
 
     let mut fields = Vec::new();
+    let mut anonymous_records = VecDeque::new();
     for child in inner(node) {
         match string_field(child, "kind").as_deref() {
             Some("FieldDecl") => {
-                let Some(field) = record_field_from_field_decl(child, target_abi) else {
+                if let Some(field) = record_field_from_field_decl(child, target_abi) {
+                    fields.push(field);
+                    continue;
+                };
+                let Some(nested_fields) = anonymous_records.pop_front() else {
+                    return Some((name, None));
+                };
+                let Some(field) =
+                    record_field_from_anonymous_record_field_decl(&name, child, nested_fields)
+                else {
                     return Some((name, None));
                 };
                 fields.push(field);
             }
-            Some("RecordDecl") => return Some((name, None)),
+            Some("RecordDecl") => {
+                let Some(fields) = anonymous_record_fields_from_record_decl(child, target_abi)
+                else {
+                    return Some((name, None));
+                };
+                anonymous_records.push_back(fields);
+            }
             _ => {}
         }
     }
-    if fields.is_empty() {
+    if fields.is_empty() || !anonymous_records.is_empty() {
         return Some((name, None));
     }
     Some((name, Some(fields)))
+}
+
+#[cfg(feature = "typed-ir")]
+fn anonymous_record_fields_from_record_decl(
+    node: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Option<Vec<IrRecordField>> {
+    if string_field(node, "kind").as_deref() != Some("RecordDecl")
+        || string_field(node, "tagUsed").as_deref() != Some("struct")
+        || node.get("completeDefinition").and_then(Value::as_bool) != Some(true)
+        || node.get("isImplicit").and_then(Value::as_bool) == Some(true)
+        || string_field(node, "name").is_some()
+    {
+        return None;
+    }
+    if inner(node)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("PackedAttr"))
+    {
+        return None;
+    }
+
+    let mut fields = Vec::new();
+    for child in inner(node) {
+        match string_field(child, "kind").as_deref() {
+            Some("FieldDecl") => {
+                let field = record_field_from_field_decl(child, target_abi)?;
+                fields.push(field);
+            }
+            Some("RecordDecl") => return None,
+            _ => {}
+        }
+    }
+    (!fields.is_empty()).then_some(fields)
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_field_from_anonymous_record_field_decl(
+    parent_name: &str,
+    field: &Value,
+    fields: Vec<IrRecordField>,
+) -> Option<IrRecordField> {
+    let field_name = string_field(field, "name")?;
+    if !is_simple_c_identifier(&field_name) || fields.is_empty() {
+        return None;
+    }
+    let type_object = field.get("type")?;
+    let spelled = clang_type_candidate_spellings(type_object)
+        .into_iter()
+        .find(|candidate| candidate.trim_start().starts_with("struct (unnamed "))?;
+    let nested_name = format!("{parent_name}_{field_name}");
+    if !is_simple_c_identifier(&nested_name) {
+        return None;
+    }
+    Some(IrRecordField {
+        name: field_name,
+        ty: IrType {
+            spelled,
+            canonical: format!("struct {nested_name}"),
+            kind: IrTypeKind::Record {
+                name: nested_name,
+                fields: Some(fields),
+            },
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        },
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -10784,5 +10873,149 @@ mod tests {
         assert_eq!(fields[2].name, "size");
         assert_eq!(fields[2].ty.spelled, "size_t");
         assert_eq!(fields[2].ty.width_bits, Some(64));
+    }
+
+    #[test]
+    fn record_inventory_from_ast_keeps_duplicate_complete_record_definitions_with_same_fields() {
+        let record_decl = serde_json::json!({
+            "kind": "RecordDecl",
+            "tagUsed": "struct",
+            "name": "fdb_blob",
+            "completeDefinition": true,
+            "inner": [
+                {
+                    "kind": "FieldDecl",
+                    "name": "buf",
+                    "type": { "qualType": "void *" }
+                },
+                {
+                    "kind": "FieldDecl",
+                    "name": "size",
+                    "type": { "qualType": "size_t" }
+                }
+            ]
+        });
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                record_decl.clone(),
+                record_decl
+            ]
+        });
+
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
+        let fields = inventory
+            .get("fdb_blob")
+            .expect("identical duplicate record definitions keep inventory");
+
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "buf");
+        assert_eq!(fields[1].name, "size");
+    }
+
+    #[test]
+    fn record_inventory_from_ast_keeps_anonymous_nested_integer_record_field() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "fdb_blob",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "buf",
+                            "type": { "qualType": "void *" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "size",
+                            "type": { "qualType": "size_t" }
+                        },
+                        {
+                            "kind": "RecordDecl",
+                            "tagUsed": "struct",
+                            "completeDefinition": true,
+                            "inner": [
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "meta_addr",
+                                    "type": {
+                                        "qualType": "uint32_t",
+                                        "desugaredQualType": "unsigned int"
+                                    }
+                                },
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "addr",
+                                    "type": {
+                                        "qualType": "uint32_t",
+                                        "desugaredQualType": "unsigned int"
+                                    }
+                                },
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "len",
+                                    "type": { "qualType": "size_t" }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "saved",
+                            "type": {
+                                "qualType": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)"
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
+        let fields = inventory
+            .get("fdb_blob")
+            .expect("anonymous nested record field stays modeled");
+
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[2].name, "saved");
+        let IrTypeKind::Record {
+            name,
+            fields: Some(saved_fields),
+        } = &fields[2].ty.kind
+        else {
+            panic!("saved field should lower to a complete nested record");
+        };
+        assert_eq!(name, "fdb_blob_saved");
+        assert_eq!(saved_fields.len(), 3);
+        assert_eq!(saved_fields[0].name, "meta_addr");
+        assert_eq!(saved_fields[1].name, "addr");
+        assert_eq!(saved_fields[2].name, "len");
     }
 }

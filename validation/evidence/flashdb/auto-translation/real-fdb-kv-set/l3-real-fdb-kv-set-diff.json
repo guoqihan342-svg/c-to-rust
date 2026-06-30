@@ -6,7 +6,7 @@
   ],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
+    "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
     "status": "skipped"
   },
   "compared_fields": [
@@ -18,9 +18,9 @@
   "reason": "Schema-aware diff requires accepted C oracle and Rust replay reports.",
   "reason_code": "missing_accepted_c_oracle_and_rust_replay",
   "required_inputs": {
-    "c_oracle_actual_status": "DRAFT_GENERATED",
-    "c_oracle_actual_toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE",
-    "c_oracle_output_gate_actual_status": "matched_not_oracle",
+    "c_oracle_actual_status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "c_oracle_actual_toolchain_status": "DRAFT_NOT_EXECUTED",
+    "c_oracle_output_gate_actual_status": "missing",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
     "rust_replay_actual_status": "recorded",
     "rust_report_actual_status": "incomplete",
@@ -29,7 +29,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "359dea7788ea1c1c1bf0f56a9509e030f320a2bb089f314e9c845bcd9481f518",
+    "sha256": "9cd273636a745c8f362a4e5188b1b0ab51d6185cc9f7ef36502eb410cbe93c6c",
     "status": "refused"
   },
   "schema_version": 1,
@@ -40,7 +40,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "3d66282ba16cc92ae9760ecc18b51f9edd52f2d2455c39740bc4064478336810",
+    "sha256": "b9a662c318bdc2c291aeca50f99e33f6275e4c278c28bee982cbe5cdf5bfba10",
     "status": "blocked"
   }
 }

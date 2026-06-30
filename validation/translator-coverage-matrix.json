@@ -1516,6 +1516,8 @@
         "mutable record pointer identity return after field write",
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
         "local complete record zero initializer for address-taken direct-call candidates",
+        "anonymous nested integer record field inventory for complete local record zero initializers",
+        "recursive nested record zero initializer for address-taken direct-call candidates",
         "embedded slice source C oracle harness diagnostic execution"
       ],
       "dimension_status": {
@@ -1550,6 +1552,14 @@
               "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
               "path": "crates/c2r-translator/tests/bounded_translation.rs",
               "proof_class": "optional_real_clang_smoke"
+            },
+            {
+              "name": "record_inventory_from_ast_keeps_duplicate_complete_record_definitions_with_same_fields",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "record_inventory_from_ast_keeps_anonymous_nested_integer_record_field",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
         },
@@ -1582,6 +1592,10 @@
             },
             {
               "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_with_nested_record_zero_initializer",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1641,6 +1655,10 @@
             },
             {
               "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_with_nested_record_zero_initializer",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]

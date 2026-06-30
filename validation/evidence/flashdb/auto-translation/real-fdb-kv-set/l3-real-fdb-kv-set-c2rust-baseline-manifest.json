@@ -56,7 +56,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-30T02:41:57Z"
+    "probed_at": "2026-06-30T03:51:59Z"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

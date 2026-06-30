@@ -35,7 +35,7 @@
     "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
   ],
   "level": "L3",
-  "repo_commit": "01b0d1c76f74afe30d39b4dd847d7335cb400283",
+  "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
   "rust_tests": [
     {
       "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",

@@ -69,80 +69,14 @@
       "-o",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
     ],
-    "attempted": true,
-    "compiler_candidates": [
-      "cc",
-      "gcc",
-      "clang"
-    ],
-    "compiler_name": "cc",
-    "compiler_path": "/usr/bin/cc",
+    "attempted": false,
     "diagnostics": [
-      "C oracle compile command succeeded, but execution/diff gates are still required."
+      "C oracle compile execution skipped by --skip-c-oracle."
     ],
-    "execution_argv": [
-      "C:\\WINDOWS\\system32\\wsl.exe",
-      "-e",
-      "sh",
-      "-lc",
-      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_file.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
-    ],
-    "harness_execution": {
-      "argv": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
-      ],
-      "attempted": true,
-      "diagnostics": [
-        "C oracle harness executed, but execution output has not passed oracle diff gates."
-      ],
-      "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe",
-      "execution_argv": [
-        "C:\\WINDOWS\\system32\\wsl.exe",
-        "-e",
-        "sh",
-        "-lc",
-        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
-      ],
-      "output_gate": {
-        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
-        "compared_fields": [
-          "return_code"
-        ],
-        "diagnostics": [
-          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
-        ],
-        "expected_stdout_fragments": [
-          "fixture case uninit-set-value return_code matched",
-          "fixture case uninit-delete-null return_code matched"
-        ],
-        "fixture_expected_output_status": "declared_not_executed",
-        "gate": "c_oracle_harness_output",
-        "matched_stdout_fragments": [
-          "fixture case uninit-set-value return_code matched",
-          "fixture case uninit-delete-null return_code matched"
-        ],
-        "missing_stdout_fragments": [],
-        "schema_version": 1,
-        "semantic_pass": false,
-        "status": "matched_not_oracle"
-      },
-      "returncode": 0,
-      "semantic_pass": false,
-      "status": "exited_zero_not_oracle",
-      "stderr": "",
-      "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-set-value return_code matched\n[FlashDB][kv][unit-kv][(null)] Error: KV (unit-kv) isn't initialize OK.\nfixture case uninit-delete-null return_code matched\n",
-      "timeout_seconds": 30,
-      "toolchain_adapter": "wsl",
-      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
-    },
-    "requested_compiler": "cc",
-    "returncode": 0,
     "semantic_pass": false,
-    "status": "compile_succeeded_not_oracle",
-    "stderr": "In file included from /mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/flashdb.h:22,\n                 from /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:16:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018read_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:18: warning: field precision specifier \u2018.*\u2019 expects argument of type \u2018int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                   ~~~~~~~~\n      |                                                                                     |\n      |                                                                                     size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:9: note: in expansion of macro \u2018FDB_INFO\u2019\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |         ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:41: note: format string is defined here\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                                       ~~^~\n      |                                         |\n      |                                         int\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018new_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:22: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~                                              ~~~~~~~\n      |                                                                                                |\n      |                                                                                                size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:13: note: in expansion of macro \u2018FDB_INFO\u2019\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |             ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:49: note: format string is defined here\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                                                ~^\n      |                                                 |\n      |                                                 unsigned int\n      |                                                %lu\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018fdb_kv_print\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1502:15: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018long unsigned int\u2019 [-Wformat=]\n 1502 |     FDB_PRINT(\"size: %\" PRIu32 \"/%\" PRIu32 \" bytes.\\n\", (uint32_t)using_size + ((SECTOR_NUM - FDB_GC_EMPTY_SEC_THRESHOLD) * SECTOR_HDR_DATA_SIZE),\n      |               ^~~~~~~~~                                 ~~~~~~\n...[truncated]",
-    "stdout": "",
-    "toolchain_adapter": "wsl",
-    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    "status": "skipped_by_flag",
+    "toolchain_adapter": "not_executed",
+    "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
   },
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -253,7 +187,7 @@
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-kv-set",
-  "status": "DRAFT_GENERATED",
+  "status": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
   "target_id": "flashdb",
-  "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE"
+  "toolchain_status": "DRAFT_NOT_EXECUTED"
 }

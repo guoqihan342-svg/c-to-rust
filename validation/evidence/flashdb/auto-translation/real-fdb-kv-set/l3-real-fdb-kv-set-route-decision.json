@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
+        "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -21,6 +21,9 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
         "kind": "legacy-string-translator",
         "role": "compatibility_rust_draft",
         "semantic_pass": false,
@@ -32,12 +35,12 @@
         "role": "typed_ir_candidate_signal",
         "rust_draft_generated": false,
         "semantic_pass": false,
-        "status": "not_available"
+        "status": "unsupported"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
+          "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -56,7 +59,9 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
-        "fallback": false,
+        "fallback": true,
+        "fallback_from": "clang-lowered-typed-ir",
+        "fallback_reason": "clang_lowered_typed_ir_unavailable",
         "selected": "legacy-string-translator",
         "semantic_pass": false
       }
@@ -73,7 +78,9 @@
       "fallback_summary": {
         "legacy_string_translator": {
           "candidate_id": "compat:legacy-string-translator",
-          "fallback": false,
+          "fallback": true,
+          "fallback_from": "clang-lowered-typed-ir",
+          "fallback_reason": "clang_lowered_typed_ir_unavailable",
           "selected_as_primary": false,
           "status": "compatibility_only"
         }
@@ -132,16 +139,34 @@
       "stage": "p0_route_governance"
     },
     "typed_ir": {
-      "candidate_route": null,
+      "candidate_route": {
+        "candidate_generator": "None",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "outside_typed_ir_emitter_subset",
+            "detail": "fdb_kv_set is outside the current typed IR emitter subset: stmt[1].if condition pointer type const char * is unsupported"
+          }
+        ],
+        "replacement": null,
+        "route": "Unsupported",
+        "route_id": "unsupported",
+        "suggested_required_gates": [
+          "manual_review"
+        ],
+        "token_cost": 0
+      },
       "readonly_globals": [],
       "readonly_globals_identity": {
         "count": 0,
         "names": [],
         "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
-      "reason": "function_ir_missing",
       "runtime_preconditions": [],
       "rust_draft_generated": false,
+      "rust_draft_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "scalar_admission": {
         "contract_status": "recorded",
         "covered": [],
@@ -152,10 +177,12 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-        "sha256": "be98eda782f04ca9e9fc65055f1dabec1bb0914a1e80a3813291e5e6812e7e14",
-        "status": "unavailable"
+        "sha256": "538215f4ed4d39dda7e6f9569d6f8935de532dd8af7ea2df71590a1a1acbc549",
+        "status": "lowered"
       },
-      "status": "not_available"
+      "status": "unsupported",
+      "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f",
+      "unsupported_reason": "fdb_kv_set is outside the current typed IR emitter subset: stmt[1].if condition pointer type const char * is unsupported"
     }
   },
   "level": "L4",
@@ -206,22 +233,22 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
+      "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
-      "sha256": "c3ed02067afd8e3dfe235aea89b5e94a35550a24dfc999e730bca0b8163a3176",
+      "sha256": "3fcacb32b95c6ed178bb5ca2a3d2eef948abaebca3a67cd7749a56bff95b1e72",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-      "sha256": "be98eda782f04ca9e9fc65055f1dabec1bb0914a1e80a3813291e5e6812e7e14",
-      "status": "unavailable"
+      "sha256": "538215f4ed4d39dda7e6f9569d6f8935de532dd8af7ea2df71590a1a1acbc549",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "sha256": "4c92fa885ca139eb131422763a4069ffb2f47ee054c420cc117c927430db9545",
+      "sha256": "cdc883735a50aa5773eccfeb3895351d7365c668ba7b5f1ed7d2c88b410ae259",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -230,7 +257,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
-      "sha256": "e63126c3d2c2fb6e5392370600d8da6f0394ddf26277e62852bd6cbf33dfc2aa",
+      "sha256": "29144b6588212953b5f8b67d5a5f4ed3893d8e254ff7dc0d45e2b9befd951ad2",
       "status": "recorded"
     }
   },

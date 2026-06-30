@@ -938,6 +938,12 @@ fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
         return Ok(pointer_ty);
     }
+    if let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &ty.kind
+    {
+        return emit_value_type(ty);
+    }
     emit_scalar_type(ty)
 }
 
@@ -979,6 +985,12 @@ fn emit_record_zero_field_value(ty: &IrType) -> Result<String, String> {
     }
     if is_integer_type(ty) {
         return emit_integer_literal(0, ty);
+    }
+    if let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &ty.kind
+    {
+        return emit_record_zero_initializer(ty);
     }
     Err(format!("type {} is unsupported", type_label(ty)))
 }
@@ -1092,6 +1104,7 @@ fn add_record_type_inventory<'a>(
     };
     for field in fields {
         add_record_field_use(records, name, &field.name, &field.ty)?;
+        add_record_type_inventory(records, &field.ty)?;
     }
     Ok(())
 }

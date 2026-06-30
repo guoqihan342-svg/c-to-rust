@@ -10,7 +10,7 @@
   },
   "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
   "c2rust_baseline_identity": {
-    "sha256": "b83cccb5e7f579e1bbfd691a5310edc6a45be77d50b60577ceabb25e9cd679a7",
+    "sha256": "56d62b34304f1579251fb39ae487e992af7b409edfd1a799190fe38de059e2e0",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
@@ -39,13 +39,37 @@
     "route_decision_identity",
     "validation_profile_identity",
     "global_dependency_identity",
-    "c_oracle_harness_identity"
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
   ],
   "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
+  "clang_lowering_identity": {
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_path_status": "configured",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
-    "validation/slice-specs/flashdb-real-fdb-kv-set.json"
+    "validation/slice-specs/flashdb-real-fdb-kv-set.json",
+    "--emit-clang-lowering-report"
   ],
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
@@ -55,19 +79,19 @@
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "be4eafbba7d0363a4776ed5347564de6990c24f5d3e50a91f66b237d603b2131",
+      "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-      "sha256": "359dea7788ea1c1c1bf0f56a9509e030f320a2bb089f314e9c845bcd9481f518",
+      "sha256": "9cd273636a745c8f362a4e5188b1b0ab51d6185cc9f7ef36502eb410cbe93c6c",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
       "profile": "L4-dev",
-      "sha256": "3d66282ba16cc92ae9760ecc18b51f9edd52f2d2455c39740bc4064478336810",
+      "sha256": "b9a662c318bdc2c291aeca50f99e33f6275e4c278c28bee982cbe5cdf5bfba10",
       "status": "blocked"
     }
   },
@@ -112,7 +136,7 @@
     "status": "insufficient"
   },
   "route_decision_identity": {
-    "sha256": "261ab81d91b77b9fab56ed56a5738f18ba943f6288a9e771293e028862f89306",
+    "sha256": "3c54063337c995c62589725b3d417588d4776329b299b23b0392230ac819fc1e",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -141,10 +165,13 @@
     "python": "Python 3.14.2",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
   "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "c1f6d471c4c28bb7ec06cfd94e6418a3b0c4b45989f170196b4c994b974f11ac",
+    "sha256": "65c3567961862407d101826b6d52bbd842591b5f3a62d000d9e5bbc71a9b5dc8",
     "status": "blocked"
   }
 }
