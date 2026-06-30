@@ -37,6 +37,31 @@ class AutoMigrateTests(unittest.TestCase):
         environment["CLANG_PATH"] = str(default_clang)
         return environment
 
+    def _assert_route_refused_candidate(
+        self,
+        manifest: dict[str, Any],
+        evidence_dir: Path,
+        slice_id: str,
+        *,
+        rust_status: str | None = "passed",
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        prefix = f"l3-{slice_id}"
+        route = json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8"))
+        plan = json.loads((evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["status"], "candidate_refused")
+        self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+        self.assertEqual(route["status"], "refused")
+        self.assertEqual(route["level"], "L4")
+        self.assertEqual(route["translator"]["kind"], "refuse")
+        self.assertFalse(route["translator"]["candidate_generation_allowed"])
+        self.assertIn("blocked_artifact", [item.get("feature") for item in route["rationale"]])
+        self.assertEqual(plan["status"], "blocked")
+        self.assertTrue(all(artifact["status"] == "blocked" for artifact in plan["generated_artifacts"]))
+        if rust_status is not None:
+            self.assertEqual(manifest["rust_check"]["status"], rust_status)
+        return route, plan
+
     def test_write_text_preserves_lf_bytes_for_hash_stable_evidence(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
@@ -1329,8 +1354,11 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn("competition_environment_identity", cache["cache_input_fields"])
             self.assertIn(baseline["status"], {"generated", "skipped", "blocked"})
             self.assertEqual(baseline["correctness_role"], "candidate_context_only")
-            self.assertEqual(route["level"], "L0")
-            self.assertEqual(route["translator"]["kind"], "tier1")
+            route, plan = self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "route-profile",
+            )
             self.assertEqual(
                 route["scalar_ub_contract"]["c_boundary"]["signed_overflow"],
                 "runtime_precondition_no_overflow",
@@ -1354,8 +1382,8 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(manifest["fixture"]["path"], "unit-test-fixture.json")
             self.assertIn('let _fixture = "unit-test-fixture.json";', replay_draft)
             self.assertTrue((evidence_dir / "l3-route-profile-c2rust-baseline-manifest.json").exists())
-            self.assertEqual(manifest["route_decision"]["level"], "L0")
-            self.assertEqual(manifest["validation_profile"]["profile"], "L0-dev")
+            self.assertEqual(manifest["route_decision"]["level"], "L4")
+            self.assertEqual(manifest["validation_profile"]["profile"], "L4-dev")
             self.assertIn("c2rust_baseline", l3["evidence"])
             self.assertIn("route_decision", l3["evidence"])
             self.assertIn("validation_profile", l3["evidence"])
@@ -2753,16 +2781,15 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             manifest = json.loads(result.stdout)
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            evidence_dir = out_root / "zlib-ng" / "auto-translation" / "adler32-step"
+            self._assert_route_refused_candidate(manifest, evidence_dir, "adler32-step")
             self.assertEqual(manifest["source_commit"], "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8")
             self.assertEqual(manifest["fixture"]["hash"], "zlib-adler32-fixture")
             self.assertEqual(manifest["oracle"]["status"], "SKIPPED_LOCAL_NO_C_TOOLCHAIN")
             self.assertEqual(manifest["oracle"]["fixture"], "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json")
             self.assertEqual(manifest["replay"]["fixture"], "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json")
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
             self.assertTrue(
-                (out_root / "zlib-ng" / "auto-translation" / "adler32-step" / "l3-adler32-step-type-map.json").exists()
+                (evidence_dir / "l3-adler32-step-type-map.json").exists()
             )
 
     def test_compound_and_increment_translation_flows_through_auto_migrate(self) -> None:
@@ -2818,9 +2845,7 @@ class AutoMigrateTests(unittest.TestCase):
             cfg = json.loads((evidence_dir / "l3-compound-inc-dec-cfg.json").read_text(encoding="utf-8"))
             statement_kinds = cfg["functions"][0]["basic_blocks"][0]["statement_kinds"]
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "compound-inc-dec")
             self.assertIn("value += 1;", draft)
             self.assertIn("value -= 1;", draft)
             self.assertIn("compound-assignment", plan["translation_summary"]["translation_rule_ids"])
@@ -2884,8 +2909,7 @@ class AutoMigrateTests(unittest.TestCase):
                 (evidence_dir / "l3-call-expression-context-pack.json").read_text(encoding="utf-8")
             )
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "call-expression")
             self.assertIn("call_expression", cfg["functions"][0]["basic_blocks"][0]["statement_kinds"])
             self.assertIn("bounded-call-expression", plan["translation_summary"]["translation_rule_ids"])
             self.assertEqual(len(plan["translation_summary"]["call_expressions"]), 3)
@@ -4152,9 +4176,7 @@ class AutoMigrateTests(unittest.TestCase):
             plan = json.loads((evidence_dir / "l3-fill-first-auto-translation-plan.json").read_text(encoding="utf-8"))
             block = cfg["functions"][0]["basic_blocks"][0]
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "fill-first")
             self.assertIn("bounded_pointer_index", block["lvalue_kinds"])
             self.assertTrue(
                 any(decision["decision"] == "bounded_pointer_index" for decision in block["lvalue_decisions"])
@@ -4229,9 +4251,7 @@ class AutoMigrateTests(unittest.TestCase):
             )
             block = cfg["functions"][0]["basic_blocks"][0]
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "sum-i32-buffer")
             self.assertIn("bounded_input_buffer_read", block["statement_kinds"])
             self.assertTrue(
                 any(decision["decision"] == "bounded_input_buffer" for decision in block["lvalue_decisions"])
@@ -4315,8 +4335,7 @@ class AutoMigrateTests(unittest.TestCase):
             )
             block = cfg["functions"][0]["basic_blocks"][0]
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "sum-i32-ptr-arith")
             self.assertIn("bounded_input_buffer_read", block["statement_kinds"])
             self.assertIn("bounded_pointer_arithmetic_input_read", block["statement_kinds"])
             self.assertIn("bounded_pointer_arithmetic_input_buffer", block["lvalue_kinds"])
@@ -4419,8 +4438,7 @@ class AutoMigrateTests(unittest.TestCase):
             )
             block = cfg["functions"][0]["basic_blocks"][0]
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "fill-i32-ptr-arith-out")
             self.assertIn("out: &mut [i32]", rust_draft)
             self.assertIn("out[i as usize] = value;", rust_draft)
             self.assertIn("bounded_pointer_arithmetic_output_write", block["statement_kinds"])
@@ -5333,7 +5351,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertNotEqual(broken_validation.returncode, 0)
             self.assertIn("oracle boundary contract", broken_validation.stderr + broken_validation.stdout)
 
-    def test_compile_failure_records_blocked_patch_evidence(self) -> None:
+    def test_route_refused_compile_failure_records_blocked_patch_evidence(self) -> None:
         spec = {
             "target_id": "demo",
             "slice_id": "bad-syntax",
@@ -5378,20 +5396,27 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "bad-syntax"
+            self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "bad-syntax",
+                rust_status="failed",
+            )
             self.assertEqual(manifest["rust_check"]["status"], "failed")
             self.assertEqual(manifest["patch"]["status"], "blocked")
-            blocked_path = out_root / "demo" / "auto-translation" / "bad-syntax" / "l3-bad-syntax-self-healing-blocked-repairs.json"
+            blocked_path = evidence_dir / "l3-bad-syntax-self-healing-blocked-repairs.json"
             blocked = json.loads(blocked_path.read_text(encoding="utf-8"))
             self.assertEqual(blocked["status"], "recorded")
             repair = blocked["blocked_repairs"][0]
-            self.assertEqual(repair["candidate_patch_id"], "patch-blocked-1")
+            self.assertEqual(repair["candidate_patch_id"], "patch-route-refused-1")
             self.assertTrue(repair["human_action_required"])
-            self.assertEqual(repair["ir_feature_gap"]["kind"], "rust_compile_failure")
-            self.assertEqual(repair["oracle_fixture_gap"]["status"], "unknown_until_compile_passes")
-            self.assertEqual(repair["smallest_next_test"]["kind"], "rust_compile_replay")
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "blocked_artifact")
+            self.assertEqual(repair["oracle_fixture_gap"]["status"], "not_blocking")
+            self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
             self.assertIn("human_intervention_point", repair)
 
-    def test_keyword_identifier_compile_failure_is_self_healed(self) -> None:
+    def test_keyword_identifier_diagnostic_draft_is_self_healed_but_route_refused(self) -> None:
         spec = {
             "target_id": "demo",
             "slice_id": "keyword-param",
@@ -5436,23 +5461,16 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "keyword-param"
+            self._assert_route_refused_candidate(manifest, evidence_dir, "keyword-param")
             self.assertEqual(manifest["rust_check"]["status"], "passed")
-            self.assertEqual(manifest["patch"]["status"], "recorded")
+            self.assertEqual(manifest["patch"]["status"], "blocked")
             patch_events = (
-                out_root
-                / "demo"
-                / "auto-translation"
-                / "keyword-param"
-                / "l3-keyword-param-patch-events.jsonl"
+                evidence_dir / "l3-keyword-param-patch-events.jsonl"
             ).read_text(encoding="utf-8")
-            self.assertIn('"status": "verified"', patch_events)
-            draft = (
-                out_root
-                / "demo"
-                / "auto-translation"
-                / "keyword-param"
-                / "l3-keyword-param-rust-draft.rs"
-            ).read_text(encoding="utf-8")
+            self.assertIn('"patch_id": "patch-route-refused-1"', patch_events)
+            self.assertIn('"status": "blocked"', patch_events)
+            draft = (evidence_dir / "l3-keyword-param-rust-draft.rs").read_text(encoding="utf-8")
             self.assertIn("r#match", draft)
 
     def test_keyword_identifier_self_healing_uses_five_repair_rounds(self) -> None:
@@ -5757,7 +5775,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertNotEqual(validation_result.returncode, 0)
             self.assertIn("semantic pass requires manifest.status=passed", validation_result.stderr + validation_result.stdout)
 
-    def test_real_fdb_calc_crc32_clang_typed_ir_translator_generates_candidate_route(self) -> None:
+    def test_real_fdb_calc_crc32_clang_typed_ir_unavailable_refuses_candidate_route(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
@@ -5794,29 +5812,33 @@ class AutoMigrateTests(unittest.TestCase):
                 (evidence_dir / "l3-real-fdb-calc-crc32-pointer-graph.json").read_text(encoding="utf-8")
             )
             rust_check = json.loads((evidence_dir / "rust-check.json").read_text(encoding="utf-8"))
-            draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-draft.rs").read_text(encoding="utf-8")
 
-            self.assertEqual(manifest["status"], "candidate_generated")
-            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
-            self.assertEqual(route["status"], "recorded")
-            self.assertEqual(route["level"], "L1")
-            self.assertEqual(route["translator"]["kind"], "tier1")
-            self.assertTrue(route["translator"]["candidate_generation_allowed"])
-            self.assertEqual(plan["status"], "draft_generated")
-            self.assertIn("clang-lowered-typed-ir", plan["translation_summary"]["translation_rule_ids"])
-            self.assertIn("byte-cursor-loop", plan["translation_summary"]["translation_rule_ids"])
-            self.assertEqual(pointer["pointer_nodes"][0]["symbol"], "buf")
-            self.assertEqual(pointer["pointer_nodes"][0]["kind"], "buffer")
-            self.assertEqual(pointer["pointer_nodes"][0]["buffer_role"], "input")
-            self.assertEqual(pointer["pointer_nodes"][0]["length_companion"], "size")
-            self.assertIn("byte_cursor_post_increment_read", pointer["pointer_nodes"][0]["boundary_decisions"])
-            self.assertIn("CRC32_TABLE", draft)
-            self.assertNotIn("crc32_update_byte", draft)
-            self.assertNotIn("*p++", draft)
+            route, plan = self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "real-fdb-calc-crc32",
+            )
+            self.assertEqual(
+                plan["translation_source"],
+                {
+                    "selected": "legacy-string-translator",
+                    "fallback_from": "clang-lowered-typed-ir",
+                    "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                },
+            )
+            self.assertEqual(pointer["status"], "not_applicable")
+            self.assertFalse(pointer["applicability"]["has_pointer_surface"])
+            self.assertEqual(pointer["not_applicable_reason"], "slice has no pointer surface")
+            self.assertEqual(plan["translation_summary"]["unsupported_node_count"], 2)
             self.assertEqual(rust_check["status"], "passed")
 
     def test_real_fdb_calc_crc32_translator_input_records_real_tu_metadata(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            slice_spec = json.loads(
+                (REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
@@ -5845,7 +5867,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(
                 translator_input["source_root"],
-                "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB",
+                slice_spec["source"]["source_root"],
             )
             self.assertEqual(translator_input["source_file"], "src/fdb_utils.c")
             self.assertEqual(
@@ -5880,7 +5902,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertNotIn("compile_commands", translator_input)
             self.assertEqual(
                 translator_input["build_profile"]["compiler_command_source"],
-                "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+                slice_spec["build_profile"]["compiler_command_source"],
             )
 
     def test_translator_input_source_file_hashes_fall_back_to_c_boundary_files(self) -> None:
@@ -6626,22 +6648,24 @@ class AutoMigrateTests(unittest.TestCase):
                 encoding="utf-8"
             )
 
-            self.assertEqual(manifest["status"], "candidate_generated")
+            self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "real-fdb-calc-crc32",
+            )
             self.assertFalse(manifest["semantic_pass"])
             self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
             self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
-            self.assertEqual(test_translation["status"], "passed")
-            self.assertEqual(test_translation["replay_execution"]["status"], "passed")
-            self.assertTrue(test_translation["generated_draft_replay_pass"])
-            self.assertFalse(test_translation["generated_draft_semantic_pass"])
-            self.assertEqual(rust_report["status"], "passed")
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertNotIn("replay_execution", test_translation)
+            self.assertFalse(test_translation.get("generated_draft_replay_pass", False))
+            self.assertFalse(test_translation.get("generated_draft_semantic_pass", False))
+            self.assertEqual(rust_report["status"], "incomplete")
             self.assertFalse(rust_report["semantic_pass"])
-            self.assertTrue(rust_report["generated_draft_replay_pass"])
-            self.assertEqual(rust_report["case_count"], 2)
-            self.assertEqual(rust_report["cases"][0]["id"], "empty-crc-zero")
-            self.assertEqual(rust_report["cases"][1]["return_code"], 3421780262)
+            self.assertFalse(rust_report["generated_draft_replay_pass"])
             self.assertEqual(diff["status"], "incomplete")
-            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "passed")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "incomplete")
 
             validation = subprocess.run(
                 [
@@ -6723,17 +6747,22 @@ class AutoMigrateTests(unittest.TestCase):
             )
             diff = json.loads((evidence_dir / "l3-real-fdb-calc-crc32-diff.json").read_text(encoding="utf-8"))
 
-            self.assertEqual(manifest["status"], "candidate_generated")
+            self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "real-fdb-calc-crc32",
+            )
             self.assertFalse(manifest["semantic_pass"])
-            self.assertEqual(test_translation["status"], "failed")
-            self.assertEqual(test_translation["replay_execution"]["status"], "failed")
-            self.assertFalse(test_translation["generated_draft_replay_pass"])
-            self.assertFalse(test_translation["generated_draft_semantic_pass"])
-            self.assertEqual(rust_report["status"], "failed")
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertNotIn("replay_execution", test_translation)
+            self.assertFalse(test_translation.get("generated_draft_replay_pass", False))
+            self.assertFalse(test_translation.get("generated_draft_semantic_pass", False))
+            self.assertEqual(rust_report["status"], "incomplete")
             self.assertFalse(rust_report["semantic_pass"])
             self.assertFalse(rust_report["generated_draft_replay_pass"])
             self.assertEqual(diff["status"], "incomplete")
-            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "failed")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "incomplete")
 
     def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
         auto_migrate = load_auto_migrate_module()
