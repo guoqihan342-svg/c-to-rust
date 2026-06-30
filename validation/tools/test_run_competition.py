@@ -907,6 +907,168 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["human_interventions"], 1)
             self.assertEqual(metrics["llm_calls"], 4)
 
+    def test_runner_rejects_worker_summary_outside_out_root_workers(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            outside_worker = write_worker_summary(tmp_path / "elsewhere", "worker-a", attempted=1, semantic_pass=1)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    worker_summaries=[outside_worker],
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertIn("worker summary", str(raised.exception))
+            self.assertIn("out_root/workers", str(raised.exception))
+
+    def test_runner_rejects_duplicate_worker_summary_path(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker = write_worker_summary(out_root / "workers", "worker-a", attempted=1, semantic_pass=1)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    worker_summaries=[worker, worker],
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertIn("duplicate worker summary", str(raised.exception))
+
+    def test_runner_rejects_worker_summary_proof_class_mismatch(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker = write_worker_summary(out_root / "workers", "worker-a", attempted=1, semantic_pass=1)
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["proof_class"] = "ci-approximation"
+            worker.write_text(json.dumps(worker_summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    worker_summaries=[worker],
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertIn("proof_class", str(raised.exception))
+
+    def test_runner_rejects_worker_workflow_metrics_sha_mismatch(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker = write_worker_summary(
+                out_root / "workers",
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 1,
+                    "llm_calls": 0,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["workflow_metrics"]["sha256"] = "0" * 64
+            worker.write_text(json.dumps(worker_summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    worker_summaries=[worker],
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertIn("workflow_metrics.sha256", str(raised.exception))
+
+    def test_runner_rejects_worker_workflow_metrics_malformed_binding(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker = write_worker_summary(
+                out_root / "workers",
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 1,
+                    "llm_calls": 0,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["workflow_metrics"] = {"path": "workflow-metrics.json"}
+            worker.write_text(json.dumps(worker_summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    worker_summaries=[worker],
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertIn("workflow_metrics.path", str(raised.exception))
+            self.assertIn("workflow_metrics.sha256", str(raised.exception))
+
     def test_runner_keeps_global_gate_failure_out_of_slice_failure_counts(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

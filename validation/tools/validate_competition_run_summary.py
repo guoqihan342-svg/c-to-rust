@@ -250,13 +250,45 @@ def validate_workers(summary: dict[str, Any]) -> None:
     summaries = workers["summaries"]
     if int(workers["count"]) != len(summaries):
         raise SystemExit("competition run summary workers.count does not match workers.summaries length")
+    seen_paths: set[str] = set()
     for index, worker in enumerate(summaries):
+        validate_worker_summary_path(worker["path"], index=index, seen_paths=seen_paths)
+        if worker["proof_class"] != summary["proof_class"]:
+            raise SystemExit(f"competition run summary workers.summaries[{index}].proof_class does not match summary")
         slices = worker["slices"]
         for key in ["attempted", "semantic_pass", "failed"]:
             if int(worker[key]) != int(slices[key]):
                 raise SystemExit(f"competition run summary workers.summaries[{index}].{key} does not match slices.{key}")
         if worker["status"] != "passed" and summary["final_gate"]["status"] == "passed":
             raise SystemExit("competition run summary final_gate passed with failed worker summary")
+
+
+def validate_worker_summary_path(value: str, *, index: int, seen_paths: set[str]) -> None:
+    if not isinstance(value, str) or not is_repo_relative_posix_path(value):
+        raise SystemExit(
+            f"competition run summary workers.summaries[{index}].worker summary path must be repo-relative POSIX"
+        )
+    parts = PurePosixPath(value).parts
+    worker_relative = (
+        len(parts) == 4
+        and parts[0] == "workers"
+        and parts[2] == "summary"
+        and parts[3] == "competition-run-summary.json"
+    )
+    repo_relative = (
+        len(parts) == 6
+        and parts[0:3] == ("target", "competition-out", "workers")
+        and parts[4] == "summary"
+        and parts[5] == "competition-run-summary.json"
+    )
+    if not worker_relative and not repo_relative:
+        raise SystemExit(
+            "competition run summary worker summary path must match "
+            "workers/<worker-id>/summary/competition-run-summary.json"
+        )
+    if value in seen_paths:
+        raise SystemExit(f"competition run summary duplicate worker summary path: {value}")
+    seen_paths.add(value)
 
 
 def repo_relative(path: Path, repo_root: Path) -> str:

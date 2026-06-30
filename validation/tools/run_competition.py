@@ -144,7 +144,12 @@ def run_competition(
     semantic_pass = 0
     refused = 0
     blocked = 0
-    worker_statuses = load_worker_summary_statuses(worker_summaries, repo_root=repo_root, out_root=out_root)
+    worker_statuses = load_worker_summary_statuses(
+        worker_summaries,
+        proof_class=proof_class,
+        repo_root=repo_root,
+        out_root=out_root,
+    )
     unit_statuses = [workflow_unit_status_from_worker(worker) for worker in worker_statuses]
     worker_workflow_metrics = [
         worker["workflow_metrics"] for worker in worker_statuses if isinstance(worker.get("workflow_metrics"), dict)
@@ -400,13 +405,25 @@ def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Pa
 def load_worker_summary_statuses(
     worker_summaries: list[Path],
     *,
+    proof_class: str,
     repo_root: Path,
     out_root: Path,
 ) -> list[dict[str, Any]]:
     statuses = []
+    seen: set[str] = set()
     for path in worker_summaries:
-        resolved = path if path.is_absolute() else repo_root / path
+        resolved = resolve_worker_summary_path(path, repo_root=repo_root, out_root=out_root)
+        seen_key = os.path.normcase(str(resolved.resolve()))
+        if seen_key in seen:
+            raise SystemExit(f"duplicate worker summary path: {summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}")
+        seen.add(seen_key)
         summary = json.loads(resolved.read_text(encoding="utf-8"))
+        worker_proof_class = str(summary.get("proof_class", "unknown"))
+        if worker_proof_class != proof_class:
+            raise SystemExit(
+                f"worker summary proof_class {worker_proof_class} does not match parent proof_class {proof_class}: "
+                f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+            )
         workflow_metrics = load_bound_workflow_metrics(
             summary,
             summary_path=resolved,
@@ -434,7 +451,7 @@ def load_worker_summary_statuses(
             {
                 "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
                 "status": status,
-                "proof_class": str(summary.get("proof_class", "unknown")),
+                "proof_class": worker_proof_class,
                 "attempted": worker_slices["attempted"],
                 "semantic_pass": worker_slices["semantic_pass"],
                 "failed": worker_slices["failed"],
@@ -443,6 +460,31 @@ def load_worker_summary_statuses(
             }
         )
     return statuses
+
+
+def resolve_worker_summary_path(path: Path, *, repo_root: Path, out_root: Path) -> Path:
+    candidates = [path] if path.is_absolute() else [repo_root / path, out_root / path]
+    resolved = next((candidate.resolve() for candidate in candidates if candidate.exists()), candidates[0].resolve())
+    worker_root = (out_root / "workers").resolve()
+    try:
+        relative_to_workers = resolved.relative_to(worker_root)
+    except ValueError as error:
+        raise SystemExit(
+            f"worker summary path must resolve under out_root/workers: "
+            f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+        ) from error
+    if (
+        len(relative_to_workers.parts) != 3
+        or relative_to_workers.parts[1] != "summary"
+        or relative_to_workers.parts[2] != "competition-run-summary.json"
+    ):
+        raise SystemExit(
+            "worker summary path must match workers/<worker-id>/summary/competition-run-summary.json: "
+            f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+        )
+    if not resolved.exists():
+        raise SystemExit(f"worker summary path does not exist: {summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}")
+    return resolved
 
 
 def load_bound_workflow_metrics(
@@ -458,12 +500,16 @@ def load_bound_workflow_metrics(
     metrics_ref = binding.get("path")
     expected_sha = binding.get("sha256")
     if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
-        return None
+        raise SystemExit("worker summary workflow_metrics.path and workflow_metrics.sha256 are required when bound")
     metrics_path = resolve_bound_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root, out_root=out_root)
-    if metrics_path is None or sha256(metrics_path) != expected_sha:
-        return None
+    if metrics_path is None:
+        raise SystemExit(f"worker summary workflow_metrics.path does not exist: {metrics_ref}")
+    if sha256(metrics_path) != expected_sha:
+        raise SystemExit("worker summary workflow_metrics.sha256 does not match artifact")
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-    return metrics if isinstance(metrics, dict) else None
+    if not isinstance(metrics, dict):
+        raise SystemExit(f"worker summary workflow_metrics artifact must be an object: {metrics_ref}")
+    return metrics
 
 
 def public_worker_summary_status(worker: dict[str, Any]) -> dict[str, Any]:
