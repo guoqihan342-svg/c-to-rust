@@ -373,6 +373,7 @@ struct EmitContext {
     nullable_pointer_params: HashSet<String>,
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
+    opaque_pointer_call_arg_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
     opaque_record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
@@ -512,6 +513,8 @@ impl EmitContext {
             &readonly_pointer_uses.mentioned_params,
         )?;
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params, &policy)?;
+        let opaque_pointer_call_arg_params =
+            collect_opaque_pointer_call_arg_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let opaque_record_pointer_field_value_params =
@@ -542,6 +545,7 @@ impl EmitContext {
             nullable_pointer_params,
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
+            opaque_pointer_call_arg_params,
             mutable_record_pointer_write_params,
             opaque_record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
@@ -580,6 +584,10 @@ impl EmitContext {
 
     fn is_opaque_record_pointer_field_value_param(&self, name: &str) -> bool {
         self.opaque_record_pointer_field_value_params.contains(name)
+    }
+
+    fn is_opaque_pointer_call_arg_param(&self, name: &str) -> bool {
+        self.opaque_pointer_call_arg_params.contains(name)
     }
 
     fn is_zero_initialized_record_local(&self, name: &str) -> bool {
@@ -745,7 +753,9 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
-    } else if context.is_opaque_record_pointer_field_value_param(&param.name) {
+    } else if context.is_opaque_record_pointer_field_value_param(&param.name)
+        || context.is_opaque_pointer_call_arg_param(&param.name)
+    {
         emit_opaque_void_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if readonly_pointer_slice_element_type(&param.ty).is_some()
@@ -1621,6 +1631,11 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(line) = emit_discarded_pointer_return_call_statement(expr, symbols, context)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -1735,6 +1750,39 @@ fn emit_stmt(
             Err(format!("unsupported statement {node}: {reason}"))
         }
     }
+}
+
+fn emit_discarded_pointer_return_call_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if !matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+        return Ok(None);
+    }
+    let callee = emit_identifier(callee, "discarded pointer-return call callee")?;
+    if reserved_c_macro_or_stdlib_callee(&callee) {
+        return Err(format!(
+            "discarded pointer-return call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
+        ));
+    }
+    validate_bounded_call_args(args)?;
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            emit_call_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("call arg[{index}] {detail}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(Some(format!("let _ = {callee}({args});")))
 }
 
 fn emit_do_while_stmt(
@@ -3116,6 +3164,9 @@ fn emit_call_arg_expr(
         IrExpr::FunctionToPointerDecay { target, expr, .. } => {
             emit_function_pointer_decay_call_arg(target, expr)
         }
+        IrExpr::Var { name, ty, .. } if emit_opaque_void_pointer_type(ty).is_some() => {
+            emit_opaque_pointer_call_arg_var(name, symbols, context)
+        }
         IrExpr::AddrOf { operand, ty, .. } => {
             emit_local_record_address_call_arg(operand, ty, symbols)
         }
@@ -3134,6 +3185,24 @@ fn emit_local_record_address_call_arg(
     }
     let name = emit_identifier(name, "address-of call argument")?;
     Ok(format!("&mut {name}"))
+}
+
+fn emit_opaque_pointer_call_arg_var(
+    name: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "opaque pointer call argument {name} is not declared"
+        ));
+    }
+    if !context.is_opaque_pointer_call_arg_param(name) {
+        return Err(format!(
+            "opaque pointer call argument {name} requires direct call argument provenance"
+        ));
+    }
+    emit_identifier(name, "opaque pointer call argument")
 }
 
 fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
@@ -3711,6 +3780,9 @@ fn validate_bounded_call_arg(
     match expr {
         IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
             if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+                if emit_opaque_void_pointer_type(ty).is_some() {
+                    return Ok(());
+                }
                 return Err(format!(
                     "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
                     type_label(ty)
@@ -6596,6 +6668,204 @@ fn collect_nullable_pointer_params_from_expr(
         ),
         IrExpr::Deref { ptr, .. } => {
             collect_nullable_pointer_params_from_expr(ptr, readonly_pointer_params, nullable_params)
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params(body: &[IrStmt], params: &[IrParam]) -> HashSet<String> {
+    let param_types: HashMap<&str, &IrType> = params
+        .iter()
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect();
+    let mut call_arg_params = HashSet::new();
+    collect_opaque_pointer_call_arg_params_from_body(body, &param_types, &mut call_arg_params);
+    call_arg_params
+}
+
+fn collect_opaque_pointer_call_arg_params_from_body(
+    body: &[IrStmt],
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    for stmt in body {
+        collect_opaque_pointer_call_arg_params_from_stmt(stmt, param_types, call_arg_params);
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params_from_stmt(
+    stmt: &IrStmt,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    init,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(target, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(value, param_types, call_arg_params);
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(
+                then_body,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(
+                else_body,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+        }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_body(init, param_types, call_arg_params);
+            if let Some(condition) = condition {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            if let Some(step) = step.as_deref() {
+                collect_opaque_pointer_call_arg_params_from_stmt(
+                    step,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    value,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrStmt::Expr { expr, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(expr, param_types, call_arg_params);
+        }
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params_from_expr(
+    expr: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::Var { name, ty, .. } = arg {
+                    if let Some(param_ty) = param_types.get(name.as_str()) {
+                        if *param_ty == ty && emit_opaque_void_pointer_type(ty).is_some() {
+                            call_arg_params.insert(name.clone());
+                        }
+                    }
+                }
+                collect_opaque_pointer_call_arg_params_from_expr(arg, param_types, call_arg_params);
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(lhs, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(rhs, param_types, call_arg_params);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(operand, param_types, call_arg_params);
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_expr(
+                then_expr,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_expr(
+                else_expr,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(base, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(index, param_types, call_arg_params);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    element,
+                    param_types,
+                    call_arg_params,
+                );
+            }
         }
         IrExpr::LitInt { .. }
         | IrExpr::NullPtr { .. }
