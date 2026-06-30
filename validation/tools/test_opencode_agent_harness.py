@@ -742,7 +742,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
-            self.assertEqual(result["summary_status"], "missing-summary")
+            self.assertEqual(result["summary_status"], "blocked")
             self.assertEqual(result["repair_hint"]["root_cause_key"], "opencode_contract_not_executed")
             verification = result["opencode_contract_verification"]
             self.assertEqual(verification["status"], "not-executed")
@@ -751,6 +751,63 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints")[0][0])
             self.assertEqual(hint_payload["root_cause_key"], "opencode_contract_not_executed")
             self.assertEqual(hint_payload["opencode_contract_verification"]["status"], "not-executed")
+
+    def test_opencode_contract_failure_writes_blocked_worker_summary_for_parent_merge(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            wrong_command = "python -m validation.tools.opencode_agent_harness init-run --run-id wrong"
+            stdout = json.dumps(
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": wrong_command}, "status": "completed"}},
+                }
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["summary_status"], "blocked")
+            self.assertTrue(result["recorded"])
+            summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "blocked")
+            self.assertEqual(summary["slices"]["blocked"], 1)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            self.assertTrue(metrics_path.exists())
+            self.assertEqual(summary["workflow_metrics"]["path"], "workflow-metrics.json")
+            self.assertEqual(summary["workflow_metrics"]["sha256"], harness.sha256_file(metrics_path))
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            self.assertEqual(metrics["fail_closed_count"], 1)
+            self.assertEqual(metrics["per_unit_statuses"][0]["root_cause_key"], "opencode_contract_not_executed")
+            self.assertEqual(metrics["per_unit_statuses"][0]["opencode_contract_verification"]["status"], "not-executed")
 
     def test_opencode_session_evidence_parses_json_lines_stdout(self) -> None:
         with temp_repo_dir() as tmp:

@@ -597,6 +597,7 @@ def run_worker(
     retry_of: str | None = None,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
+    started = time.monotonic()
     assignment_path = assignment_file_path(db_path, worker_id)
     request_path = assignment_path.with_name(f"{worker_id}-request.json")
     if not request_path.exists():
@@ -711,6 +712,33 @@ def run_worker(
             repo_root=repo_root,
         )
 
+    synthetic_failure_root_cause = None
+    if not summary_path.exists():
+        provisional_root_cause = worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=False,
+            summary_status="missing-summary",
+            opencode_contract_verification=opencode_contract_verification,
+        )
+        if provisional_root_cause == "opencode_contract_not_executed":
+            synthetic_failure_root_cause = provisional_root_cause
+            write_blocked_worker_summary(
+                run_id=run_id,
+                proof_class=run_proof_class(db_path, run_id),
+                worker_id=worker_id,
+                request=request,
+                root_cause_key=provisional_root_cause,
+                process_returncode=int(completed.returncode),
+                exit_code=1,
+                elapsed_seconds=int(time.monotonic() - started),
+                summary_path=summary_path,
+                metrics_path=summary_path.parent / "workflow-metrics.json",
+                opencode_contract_verification=opencode_contract_verification,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                repo_root=repo_root,
+            )
+
     recorded: dict[str, Any] | None = None
     summary_status = "missing-summary"
     if summary_path.exists():
@@ -731,17 +759,18 @@ def run_worker(
     report_path = report_dir / "run-worker-report.json"
     repair_hint = None
     if effective_exit_code != 0:
+        root_cause_key = synthetic_failure_root_cause or worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=recorded is not None,
+            summary_status=summary_status,
+            opencode_contract_verification=opencode_contract_verification,
+        )
         repair_hint = worker_repair_hint_payload(
             db_path=db_path,
             run_id=run_id,
             worker_id=worker_id,
             request=request,
-            root_cause_key=worker_failure_root_cause(
-                process_returncode=int(completed.returncode),
-                recorded=recorded is not None,
-                summary_status=summary_status,
-                opencode_contract_verification=opencode_contract_verification,
-            ),
+            root_cause_key=root_cause_key,
             summary_status=summary_status,
             process_returncode=int(completed.returncode),
             summary_path=summary_path,
@@ -1366,6 +1395,120 @@ def normalize_command_for_contract(command: str) -> str:
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def write_blocked_worker_summary(
+    *,
+    run_id: str,
+    proof_class: str,
+    worker_id: str,
+    request: dict[str, Any],
+    root_cause_key: str,
+    process_returncode: int,
+    exit_code: int,
+    elapsed_seconds: int,
+    summary_path: Path,
+    metrics_path: Path,
+    opencode_contract_verification: dict[str, Any] | None,
+    handoff_contract: dict[str, Any] | None,
+    opencode_session_evidence: dict[str, Any] | None,
+    repo_root: Path,
+) -> None:
+    target_id = str(request.get("target_id", "unknown"))
+    slice_id = str(request.get("slice_id", "unknown"))
+    unit_status = {
+        "unit_id": f"{target_id}/{slice_id}",
+        "source": "opencode-worker",
+        "status": "blocked",
+        "compiled": False,
+        "semantic_pass": False,
+        "refused": False,
+        "blocked": True,
+        "failed": False,
+        "root_cause_key": root_cause_key,
+        "process_returncode": process_returncode,
+        "exit_code": exit_code,
+        "worker_id": worker_id,
+    }
+    if opencode_contract_verification is not None:
+        unit_status["opencode_contract_verification"] = opencode_contract_verification
+    if handoff_contract is not None:
+        unit_status["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        unit_status["opencode_session_evidence"] = opencode_session_evidence
+
+    metrics = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "units_total": 1,
+        "units_converged": 0,
+        "units_baseline_only": 0,
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": None,
+            "reduced_by": None,
+            "ratio": 0.0,
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": False,
+        "always_equivalent": False,
+        "fail_closed_count": 1,
+        "root_cause_counts": {root_cause_key: 1},
+        "wall_clock_seconds": max(0, elapsed_seconds),
+        "llm_calls": 1,
+        "per_unit_statuses": [unit_status],
+    }
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "profile_id": PROFILE_ID,
+        "profile_sha256": sha256_file(repo_root / "config" / "competition-env" / "environment.json"),
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": max(0, elapsed_seconds),
+        "translator_version": "opencode-agent-harness",
+        "slices": {
+            "attempted": 1,
+            "typed_ir_generated": 0,
+            "compiled": 0,
+            "semantic_pass": 0,
+            "refused": 0,
+            "blocked": 1,
+            "failed": 0,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "workflow_metrics": {
+            "path": metrics_path.name,
+            "sha256": sha256_file(metrics_path),
+        },
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "blocked",
+            "validator": "opencode_agent_harness.py run-worker --mode opencode",
+        },
+    }
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def write_opencode_handoff_contract(

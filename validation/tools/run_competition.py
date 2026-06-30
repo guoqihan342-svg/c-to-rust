@@ -563,7 +563,16 @@ def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
     if attempted == 1 and isinstance(per_unit_statuses, list) and len(per_unit_statuses) == 1:
         worker_unit = per_unit_statuses[0]
         if isinstance(worker_unit, dict):
-            for key in ["repair_rounds", "auto_recovered", "repair_history", "llm_calls"]:
+            for key in [
+                "repair_rounds",
+                "auto_recovered",
+                "repair_history",
+                "llm_calls",
+                "root_cause_key",
+                "opencode_contract_verification",
+                "handoff_contract",
+                "opencode_session_evidence",
+            ]:
                 if key in worker_unit:
                     status[key] = worker_unit[key]
     return status
@@ -680,6 +689,7 @@ def build_workflow_metrics(
         "always_compiles": attempted > 0 and compiled == attempted and failed == 0,
         "always_equivalent": attempted > 0 and semantic_pass == attempted and failed == 0,
         "fail_closed_count": refused + blocked,
+        "root_cause_counts": root_cause_counts(unit_statuses),
         "wall_clock_seconds": summary["elapsed_seconds"],
         "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls")
         + sum_unit_int_metric(unit_statuses, "llm_calls"),
@@ -773,6 +783,15 @@ def sum_unit_int_metric(unit_statuses: list[dict[str, Any]], key: str) -> int:
     for unit in unit_statuses:
         total += nonnegative_int(unit.get(key))
     return total
+
+
+def root_cause_counts(unit_statuses: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for unit in unit_statuses:
+        root_cause = unit.get("root_cause_key")
+        if isinstance(root_cause, str) and root_cause:
+            counts[root_cause] = counts.get(root_cause, 0) + 1
+    return counts
 
 
 def nonnegative_int(value: Any) -> int:

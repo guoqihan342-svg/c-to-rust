@@ -117,6 +117,7 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
         "always_compiles",
         "always_equivalent",
         "fail_closed_count",
+        "root_cause_counts",
         "wall_clock_seconds",
         "llm_calls",
         "per_unit_statuses",
@@ -140,6 +141,7 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
     if not isinstance(metrics["per_unit_statuses"], list):
         raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
     validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
+    validate_root_cause_counts(metrics)
 
 
 def validate_per_unit_statuses(
@@ -151,6 +153,16 @@ def validate_per_unit_statuses(
     for index, unit in enumerate(metrics["per_unit_statuses"]):
         if not isinstance(unit, dict):
             raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        root_cause = unit.get("root_cause_key")
+        if root_cause is not None and (not isinstance(root_cause, str) or not root_cause):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].root_cause_key must be a non-empty string")
+        contract_verification = unit.get("opencode_contract_verification")
+        if contract_verification is not None:
+            if not isinstance(contract_verification, dict) or not isinstance(contract_verification.get("status"), str):
+                raise SystemExit(
+                    f"workflow metrics per_unit_statuses[{index}].opencode_contract_verification.status "
+                    "must be a string"
+                )
         if "repair_rounds" not in unit:
             continue
         repair_rounds = unit["repair_rounds"]
@@ -199,6 +211,28 @@ def validate_per_unit_statuses(
             raise SystemExit(
                 f"workflow metrics per_unit_statuses[{index}] auto_recovered requires verified repair history"
             )
+
+
+def validate_root_cause_counts(metrics: dict[str, Any]) -> None:
+    counts = metrics.get("root_cause_counts")
+    if not isinstance(counts, dict):
+        raise SystemExit("workflow metrics artifact root_cause_counts must be an object")
+    expected: dict[str, int] = {}
+    for unit in metrics["per_unit_statuses"]:
+        if not isinstance(unit, dict):
+            continue
+        root_cause = unit.get("root_cause_key")
+        if isinstance(root_cause, str) and root_cause:
+            expected[root_cause] = expected.get(root_cause, 0) + 1
+    actual: dict[str, int] = {}
+    for key, value in counts.items():
+        if not isinstance(key, str) or not key:
+            raise SystemExit("workflow metrics artifact root_cause_counts keys must be non-empty strings")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise SystemExit(f"workflow metrics artifact root_cause_counts.{key} must be a non-negative integer")
+        actual[key] = value
+    if actual != expected:
+        raise SystemExit("workflow metrics artifact root_cause_counts does not match per_unit_statuses")
 
 
 def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
