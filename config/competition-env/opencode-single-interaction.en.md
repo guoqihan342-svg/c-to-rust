@@ -52,7 +52,7 @@ These estimates are only for planning, not acceptance criteria. Competition and 
 
 For FlashDB crc32 (the proven case): typed IR candidate generation to validation profile generation takes ~5-8 minutes.
 
-**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence. For file-level batches, prefer `plan-source-file` to generate a plan, then `run-plan --mode deterministic` to execute planned workers in order and generate a merge plan; this is deterministic batch orchestration, not a replacement for the final runner/validator.
+**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence. For file-level batches, prefer `plan-source-file` to generate a plan, then `run-plan --mode deterministic --execute-merge` to execute planned workers in order and run the final worker-summary aggregation; this is deterministic batch orchestration around the final runner/validator, not a replacement for it. If any planned worker lacks a recorded summary, final merge execution is skipped fail-closed.
 
 ## OpenCode Harness Multi-Agent + SQLite Flow
 
@@ -84,6 +84,7 @@ python -m validation.tools.opencode_agent_harness run-plan \
   --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
   --proof-class <proof-class> \
   --mode deterministic \
+  --execute-merge \
   --out-root target/competition-out
 
 # Manual expanded single-worker path:
@@ -164,7 +165,7 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
-9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`. For file-level batches, use `plan-source-file` to generate ordered assignments and then `run-plan --mode deterministic` to execute those planned workers and write `harness/run-plan-report.json`; manual `assign-slice` plus repeated `run-worker --mode deterministic` remains the expanded form. Use `run-worker --mode opencode --opencode-variant max` only when OpenCode wraps one assigned request under the exact-command contract. Worker summaries still converge through `write-merge-plan`, the final runner, and the common summary validator.
+9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`. For file-level batches, use `plan-source-file` to generate ordered assignments and then `run-plan --mode deterministic --execute-merge` to execute those planned workers, write `harness/run-plan-report.json`, and run the final worker-summary aggregation. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the expanded form. Use `run-worker --mode opencode --opencode-variant max` only when OpenCode wraps one assigned request under the exact-command contract. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries skip final merge fail-closed.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.

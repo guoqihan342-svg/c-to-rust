@@ -373,6 +373,141 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 [repo_rel(first_summary), repo_rel(second_summary)],
             )
 
+    def test_run_plan_can_execute_final_merge_and_finalize_run(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            merge_calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                merge_calls.append(argv)
+                self.assertIn("validation/tools/run_competition.py", argv)
+                self.assertIn("--worker-summary", argv)
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-test", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-test",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                execute_merge=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(len(merge_calls), 1)
+            self.assertEqual(result["merge_execution"]["exit_code"], 0)
+            self.assertEqual(
+                result["merge_execution"]["summary_path"],
+                repo_rel(out_root / "summary" / "competition-run-summary.json"),
+            )
+            self.assertTrue((out_root / "harness" / "run-plan-merge.stdout.log").exists())
+            run_rows = fetch_rows(
+                db_path,
+                "select status, final_gate_status, summary_path from runs where run_id=?",
+                ("run-test",),
+            )
+            self.assertEqual(
+                run_rows,
+                [("completed", "passed", repo_rel(out_root / "summary" / "competition-run-summary.json"))],
+            )
+
+    def test_run_plan_execute_merge_skips_partial_worker_summaries(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            merge_called = False
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal merge_called
+                if "validation/tools/run_competition.py" in argv:
+                    merge_called = True
+                return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-test",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                execute_merge=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertFalse(merge_called)
+            self.assertEqual(result["merge_execution"]["status"], "skipped")
+            self.assertEqual(result["merge_execution"]["reason"], "unrecorded-worker-summaries")
+
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -457,6 +592,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-variant",
             "max",
             "--opencode-skip-permissions",
+            "--execute-merge",
         ]
 
         with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
@@ -480,6 +616,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(runner.call_args.kwargs["opencode_model"], "gpt-5.4")
         self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-worker")
         self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
+        self.assertTrue(runner.call_args.kwargs["execute_merge"])
 
     def test_plan_source_file_direct_script_cli_runs_from_repo_root(self) -> None:
         with temp_repo_dir() as tmp:

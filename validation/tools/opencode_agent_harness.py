@@ -106,6 +106,7 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-agent")
     run_plan_parser.add_argument("--opencode-variant", default="max")
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_plan_parser.add_argument("--execute-merge", action="store_true")
 
     run_parser = subcommands.add_parser("run-worker")
     run_parser.add_argument("--db", type=Path, required=True)
@@ -214,6 +215,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            execute_merge=args.execute_merge,
         )
     elif args.command == "run-worker":
         result = run_worker(
@@ -683,6 +685,7 @@ def run_plan(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    execute_merge: bool = False,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -740,19 +743,42 @@ def run_plan(
         worker_summary_paths=ordered_summary_paths,
         repo_root=repo_root,
     )
+    merge_execution = None
+    merge_failed = False
+    if execute_merge:
+        unrecorded_workers = [worker["worker_id"] for worker in worker_results if not worker["recorded"]]
+        if unrecorded_workers:
+            merge_execution = {
+                "status": "skipped",
+                "reason": "unrecorded-worker-summaries",
+                "exit_code": 1,
+                "unrecorded_workers": unrecorded_workers,
+            }
+        else:
+            merge_execution = execute_merge_plan(
+                db_path=db_path,
+                run_id=run_id,
+                out_root=out_root,
+                merge_plan=merge_plan,
+                command_runner=command_runner,
+                repo_root=repo_root,
+            )
+        merge_failed = int(merge_execution["exit_code"]) != 0
     report = {
         "schema_version": SCHEMA_VERSION,
-        "status": "completed" if failed_workers == 0 else "failed",
+        "status": "completed" if failed_workers == 0 and not merge_failed else "failed",
         "run_id": run_id,
         "mode": mode,
         "plan_path": repo_relative(plan_path, repo_root=repo_root),
         "worker_count": len(worker_results),
         "failed_workers": failed_workers,
-        "exit_code": 0 if failed_workers == 0 else 1,
+        "exit_code": 0 if failed_workers == 0 and not merge_failed else 1,
         "elapsed_seconds": int(time.monotonic() - started),
         "workers": worker_results,
         "merge_plan": merge_plan,
     }
+    if merge_execution is not None:
+        report["merge_execution"] = merge_execution
     report_path = out_root / "harness" / "run-plan-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -774,6 +800,77 @@ def run_plan(
     result = dict(report)
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     return result
+
+
+def execute_merge_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    merge_plan: dict[str, Any],
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    argv = list(merge_plan.get("argv", []))
+    if not argv:
+        raise SystemExit("merge plan argv is required before execute-merge")
+    logs_dir = out_root / "harness"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = logs_dir / "run-plan-merge.stdout.log"
+    stderr_path = logs_dir / "run-plan-merge.stderr.log"
+    try:
+        completed = command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    summary_exists = summary_path.exists()
+    final_gate_status = None
+    finalized = None
+    effective_exit_code = int(completed.returncode)
+    if summary_exists:
+        summary = load_json(summary_path)
+        final_gate_status = str(summary.get("final_gate", {}).get("status", "failed"))
+        if effective_exit_code == 0 and final_gate_status != "passed":
+            effective_exit_code = 1
+        finalized = finalize_run(
+            db_path=db_path,
+            run_id=run_id,
+            status="completed" if effective_exit_code == 0 else "failed",
+            summary_path=summary_path,
+            final_gate_status=final_gate_status,
+            repo_root=repo_root,
+        )
+    elif effective_exit_code == 0:
+        effective_exit_code = 1
+
+    return {
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_exists": summary_exists,
+        "final_gate_status": final_gate_status,
+        "finalized": finalized,
+    }
 
 
 def record_worker_summary(
