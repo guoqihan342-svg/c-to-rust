@@ -374,6 +374,7 @@ struct EmitContext {
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
     opaque_pointer_call_arg_params: HashSet<String>,
+    raw_direct_call_pointer_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
     opaque_record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
@@ -515,6 +516,8 @@ impl EmitContext {
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params, &policy)?;
         let opaque_pointer_call_arg_params =
             collect_opaque_pointer_call_arg_params(&function.body, &function.params);
+        let raw_direct_call_pointer_params =
+            collect_raw_direct_call_pointer_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let opaque_record_pointer_field_value_params =
@@ -546,6 +549,7 @@ impl EmitContext {
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
             opaque_pointer_call_arg_params,
+            raw_direct_call_pointer_params,
             mutable_record_pointer_write_params,
             opaque_record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
@@ -588,6 +592,10 @@ impl EmitContext {
 
     fn is_opaque_pointer_call_arg_param(&self, name: &str) -> bool {
         self.opaque_pointer_call_arg_params.contains(name)
+    }
+
+    fn is_raw_direct_call_pointer_param(&self, name: &str) -> bool {
+        self.raw_direct_call_pointer_params.contains(name)
     }
 
     fn is_zero_initialized_record_local(&self, name: &str) -> bool {
@@ -712,7 +720,7 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     if !globals.is_empty() {
         rust.push('\n');
     }
-    let record_definitions = emit_record_definitions(function)?;
+    let record_definitions = emit_record_definitions(function, &context)?;
     for definition in &record_definitions {
         rust.push_str(definition);
     }
@@ -758,6 +766,14 @@ fn emit_param(
     {
         emit_opaque_void_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if should_emit_raw_direct_call_pointer_param(&param.name, &param.ty, context) {
+        emit_raw_direct_call_pointer_param_type(&param.ty).ok_or_else(|| {
+            format!(
+                "param {} has raw direct call pointer type {} unsupported",
+                param.name,
+                type_label(&param.ty)
+            )
+        })?
     } else if readonly_pointer_slice_element_type(&param.ty).is_some()
         && !context.is_readonly_pointer_read_param(&param.name)
         && !context.is_readonly_pointer_mentioned_param(&param.name)
@@ -891,6 +907,33 @@ fn emit_opaque_void_pointer_param_type(ty: &IrType) -> Result<String, String> {
     })
 }
 
+fn emit_raw_direct_call_pointer_param_type(ty: &IrType) -> Option<String> {
+    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+        return Some(pointer_ty);
+    }
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    if is_incomplete_record_type(pointee) {
+        let mutability = if pointee.is_const { "const" } else { "mut" };
+        return Some(format!("*{mutability} core::ffi::c_void"));
+    }
+    if is_readonly_8_bit_pointer_type(ty) {
+        return Some("*const core::ffi::c_void".to_string());
+    }
+    None
+}
+
+fn should_emit_raw_direct_call_pointer_param(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> bool {
+    context.is_raw_direct_call_pointer_param(name)
+        && emit_raw_direct_call_pointer_param_type(ty).is_some()
+        && !(is_readonly_8_bit_pointer_type(ty) && context.is_readonly_pointer_read_param(name))
+}
+
 fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
         return Ok(pointer_ty);
@@ -991,10 +1034,18 @@ fn emit_mutable_record_pointer_param_type(ty: &IrType) -> Result<String, String>
     ))
 }
 
-fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
+fn emit_record_definitions(
+    function: &IrFunction,
+    context: &EmitContext,
+) -> Result<Vec<String>, String> {
     let mut records: Vec<(&str, Vec<RecordFieldUse<'_>>)> = Vec::new();
     add_record_type_inventory(&mut records, &function.return_type)?;
     for param in &function.params {
+        if context.is_raw_direct_call_pointer_param(&param.name)
+            && is_incomplete_record_pointer_type(&param.ty)
+        {
+            continue;
+        }
         if let IrTypeKind::Record { name, .. } = &param.ty.kind {
             ensure_record_entry(&mut records, name);
         }
@@ -1772,7 +1823,7 @@ fn emit_discarded_pointer_return_call_statement(
             "discarded pointer-return call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
         ));
     }
-    validate_bounded_call_args(args)?;
+    validate_bounded_call_args(args, context)?;
     let args = args
         .iter()
         .enumerate()
@@ -3142,7 +3193,7 @@ fn emit_call_expr(
     if !is_void_type(ty) {
         emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
     }
-    validate_bounded_call_args(args)?;
+    validate_bounded_call_args(args, context)?;
     let args = args
         .iter()
         .enumerate()
@@ -3172,6 +3223,11 @@ fn emit_call_arg_expr(
         IrExpr::Var { name, ty, .. } if emit_opaque_void_pointer_type(ty).is_some() => {
             emit_opaque_pointer_call_arg_var(name, symbols, context)
         }
+        IrExpr::Var { name, ty, .. }
+            if should_emit_raw_direct_call_pointer_param(name, ty, context) =>
+        {
+            emit_raw_direct_call_pointer_arg_var(name, ty, symbols, context)
+        }
         IrExpr::AddrOf { operand, ty, .. } => {
             emit_local_record_address_call_arg(operand, ty, symbols)
         }
@@ -3186,7 +3242,7 @@ fn emit_record_pointer_return_call_arg_expr(
     symbols: &HashSet<String>,
     context: &EmitContext,
 ) -> Result<String, String> {
-    validate_record_pointer_return_nested_call_arg(callee, args, ty)?;
+    validate_record_pointer_return_nested_call_arg(callee, args, ty, Some(context))?;
     let callee = emit_identifier(callee, "record pointer return call argument callee")?;
     let args = args
         .iter()
@@ -3227,6 +3283,21 @@ fn emit_local_record_address_call_arg(
     }
     let name = emit_identifier(name, "address-of call argument")?;
     Ok(format!("&mut {name}"))
+}
+
+fn emit_raw_direct_call_pointer_arg_var(
+    name: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "raw direct call pointer argument {name} is not declared"
+        ));
+    }
+    validate_raw_direct_call_pointer_arg(name, ty, context)?;
+    emit_identifier(name, "raw direct call pointer argument")
 }
 
 fn emit_opaque_pointer_call_arg_var(
@@ -3331,7 +3402,7 @@ fn emit_c_assert_call_expr(
             args.len()
         ));
     };
-    validate_bounded_call_arg(condition, false)
+    validate_bounded_call_arg_with_context(condition, false, Some(context))
         .map_err(|detail| format!("C assert condition {detail}"))?;
     let condition = emit_condition_expr(condition, symbols, context)
         .map_err(|detail| format!("C assert condition {detail}"))?;
@@ -3356,7 +3427,8 @@ fn emit_c_abs_call_expr(
             args.len()
         ));
     };
-    validate_bounded_call_arg(arg, false).map_err(|detail| format!("C abs argument {detail}"))?;
+    validate_bounded_call_arg_with_context(arg, false, Some(context))
+        .map_err(|detail| format!("C abs argument {detail}"))?;
     let arg_ty = expr_type(arg).ok_or_else(|| "C abs argument type is unsupported".to_string())?;
     if !is_c_int_type(arg_ty) {
         return Err(format!(
@@ -3811,7 +3883,7 @@ fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
     )
 }
 
-fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
+fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<(), String> {
     let nested_call_count = args
         .iter()
         .filter(|arg| matches!(arg, IrExpr::Call { .. }))
@@ -3822,7 +3894,7 @@ fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
         );
     }
     for (index, arg) in args.iter().enumerate() {
-        validate_bounded_call_arg(arg, true)
+        validate_bounded_call_arg_with_context(arg, true, Some(context))
             .map_err(|detail| format!("call arg[{index}] {detail}"))?;
     }
     Ok(())
@@ -3832,11 +3904,37 @@ fn validate_bounded_call_arg(
     expr: &IrExpr,
     allow_immediate_nested_call: bool,
 ) -> Result<(), String> {
+    validate_bounded_call_arg_with_context(expr, allow_immediate_nested_call, None)
+}
+
+fn validate_bounded_call_arg_with_context(
+    expr: &IrExpr,
+    allow_immediate_nested_call: bool,
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
     match expr {
-        IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
+        IrExpr::LitInt { ty, .. } => {
             if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
                 if emit_opaque_void_pointer_type(ty).is_some() {
                     return Ok(());
+                }
+                return Err(format!(
+                    "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
+                    type_label(ty)
+                ));
+            }
+            emit_scalar_type(ty)?;
+            Ok(())
+        }
+        IrExpr::Var { name, ty, .. } => {
+            if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+                if emit_opaque_void_pointer_type(ty).is_some() {
+                    return Ok(());
+                }
+                if let Some(context) = context {
+                    if validate_raw_direct_call_pointer_arg(name, ty, context).is_ok() {
+                        return Ok(());
+                    }
                 }
                 return Err(format!(
                     "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
@@ -3850,12 +3948,14 @@ fn validate_bounded_call_arg(
             Err("null pointer call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Binary { lhs, rhs, .. } => {
-            validate_bounded_call_arg(lhs, false)?;
-            validate_bounded_call_arg(rhs, false)
+            validate_bounded_call_arg_with_context(lhs, false, context)?;
+            validate_bounded_call_arg_with_context(rhs, false, context)
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
-        | IrExpr::LValueToRValue { expr: operand, .. } => validate_bounded_call_arg(operand, false),
+        | IrExpr::LValueToRValue { expr: operand, .. } => {
+            validate_bounded_call_arg_with_context(operand, false, context)
+        }
         IrExpr::ArrayToPointerDecay { .. } => Err(
             "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
                 .to_string(),
@@ -3867,8 +3967,8 @@ fn validate_bounded_call_arg(
             Err("conditional call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Index { base, index, .. } => {
-            validate_bounded_call_arg(base, false)?;
-            validate_bounded_call_arg(index, false)
+            validate_bounded_call_arg_with_context(base, false, context)?;
+            validate_bounded_call_arg_with_context(index, false, context)
         }
         IrExpr::Member { .. } => {
             Err("member access call arguments are outside the bounded call subset".to_string())
@@ -3878,7 +3978,9 @@ fn validate_bounded_call_arg(
         }
         IrExpr::Call {
             callee, args, ty, ..
-        } if allow_immediate_nested_call => validate_bounded_nested_call_arg(callee, args, ty),
+        } if allow_immediate_nested_call => {
+            validate_bounded_nested_call_arg(callee, args, ty, context)
+        }
         IrExpr::Call { .. } => {
             Err("nested call expressions are outside the bounded call subset".to_string())
         }
@@ -3895,6 +3997,25 @@ fn validate_bounded_call_arg(
             Err(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+fn validate_raw_direct_call_pointer_arg(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> Result<(), String> {
+    if !should_emit_raw_direct_call_pointer_param(name, ty, context) {
+        return Err(format!(
+            "raw direct call pointer argument {name} lacks direct call provenance"
+        ));
+    }
+    emit_raw_direct_call_pointer_param_type(ty).ok_or_else(|| {
+        format!(
+            "raw direct call pointer argument {name} has unsupported type {}",
+            type_label(ty)
+        )
+    })?;
+    Ok(())
 }
 
 fn validate_local_record_address_call_arg<'a>(
@@ -3936,6 +4057,7 @@ fn validate_bounded_nested_call_arg(
     callee: &str,
     args: &[IrExpr],
     ty: &IrType,
+    context: Option<&EmitContext>,
 ) -> Result<(), String> {
     emit_identifier(callee, "nested call callee")?;
     if callee == "strlen" {
@@ -3951,11 +4073,11 @@ fn validate_bounded_nested_call_arg(
         return Ok(());
     }
     if mutable_record_pointer_pointee_type(ty).is_some() {
-        return validate_record_pointer_return_nested_call_arg(callee, args, ty);
+        return validate_record_pointer_return_nested_call_arg(callee, args, ty, context);
     }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
     for (index, arg) in args.iter().enumerate() {
-        validate_bounded_call_arg(arg, false)
+        validate_bounded_call_arg_with_context(arg, false, context)
             .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
     }
     Ok(())
@@ -3965,6 +4087,7 @@ fn validate_record_pointer_return_nested_call_arg(
     callee: &str,
     args: &[IrExpr],
     ty: &IrType,
+    context: Option<&EmitContext>,
 ) -> Result<(), String> {
     emit_identifier(callee, "record pointer return nested call callee")?;
     let return_pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
@@ -4007,7 +4130,7 @@ fn validate_record_pointer_return_nested_call_arg(
         if validate_record_pointer_return_call_inner_arg(arg).is_ok() {
             continue;
         }
-        validate_bounded_call_arg(arg, false)
+        validate_bounded_call_arg_with_context(arg, false, context)
             .map_err(|detail| format!("record pointer return nested call arg[{index}] {detail}"))?;
     }
     Ok(())
@@ -6994,6 +7117,238 @@ fn collect_opaque_pointer_call_arg_params_from_expr(
     }
 }
 
+fn collect_raw_direct_call_pointer_params(body: &[IrStmt], params: &[IrParam]) -> HashSet<String> {
+    let param_types: HashMap<&str, &IrType> = params
+        .iter()
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect();
+    let mut call_arg_params = HashSet::new();
+    collect_raw_direct_call_pointer_params_from_body(body, &param_types, &mut call_arg_params);
+    call_arg_params
+}
+
+fn collect_raw_direct_call_pointer_params_from_body(
+    body: &[IrStmt],
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        init,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    target,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_expr(
+                    value,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    then_body,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    else_body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_body(
+                    init,
+                    param_types,
+                    call_arg_params,
+                );
+                if let Some(condition) = condition {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        condition,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+                if let Some(step) = step.as_deref() {
+                    collect_raw_direct_call_pointer_params_from_stmt(
+                        step,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        value,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+            }
+            IrStmt::Expr { expr, .. } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    expr,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn collect_raw_direct_call_pointer_params_from_stmt(
+    stmt: &IrStmt,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    collect_raw_direct_call_pointer_params_from_body(
+        std::slice::from_ref(stmt),
+        param_types,
+        call_arg_params,
+    );
+}
+
+fn collect_raw_direct_call_pointer_params_from_expr(
+    expr: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::Var { name, ty, .. } = arg {
+                    if param_types
+                        .get(name.as_str())
+                        .is_some_and(|param_ty| *param_ty == ty)
+                        && emit_raw_direct_call_pointer_param_type(ty).is_some()
+                    {
+                        call_arg_params.insert(name.clone());
+                    }
+                }
+                collect_raw_direct_call_pointer_params_from_expr(arg, param_types, call_arg_params);
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(lhs, param_types, call_arg_params);
+            collect_raw_direct_call_pointer_params_from_expr(rhs, param_types, call_arg_params);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(operand, param_types, call_arg_params);
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_raw_direct_call_pointer_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_raw_direct_call_pointer_params_from_expr(
+                then_expr,
+                param_types,
+                call_arg_params,
+            );
+            collect_raw_direct_call_pointer_params_from_expr(
+                else_expr,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(base, param_types, call_arg_params);
+            collect_raw_direct_call_pointer_params_from_expr(index, param_types, call_arg_params);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    element,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
 fn collect_mutable_record_pointer_write_params(
     body: &[IrStmt],
     params: &[IrParam],
@@ -8514,6 +8869,17 @@ fn mutable_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
             Some(pointee.as_ref())
         }
         _ => None,
+    }
+}
+
+fn is_incomplete_record_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Record { fields: None, .. })
+}
+
+fn is_incomplete_record_pointer_type(ty: &IrType) -> bool {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } => is_incomplete_record_type(pointee),
+        _ => false,
     }
 }
 

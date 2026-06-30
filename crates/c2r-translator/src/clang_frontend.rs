@@ -1132,8 +1132,15 @@ fn collect_typedef_enum_type_inventory_from_ast(
     if string_field(node, "kind").as_deref() == Some("TypedefDecl")
         && node.get("isImplicit").and_then(Value::as_bool) != Some(true)
     {
-        if let Some((alias, enum_decl)) = typedef_enum_alias_decl(node, ast) {
-            let entry = enum_type_from_decl(enum_decl, &alias, target_abi);
+        if let Some((alias, enum_decl, allow_missing_complete_definition)) =
+            typedef_enum_alias_decl(node, ast)
+        {
+            let entry = enum_type_from_decl_with_options(
+                enum_decl,
+                &alias,
+                target_abi,
+                allow_missing_complete_definition,
+            );
             insert_enum_type_inventory_entry(inventory, alias, entry);
         }
     }
@@ -1165,10 +1172,16 @@ fn insert_enum_type_inventory_entry(
 fn typedef_enum_alias_decl<'a>(
     typedef_decl: &'a Value,
     ast: &'a Value,
-) -> Option<(String, &'a Value)> {
+) -> Option<(String, &'a Value, bool)> {
     let alias = string_field(typedef_decl, "name")?;
     if !is_simple_c_identifier(&alias) {
         return None;
+    }
+    if let Some(enum_decl) = inner(typedef_decl)
+        .iter()
+        .find(|child| string_field(child, "kind").as_deref() == Some("EnumDecl"))
+    {
+        return Some((alias, enum_decl, true));
     }
     let enum_decl_id = inner(typedef_decl)
         .iter()
@@ -1183,7 +1196,10 @@ fn typedef_enum_alias_decl<'a>(
         })?;
     find_decl_by_id(ast, &enum_decl_id)
         .filter(|decl| string_field(decl, "kind").as_deref() == Some("EnumDecl"))
-        .map(|decl| (alias, decl))
+        .map(|decl| {
+            let allow_missing_complete_definition = enum_decl_name(decl).is_none();
+            (alias, decl, allow_missing_complete_definition)
+        })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1212,6 +1228,16 @@ fn enum_type_from_decl(
     name: &str,
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, String> {
+    enum_type_from_decl_with_options(node, name, target_abi, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_from_decl_with_options(
+    node: &Value,
+    name: &str,
+    target_abi: Option<&TargetAbiProfile>,
+    allow_missing_complete_definition: bool,
+) -> Result<ClangTypeSkeleton, String> {
     let Some(target_abi) = target_abi else {
         return Err(format!(
             "EnumDecl {name} requires target ABI profile evidence before enum-typed scalar lowering"
@@ -1222,10 +1248,14 @@ fn enum_type_from_decl(
             "EnumDecl {name} requires target ABI int_width=32 for the current enum-typed scalar subset"
         ));
     }
-    if node.get("completeDefinition").and_then(Value::as_bool) != Some(true) {
-        return Err(format!(
-            "EnumDecl {name} is not a complete definition; enum type lowering requires all constants"
-        ));
+    match node.get("completeDefinition").and_then(Value::as_bool) {
+        Some(true) => {}
+        None if allow_missing_complete_definition => {}
+        _ => {
+            return Err(format!(
+                "EnumDecl {name} is not a complete definition; enum type lowering requires all constants"
+            ));
+        }
     }
     if node.get("isImplicit").and_then(Value::as_bool) == Some(true) {
         return Err(format!(
@@ -1243,8 +1273,16 @@ fn enum_type_from_decl(
         ));
     }
 
-    for constant in constants {
-        let literal = enum_constant_literal_from_decl(constant)?;
+    let infer_sequential_values = allow_missing_complete_definition
+        && constants
+            .iter()
+            .all(|constant| !enum_constant_has_constant_expr(constant));
+
+    for (index, constant) in constants.iter().enumerate() {
+        let literal = enum_constant_literal_from_decl_with_inferred_value(
+            constant,
+            infer_sequential_values.then_some(index as u64),
+        )?;
         if !matches!(
             literal.ty.kind,
             ClangTypeKind::Integer {
@@ -1310,6 +1348,14 @@ fn collect_enum_constant_inventory_from_ast(node: &Value, inventory: &mut EnumCo
 
 #[cfg(feature = "typed-ir")]
 fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLiteral, String> {
+    enum_constant_literal_from_decl_with_inferred_value(node, None)
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_literal_from_decl_with_inferred_value(
+    node: &Value,
+    inferred_value: Option<u64>,
+) -> Result<ClangEnumConstantLiteral, String> {
     let name = enum_constant_decl_name(node)
         .ok_or_else(|| "EnumConstantDecl is missing name".to_string())?;
     let type_object = node
@@ -1328,14 +1374,22 @@ fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLite
         ));
     }
 
-    let constant_expr = inner(node)
+    let Some(constant_expr) = inner(node)
         .iter()
         .find(|child| string_field(child, "kind").as_deref() == Some("ConstantExpr"))
-        .ok_or_else(|| {
-            format!(
+    else {
+        let Some(value) = inferred_value else {
+            return Err(format!(
                 "EnumConstantDecl {name} is missing explicit ConstantExpr value; implicit enum values are outside the current clang lowering skeleton"
-            )
-        })?;
+            ));
+        };
+        return Ok(ClangEnumConstantLiteral {
+            name,
+            value,
+            spelling: value.to_string(),
+            ty,
+        });
+    };
     let spelling = string_field(constant_expr, "value").ok_or_else(|| {
         format!(
             "EnumConstantDecl {name} is missing explicit ConstantExpr value; computed enum constants are outside the current clang lowering skeleton"
@@ -1358,6 +1412,13 @@ fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLite
         spelling,
         ty,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_has_constant_expr(node: &Value) -> bool {
+    inner(node)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("ConstantExpr"))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3304,7 +3365,7 @@ fn call_expr_skeleton_from_ast_with_memory_statement_args(
             (true, "memset", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memset")?,
             (true, "memcpy", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memcpy")?,
             (true, "memcpy", 1) => memcpy_source_arg_skeleton_from_ast(arg_node)?,
-            _ => expr_skeleton_from_ast_with_options(arg_node, true)?,
+            _ => direct_call_arg_skeleton_from_ast(arg_node)?,
         };
         args.push(arg);
     }
@@ -3319,6 +3380,56 @@ fn call_expr_skeleton_from_ast_with_memory_statement_args(
         args,
         ty: expr_type(expr)?,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_call_arg_skeleton_from_ast(arg: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_const_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "direct-call argument BitCast target {} is outside the readonly byte pointer to const void * subset",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_readonly_8_bit_pointer(ty)
+                || clang_type_is_const_char_pointer_spelling(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "direct-call argument BitCast operand {} is not a readonly 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: "direct-call argument BitCast operand must be a direct pointer parameter"
+                .to_string(),
+        }),
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3463,6 +3574,32 @@ fn clang_type_is_readonly_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool
 }
 
 #[cfg(feature = "typed-ir")]
+fn clang_type_is_readonly_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { width: 8, .. })
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_const_char_pointer_spelling(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        (ty.spelled.trim(), ty.canonical.trim(),),
+        ("const char *", _) | (_, "const char *")
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_size_t_spelling(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        (ty.spelled.trim(), ty.canonical.trim()),
+        ("size_t", _) | (_, "size_t") | ("__size_t", _) | (_, "__size_t")
+    )
+}
+
+#[cfg(feature = "typed-ir")]
 fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
     match string_field(callee, "kind").as_deref() {
         Some("ImplicitCastExpr") => {
@@ -3584,6 +3721,9 @@ fn bounded_call_arg_rejection_reason(
             Some("array initializer lists are outside the bounded call subset".to_string())
         }
         ClangExprSkeleton::Call { args, ty, .. } if allow_immediate_nested_call => {
+            if clang_strlen_leaf_call_arg(expr) {
+                return None;
+            }
             if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
                 if clang_mutable_record_pointer_record_name(ty).is_some() {
                     return bounded_record_pointer_constructor_call_arg_rejection_reason(args, ty);
@@ -3679,13 +3819,16 @@ fn clang_strlen_leaf_call_arg(expr: &ClangExprSkeleton) -> bool {
     let ClangExprSkeleton::Call { callee, args, ty } = expr else {
         return false;
     };
-    if callee != "strlen" || !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+    if callee != "strlen"
+        || !(matches!(&ty.kind, ClangTypeKind::Integer { .. }) || clang_type_is_size_t_spelling(ty))
+    {
         return false;
     }
     let [ClangExprSkeleton::DeclRef { ty: arg_ty, .. }] = args.as_slice() else {
         return false;
     };
     clang_type_is_readonly_unsigned_8_bit_pointer(arg_ty)
+        || clang_type_is_const_char_pointer_spelling(arg_ty)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4085,9 +4228,9 @@ fn type_from_qual_type_with_target_abi(
             },
         }),
         "char" | "short" | "unsigned short" | "long" | "unsigned long" | "long long"
-        | "unsigned long long" | "size_t" => Ok(target_dependent_integer_type_with_profile(
-            trimmed, target_abi,
-        )),
+        | "unsigned long long" | "size_t" | "__size_t" => Ok(
+            target_dependent_integer_type_with_profile(trimmed, target_abi),
+        ),
         other => Ok(ClangTypeSkeleton {
             spelled: other.to_string(),
             canonical: other.to_string(),
@@ -4177,7 +4320,7 @@ fn target_dependent_integer_width(
         "unsigned long" => nonzero_width(abi.long_width).map(|width| (false, width)),
         "long long" => nonzero_width(abi.long_long_width).map(|width| (true, width)),
         "unsigned long long" => nonzero_width(abi.long_long_width).map(|width| (false, width)),
-        "size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
+        "size_t" | "__size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
         _ => None,
     }
 }
@@ -6798,6 +6941,117 @@ mod tests {
             operand.as_ref(),
             IrExpr::Var { name, .. } if name == "blob"
         ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_allows_const_void_bitcast_direct_call_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "struct fdb_blob *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "struct fdb_blob *(*)(struct fdb_blob *, const void *, size_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob *(struct fdb_blob *, const void *, size_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "fdb_blob_make"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "&",
+                    "type": { "qualType": "struct fdb_blob *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob" },
+                            "referencedDecl": { "name": "blob" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "const void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "CallExpr",
+                    "type": { "qualType": "__size_t" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "FunctionToPointerDecay",
+                            "type": { "qualType": "__size_t (*)(const char *)" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "__size_t (const char *)" },
+                                    "referencedDecl": {
+                                        "kind": "FunctionDecl",
+                                        "name": "strlen"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton =
+            expr_skeleton_from_ast(&expr).expect("record pointer constructor bitcast skeleton");
+        let ClangExprSkeleton::Call { callee, args, .. } = &skeleton else {
+            panic!("expected fdb_blob_make call skeleton, got {skeleton:?}");
+        };
+        assert_eq!(callee, "fdb_blob_make");
+        let [ClangExprSkeleton::AddrOf { .. }, ClangExprSkeleton::DeclRef { name, .. }, ClangExprSkeleton::Call {
+            callee: strlen,
+            args: strlen_args,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected address, bitcast-stripped value, and strlen args, got {args:?}");
+        };
+        assert_eq!(name, "value");
+        assert_eq!(strlen, "strlen");
+        assert!(matches!(
+            strlen_args.as_slice(),
+            [ClangExprSkeleton::DeclRef { name, .. }] if name == "value"
+        ));
+        assert_eq!(bounded_call_args_rejection_reason(&[skeleton]), None);
     }
 
     #[test]
@@ -9644,6 +9898,36 @@ mod tests {
         };
         assert_eq!(value, 8);
         assert_eq!(ty.spelled, "size_t");
+    }
+
+    #[test]
+    fn type_from_qual_type_binds_double_underscore_size_t_with_target_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-pc-windows-msvc".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+
+        let ty = type_from_qual_type_with_target_abi("__size_t", Some(&abi))
+            .expect("__size_t should parse with target ABI profile");
+        assert_eq!(ty.spelled, "__size_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+
+        let unbound = type_from_qual_type("__size_t").expect("__size_t should parse as unbound");
+        assert!(matches!(unbound.kind, ClangTypeKind::Unsupported { .. }));
     }
 
     #[test]

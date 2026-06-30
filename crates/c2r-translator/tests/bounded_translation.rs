@@ -1528,6 +1528,108 @@ fn clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_named_enum_without_complete_definition_flag() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3100",
+                "kind": "EnumDecl",
+                "name": "mode",
+                "inner": [
+                    {
+                        "id": "0x3101",
+                        "kind": "EnumConstantDecl",
+                        "name": "MODE_OK",
+                        "type": { "qualType": "int" },
+                        "inner": [
+                            {
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "0",
+                                "inner": [
+                                    {
+                                        "kind": "IntegerLiteral",
+                                        "type": { "qualType": "int" },
+                                        "value": "0"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "identity_mode",
+                "type": { "qualType": "enum mode (enum mode)" },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "value",
+                        "type": { "qualType": "enum mode" }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": { "qualType": "enum mode" },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": { "qualType": "enum mode" },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "value"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "identity_mode",
+        Some(&target_abi),
+    )
+    .expect_err("named enum without completeDefinition must fail closed");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
+        error
+            .message
+            .contains("EnumDecl mode is not a complete definition"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
@@ -1774,6 +1876,303 @@ fn clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi() {
     assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
     assert!(rust.contains("return e;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-typedef-enum-alias", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3000",
+                "kind": "TypedefDecl",
+                "name": "fdb_err_t",
+                "isReferenced": true,
+                "type": { "qualType": "enum fdb_err_t" },
+                "inner": [
+                    {
+                        "id": "0x3001",
+                        "kind": "EnumDecl",
+                        "inner": [
+                            {
+                                "id": "0x3002",
+                                "kind": "EnumConstantDecl",
+                                "name": "FDB_NO_ERR",
+                                "type": { "qualType": "int" },
+                                "inner": [
+                                    {
+                                        "kind": "ConstantExpr",
+                                        "type": { "qualType": "int" },
+                                        "value": "0",
+                                        "inner": [
+                                            {
+                                                "kind": "IntegerLiteral",
+                                                "type": { "qualType": "int" },
+                                                "value": "0"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "0x3003",
+                                "kind": "EnumConstantDecl",
+                                "name": "FDB_INIT_FAILED",
+                                "type": { "qualType": "int" },
+                                "inner": [
+                                    {
+                                        "kind": "ConstantExpr",
+                                        "type": { "qualType": "int" },
+                                        "value": "7",
+                                        "inner": [
+                                            {
+                                                "kind": "IntegerLiteral",
+                                                "type": { "qualType": "int" },
+                                                "value": "7"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "id_err",
+                "type": {
+                    "qualType": "fdb_err_t (fdb_err_t)"
+                },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "e",
+                        "type": {
+                            "qualType": "fdb_err_t",
+                            "desugaredQualType": "enum fdb_err_t",
+                            "typeAliasDeclId": "0x3000"
+                        }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": {
+                                            "qualType": "fdb_err_t",
+                                            "desugaredQualType": "enum fdb_err_t",
+                                            "typeAliasDeclId": "0x3000"
+                                        },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": {
+                                                    "qualType": "fdb_err_t",
+                                                    "desugaredQualType": "enum fdb_err_t",
+                                                    "typeAliasDeclId": "0x3000"
+                                                },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "e"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "id_err",
+        Some(&target_abi),
+    )
+    .expect("lower FlashDB-style owned typedef enum alias without completeDefinition flag");
+
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lowered.function_ir.params.as_slice(),
+        [IrParam {
+            name,
+            ty:
+                IrType {
+                    kind:
+                        IrTypeKind::Integer {
+                            signed: true,
+                            width: 32
+                        },
+                    ..
+                },
+            ..
+        }] if name == "e"
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from FlashDB-style owned typedef enum alias fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return e;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-owned-typedef-enum-alias", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3201",
+                "kind": "EnumDecl",
+                "inner": [
+                    {
+                        "id": "0x3202",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_NO_ERR",
+                        "type": { "qualType": "int" }
+                    },
+                    {
+                        "id": "0x3203",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_INIT_FAILED",
+                        "type": { "qualType": "int" }
+                    }
+                ]
+            },
+            {
+                "id": "0x3200",
+                "kind": "TypedefDecl",
+                "name": "fdb_err_t",
+                "isReferenced": true,
+                "type": { "qualType": "enum fdb_err_t" },
+                "inner": [
+                    {
+                        "kind": "EnumType",
+                        "type": { "qualType": "enum fdb_err_t" },
+                        "decl": {
+                            "kind": "EnumDecl",
+                            "id": "0x3201"
+                        }
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "id_err",
+                "type": {
+                    "qualType": "fdb_err_t (fdb_err_t)"
+                },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "e",
+                        "type": {
+                            "qualType": "fdb_err_t",
+                            "desugaredQualType": "enum fdb_err_t",
+                            "typeAliasDeclId": "0x3200"
+                        }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": {
+                                            "qualType": "fdb_err_t",
+                                            "desugaredQualType": "enum fdb_err_t",
+                                            "typeAliasDeclId": "0x3200"
+                                        },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": {
+                                                    "qualType": "fdb_err_t",
+                                                    "desugaredQualType": "enum fdb_err_t",
+                                                    "typeAliasDeclId": "0x3200"
+                                                },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "e"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "id_err",
+        Some(&target_abi),
+    )
+    .expect("lower FlashDB-style typedef enum alias reference with implicit values");
+
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from FlashDB-style implicit typedef enum alias fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return e;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-typedef-enum-alias-implicit-values",
+        rust,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -4298,6 +4697,119 @@ fn typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf() {
             "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
         ),
         "assert_eq!(call_kv_set_blob_strlen(b\"abc\\0\"), 3i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const char *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let usize_ty = ir_usize();
+    let kvdb_ty = ir_record("fdb_kvdb");
+    let kvdb_ptr_ty = ir_pointer("fdb_kvdb_t", "struct fdb_kvdb *", kvdb_ty, false);
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_with_context".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "db".to_string(),
+                ty: kvdb_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "key".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![
+                        ir_var("db", kvdb_ptr_ty),
+                        ir_var("key", const_u8_ptr_ty.clone()),
+                        IrExpr::Call {
+                            callee: "fdb_blob_make".to_string(),
+                            args: vec![
+                                IrExpr::AddrOf {
+                                    operand: Box::new(ir_var("blob", blob_ty)),
+                                    ty: blob_ptr_ty.clone(),
+                                    source_span: None,
+                                },
+                                ir_var("value", const_u8_ptr_ty.clone()),
+                                IrExpr::Call {
+                                    callee: "strlen".to_string(),
+                                    args: vec![ir_var("value", const_u8_ptr_ty)],
+                                    ty: usize_ty,
+                                    source_span: None,
+                                },
+                            ],
+                            ty: blob_ptr_ty,
+                            source_span: None,
+                        },
+                    ],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit external direct call pointer passthrough compile-context candidate");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn call_kv_set_blob_with_context(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, value: &[u8]) -> i32"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return fdb_kv_set_blob(db, key, fdb_blob_make(&mut blob, value.as_ptr() as *const core::ffi::c_void, value.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")));"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-external-direct-call-pointer-passthrough-blob-constructor",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(_: *mut core::ffi::c_void, _: *const core::ffi::c_void, blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "let mut db = 0u8; assert_eq!(call_kv_set_blob_with_context((&mut db as *mut u8).cast::<core::ffi::c_void>(), b\"boot\\0\".as_ptr().cast::<core::ffi::c_void>(), b\"123\\0\"), 3i32);",
     );
 }
 

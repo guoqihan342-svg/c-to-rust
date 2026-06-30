@@ -616,6 +616,7 @@
         "profile-bound int/unsigned int width binding",
         "profile-bound int/unsigned int alignment binding",
         "plain char/short/long/long long/size_t width binding",
+        "__size_t spelling bound through target pointer width",
         "plain char signedness provenance",
         "explicit-width-field refusal",
         "profile-bound target integer width lowering",
@@ -760,6 +761,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "type_from_qual_type_binds_double_underscore_size_t_with_target_profile",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "sizeof_long_lowers_from_target_long_width_profile",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -820,7 +825,7 @@
         {
           "name": "type_from_qual_type_keeps_target_dependent_integer_spellings_unsupported",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "plain char/short/long/long long/size_t widths require target ABI/profile binding before lowering"
+          "fail_closed_reason": "plain char/short/long/long long/size_t/__size_t widths require target ABI/profile binding before lowering"
         },
         {
           "name": "type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed",
@@ -1294,9 +1299,12 @@
         "target-ABI-bound i32 enum scalar params/returns",
         "target-ABI-bound i32 enum local scalar declaration/branch/assignment/return",
         "anonymous typedef enum alias scalar params/returns with target ABI",
-        "implicit enum value fail-closed",
+        "FlashDB-style typedef-owned anonymous enum alias scalar params/returns without a completeDefinition flag when constants are explicit and target ABI is bound",
+        "FlashDB-style typedef alias referencing anonymous EnumDecl through EnumType.decl with missing completeDefinition and all-implicit sequential constants when target ABI is bound",
+        "ordinary implicit enum constant value fail-closed",
         "implicit enum global initializer fail-closed",
         "implicit enum typed function fail-closed",
+        "named enum without completeDefinition flag fail-closed",
         "enum typed function without target ABI fail-closed"
       ],
       "dimension_status": {
@@ -1328,6 +1336,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -1350,6 +1366,10 @@
             },
             {
               "name": "clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_named_enum_without_complete_definition_flag",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1383,6 +1403,14 @@
             },
             {
               "name": "clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1430,6 +1458,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
@@ -1443,7 +1479,7 @@
         {
           "name": "clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "enum typed scalar support does not infer implicit enum values; all constants must have explicit ConstantExpr.value"
+          "fail_closed_reason": "ordinary enum-constant inventory still does not infer implicit enum values; only anonymous typedef enum type inventory may infer all-implicit sequential values for type validation"
         },
         {
           "name": "clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi",
@@ -1454,6 +1490,11 @@
           "name": "readonly_globals_from_ast_rejects_implicit_enum_constant_initializer",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "implicit enum values in readonly global initializers are not inferred from declaration order"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_named_enum_without_complete_definition_flag",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "missing completeDefinition is accepted only for a typedef-owned anonymous EnumDecl whose constants are present; ordinary named EnumDecls without completeDefinition still fail closed"
         },
         {
           "name": "clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang",
@@ -1778,8 +1819,11 @@
         "local complete record address-of direct-call argument candidate",
         "discarded pointer-return direct-call statement with opaque void pointer argument candidate",
         "record-pointer-return nested direct-call argument candidate with local record address first argument",
+        "raw direct-call pointer passthrough for incomplete record pointer params and non-read readonly 8-bit pointer params in direct-call contexts",
         "readonly 8-bit pointer argument cast to const void pointer inside record-pointer constructor call arguments",
+        "const char pointer BitCast to const void pointer inside record-pointer constructor call arguments",
         "modeled C strlen(const char *) as the only admitted deeper leaf inside record-pointer constructor call arguments",
+        "modeled C strlen(const char *) leaf with size_t or __size_t result spelling inside record-pointer constructor call arguments",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -1868,6 +1912,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "expr_skeleton_from_ast_allows_const_void_bitcast_direct_call_arg",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1929,6 +1977,10 @@
             },
             {
               "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -2076,6 +2128,10 @@
             {
               "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2139,6 +2195,10 @@
         },
         {
           "name": "bounded_call_args_allow_record_pointer_constructor_with_strlen_leaf",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_allows_const_void_bitcast_direct_call_arg",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
@@ -2228,6 +2288,10 @@
         {
           "name": "typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -2274,7 +2338,7 @@
         {
           "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "ordinary pointer values passed to unknown callees require explicit ownership/lifetime/ABI lowering instead of being treated as slices"
+          "fail_closed_reason": "ordinary typed pointer values outside the raw direct-call passthrough subset require explicit ownership/lifetime/ABI lowering instead of being treated as slices or raw pointers"
         },
         {
           "name": "typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg",
