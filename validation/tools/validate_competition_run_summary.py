@@ -145,6 +145,7 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
         raise SystemExit("workflow metrics artifact per_unit_statuses count does not match units_total")
     validate_translation_before_after_summary(metrics)
     validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
+    validate_root_unsafe_reduction_consistency(metrics)
     validate_root_cause_counts(metrics)
 
 
@@ -311,6 +312,49 @@ def validate_translation_before_after_unit(
             f"workflow metrics per_unit_statuses[{index}].translation_before_after.unsafe_reduction "
             "must strictly reduce unsafe"
         )
+
+
+def validate_root_unsafe_reduction_consistency(metrics: dict[str, Any]) -> None:
+    measured_units = []
+    for unit in metrics["per_unit_statuses"]:
+        if not isinstance(unit, dict):
+            continue
+        before_after = unit.get("translation_before_after")
+        if not isinstance(before_after, dict):
+            continue
+        unsafe_reduction = before_after.get("unsafe_reduction")
+        if isinstance(unsafe_reduction, dict) and unsafe_reduction.get("status") == "measured":
+            measured_units.append(unsafe_reduction)
+    if len(measured_units) != int(metrics["units_total"]):
+        return
+
+    baseline_total = 0
+    current_total = 0
+    for unsafe_reduction in measured_units:
+        baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+        current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+        reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+        if baseline is None or current is None or reduced_by is None or baseline - current != reduced_by:
+            raise SystemExit("workflow metrics translation_before_after unsafe_reduction counts are inconsistent")
+        baseline_total += baseline
+        current_total += current
+
+    root = metrics.get("unsafe_reduction")
+    expected = {
+        "status": "measured",
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": baseline_total - current_total,
+        "ratio": 0.0 if baseline_total == 0 else current_total / baseline_total,
+    }
+    if not isinstance(root, dict) or root.get("status") != "measured":
+        raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
+    for field in ["baseline_total_unsafe", "current_total_unsafe", "reduced_by"]:
+        if root.get(field) != expected[field]:
+            raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
+    ratio = root.get("ratio")
+    if not isinstance(ratio, (int, float)) or abs(float(ratio) - float(expected["ratio"])) > 1e-12:
+        raise SystemExit("workflow metrics unsafe_reduction does not match translation_before_after units")
 
 
 def validate_before_after_artifact_ref(

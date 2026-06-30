@@ -473,6 +473,11 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["translation_before_after"]["unit_count"], 1)
             self.assertEqual(metrics["translation_before_after"]["measured_unsafe_unit_count"], 1)
             self.assertEqual(metrics["translation_before_after"]["accepted_patch_unit_count"], 1)
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(metrics["unsafe_reduction"]["baseline_total_unsafe"], 3)
+            self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 0)
+            self.assertEqual(metrics["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(metrics["unsafe_reduction"]["ratio"], 0.0)
             unit = metrics["per_unit_statuses"][0]
             self.assertEqual(unit["translation_before_after"], before_after)
 

@@ -813,7 +813,12 @@ def build_workflow_metrics(
         "units_total": attempted,
         "units_converged": semantic_pass,
         "units_baseline_only": max(0, compiled - semantic_pass),
-        "unsafe_reduction": aggregate_unsafe_reduction(worker_workflow_metrics, unsafe_budget, attempted=attempted),
+        "unsafe_reduction": aggregate_unsafe_reduction(
+            worker_workflow_metrics,
+            unsafe_budget,
+            attempted=attempted,
+            direct_unit_statuses=direct_unit_statuses,
+        ),
         "translation_before_after": summarize_translation_before_after(unit_statuses),
         "avg_repair_rounds": repair_rounds,
         "auto_recovery_rate": auto_recovery_rate,
@@ -869,6 +874,7 @@ def aggregate_unsafe_reduction(
     unsafe_budget: dict[str, Any],
     *,
     attempted: int,
+    direct_unit_statuses: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     fallback = {
         "status": "not_measured",
@@ -877,7 +883,7 @@ def aggregate_unsafe_reduction(
         "reduced_by": None,
         "ratio": unsafe_budget["ratio"],
     }
-    if attempted <= 0 or not metrics:
+    if attempted <= 0:
         return fallback
 
     baseline_total = 0
@@ -889,11 +895,20 @@ def aggregate_unsafe_reduction(
             return fallback
         baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
         current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
-        if baseline is None or current is None:
+        reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+        if baseline is None or current is None or reduced_by is None or baseline - current != reduced_by:
             return fallback
         baseline_total += baseline
         current_total += current
         measured_units += nonnegative_int(metric.get("units_total"))
+
+    for unit in direct_unit_statuses or []:
+        unsafe_reduction = measured_unit_translation_unsafe_reduction(unit)
+        if unsafe_reduction is None:
+            continue
+        baseline_total += unsafe_reduction["baseline"]
+        current_total += unsafe_reduction["current"]
+        measured_units += 1
 
     if measured_units != attempted:
         return fallback
@@ -905,6 +920,23 @@ def aggregate_unsafe_reduction(
         "reduced_by": baseline_total - current_total,
         "ratio": ratio,
     }
+
+
+def measured_unit_translation_unsafe_reduction(unit: dict[str, Any]) -> dict[str, int] | None:
+    evidence = unit.get("translation_before_after")
+    if not isinstance(evidence, dict):
+        return None
+    unsafe_reduction = evidence.get("unsafe_reduction")
+    if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+        return None
+    baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+    current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+    reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+    if baseline is None or current is None or reduced_by is None:
+        return None
+    if baseline - current != reduced_by or reduced_by <= 0:
+        return None
+    return {"baseline": baseline, "current": current}
 
 
 def weighted_worker_metric(metrics: list[dict[str, Any]], key: str, denominator: int) -> float:

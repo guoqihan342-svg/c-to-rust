@@ -417,6 +417,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 ],
             }
             metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
+            metrics["unsafe_reduction"] = before_after["unsafe_reduction"]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
             summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
@@ -424,6 +425,84 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
             result = module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
         self.assertEqual(result["status"], "passed")
+
+    def test_rejects_root_unsafe_reduction_drift_from_translation_before_after_units(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["slices"] = {
+            "attempted": 1,
+            "typed_ir_generated": 1,
+            "compiled": 1,
+            "semantic_pass": 1,
+            "refused": 0,
+            "blocked": 0,
+            "failed": 0,
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-run-summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            evidence_dir = root / "evidence"
+            evidence_dir.mkdir()
+            artifacts = {
+                "baseline": evidence_dir / "baseline.rs",
+                "final": evidence_dir / "final.rs",
+                "oracle_evidence": evidence_dir / "oracle-diff.json",
+                "accepted_patch": evidence_dir / "accepted.patch",
+            }
+            for name, path in artifacts.items():
+                path.write_text(f"{name}\n", encoding="utf-8")
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            unsafe_reduction = {
+                "status": "measured",
+                "baseline_total_unsafe": 4,
+                "current_total_unsafe": 1,
+                "reduced_by": 3,
+                "ratio": 0.25,
+            }
+            before_after = {
+                "schema_version": 1,
+                "status": "bound",
+                **{
+                    name: {
+                        "path": f"evidence/{path.name}",
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    }
+                    for name, path in artifacts.items()
+                },
+                "unsafe_reduction": unsafe_reduction,
+            }
+            metrics["translation_before_after"] = {
+                "status": "bound",
+                "unit_count": 1,
+                "measured_unsafe_unit_count": 1,
+                "accepted_patch_unit_count": 1,
+                "units": [
+                    {
+                        "unit_id": "demo/unit-1",
+                        "status": "bound",
+                        "unsafe_reduction": unsafe_reduction,
+                    }
+                ],
+            }
+            metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
+            metrics["unsafe_reduction"] = {
+                "status": "measured",
+                "baseline_total_unsafe": 4,
+                "current_total_unsafe": 2,
+                "reduced_by": 2,
+                "ratio": 0.5,
+            }
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("workflow metrics unsafe_reduction does not match translation_before_after units", str(raised.exception))
 
     def test_rejects_translation_before_after_sha_mismatch(self) -> None:
         module = load_validator_module()
