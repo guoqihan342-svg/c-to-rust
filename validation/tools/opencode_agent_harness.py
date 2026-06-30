@@ -944,6 +944,11 @@ def write_route_governance_metrics_profile_report(
         if isinstance(s2_workflow_metrics.get("unsafe_reduction"), dict)
         else {}
     )
+    translation_before_after = (
+        s2_workflow_metrics.get("translation_before_after")
+        if isinstance(s2_workflow_metrics.get("translation_before_after"), dict)
+        else {}
+    )
     binding = {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
@@ -954,6 +959,14 @@ def write_route_governance_metrics_profile_report(
         "tracked_slice_gate_contexts": int(metrics.get("tracked_slice_gate_contexts", 0)),
         "s2_workflow_run_count": int(s2_workflow_metrics.get("run_count", 0)),
         "s2_unsafe_reduction_status": str(unsafe_reduction.get("status", "not_measured")),
+        "s2_translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+        "s2_translation_before_after_unit_count": int(translation_before_after.get("unit_count", 0)),
+        "s2_translation_before_after_measured_unsafe_unit_count": int(
+            translation_before_after.get("measured_unsafe_unit_count", 0)
+        ),
+        "s2_translation_before_after_accepted_patch_unit_count": int(
+            translation_before_after.get("accepted_patch_unit_count", 0)
+        ),
         "claim_boundary": str(payload.get("claim_boundary", "")),
     }
     return {"binding": binding, "payload": payload}

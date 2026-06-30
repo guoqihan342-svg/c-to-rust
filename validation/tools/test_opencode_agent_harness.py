@@ -731,6 +731,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(route_report["metrics"]["s2_workflow_metrics"]["run_count"], 1)
             self.assertEqual(route_report_ref["s2_workflow_run_count"], 1)
             self.assertEqual(route_report_ref["s2_unsafe_reduction_status"], "measured")
+            self.assertEqual(route_report_ref["s2_translation_before_after_status"], "not_provided")
+            self.assertEqual(route_report_ref["s2_translation_before_after_unit_count"], 0)
             artifact_rows = fetch_rows(
                 result["db_path"],
                 "select kind, repo_rel_path, semantic_role from artifacts where kind='route-governance-metrics-report'",
