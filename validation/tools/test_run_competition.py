@@ -907,6 +907,88 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["human_interventions"], 1)
             self.assertEqual(metrics["llm_calls"], 4)
 
+    def test_runner_expands_multi_unit_worker_per_unit_statuses_into_parent_workflow_metrics(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=2,
+                semantic_pass=1,
+                final_gate_status="blocked",
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 2,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.5,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": False,
+                    "always_equivalent": False,
+                    "fail_closed_count": 1,
+                    "root_cause_counts": {"rustc_compile_error": 1},
+                    "wall_clock_seconds": 6,
+                    "llm_calls": 2,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "demo/unit-a",
+                            "source": "worker-summary",
+                            "status": "converged",
+                            "compiled": True,
+                            "semantic_pass": True,
+                            "refused": False,
+                            "blocked": False,
+                            "failed": False,
+                            "llm_calls": 1,
+                        },
+                        {
+                            "unit_id": "demo/unit-b",
+                            "source": "worker-summary",
+                            "status": "blocked",
+                            "compiled": False,
+                            "semantic_pass": False,
+                            "refused": False,
+                            "blocked": True,
+                            "failed": False,
+                            "root_cause_key": "rustc_compile_error",
+                            "llm_calls": 1,
+                        },
+                    ],
+                },
+            )
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["slices"]["blocked"] = 1
+            worker.write_text(json.dumps(worker_summary, sort_keys=True), encoding="utf-8")
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"], "passed")
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual([unit["unit_id"] for unit in metrics["per_unit_statuses"]], ["demo/unit-a", "demo/unit-b"])
+            self.assertEqual(metrics["root_cause_counts"], {"rustc_compile_error": 1})
+            self.assertEqual(metrics["per_unit_statuses"][1]["root_cause_key"], "rustc_compile_error")
+            self.assertEqual(metrics["per_unit_statuses"][0]["worker_summary_path"], "workers/worker-a/summary/competition-run-summary.json")
+            self.assertEqual(metrics["llm_calls"], 2)
+
     def test_runner_preserves_worker_root_cause_metrics_for_opencode_contract_failure(self) -> None:
         module = load_runner_module()
         validator = load_summary_validator_module()

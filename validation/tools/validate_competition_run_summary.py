@@ -140,6 +140,8 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
             raise SystemExit(f"workflow metrics artifact {field} does not match competition summary")
     if not isinstance(metrics["per_unit_statuses"], list):
         raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
+    if len(metrics["per_unit_statuses"]) != int(metrics["units_total"]):
+        raise SystemExit("workflow metrics artifact per_unit_statuses count does not match units_total")
     validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
     validate_root_cause_counts(metrics)
 

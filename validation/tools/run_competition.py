@@ -150,7 +150,9 @@ def run_competition(
         repo_root=repo_root,
         out_root=out_root,
     )
-    unit_statuses = [workflow_unit_status_from_worker(worker) for worker in worker_statuses]
+    unit_statuses = []
+    for worker in worker_statuses:
+        unit_statuses.extend(workflow_unit_statuses_from_worker(worker))
     worker_workflow_metrics = [
         worker["workflow_metrics"] for worker in worker_statuses if isinstance(worker.get("workflow_metrics"), dict)
     ]
@@ -545,6 +547,127 @@ def is_safe_posix_relative(value: str) -> bool:
     return ".." not in Path(value).parts
 
 
+def workflow_unit_statuses_from_worker(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    slices = worker["slices"]
+    attempted = int(slices["attempted"])
+    metrics = worker.get("workflow_metrics")
+    per_unit_statuses = metrics.get("per_unit_statuses") if isinstance(metrics, dict) else None
+    if isinstance(per_unit_statuses, list) and len(per_unit_statuses) == attempted:
+        return [worker_unit_status_copy(unit, worker) for unit in per_unit_statuses]
+    if attempted == 0:
+        return []
+    if attempted == 1:
+        return [worker_unit_status_copy(workflow_unit_status_from_worker(worker), worker)]
+    return synthetic_worker_unit_statuses(worker)
+
+
+def worker_unit_status_copy(unit: Any, worker: dict[str, Any]) -> Any:
+    if not isinstance(unit, dict):
+        return unit
+    copied = dict(unit)
+    copied.setdefault("worker_summary_path", worker["path"])
+    return copied
+
+
+def synthetic_worker_unit_statuses(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    slices = worker["slices"]
+    attempted = int(slices["attempted"])
+    categories: list[tuple[str, int, dict[str, Any]]] = [
+        (
+            "converged",
+            int(slices["semantic_pass"]),
+            {
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (
+            "baseline-only",
+            max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+            {
+                "status": "baseline-only",
+                "compiled": True,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (
+            "refused",
+            int(slices["refused"]),
+            {
+                "status": "refused",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": True,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (
+            "blocked",
+            int(slices["blocked"]),
+            {
+                "status": "blocked",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": True,
+                "failed": False,
+            },
+        ),
+        (
+            "failed",
+            int(slices["failed"]),
+            {
+                "status": "failed",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": True,
+            },
+        ),
+    ]
+    statuses: list[dict[str, Any]] = []
+    for category, count, payload in categories:
+        for _ in range(max(0, count)):
+            statuses.append(
+                {
+                    "unit_id": f"{worker['path']}#{len(statuses) + 1}",
+                    "source": "worker-summary",
+                    "worker_summary_path": worker["path"],
+                    "synthetic": True,
+                    "synthetic_reason": "worker metrics did not provide matching per_unit_statuses",
+                    "synthetic_category": category,
+                    **payload,
+                }
+            )
+    while len(statuses) < attempted:
+        statuses.append(
+            {
+                "unit_id": f"{worker['path']}#{len(statuses) + 1}",
+                "source": "worker-summary",
+                "worker_summary_path": worker["path"],
+                "synthetic": True,
+                "synthetic_reason": "worker summary counts did not classify every attempted unit",
+                "synthetic_category": "unclassified",
+                "status": "unclassified",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": worker["status"] != "passed",
+            }
+        )
+    return statuses[:attempted]
+
+
 def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
     slices = worker["slices"]
     attempted = int(slices["attempted"])
@@ -661,17 +784,20 @@ def build_workflow_metrics(
     blocked = int(slices["blocked"])
     failed = int(slices["failed"])
     unsafe_budget = summary["unsafe_budget"]
+    direct_unit_statuses = [
+        unit for unit in unit_statuses if isinstance(unit, dict) and "worker_summary_path" not in unit
+    ]
     repair_rounds = weighted_metric_with_direct_units(
         worker_workflow_metrics,
         "avg_repair_rounds",
-        unit_statuses,
+        direct_unit_statuses,
         "repair_rounds",
         attempted,
     )
     auto_recovery_rate = weighted_metric_with_direct_units(
         worker_workflow_metrics,
         "auto_recovery_rate",
-        unit_statuses,
+        direct_unit_statuses,
         "auto_recovered",
         attempted,
     )
@@ -692,7 +818,7 @@ def build_workflow_metrics(
         "root_cause_counts": root_cause_counts(unit_statuses),
         "wall_clock_seconds": summary["elapsed_seconds"],
         "llm_calls": sum_worker_int_metric(worker_workflow_metrics, "llm_calls")
-        + sum_unit_int_metric(unit_statuses, "llm_calls"),
+        + sum_unit_int_metric(direct_unit_statuses, "llm_calls"),
         "per_unit_statuses": unit_statuses,
     }
 
@@ -781,6 +907,8 @@ def sum_worker_int_metric(metrics: list[dict[str, Any]], key: str) -> int:
 def sum_unit_int_metric(unit_statuses: list[dict[str, Any]], key: str) -> int:
     total = 0
     for unit in unit_statuses:
+        if not isinstance(unit, dict):
+            continue
         total += nonnegative_int(unit.get(key))
     return total
 
@@ -788,6 +916,8 @@ def sum_unit_int_metric(unit_statuses: list[dict[str, Any]], key: str) -> int:
 def root_cause_counts(unit_statuses: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for unit in unit_statuses:
+        if not isinstance(unit, dict):
+            continue
         root_cause = unit.get("root_cause_key")
         if isinstance(root_cause, str) and root_cause:
             counts[root_cause] = counts.get(root_cause, 0) + 1

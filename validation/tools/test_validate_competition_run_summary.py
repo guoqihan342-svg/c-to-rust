@@ -62,6 +62,72 @@ def valid_summary() -> dict:
 
 def workflow_metrics_for(summary: dict) -> dict:
     slices = summary["slices"]
+    per_unit_statuses = []
+    for index in range(slices["semantic_pass"]):
+        per_unit_statuses.append(
+            {
+                "unit_id": f"demo/unit-{index + 1}",
+                "source": "slice-spec",
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            }
+        )
+    for index in range(slices["refused"]):
+        per_unit_statuses.append(
+            {
+                "unit_id": f"demo/refused-{index + 1}",
+                "source": "slice-spec",
+                "status": "refused",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": True,
+                "blocked": False,
+                "failed": False,
+            }
+        )
+    for index in range(slices["blocked"]):
+        per_unit_statuses.append(
+            {
+                "unit_id": f"demo/blocked-{index + 1}",
+                "source": "slice-spec",
+                "status": "blocked",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": True,
+                "failed": False,
+            }
+        )
+    for index in range(slices["failed"]):
+        per_unit_statuses.append(
+            {
+                "unit_id": f"demo/failed-{index + 1}",
+                "source": "slice-spec",
+                "status": "failed",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": True,
+            }
+        )
+    while len(per_unit_statuses) < slices["attempted"]:
+        per_unit_statuses.append(
+            {
+                "unit_id": f"demo/unclassified-{len(per_unit_statuses) + 1}",
+                "source": "slice-spec",
+                "status": "unclassified",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            }
+        )
     return {
         "schema_version": 1,
         "run_id": summary["run_id"],
@@ -85,7 +151,7 @@ def workflow_metrics_for(summary: dict) -> dict:
         "root_cause_counts": {},
         "wall_clock_seconds": summary["elapsed_seconds"],
         "llm_calls": 0,
-        "per_unit_statuses": [],
+        "per_unit_statuses": per_unit_statuses,
     }
 
 
@@ -261,7 +327,17 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                     "failed": False,
                     "repair_rounds": 2,
                     "auto_recovered": True,
-                }
+                },
+                {
+                    "unit_id": "demo/refused-1",
+                    "source": "slice-spec",
+                    "status": "refused",
+                    "compiled": False,
+                    "semantic_pass": False,
+                    "refused": True,
+                    "blocked": False,
+                    "failed": False,
+                },
             ]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
             summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
@@ -292,7 +368,17 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                     "blocked": True,
                     "failed": False,
                     "root_cause_key": "opencode_contract_not_executed",
-                }
+                },
+                {
+                    "unit_id": "demo/demo-add-two",
+                    "source": "slice-spec",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                },
             ]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
             summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
@@ -302,6 +388,35 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
         self.assertIn("root_cause_counts", str(raised.exception))
+
+    def test_rejects_workflow_per_unit_status_count_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["per_unit_statuses"] = [
+                {
+                    "unit_id": "demo/demo-add-one",
+                    "source": "slice-spec",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                }
+            ]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("per_unit_statuses count", str(raised.exception))
 
     def test_rejects_worker_summary_count_mismatch(self) -> None:
         module = load_validator_module()
