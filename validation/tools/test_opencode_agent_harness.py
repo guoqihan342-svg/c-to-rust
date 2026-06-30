@@ -1647,11 +1647,113 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
             context_worker = context_pack["workers"][0]
             indexed_agent = agent_index["agents_by_worker_id"][context_worker["worker_id"]]
+            self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
+            self.assertEqual(agent_index["reports"]["opencode_preflight_report"]["path"], repo_rel(preflight_report))
             for indexed in (context_worker, indexed_agent):
                 self.assertEqual(indexed["handoff_contract"], handoff_contract)
                 self.assertEqual(indexed["opencode_session_evidence"], session_evidence)
                 self.assertEqual(indexed["opencode_contract_verification"], contract_verification)
                 self.assertEqual(indexed["opencode_preflight_report"], preflight_binding)
+
+    def test_run_batch_profile_opencode_auto_runs_preflight_when_profile_omits_report(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-auto-preflight",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                marker_path.parent.mkdir(parents=True, exist_ok=True)
+                marker_path.write_text(
+                    json.dumps({"schema_version": 1, "run_id": "run-profile-opencode-auto"}, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": "",
+                "status": "passed",
+            }
+
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "exit_code": 0,
+                    "summary_status": "passed",
+                    "summary_path": "",
+                    "report_path": "target/report.json",
+                    "recorded": False,
+                    "opencode_preflight_report": preflight_binding,
+                },
+            ) as runner:
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-opencode-auto",
+                    out_root=out_root,
+                    command_runner=fake_preflight_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            expected_preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+                "run_id": "run-profile-opencode-auto",
+                "contract_status": "executed",
+                "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+            }
+            self.assertEqual(result["mode"], "opencode")
+            self.assertEqual(result["opencode_preflight_report"], expected_preflight_binding)
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], Path(repo_rel(preflight_report)))
+            run_plan = result["run_plan"]
+            self.assertEqual(run_plan["opencode_preflight_report"], expected_preflight_binding)
+            self.assertEqual(
+                run_plan["graph"]["opencode_worker"]["preflight_report"]["path"],
+                repo_rel(preflight_report),
+            )
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
+            self.assertEqual(agent_index["reports"]["opencode_preflight_report"], expected_preflight_binding)
 
     def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
         with temp_repo_dir() as tmp:
@@ -2775,6 +2877,159 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ],
             )
 
+    def test_write_judge_evidence_index_records_opencode_runtime_without_semantic_gate(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            harness_dir = out_root / "harness"
+            harness_dir.mkdir(parents=True, exist_ok=True)
+            profile_path = out_root / "profile.json"
+            evaluate_report_path = harness_dir / "evaluate-report.json"
+            run_plan_report_path = harness_dir / "run-plan-report.json"
+            worker_plan_path = harness_dir / "worker-plan.json"
+            preflight_report = harness_dir / "opencode-preflight-report.json"
+            handoff_a = out_root / "workers" / "worker-a" / "harness" / "opencode-handoff-contract.json"
+            handoff_b = out_root / "workers" / "worker-b" / "harness" / "opencode-handoff-contract.json"
+            session_a = out_root / "workers" / "worker-a" / "logs" / "opencode-session-evidence.json"
+            session_b = out_root / "workers" / "worker-b" / "logs" / "opencode-session-evidence.json"
+            summary_a = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+            summary_b = out_root / "workers" / "worker-b" / "summary" / "competition-run-summary.json"
+            worker_report_a = out_root / "workers" / "worker-a" / "harness" / "run-worker-report.json"
+            worker_report_b = out_root / "workers" / "worker-b" / "harness" / "run-worker-report.json"
+            stdout_a = out_root / "workers" / "worker-a" / "logs" / "harness-worker-executor.stdout.log"
+            stderr_a = out_root / "workers" / "worker-a" / "logs" / "harness-worker-executor.stderr.log"
+            stdout_b = out_root / "workers" / "worker-b" / "logs" / "harness-worker-executor.stdout.log"
+            stderr_b = out_root / "workers" / "worker-b" / "logs" / "harness-worker-executor.stderr.log"
+            for path, payload in [
+                (profile_path, {"schema_version": 1, "profile_id": "demo-opencode"}),
+                (evaluate_report_path, {"report_kind": "evaluate-report"}),
+                (run_plan_report_path, {"report_kind": "run-plan-report"}),
+                (worker_plan_path, {"report_kind": "worker-plan"}),
+                (preflight_report, {"report_kind": "opencode-preflight-report", "status": "passed"}),
+                (handoff_a, {"report_kind": "opencode-handoff-contract", "worker_id": "worker-a"}),
+                (handoff_b, {"report_kind": "opencode-handoff-contract", "worker_id": "worker-b"}),
+                (session_a, {"report_kind": "opencode-session-evidence", "worker_id": "worker-a"}),
+                (session_b, {"report_kind": "opencode-session-evidence", "worker_id": "worker-b"}),
+                (summary_a, {"report_kind": "competition-run-summary", "worker_id": "worker-a"}),
+                (summary_b, {"report_kind": "competition-run-summary", "worker_id": "worker-b"}),
+                (worker_report_a, {"report_kind": "run-worker-report", "worker_id": "worker-a"}),
+                (worker_report_b, {"report_kind": "run-worker-report", "worker_id": "worker-b"}),
+                (stdout_a, {"log": "stdout-a"}),
+                (stderr_a, {"log": "stderr-a"}),
+                (stdout_b, {"log": "stdout-b"}),
+                (stderr_b, {"log": "stderr-b"}),
+            ]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+                "run_id": "run-opencode-index",
+                "contract_status": "executed",
+            }
+            handoff_a_binding = {"path": repo_rel(handoff_a), "sha256": harness.sha256_file(handoff_a)}
+            handoff_b_binding = {"path": repo_rel(handoff_b), "sha256": harness.sha256_file(handoff_b)}
+            session_a_binding = {"path": repo_rel(session_a), "sha256": harness.sha256_file(session_a)}
+            session_b_binding = {"path": repo_rel(session_b), "sha256": harness.sha256_file(session_b)}
+            batch_result = {
+                "status": "completed",
+                "exit_code": 0,
+                "profile_id": "demo-opencode",
+                "proof_class": "local-simulation",
+                "mode": "opencode",
+                "plan_path": repo_rel(worker_plan_path),
+                "opencode_preflight_report": preflight_binding,
+                "run_plan": {
+                    "report_path": repo_rel(run_plan_report_path),
+                    "opencode_preflight_report": preflight_binding,
+                    "workers": [
+                        {
+                            "worker_id": "worker-a",
+                            "summary_path": repo_rel(summary_a),
+                            "report_path": repo_rel(worker_report_a),
+                            "logs": {"stdout": repo_rel(stdout_a), "stderr": repo_rel(stderr_a)},
+                            "handoff_contract": handoff_a_binding,
+                            "opencode_session_evidence": session_a_binding,
+                            "opencode_preflight_report": preflight_binding,
+                            "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+                            "opencode_contract_verification": {"status": "executed", "matched_command": "cmd-a"},
+                        },
+                        {
+                            "worker_id": "worker-b",
+                            "summary_path": repo_rel(summary_b),
+                            "report_path": repo_rel(worker_report_b),
+                            "logs": {"stdout": repo_rel(stdout_b), "stderr": repo_rel(stderr_b)},
+                            "handoff_contract": handoff_b_binding,
+                            "opencode_session_evidence": session_b_binding,
+                            "opencode_preflight_report": preflight_binding,
+                            "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+                            "opencode_contract_verification": {"status": "executed", "matched_command": "cmd-b"},
+                        },
+                    ],
+                },
+            }
+            evaluate_report = {
+                "status": "completed",
+                "exit_code": 0,
+                "profile_id": "demo-opencode",
+                "proof_class": "local-simulation",
+                "mode": "opencode",
+                "opencode_preflight_report": preflight_binding,
+                "judge_summary": {
+                    "harness_architecture": {"entrypoint": "evaluate"},
+                    "core_translation_quality": {
+                        "semantic_claim_source": "accepted_evidence_binding",
+                        "generated_draft_semantic_pass": False,
+                    },
+                },
+            }
+
+            result = harness.write_judge_evidence_index(
+                evaluate_report=evaluate_report,
+                evaluate_report_path=evaluate_report_path,
+                batch_result=batch_result,
+                profile_path=profile_path,
+                run_id="run-opencode-index",
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            payload = result["payload"]
+            runtime = payload["opencode_agent_runtime"]
+            self.assertFalse(runtime["chat_output_is_evidence"])
+            self.assertFalse(runtime["semantic_gate"])
+            self.assertEqual(runtime["opencode_preflight_report"], preflight_binding)
+            self.assertEqual(runtime["worker_count"], 2)
+            self.assertEqual(runtime["contract_status_counts"], {"executed": 2})
+            self.assertTrue(runtime["all_contracts_executed"])
+            self.assertEqual(runtime["failed_or_missing_contract_workers"], [])
+            self.assertEqual([worker["worker_id"] for worker in runtime["workers"]], ["worker-a", "worker-b"])
+            self.assertEqual(
+                [worker["contract_verification_status"] for worker in runtime["workers"]],
+                ["executed", "executed"],
+            )
+            self.assertFalse(runtime["workers"][0]["chat_output_is_evidence"])
+            self.assertFalse(runtime["workers"][0]["semantic_gate"])
+            self.assertEqual(runtime["workers"][0]["handoff_contract"], handoff_a_binding)
+            self.assertEqual(runtime["workers"][0]["opencode_session_evidence"], session_a_binding)
+            self.assertEqual(runtime["workers"][0]["summary"], {"path": repo_rel(summary_a), "sha256": harness.sha256_file(summary_a)})
+            self.assertEqual(
+                runtime["workers"][0]["worker_report"],
+                {"path": repo_rel(worker_report_a), "sha256": harness.sha256_file(worker_report_a)},
+            )
+            self.assertEqual(
+                runtime["workers"][0]["logs"]["stdout"],
+                {"path": repo_rel(stdout_a), "sha256": harness.sha256_file(stdout_a)},
+            )
+            self.assertEqual(
+                runtime["workers"][0]["logs"]["stderr"],
+                {"path": repo_rel(stderr_a), "sha256": harness.sha256_file(stderr_a)},
+            )
+            self.assertEqual(runtime["workers"][0]["final_decision"]["status"], "accepted")
+            self.assertEqual(payload["evidence_artifact_refs"]["opencode_preflight_report"], preflight_binding)
+            self.assertFalse(payload["claim_boundary"]["index_is_semantic_gate"])
+
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -3293,7 +3548,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(hint_rows[0][:4], ("demo", "demo-add-one", "final_gate_failed", "open"))
             payload = json.loads(hint_rows[0][4])
             self.assertEqual(payload["worker_id"], "worker-a")
-            self.assertEqual(payload["retry_command"][1:4], ["validation/tools/opencode_agent_harness.py", "retry-worker", "--db"])
+            self.assertEqual(
+                payload["retry_command"][:5],
+                ["python", "-B", "validation/tools/opencode_agent_harness.py", "retry-worker", "--db"],
+            )
             self.assertEqual(payload["revalidate_gate"], "competition-run-summary.final_gate.status == passed")
 
     def test_run_worker_records_structured_error_stack_in_repair_hint_from_stderr(self) -> None:
@@ -3459,7 +3717,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract["expected_summary_path"],
                 repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
             )
-            self.assertEqual(contract["worker_command"][1:4], ["scripts/c2rust-migrator.py", "--phase", "migrate"])
+            self.assertEqual(
+                contract["worker_command"][:5],
+                ["python", "-B", "scripts/c2rust-migrator.py", "--phase", "migrate"],
+            )
             self.assertEqual(contract["opencode_argv"], result["argv"])
             self.assertNotIn("Read the handoff contract before running the command.", contract["prompt"])
             self.assertIn("Handoff contract is audit metadata; do not inspect it before the first command.", contract["prompt"])
@@ -4233,19 +4494,33 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            handoff_contract = {"path": "target/opencode/handoff-contract.json", "sha256": "a" * 64}
+            session_evidence = {"path": "target/opencode/session-evidence.json", "sha256": "b" * 64}
+            contract_verification = {"status": "executed", "matched_command": "python -B scripts/c2rust-migrator.py"}
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+            }
 
             with patch.object(
                 harness,
                 "run_worker",
                 return_value={
                     "exit_code": 0,
+                    "process_returncode": 0,
                     "summary_status": "passed",
                     "summary_path": "",
                     "report_path": "target/report.json",
+                    "logs": {"stdout": "target/stdout.log", "stderr": "target/stderr.log"},
                     "recorded": False,
+                    "handoff_contract": handoff_contract,
+                    "opencode_session_evidence": session_evidence,
+                    "opencode_contract_verification": contract_verification,
+                    "opencode_preflight_report": preflight_binding,
                 },
             ) as runner:
-                harness.run_plan(
+                result = harness.run_plan(
                     db_path=db_path,
                     run_id="run-test",
                     plan_path=Path(str(plan["plan_path"])),
@@ -4259,6 +4534,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(runner.call_count, 2)
             for call in runner.call_args_list:
                 self.assertEqual(call.kwargs["opencode_preflight_report"], preflight_report)
+            self.assertEqual(result["opencode_preflight_report"]["path"], repo_rel(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["sha256"], harness.sha256_file(preflight_report))
+            self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["status"], "passed")
+            self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["contract_status"], "executed")
+            first_attempt = result["workers"][0]["attempts"][0]
+            self.assertEqual(first_attempt["handoff_contract"], handoff_contract)
+            self.assertEqual(first_attempt["opencode_session_evidence"], session_evidence)
+            self.assertEqual(first_attempt["opencode_contract_verification"], contract_verification)
+            self.assertEqual(first_attempt["opencode_preflight_report"], preflight_binding)
+            report = json.loads((out_root / "harness" / "run-plan-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["opencode_preflight_report"], result["opencode_preflight_report"])
 
     def test_run_worker_ignores_stale_summary_from_before_execution(self) -> None:
         with temp_repo_dir() as tmp:

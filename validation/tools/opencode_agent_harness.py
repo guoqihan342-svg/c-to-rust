@@ -1149,6 +1149,26 @@ def run_batch_profile(
     opencode_preflight_report = (
         Path(opencode_preflight_report_text) if opencode_preflight_report_text is not None else None
     )
+    if mode == "opencode" and opencode_preflight_report is None:
+        preflight_result = run_opencode_preflight(
+            out_root=out_root,
+            run_id=run_id,
+            opencode_command=profile_string(profile, "opencode_command", default="opencode") or "opencode",
+            opencode_model=profile_string(profile, "opencode_model"),
+            opencode_agent=profile_string(profile, "opencode_agent"),
+            opencode_variant=profile_string(profile, "opencode_variant", default="max") or "max",
+            opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+            command_runner=command_runner,
+            repo_root=repo_root,
+        )
+        opencode_preflight_report = Path(
+            str(preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json"))
+        )
+        if preflight_result.get("status") != "passed" or int(preflight_result.get("exit_code", 1)) != 0:
+            raise SystemExit(
+                "opencode preflight failed before batch profile execution: "
+                f"{repo_relative(repo_path(opencode_preflight_report, repo_root=repo_root), repo_root=repo_root)}"
+            )
 
     db_path = init_run(
         out_root=out_root,
@@ -1251,9 +1271,13 @@ def run_batch_profile(
         result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
     if before_after_exhibit_artifact is not None:
         result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        result["opencode_preflight_report"] = run_result["opencode_preflight_report"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_artifacts: dict[str, dict[str, Any]] = {}
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts["opencode_preflight_report"] = run_result["opencode_preflight_report"]
     if route_metrics_artifact is not None:
         report_artifacts["route_governance_metrics_report"] = route_metrics_artifact["binding"]
     if before_after_exhibit_artifact is not None:
@@ -1403,6 +1427,10 @@ def write_evaluate_profile_report(
         payload["route_governance_metrics_report"] = batch_result["route_governance_metrics_report"]
     if "before_after_exhibit_report" in batch_result:
         payload["before_after_exhibit_report"] = batch_result["before_after_exhibit_report"]
+    if isinstance(batch_result.get("opencode_preflight_report"), dict):
+        payload["opencode_preflight_report"] = batch_result["opencode_preflight_report"]
+    elif isinstance(run_plan.get("opencode_preflight_report"), dict):
+        payload["opencode_preflight_report"] = run_plan["opencode_preflight_report"]
     architecture = payload.get("judge_summary", {}).get("harness_architecture")
     if isinstance(architecture, dict):
         graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
@@ -1568,6 +1596,9 @@ def write_judge_evidence_index(
 
     run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
     add_path("run_plan_report", run_plan.get("report_path"))
+    add_binding("opencode_preflight_report", evaluate_report.get("opencode_preflight_report"))
+    add_binding("opencode_preflight_report", batch_result.get("opencode_preflight_report"))
+    add_binding("opencode_preflight_report", run_plan.get("opencode_preflight_report"))
     merge_plan = run_plan.get("merge_plan") if isinstance(run_plan.get("merge_plan"), dict) else {}
     add_path("merge_plan", merge_plan.get("path"))
     add_path("worker_plan", batch_result.get("plan_path"))
@@ -1644,6 +1675,9 @@ def write_judge_evidence_index(
             ),
         },
     }
+    opencode_runtime = opencode_agent_runtime_evidence(run_plan, repo_root=repo_root)
+    if opencode_runtime is not None:
+        payload["opencode_agent_runtime"] = opencode_runtime
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     binding = artifact_ref(index_path, repo_root=repo_root)
@@ -1654,6 +1688,76 @@ def write_judge_evidence_index(
         }
     )
     return {"binding": binding, "payload": payload}
+
+
+def opencode_agent_runtime_evidence(
+    run_plan: dict[str, Any],
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    preflight = artifact_binding_from_value(run_plan.get("opencode_preflight_report"), repo_root=repo_root)
+    workers: list[dict[str, Any]] = []
+    raw_workers = run_plan.get("workers") if isinstance(run_plan.get("workers"), list) else []
+    for worker in raw_workers:
+        if not isinstance(worker, dict):
+            continue
+        runtime_entry: dict[str, Any] = {
+            "worker_id": str(worker.get("worker_id", "")),
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+        }
+        summary_binding = path_ref_from_text(worker.get("summary_path"), repo_root=repo_root)
+        if summary_binding is not None:
+            runtime_entry["summary"] = summary_binding
+        worker_report_binding = path_ref_from_text(worker.get("report_path"), repo_root=repo_root)
+        if worker_report_binding is not None:
+            runtime_entry["worker_report"] = worker_report_binding
+        logs = worker.get("logs") if isinstance(worker.get("logs"), dict) else {}
+        log_refs = {}
+        for name in ("stdout", "stderr"):
+            log_ref = path_ref_from_text(logs.get(name), repo_root=repo_root)
+            if log_ref is not None:
+                log_refs[name] = log_ref
+        if log_refs:
+            runtime_entry["logs"] = log_refs
+        for field in ("handoff_contract", "opencode_session_evidence", "opencode_preflight_report"):
+            binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                runtime_entry[field] = binding
+        verification = worker.get("opencode_contract_verification")
+        if isinstance(verification, dict):
+            runtime_entry["opencode_contract_verification"] = json.loads(json.dumps(verification))
+            runtime_entry["contract_verification_status"] = str(verification.get("status", "unknown"))
+        if isinstance(worker.get("final_decision"), dict):
+            runtime_entry["final_decision"] = json.loads(json.dumps(worker["final_decision"]))
+        if any(field in runtime_entry for field in OPENCODE_WORKER_EVIDENCE_FIELDS):
+            workers.append(runtime_entry)
+    if preflight is None and not workers:
+        return None
+    contract_status_counts: dict[str, int] = {}
+    failed_or_missing_contract_workers = []
+    for worker in workers:
+        contract_status = str(worker.get("contract_verification_status", "missing"))
+        contract_status_counts[contract_status] = contract_status_counts.get(contract_status, 0) + 1
+        if contract_status != "executed":
+            failed_or_missing_contract_workers.append(str(worker.get("worker_id", "")))
+    payload: dict[str, Any] = {
+        "runtime": "opencode",
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "worker_count": len(workers),
+        "contract_status_counts": contract_status_counts,
+        "all_contracts_executed": bool(workers) and not failed_or_missing_contract_workers,
+        "failed_or_missing_contract_workers": failed_or_missing_contract_workers,
+        "workers": workers,
+        "boundary": (
+            "OpenCode chat/session output is indexed for command-contract audit only; "
+            "semantic acceptance remains owned by validator artifacts and final summaries."
+        ),
+    }
+    if preflight is not None:
+        payload["opencode_preflight_report"] = preflight
+    return payload
 
 
 def evaluate_profile_judge_summary(value: Any) -> dict[str, Any]:
@@ -2441,7 +2545,9 @@ def write_context_pack_and_agent_index(
         agents.append(agent_entry)
     graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
     context_pack_id = f"{run_id}-context-pack"
-    report_artifacts = report_artifacts or {}
+    report_artifacts = dict(report_artifacts or {})
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts.setdefault("opencode_preflight_report", run_result["opencode_preflight_report"])
     report_entrypoints = {
         name: artifact.get("path")
         for name, artifact in report_artifacts.items()
@@ -3017,6 +3123,7 @@ def profile_int(profile: dict[str, Any], field: str, *, default: int | None = No
 
 def run_plan_attempt_from_worker_result(result: dict[str, Any]) -> dict[str, Any]:
     attempt = repair_attempt_from_result(result)
+    copy_opencode_worker_evidence(result, attempt)
     repair_hint = result.get("repair_hint")
     if isinstance(repair_hint, dict):
         if isinstance(repair_hint.get("hint_id"), str):
@@ -3084,6 +3191,12 @@ def run_plan(
         raise SystemExit("run-plan requires a planner artifact with at least one unit")
     if max_workers < 1:
         raise SystemExit("run-plan max_workers must be a positive integer")
+    opencode_preflight_binding = None
+    if mode == "opencode":
+        opencode_preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            repo_root=repo_root,
+        )
 
     started = time.monotonic()
     planned_units = []
@@ -3115,9 +3228,11 @@ def run_plan(
             "slice_id": unit.get("slice_id"),
             "function": unit.get("function"),
             "exit_code": int(result.get("exit_code", 1)),
+            "process_returncode": result.get("process_returncode"),
             "summary_status": result.get("summary_status"),
             "summary_path": result.get("summary_path"),
             "report_path": result.get("report_path"),
+            "logs": result.get("logs"),
             "recorded": bool(result.get("recorded")),
         }
         copy_opencode_worker_evidence(result, worker_result)
@@ -3153,7 +3268,10 @@ def run_plan(
                     "hint_status": retry_result.get("hint_status"),
                     "summary_path": retry_result.get("summary_path"),
                     "report_path": retry_result.get("report_path"),
+                    "logs": retry_result.get("logs"),
+                    "process_returncode": retry_result.get("process_returncode"),
                 }
+                copy_opencode_worker_evidence(retry_result, retry_entry)
                 for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
                     if field in retry_result:
                         retry_entry[field] = retry_result[field]
@@ -3248,7 +3366,7 @@ def run_plan(
             auto_retry=auto_retry,
             max_workers=max_workers,
             effective_workers=effective_workers,
-            opencode_preflight_report=opencode_preflight_report,
+            opencode_preflight_report=opencode_preflight_binding,
         ),
         "parallelism": {
             "max_workers": max_workers,
@@ -3263,6 +3381,8 @@ def run_plan(
         "workers": worker_results,
         "merge_plan": merge_plan,
     }
+    if opencode_preflight_binding is not None:
+        report["opencode_preflight_report"] = opencode_preflight_binding
     if merge_execution is not None:
         report["merge_execution"] = merge_execution
     report_path = out_root / "harness" / "run-plan-report.json"
@@ -3294,8 +3414,20 @@ def build_run_plan_graph_contract(
     auto_retry: bool,
     max_workers: int,
     effective_workers: int,
-    opencode_preflight_report: Path | None,
+    opencode_preflight_report: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    opencode_worker = {
+        "enabled": mode == "opencode",
+        "preflight_required": mode == "opencode",
+        "preflight_bound": opencode_preflight_report is not None,
+    }
+    if opencode_preflight_report is not None:
+        opencode_worker["preflight_report"] = {
+            "path": opencode_preflight_report.get("path"),
+            "sha256": opencode_preflight_report.get("sha256"),
+            "status": opencode_preflight_report.get("status"),
+            "contract_status": opencode_preflight_report.get("contract_status"),
+        }
     return {
         "runtime": "opencode-harness-langgraph-inspired",
         "state_schema": "run-plan-state/v1",
@@ -3327,11 +3459,7 @@ def build_run_plan_graph_contract(
             "round_cap": REPAIR_ROUND_CAP,
             "checkpoint": "repair_hints",
         },
-        "opencode_worker": {
-            "enabled": mode == "opencode",
-            "preflight_required": mode == "opencode",
-            "preflight_bound": opencode_preflight_report is not None,
-        },
+        "opencode_worker": opencode_worker,
     }
 
 
@@ -3598,7 +3726,8 @@ def run_worker(
         summary_path.unlink()
 
     worker_command = [
-        sys.executable,
+        "python",
+        "-B",
         "scripts/c2rust-migrator.py",
         "--phase",
         "migrate",
@@ -4091,7 +4220,8 @@ def run_opencode_preflight(
         marker_path.unlink()
 
     marker_command = [
-        sys.executable,
+        "python",
+        "-B",
         "validation/tools/opencode_agent_harness.py",
         "write-preflight-marker",
         "--marker",
@@ -4391,7 +4521,8 @@ def worker_repair_hint_payload(
     slice_id = str(request.get("slice_id", "unknown"))
     hint_id = f"repair:{run_id}:{worker_id}:{root_cause_key}"
     retry_command = [
-        sys.executable,
+        "python",
+        "-B",
         "validation/tools/opencode_agent_harness.py",
         "retry-worker",
         "--db",
