@@ -1640,6 +1640,25 @@ def write_before_after_exhibit_profile_report(
     )
     units = before_after_exhibit_units(workflow_metrics)
     status = "passed" if units and translation_before_after.get("status") == "bound" else "not_provided"
+    stage_contracts = before_after_stage_contracts(
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        route_metrics_artifact=route_metrics_artifact,
+        summary=summary,
+        workflow_metrics=workflow_metrics,
+        summary_path=summary_path,
+        workflow_path=workflow_path,
+        repo_root=repo_root,
+    )
+    if (
+        profile_bool(profile, "require_repair_trace", default=False)
+        and status == "passed"
+        and stage_contracts.get("repairer", {}).get("status") != "verified"
+    ):
+        raise SystemExit(
+            "before-after exhibit requires verified repair trace when profile require_repair_trace is true"
+        )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "before-after-exhibit",
@@ -1669,17 +1688,7 @@ def write_before_after_exhibit_profile_report(
             "accepted_patch_unit_count": int(translation_before_after.get("accepted_patch_unit_count", 0)),
         },
         "units": units,
-        "stage_contracts": before_after_stage_contracts(
-            mode=mode,
-            plan=plan,
-            run_result=run_result,
-            route_metrics_artifact=route_metrics_artifact,
-            summary=summary,
-            workflow_metrics=workflow_metrics,
-            summary_path=summary_path,
-            workflow_path=workflow_path,
-            repo_root=repo_root,
-        ),
+        "stage_contracts": stage_contracts,
         "reproduction": {
             "run_command": (
                 "python -B -m validation.tools.opencode_agent_harness run-batch-profile "

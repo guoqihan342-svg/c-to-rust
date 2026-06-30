@@ -1677,6 +1677,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "schema_version": 1,
                 "profile_id": "demo-before-after-repair",
                 "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
                 "acceptance_boundary": {
                     "semantic_claim_source": "accepted_evidence_binding",
                     "generated_draft_semantic_pass": False,
@@ -1744,6 +1745,45 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(repairer["auto_recovery_rate"], 1.0)
             self.assertEqual(repairer["root_cause_counts"], {"rustc_compile_failed": 1})
             self.assertEqual(repairer["histories"][0]["unit_id"], "demo/store-add-one")
+
+    def test_before_after_exhibit_requires_verified_repair_trace_when_profile_demands_it(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-strict-repair",
+                "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            write_worker_summary(
+                summary_path,
+                "run-before-after-strict-repair",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=before_after_worker_metrics(out_root, "run-before-after-strict-repair"),
+            )
+
+            with self.assertRaisesRegex(SystemExit, "requires verified repair trace"):
+                harness.write_before_after_exhibit_profile_report(
+                    profile=profile,
+                    profile_path=profile_path,
+                    run_id="run-before-after-strict-repair",
+                    proof_class="local-simulation",
+                    mode="deterministic",
+                    plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                    run_result={"workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                    route_metrics_artifact=None,
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
 
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
