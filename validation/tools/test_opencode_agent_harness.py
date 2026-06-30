@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -45,6 +46,18 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             profile_rows = fetch_rows(db_path, "select profile_id, profile_path from profiles")
             self.assertEqual(profile_rows, [("huawei-competition-ubuntu-24.04", "config/competition-env/environment.json")])
+
+    def test_sqlite_connection_sets_parallel_worker_busy_timeout(self) -> None:
+        with temp_repo_dir() as tmp:
+            db_path = Path(tmp) / "parallel.sqlite3"
+
+            connection = harness.connect(db_path)
+            try:
+                busy_timeout = connection.execute("pragma busy_timeout").fetchone()[0]
+            finally:
+                connection.close()
+
+            self.assertEqual(busy_timeout, 30000)
 
     def test_assign_slice_creates_worker_task_slice_lease_and_assignment_file(self) -> None:
         with temp_repo_dir() as tmp:
@@ -562,6 +575,94 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_rows = fetch_rows(db_path, "select status from repair_hints")
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
+    def test_run_plan_executes_workers_in_parallel_when_max_workers_allows(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                functions=["first_unit", "second_unit"],
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            worker_started: list[str] = []
+            both_workers_started = threading.Event()
+            worker_lock = threading.Lock()
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    with worker_lock:
+                        worker_started.append(str(request["run_id"]))
+                        if len(worker_started) == 2:
+                            both_workers_started.set()
+                    self.assertTrue(both_workers_started.wait(2), "run-plan did not overlap worker execution")
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-test", status="passed", failed=0, semantic_pass=2)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-test",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                execute_merge=True,
+                max_workers=2,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["parallelism"], {"max_workers": 2, "effective_workers": 2})
+            self.assertEqual(result["graph"]["runtime"], "opencode-harness-langgraph-inspired")
+            self.assertEqual(result["graph"]["checkpoint_backend"], "sqlite")
+            self.assertIn("fanout_workers", result["graph"]["nodes"])
+            self.assertIn("repair_retry", result["graph"]["nodes"])
+            self.assertIn(
+                {
+                    "from": "worker",
+                    "to": "repair_retry",
+                    "condition": "exit_code != 0 and auto_retry",
+                },
+                result["graph"]["edges"],
+            )
+            self.assertEqual(result["graph"]["parallel_map"]["max_workers"], 2)
+            self.assertEqual(result["graph"]["parallel_map"]["result_order"], "planner_order")
+            self.assertEqual([worker["worker_id"] for worker in result["workers"]], [unit["worker_id"] for unit in plan["units"]])
+            self.assertEqual(len(worker_started), 2)
+
     def test_run_plan_can_execute_final_merge_and_finalize_run(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -740,6 +841,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "mode": "deterministic",
                         "execute_merge": True,
                         "auto_retry": True,
+                        "max_workers": 2,
                         "emit_route_governance_metrics_report": True,
                         "acceptance_boundary": {
                             "semantic_claim_source": "accepted_evidence_binding",
@@ -797,6 +899,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(result["run_plan"]["merge_execution"]["final_gate_status"], "passed")
             self.assertEqual(result["run_plan"]["auto_retry"], {"enabled": True, "retried_worker_count": 0})
+            self.assertEqual(result["run_plan"]["parallelism"], {"max_workers": 2, "effective_workers": 2})
+            self.assertEqual(result["run_plan"]["graph"]["parallel_map"]["max_workers"], 2)
             self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
             route_report_ref = result["route_governance_metrics_report"]
             route_report_path = REPO_ROOT / route_report_ref["path"]
@@ -1135,6 +1239,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-skip-permissions",
             "--execute-merge",
             "--auto-retry",
+            "--max-workers",
+            "3",
         ]
 
         with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
@@ -1160,6 +1266,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
         self.assertTrue(runner.call_args.kwargs["execute_merge"])
         self.assertTrue(runner.call_args.kwargs["auto_retry"])
+        self.assertEqual(runner.call_args.kwargs["max_workers"], 3)
 
     def test_plan_source_file_direct_script_cli_runs_from_repo_root(self) -> None:
         with temp_repo_dir() as tmp:

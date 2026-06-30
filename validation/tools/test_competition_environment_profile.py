@@ -159,6 +159,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(batch["mode"], "deterministic")
         self.assertTrue(batch["execute_merge"])
         self.assertTrue(batch["auto_retry"])
+        self.assertEqual(batch["max_workers"], 4)
         self.assertEqual(
             batch["acceptance_boundary"],
             {
@@ -193,6 +194,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(batch["mode"], "deterministic")
         self.assertTrue(batch["execute_merge"])
         self.assertTrue(batch["auto_retry"])
+        self.assertEqual(batch["max_workers"], 4)
         self.assertTrue(batch["emit_before_after_exhibit_report"])
         self.assertTrue(batch["emit_route_governance_metrics_report"])
         self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
@@ -241,6 +243,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             text = runbook_path.read_text(encoding="utf-8")
             with self.subTest(runbook=runbook_path.relative_to(REPO_ROOT).as_posix()):
                 self.assertIn("--auto-retry", text)
+                self.assertIn("--max-workers", text)
                 self.assertIn("repair", text)
                 self.assertIn("5", text)
                 self.assertIn("validator", text)
@@ -264,6 +267,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertTrue(batch["reuse_accepted_evidence"])
         self.assertTrue(batch["execute_merge"])
         self.assertTrue(batch["auto_retry"])
+        self.assertEqual(batch["max_workers"], 4)
         self.assertTrue(batch["emit_route_governance_metrics_report"])
         self.assertTrue(batch["emit_before_after_exhibit_report"])
         self.assertEqual(batch["acceptance_boundary"]["semantic_claim_source"], "accepted_evidence_binding")

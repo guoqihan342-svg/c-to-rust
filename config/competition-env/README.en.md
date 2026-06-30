@@ -41,7 +41,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `env.sh`: shell environment entrypoint for the competition host, including local clang auto-detection.
 - `toolchain-check.sh`: competition host self-check script.
 - `smoke.sh`: lightweight Linux/WSL/CI smoke entrypoint; it calls `run_competition_smoke.py` and emits a proof-classed summary.
-- `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile, and can enable `run-plan --auto-retry` when `auto_retry=true`.
+- `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile, can enable `run-plan --auto-retry` when `auto_retry=true`, and can fan out independent workers with `max_workers`.
 - `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
 
 ## Clang Policy: Project-Local Vendored Binary
@@ -125,7 +125,7 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
   --out-root target/competition-out
 ```
 
-This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate. The committed judge-facing profiles set `auto_retry=true`; that only lets failed workers consume persisted repair hints and retry up to the five-round cap before final aggregation, and it never replaces the validator.
+This profile only makes `init-run`, `plan-source-file`, and `run-plan --execute-merge` reproducible as one command. Semantic acceptance still comes only from the final `competition-run-summary.json`, workflow metrics, and validators. The current FlashDB profile reuses committed accepted-evidence bindings and explicitly records `generated_draft_semantic_pass=false`; do not interpret it as the regenerated Rust draft itself passing the semantic gate. The committed judge-facing profiles set `auto_retry=true` and `max_workers=4`; retries only let failed workers consume persisted repair hints up to the five-round cap, while `max_workers` is LangGraph-style worker fan-out with planner-order fan-in. Neither replaces the validator.
 
 Judge-facing before/after demo profile:
 

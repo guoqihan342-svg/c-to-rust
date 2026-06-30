@@ -10,6 +10,7 @@ and the existing validators.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 import hashlib
 import json
@@ -114,6 +115,7 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
     run_plan_parser.add_argument("--execute-merge", action="store_true")
     run_plan_parser.add_argument("--auto-retry", action="store_true")
+    run_plan_parser.add_argument("--max-workers", type=int, default=1)
 
     batch_profile_parser = subcommands.add_parser("run-batch-profile")
     batch_profile_parser.add_argument("--profile", type=Path, required=True)
@@ -247,6 +249,7 @@ def main() -> int:
             opencode_preflight_report=args.opencode_preflight_report,
             execute_merge=args.execute_merge,
             auto_retry=args.auto_retry,
+            max_workers=args.max_workers,
         )
     elif args.command == "run-batch-profile":
         result = run_batch_profile(
@@ -855,6 +858,7 @@ def run_batch_profile(
         opencode_preflight_report=opencode_preflight_report,
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         auto_retry=profile_bool(profile, "auto_retry", default=False),
+        max_workers=profile_int(profile, "max_workers", default=1),
         command_runner=command_runner,
         repo_root=repo_root,
     )
@@ -1324,6 +1328,7 @@ def run_plan(
     opencode_preflight_report: Path | None = None,
     execute_merge: bool = False,
     auto_retry: bool = False,
+    max_workers: int = 1,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -1336,14 +1341,19 @@ def run_plan(
     units = plan.get("units")
     if not isinstance(units, list) or not units:
         raise SystemExit("run-plan requires a planner artifact with at least one unit")
+    if max_workers < 1:
+        raise SystemExit("run-plan max_workers must be a positive integer")
 
     started = time.monotonic()
-    worker_results = []
-    ordered_summary_paths: list[str] = []
-    failed_workers = 0
+    planned_units = []
     for index, unit in enumerate(units, start=1):
         if not isinstance(unit, dict) or not isinstance(unit.get("worker_id"), str) or not unit["worker_id"]:
             raise SystemExit(f"run-plan unit {index} missing worker_id")
+        planned_units.append(unit)
+
+    effective_workers = min(max_workers, len(planned_units))
+
+    def execute_unit(unit: dict[str, Any]) -> dict[str, Any]:
         result = run_worker(
             db_path=db_path,
             run_id=run_id,
@@ -1421,11 +1431,27 @@ def run_plan(
                 "attempts": retry_results,
                 "final_hint_status": retry_results[-1].get("hint_status"),
             }
-        if worker_result["exit_code"] != 0:
-            failed_workers += 1
-        if worker_result["recorded"] and worker_result["summary_path"]:
-            ordered_summary_paths.append(str(worker_result["summary_path"]))
-        worker_results.append(worker_result)
+        return worker_result
+
+    if effective_workers == 1:
+        worker_results = [execute_unit(unit) for unit in planned_units]
+    else:
+        worker_results_by_index: dict[int, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+            futures = {
+                executor.submit(execute_unit, unit): index
+                for index, unit in enumerate(planned_units)
+            }
+            for future in as_completed(futures):
+                worker_results_by_index[futures[future]] = future.result()
+        worker_results = [worker_results_by_index[index] for index in range(len(planned_units))]
+
+    failed_workers = sum(1 for worker in worker_results if int(worker["exit_code"]) != 0)
+    ordered_summary_paths = [
+        str(worker["summary_path"])
+        for worker in worker_results
+        if worker["recorded"] and worker["summary_path"]
+    ]
 
     merge_plan = write_merge_plan(
         db_path=db_path,
@@ -1464,6 +1490,17 @@ def run_plan(
         "plan_path": repo_relative(plan_path, repo_root=repo_root),
         "worker_count": len(worker_results),
         "failed_workers": failed_workers,
+        "graph": build_run_plan_graph_contract(
+            mode=mode,
+            auto_retry=auto_retry,
+            max_workers=max_workers,
+            effective_workers=effective_workers,
+            opencode_preflight_report=opencode_preflight_report,
+        ),
+        "parallelism": {
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+        },
         "auto_retry": {
             "enabled": auto_retry,
             "retried_worker_count": sum(1 for worker in worker_results if isinstance(worker.get("auto_retry"), dict)),
@@ -1496,6 +1533,53 @@ def run_plan(
     result = dict(report)
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     return result
+
+
+def build_run_plan_graph_contract(
+    *,
+    mode: str,
+    auto_retry: bool,
+    max_workers: int,
+    effective_workers: int,
+    opencode_preflight_report: Path | None,
+) -> dict[str, Any]:
+    return {
+        "runtime": "opencode-harness-langgraph-inspired",
+        "state_schema": "run-plan-state/v1",
+        "checkpoint_backend": "sqlite",
+        "nodes": [
+            "load_plan",
+            "fanout_workers",
+            "worker",
+            "repair_retry",
+            "merge",
+            "report",
+        ],
+        "edges": [
+            {"from": "load_plan", "to": "fanout_workers", "condition": "units > 0"},
+            {"from": "fanout_workers", "to": "worker", "condition": "map(unit)"},
+            {"from": "worker", "to": "repair_retry", "condition": "exit_code != 0 and auto_retry"},
+            {"from": "repair_retry", "to": "worker", "condition": "hint_open and repair_round < 5"},
+            {"from": "fanout_workers", "to": "merge", "condition": "all_workers_recorded"},
+            {"from": "merge", "to": "report", "condition": "always"},
+        ],
+        "parallel_map": {
+            "node": "worker",
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+            "result_order": "planner_order",
+        },
+        "retry_policy": {
+            "enabled": auto_retry,
+            "round_cap": REPAIR_ROUND_CAP,
+            "checkpoint": "repair_hints",
+        },
+        "opencode_worker": {
+            "enabled": mode == "opencode",
+            "preflight_required": mode == "opencode",
+            "preflight_bound": opencode_preflight_report is not None,
+        },
+    }
 
 
 def execute_merge_plan(
@@ -3792,8 +3876,9 @@ def find_matching_reverse(text: str, close_index: int, open_char: str, close_cha
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=30)
     connection.execute("pragma foreign_keys = on")
+    connection.execute("pragma busy_timeout = 30000")
     return connection
 
 
@@ -3810,11 +3895,20 @@ def repo_path(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
     else:
         checked_relative_path(path_text(path))
         resolved = (repo_root / path).resolve()
+    resolved = normalize_windows_extended_path(resolved)
+    repo_resolved = normalize_windows_extended_path(repo_root.resolve())
     try:
-        resolved.relative_to(repo_root.resolve())
+        resolved.relative_to(repo_resolved)
     except ValueError as error:
         raise SystemExit(f"path must stay inside repository: {path}") from error
     return resolved
+
+
+def normalize_windows_extended_path(path: Path) -> Path:
+    text = str(path)
+    if text.startswith("\\\\?\\"):
+        return Path(text[4:])
+    return path
 
 
 def checked_relative_path(value: str) -> PurePosixPath:
@@ -3842,8 +3936,10 @@ def slug_id(value: str) -> str:
 
 
 def repo_relative(path: Path, *, repo_root: Path = REPO_ROOT) -> str:
+    resolved = normalize_windows_extended_path(path.resolve())
+    repo_resolved = normalize_windows_extended_path(repo_root.resolve())
     try:
-        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+        return resolved.relative_to(repo_resolved).as_posix()
     except ValueError as error:
         raise SystemExit(f"path must stay inside repository: {path}") from error
 

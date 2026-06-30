@@ -120,7 +120,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-worker --mode deterministic` invokes the same repo-local wrapper and writes stdout/stderr, return code, summary path, record status, and final task status to `workers/<worker-id>/harness/run-worker-report.json`. If the child process fails, the summary is missing, or the summary `final_gate.status` is not `passed`, the worker task must be recorded as failed and final aggregation must not treat it as passed.
 
-`run-plan --auto-retry` connects the worker failure path to the persisted `repair_hints` ledger. A failed worker can be retried with the same assignment until it revalidates or reaches `REPAIR_ROUND_CAP=5`; failed intermediate attempts stay audit-visible, while semantic acceptance still comes only from the worker summary, final aggregation, and validators.
+`run-plan --max-workers <N> --auto-retry` is the LangGraph-inspired execution shape without adding a new runtime dependency: `load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`. Independent workers run in parallel up to `max_workers`, but `run-plan-report.json.graph.parallel_map.result_order=planner_order` keeps the fan-in deterministic. A failed worker can be retried with the same assignment through the persisted `repair_hints` ledger until it revalidates or reaches `REPAIR_ROUND_CAP=5`; failed intermediate attempts stay audit-visible, while semantic acceptance still comes only from the worker summary, final aggregation, and validators.
 
 When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
 

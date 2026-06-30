@@ -22,6 +22,7 @@
   "mode": "deterministic",
   "execute_merge": true,
   "auto_retry": true,
+  "max_workers": 4,
   "emit_route_governance_metrics_report": true,
   "acceptance_boundary": {
     "semantic_claim_source": "accepted_evidence_binding",

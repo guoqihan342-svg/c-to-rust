@@ -43,7 +43,7 @@
 - `env.sh`：比赛机 shell 会话环境变量入口（含本地 clang 自动探测）。
 - `toolchain-check.sh`：比赛机环境自检脚本。
 - `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
-- `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，并在 `auto_retry=true` 时启用 `run-plan --auto-retry`。
+- `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
 
 ## Clang 策略：vendored 本地分发
@@ -127,7 +127,7 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
   --out-root target/competition-out
 ```
 
-该 profile 只是把 `init-run`、`plan-source-file`、`run-plan --execute-merge` 固化为一条命令；语义接受仍只看最终 `competition-run-summary.json`、workflow metrics 和 validator。当前 FlashDB profile 复用已提交 accepted evidence binding，明确记录 `generated_draft_semantic_pass=false`，不能解读为重新生成 Rust draft 自身通过 semantic gate。已提交的评委展示 profile 设置 `auto_retry=true`；它只允许失败 worker 消费已落盘 repair hint 并在 5 轮上限内重试，不能替代 validator。
+该 profile 只是把 `init-run`、`plan-source-file`、`run-plan --execute-merge` 固化为一条命令；语义接受仍只看最终 `competition-run-summary.json`、workflow metrics 和 validator。当前 FlashDB profile 复用已提交 accepted evidence binding，明确记录 `generated_draft_semantic_pass=false`，不能解读为重新生成 Rust draft 自身通过 semantic gate。已提交的评委展示 profile 设置 `auto_retry=true` 和 `max_workers=4`；retry 只允许失败 worker 消费已落盘 repair hint 并在 5 轮上限内重试，`max_workers` 是 LangGraph 风格 worker fan-out 和 planner 顺序 fan-in，二者都不能替代 validator。
 
 评委 before/after demo profile：
 

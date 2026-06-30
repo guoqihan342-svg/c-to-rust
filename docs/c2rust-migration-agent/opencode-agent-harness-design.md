@@ -122,7 +122,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-worker --mode deterministic` 调用同一个 repo-local wrapper，并把 stdout/stderr、return code、summary path、record status 和最终任务状态写入 `workers/<worker-id>/harness/run-worker-report.json`。如果子进程失败、summary 缺失，或 summary 的 `final_gate.status` 不是 `passed`，worker 任务必须记录为 failed，最终合并不能把它当成通过。
 
-`run-plan --auto-retry` 把 worker 失败路径接到已落盘的 `repair_hints` 账本。失败 worker 会用同一份 assignment 重试，直到重新验证通过或达到 `REPAIR_ROUND_CAP=5`；中间失败尝试保留审计记录，语义接受仍只来自 worker summary、最终聚合和 validator。
+`run-plan --max-workers <N> --auto-retry` 是不新增运行时依赖的 LangGraph-inspired 执行形态：`load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`。独立 worker 最多并行到 `max_workers`，但 `run-plan-report.json.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。失败 worker 会通过已落盘的 `repair_hints` 账本用同一份 assignment 重试，直到重新验证通过或达到 `REPAIR_ROUND_CAP=5`；中间失败尝试保留审计记录，语义接受仍只来自 worker summary、最终聚合和 validator。
 
 连接本机 OpenCode / DeepSeek V4 Pro 时，可以让 OpenCode 包装同一份 assignment request：
 
