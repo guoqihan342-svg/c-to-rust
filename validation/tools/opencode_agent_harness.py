@@ -1709,6 +1709,7 @@ def retry_worker(
         if int(result.get("exit_code", 1)) == 0 and result.get("summary_status") == "passed"
         else "revalidated_failed"
     )
+    retry_metrics_annotation = None
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         mark_repair_hint_revalidated(
@@ -1717,7 +1718,23 @@ def retry_worker(
             status=hint_status,
             result=result,
         )
+        if hint_status == "revalidated_passed":
+            retry_metrics_annotation = annotate_retry_worker_metrics(
+                connection,
+                hint_id=str(hint["hint_id"]),
+                result=result,
+                repo_root=repo_root,
+            )
         connection.commit()
+    if retry_metrics_annotation is not None:
+        result["retry_metrics_annotation"] = retry_metrics_annotation
+        result["record_worker_summary"] = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=repo_path(Path(str(result["summary_path"])), repo_root=repo_root),
+            repo_root=repo_root,
+        )
 
     retry_result = dict(result)
     retry_result["hint_id"] = hint["hint_id"]
@@ -2251,6 +2268,166 @@ def mark_repair_hint_revalidated(
             "rollback_evidence": attempt.get("rollback_evidence"),
         },
     )
+
+
+def annotate_retry_worker_metrics(
+    connection: sqlite3.Connection,
+    *,
+    hint_id: str,
+    result: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    summary_path = repo_path(Path(str(result.get("summary_path", ""))), repo_root=repo_root)
+    if not summary_path.exists():
+        return None
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return None
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        raise SystemExit("retry worker summary workflow_metrics.path and workflow_metrics.sha256 are required")
+    metrics_path = resolve_summary_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None:
+        raise SystemExit(f"retry worker summary workflow_metrics.path does not exist: {metrics_ref}")
+    if sha256_file(metrics_path) != expected_sha:
+        raise SystemExit("retry worker summary workflow_metrics.sha256 does not match artifact before annotation")
+    metrics = load_json(metrics_path)
+    units = metrics.get("per_unit_statuses")
+    if not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
+        return None
+
+    row = connection.execute("select payload_json from repair_hints where hint_id=?", (hint_id,)).fetchone()
+    if row is None:
+        raise SystemExit(f"unknown repair hint for retry metrics: {hint_id}")
+    hint_payload = json.loads(row[0])
+    attempts = hint_payload.get("attempts")
+    if not isinstance(attempts, list) or len(attempts) < 2:
+        return None
+
+    repair_rounds = len(attempts) - 1
+    safe_hint_id = safe_file_component(hint_id)
+    history_path = summary_path.parent / f"retry-repair-history-{safe_hint_id}.jsonl"
+    history_events = retry_repair_history_events(hint_payload, result)
+    history_path.write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in history_events),
+        encoding="utf-8",
+    )
+    statuses = [str(event.get("status")) for event in history_events if isinstance(event.get("status"), str)]
+    rollback_ids = retry_rollback_ids(attempts)
+    repair_history = {
+        "patch_events_path": history_path.name,
+        "patch_events_sha256": sha256_file(history_path),
+        "statuses": statuses,
+        "rollback_ids": rollback_ids,
+        "verified": "verified" in statuses,
+    }
+
+    unit = units[0]
+    unit["repair_rounds"] = repair_rounds
+    unit["auto_recovered"] = repair_history["verified"] and result.get("summary_status") == "passed"
+    unit["repair_history"] = repair_history
+    units_total = int(metrics.get("units_total", 1)) if isinstance(metrics.get("units_total"), int) else 1
+    metrics["avg_repair_rounds"] = repair_rounds / max(1, units_total)
+    metrics["auto_recovery_rate"] = (1.0 if unit["auto_recovered"] else 0.0) / max(1, units_total)
+    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary["workflow_metrics"]["sha256"] = sha256_file(metrics_path)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    annotation = {
+        "history_path": repo_relative(history_path, repo_root=repo_root),
+        "history_sha256": sha256_file(history_path),
+        "metrics_path": repo_relative(metrics_path, repo_root=repo_root),
+        "metrics_sha256": sha256_file(metrics_path),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_sha256": sha256_file(summary_path),
+        "repair_rounds": repair_rounds,
+        "auto_recovered": bool(unit["auto_recovered"]),
+        "unsafe_reduction": metrics.get("unsafe_reduction", {}),
+    }
+    record_artifact(
+        connection,
+        run_id=str(result["run_id"]),
+        worker_id=str(result["worker_id"]),
+        kind="retry-repair-history",
+        path=history_path,
+        status="verified" if annotation["auto_recovered"] else "recorded",
+        semantic_role="repair-history",
+        payload={"schema_version": SCHEMA_VERSION, "hint_id": hint_id, "events": history_events},
+        repo_root=repo_root,
+    )
+    record_event(
+        connection,
+        run_id=str(result["run_id"]),
+        event_type="retry_worker_metrics_annotated",
+        payload={"hint_id": hint_id, **annotation},
+    )
+    return annotation
+
+
+def retry_repair_history_events(hint_payload: dict[str, Any], result: dict[str, Any]) -> list[dict[str, Any]]:
+    events = []
+    for attempt in hint_payload.get("attempts", []):
+        if not isinstance(attempt, dict):
+            continue
+        events.append(
+            {
+                "attempt": attempt.get("attempt"),
+                "status": attempt.get("summary_status", "unknown"),
+                "exit_code": attempt.get("exit_code"),
+                "retry_of": attempt.get("retry_of"),
+                "root_cause_key": attempt.get("root_cause_key"),
+                "rollback_evidence": attempt.get("rollback_evidence"),
+            }
+        )
+    events.append(
+        {
+            "attempt": result.get("attempt"),
+            "status": "verified",
+            "summary_status": result.get("summary_status"),
+            "exit_code": result.get("exit_code"),
+            "report_path": result.get("report_path"),
+        }
+    )
+    return events
+
+
+def retry_rollback_ids(attempts: list[Any]) -> list[str]:
+    rollback_ids = []
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            continue
+        rollback = attempt.get("rollback_evidence")
+        if not isinstance(rollback, dict):
+            continue
+        path = rollback.get("path")
+        if isinstance(path, str) and path:
+            rollback_ids.append(path)
+    return rollback_ids
+
+
+def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
+    checked_relative_path(value)
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(repo_root.resolve())
+        except ValueError:
+            continue
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def safe_file_component(value: str) -> str:
+    return "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in value)
 
 
 def build_opencode_run_argv(

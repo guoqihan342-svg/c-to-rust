@@ -64,6 +64,7 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - Treat a missing or failed OpenCode preflight report as a launch blocker, not as a worker failure or semantic result. Do not start OpenCode workers without a passed preflight report bound into the worker report/event/artifact index.
 - `retry-worker` must reuse the same worker, ledger assignment, out-root, and repair hint; the revalidation result comes only from the newly written final gate.
 - `retry-worker` may count a retry as revalidated only from the newly written final gate; repair history, rollback ids, or an OpenCode process exit code are audit signals, not semantic acceptance.
+- When a revalidated retry has a bound worker `workflow-metrics.json`, annotate repair history, retry rounds, and auto recovery only after verifying the existing metrics hash, then refresh the summary hash; never turn unmeasured unsafe data into measured unsafe reduction.
 - The SQLite ledger is scheduling, lease, recovery, and artifact index state. Semantic evidence still comes only from on-disk summaries, evidence, workflow metrics, and validators.
 
 ## Handoff Checklist
