@@ -857,6 +857,83 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 [("before-after-exhibit-report", exhibit_ref["path"], "before-after-exhibit")],
             )
 
+    def test_before_after_exhibit_surfaces_bound_repair_history(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-repair",
+                "emit_before_after_exhibit_report": True,
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            workflow_metrics = before_after_worker_metrics(out_root, "run-before-after-repair")
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = workflow_metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["root_cause_key"] = "rustc_compile_failed"
+            unit["repair_history"] = {
+                "patch_events_path": history_path.name,
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback-before-retry.json"],
+                "verified": True,
+            }
+            workflow_metrics["avg_repair_rounds"] = 1.0
+            workflow_metrics["auto_recovery_rate"] = 1.0
+            workflow_metrics["root_cause_counts"] = {"rustc_compile_failed": 1}
+            write_worker_summary(
+                summary_path,
+                "run-before-after-repair",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=workflow_metrics,
+            )
+
+            result = harness.write_before_after_exhibit_profile_report(
+                profile=profile,
+                profile_path=profile_path,
+                run_id="run-before-after-repair",
+                proof_class="local-simulation",
+                mode="deterministic",
+                plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                run_result={"workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                route_metrics_artifact=None,
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIsNotNone(result)
+            exhibit = result["payload"]
+            unit_exhibit = exhibit["units"][0]
+            self.assertEqual(unit_exhibit["repair_rounds"], 1)
+            self.assertTrue(unit_exhibit["auto_recovered"])
+            self.assertEqual(unit_exhibit["repair_history"]["patch_events_sha256"], harness.sha256_file(history_path))
+            self.assertEqual(unit_exhibit["root_cause_key"], "rustc_compile_failed")
+            repairer = exhibit["stage_contracts"]["repairer"]
+            self.assertEqual(repairer["status"], "verified")
+            self.assertEqual(repairer["repair_round_cap"], 5)
+            self.assertEqual(repairer["observed_repair_unit_count"], 1)
+            self.assertEqual(repairer["avg_repair_rounds"], 1.0)
+            self.assertEqual(repairer["auto_recovery_rate"], 1.0)
+            self.assertEqual(repairer["root_cause_counts"], {"rustc_compile_failed": 1})
+            self.assertEqual(repairer["histories"][0]["unit_id"], "demo/store-add-one")
+
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -1401,6 +1478,56 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(payload["worker_id"], "worker-a")
             self.assertEqual(payload["retry_command"][1:4], ["validation/tools/opencode_agent_harness.py", "retry-worker", "--db"])
             self.assertEqual(payload["revalidate_gate"], "competition-run-summary.final_gate.status == passed")
+
+    def test_run_worker_records_structured_error_stack_in_repair_hint_from_stderr(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                stderr = (
+                    "error[E0133]: call to unsafe function `std::ptr::read` is unsafe and requires unsafe block\n"
+                    "  --> candidate.rs:17:9\n"
+                    "Traceback (most recent call last):\n"
+                    "  File \"scripts/c2rust-migrator.py\", line 42, in <module>\n"
+                    "RuntimeError: rustc failed\n"
+                )
+                return subprocess.CompletedProcess(argv, 1, stdout="compile failed\n", stderr=stderr)
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints")[0][0])
+            diagnostics = payload["diagnostics"]
+            self.assertEqual(diagnostics["primary_error"]["kind"], "rustc")
+            self.assertEqual(diagnostics["primary_error"]["code"], "E0133")
+            self.assertIn("candidate.rs:17:9", diagnostics["stderr_tail"])
+            self.assertIn("RuntimeError: rustc failed", diagnostics["python_traceback"])
+            self.assertEqual(payload["attempts"][0]["diagnostics"]["primary_error"]["code"], "E0133")
 
     def test_run_worker_records_report_when_worker_command_cannot_launch(self) -> None:
         with temp_repo_dir() as tmp:
@@ -2386,6 +2513,87 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(call_count, 2)
             hint_rows = fetch_rows(db_path, "select status from repair_hints where hint_id=?", (hint_id,))
             self.assertEqual(hint_rows, [("revalidated_passed",)])
+
+    def test_retry_worker_enforces_five_round_cap_without_launching_worker(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+
+            def failing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(argv, 1, stdout="", stderr="error[E0308]: mismatched types\n")
+
+            first = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=failing_runner,
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(first["exit_code"], 1)
+            hint_id = fetch_rows(db_path, "select hint_id from repair_hints")[0][0]
+            payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints where hint_id=?", (hint_id,))[0][0])
+            payload["attempts"] = [
+                {
+                    "attempt": attempt,
+                    "summary_status": "failed",
+                    "process_returncode": 1,
+                    "exit_code": 1,
+                    "summary_path": first["summary_path"],
+                    "worker_report_path": first["report_path"],
+                    "logs": first["logs"],
+                }
+                for attempt in range(1, 7)
+            ]
+            connection = sqlite3.connect(db_path)
+            try:
+                connection.execute(
+                    "update repair_hints set payload_json=? where hint_id=?",
+                    (json.dumps(payload, sort_keys=True), hint_id),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            call_count = 0
+
+            def should_not_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal call_count
+                call_count += 1
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            retry = harness.retry_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                hint_id=hint_id,
+                command_runner=should_not_run,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(call_count, 0)
+            self.assertEqual(retry["exit_code"], 1)
+            self.assertEqual(retry["hint_status"], "retry_limit_exceeded")
+            self.assertEqual(retry["repair_round_cap"], 5)
+            payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints where hint_id=?", (hint_id,))[0][0])
+            self.assertEqual(payload["status"], "retry_limit_exceeded")
+            self.assertEqual(payload["retry_limit"]["max_repair_rounds"], 5)
 
     def test_retry_worker_records_attempt_history_and_rollback_evidence(self) -> None:
         with temp_repo_dir() as tmp:

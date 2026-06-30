@@ -33,6 +33,8 @@ PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 DB_REL_PATH = Path("state") / "opencode-agent-harness.sqlite3"
 SCHEMA_VERSION = 1
 PROFILE_ID = "huawei-competition-ubuntu-24.04"
+REPAIR_ROUND_CAP = 5
+REPAIR_LOG_TAIL_CHARS = 4096
 
 
 def main() -> int:
@@ -1071,6 +1073,7 @@ def write_before_after_exhibit_profile_report(
             run_result=run_result,
             route_metrics_artifact=route_metrics_artifact,
             summary=summary,
+            workflow_metrics=workflow_metrics,
             summary_path=summary_path,
             workflow_path=workflow_path,
             repo_root=repo_root,
@@ -1118,6 +1121,14 @@ def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[st
             "accepted_patch": evidence.get("accepted_patch", {}),
             "unsafe_reduction": evidence.get("unsafe_reduction", {}),
         }
+        if "repair_rounds" in unit:
+            exhibit_unit["repair_rounds"] = int(unit.get("repair_rounds", 0) or 0)
+        if "auto_recovered" in unit:
+            exhibit_unit["auto_recovered"] = bool(unit.get("auto_recovered"))
+        if isinstance(unit.get("root_cause_key"), str):
+            exhibit_unit["root_cause_key"] = unit["root_cause_key"]
+        if isinstance(unit.get("repair_history"), dict):
+            exhibit_unit["repair_history"] = unit["repair_history"]
         if isinstance(evidence.get("patch_log"), dict):
             exhibit_unit["patch_log"] = evidence["patch_log"]
         if isinstance(evidence.get("claim_boundary"), dict):
@@ -1133,6 +1144,7 @@ def before_after_stage_contracts(
     run_result: dict[str, Any],
     route_metrics_artifact: dict[str, Any] | None,
     summary: dict[str, Any],
+    workflow_metrics: dict[str, Any],
     summary_path: Path,
     workflow_path: Path,
     repo_root: Path,
@@ -1143,6 +1155,12 @@ def before_after_stage_contracts(
         run_plan.get("merge_execution") if isinstance(run_plan.get("merge_execution"), dict) else {}
     )
     workflow_metrics_ref = summary.get("workflow_metrics") if isinstance(summary.get("workflow_metrics"), dict) else {}
+    repair_histories = before_after_repair_histories(workflow_metrics)
+    repair_status = (
+        "verified"
+        if any(history.get("verified") for history in repair_histories)
+        else ("recorded" if repair_histories else "not_exercised")
+    )
     return {
         "planner": {
             "stage": "planner",
@@ -1173,8 +1191,17 @@ def before_after_stage_contracts(
         },
         "repairer": {
             "stage": "repairer",
-            "status": "not_exercised",
-            "repair_round_cap": 5,
+            "status": repair_status,
+            "repair_round_cap": REPAIR_ROUND_CAP,
+            "observed_repair_unit_count": len(repair_histories),
+            "avg_repair_rounds": float(workflow_metrics.get("avg_repair_rounds", 0.0) or 0.0),
+            "auto_recovery_rate": float(workflow_metrics.get("auto_recovery_rate", 0.0) or 0.0),
+            "root_cause_counts": (
+                workflow_metrics["root_cause_counts"]
+                if isinstance(workflow_metrics.get("root_cause_counts"), dict)
+                else {}
+            ),
+            "histories": repair_histories,
             "evidence_boundary": (
                 "Repair history is shown only when workflow metrics bind measured repair or retry evidence."
             ),
@@ -1190,6 +1217,27 @@ def before_after_stage_contracts(
             "workflow_metrics": artifact_ref(workflow_path, repo_root=repo_root),
         },
     }
+
+
+def before_after_repair_histories(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    histories = []
+    for unit in workflow_metrics.get("per_unit_statuses", []):
+        if not isinstance(unit, dict) or not isinstance(unit.get("repair_history"), dict):
+            continue
+        history = unit["repair_history"]
+        item = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "repair_rounds": int(unit.get("repair_rounds", 0) or 0),
+            "auto_recovered": bool(unit.get("auto_recovered", False)),
+            "verified": bool(history.get("verified", False)),
+            "repair_history": history,
+        }
+        if isinstance(unit.get("root_cause_key"), str):
+            item["root_cause_key"] = unit["root_cause_key"]
+        histories.append(item)
+    return histories
 
 
 def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, str]:
@@ -1790,6 +1838,12 @@ def run_worker(
             summary_status=summary_status,
             opencode_contract_verification=opencode_contract_verification,
         )
+        diagnostics = worker_repair_diagnostics(
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            process_returncode=int(completed.returncode),
+            root_cause_key=root_cause_key,
+        )
         repair_hint = worker_repair_hint_payload(
             db_path=db_path,
             run_id=run_id,
@@ -1805,6 +1859,7 @@ def run_worker(
             repo_root=repo_root,
             exit_code=effective_exit_code,
             attempt_number=attempt_number,
+            diagnostics=diagnostics,
             retry_of=retry_of,
             rollback_evidence=rollback_evidence,
             rejected_summary_evidence=rejected_summary_evidence,
@@ -1850,6 +1905,7 @@ def run_worker(
             "hint_id": repair_hint["hint_id"],
             "root_cause_key": repair_hint["root_cause_key"],
             "status": "open",
+            "diagnostics": repair_hint["diagnostics"],
         }
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -1953,6 +2009,15 @@ def retry_worker(
         hint = load_open_repair_hint(connection, run_id=run_id, worker_id=worker_id, hint_id=hint_id)
         attempts = hint.get("attempts")
         attempt_number = len(attempts) + 1 if isinstance(attempts, list) else 2
+        repair_rounds = max(0, attempt_number - 2)
+        if repair_rounds >= REPAIR_ROUND_CAP:
+            retry_result = mark_repair_hint_retry_limit_exceeded(
+                connection,
+                hint=hint,
+                repair_rounds=repair_rounds,
+            )
+            connection.commit()
+            return retry_result
 
     result = run_worker(
         db_path=db_path,
@@ -2006,6 +2071,61 @@ def retry_worker(
     retry_result["hint_id"] = hint["hint_id"]
     retry_result["hint_status"] = hint_status
     return retry_result
+
+
+def mark_repair_hint_retry_limit_exceeded(
+    connection: sqlite3.Connection,
+    *,
+    hint: dict[str, Any],
+    repair_rounds: int,
+) -> dict[str, Any]:
+    retry_limit = {
+        "status": "retry_limit_exceeded",
+        "max_repair_rounds": REPAIR_ROUND_CAP,
+        "observed_repair_rounds": repair_rounds,
+        "boundary": "retry-worker refuses to launch another worker after the configured repair round cap",
+    }
+    payload = dict(hint)
+    payload["status"] = "retry_limit_exceeded"
+    payload["retry_limit"] = retry_limit
+    hint_id = str(payload["hint_id"])
+    connection.execute(
+        "update repair_hints set status=?, payload_json=? where hint_id=?",
+        ("retry_limit_exceeded", json.dumps(payload, sort_keys=True), hint_id),
+    )
+    record_event(
+        connection,
+        run_id=str(payload["run_id"]),
+        event_type="repair_retry_limit_exceeded",
+        payload={
+            "hint_id": hint_id,
+            "worker_id": payload.get("worker_id"),
+            "repair_round_cap": REPAIR_ROUND_CAP,
+            "repair_rounds": repair_rounds,
+        },
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": str(payload["run_id"]),
+        "worker_id": str(payload["worker_id"]),
+        "hint_id": hint_id,
+        "hint_status": "retry_limit_exceeded",
+        "status": "retry_limit_exceeded",
+        "exit_code": 1,
+        "summary_status": str(payload.get("summary_status", "unknown")),
+        "repair_round_cap": REPAIR_ROUND_CAP,
+        "repair_rounds": repair_rounds,
+        "retry_limit": retry_limit,
+    }
+    if isinstance(payload.get("summary_path"), str):
+        result["summary_path"] = payload["summary_path"]
+    if isinstance(payload.get("worker_report_path"), str):
+        result["report_path"] = payload["worker_report_path"]
+    if isinstance(payload.get("logs"), dict):
+        result["logs"] = payload["logs"]
+    if isinstance(payload.get("diagnostics"), dict):
+        result["diagnostics"] = payload["diagnostics"]
+    return result
 
 
 def run_opencode_preflight(
@@ -2217,6 +2337,61 @@ def worker_failure_root_cause(
     return "worker_failed"
 
 
+def worker_repair_diagnostics(
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+    process_returncode: int,
+    root_cause_key: str,
+) -> dict[str, Any]:
+    stdout_tail = file_tail(stdout_path, REPAIR_LOG_TAIL_CHARS)
+    stderr_tail = file_tail(stderr_path, REPAIR_LOG_TAIL_CHARS)
+    combined = "\n".join(part for part in [stderr_tail, stdout_tail] if part)
+    diagnostics: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "root_cause_key": root_cause_key,
+        "process_returncode": process_returncode,
+        "stdout_tail": stdout_tail,
+        "stderr_tail": stderr_tail,
+        "primary_error": {
+            "kind": "process",
+            "message": root_cause_key,
+        },
+    }
+    rustc_match = re.search(r"\berror\[(E\d+)\]:\s*(.+)", combined)
+    if rustc_match:
+        diagnostics["primary_error"] = {
+            "kind": "rustc",
+            "code": rustc_match.group(1),
+            "message": rustc_match.group(2).strip(),
+        }
+    traceback_text = extract_python_traceback(combined)
+    if traceback_text:
+        diagnostics["python_traceback"] = traceback_text
+        if diagnostics["primary_error"]["kind"] == "process":
+            last_line = next((line.strip() for line in reversed(traceback_text.splitlines()) if line.strip()), "")
+            diagnostics["primary_error"] = {
+                "kind": "python",
+                "message": last_line or "python traceback",
+            }
+    return diagnostics
+
+
+def file_tail(path: Path, max_chars: int) -> str:
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return text[-max_chars:]
+
+
+def extract_python_traceback(text: str) -> str:
+    marker = "Traceback (most recent call last):"
+    index = text.find(marker)
+    if index < 0:
+        return ""
+    return text[index:][-REPAIR_LOG_TAIL_CHARS:]
+
+
 def worker_repair_hint_payload(
     *,
     db_path: Path,
@@ -2233,6 +2408,7 @@ def worker_repair_hint_payload(
     repo_root: Path,
     exit_code: int,
     attempt_number: int,
+    diagnostics: dict[str, Any],
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
     rejected_summary_evidence: dict[str, Any] | None = None,
@@ -2273,6 +2449,7 @@ def worker_repair_hint_payload(
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
+        "diagnostics": diagnostics,
         "attempts": [
             repair_attempt_payload(
                 attempt_number=attempt_number,
@@ -2288,6 +2465,7 @@ def worker_repair_hint_payload(
                 root_cause_key=root_cause_key,
                 retry_of=retry_of,
                 rollback_evidence=rollback_evidence,
+                diagnostics=diagnostics,
             )
         ],
         "retry_command": retry_command,
@@ -2316,6 +2494,7 @@ def repair_attempt_payload(
     root_cause_key: str | None = None,
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     attempt = {
         "attempt": attempt_number,
@@ -2332,6 +2511,8 @@ def repair_attempt_payload(
         attempt["retry_of"] = retry_of
     if rollback_evidence is not None:
         attempt["rollback_evidence"] = rollback_evidence
+    if diagnostics is not None:
+        attempt["diagnostics"] = diagnostics
     return attempt
 
 
@@ -2349,6 +2530,11 @@ def repair_attempt_from_result(result: dict[str, Any]) -> dict[str, Any]:
         root_cause_key=str(root_cause_key) if root_cause_key else None,
         retry_of=str(result.get("retry_of")) if result.get("retry_of") else None,
         rollback_evidence=result.get("rollback_evidence") if isinstance(result.get("rollback_evidence"), dict) else None,
+        diagnostics=(
+            repair_hint.get("diagnostics")
+            if isinstance(repair_hint, dict) and isinstance(repair_hint.get("diagnostics"), dict)
+            else None
+        ),
     )
 
 
