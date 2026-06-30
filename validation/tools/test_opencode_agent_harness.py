@@ -1812,6 +1812,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             profile_path = REPO_ROOT / "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"
             profile = json.loads(profile_path.read_text(encoding="utf-8"))
             self.assertTrue(profile["require_repair_trace"])
+            self.assertEqual(profile["attempt_evidence_policy"]["mode"], "baseline_repair_gate")
+            self.assertEqual(
+                profile["attempt_evidence_policy"]["translation_before_after"]["path"],
+                profile["acceptance_boundary"]["translation_before_after"],
+            )
+            self.assertEqual(
+                profile["attempt_evidence_policy"]["baseline_attempt"]["root_cause_key"],
+                "unsafe_baseline_requires_repair",
+            )
             write_worker_summary(
                 summary_path,
                 "run-flashdb-before-after-strict-repair",
@@ -1914,6 +1923,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "auto_retry": True,
                         "emit_before_after_exhibit_report": True,
                         "require_repair_trace": True,
+                        "attempt_evidence_policy": {
+                            "mode": "baseline_repair_gate",
+                            "baseline_attempt": {"attempt_number": 1},
+                            "accepted_attempt": {"min_attempt_number": 2, "require_hint_id": True},
+                        },
                         "acceptance_boundary": {
                             "semantic_claim_source": "accepted_evidence_binding",
                             "generated_draft_semantic_pass": False,
@@ -1982,9 +1996,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(unit["repair_history"], repair_history)
             summary_metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(summary_metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(summary_metrics["root_cause_counts"], {"final_gate_failed": 1})
+            self.assertEqual(summary_metrics["per_unit_statuses"][0]["root_cause_key"], "final_gate_failed")
             self.assertEqual(summary_metrics["per_unit_statuses"][0]["repair_history"], repair_history)
             context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
             agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["attempt_evidence_policy"]["mode"], "baseline_repair_gate")
+            self.assertEqual(agent_index["attempt_evidence_policy"]["mode"], "baseline_repair_gate")
             self.assertEqual(context_pack["entrypoints"]["before_after_exhibit_report"], exhibit_ref["path"])
             self.assertEqual(context_pack["report_artifacts"]["before_after_exhibit_report"], exhibit_ref)
             self.assertEqual(agent_index["reports"]["before_after_exhibit_report"], exhibit_ref)
@@ -2799,7 +2817,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(contract_binding["sha256"], harness.sha256_file(contract_path))
             contract = json.loads(contract_path.read_text(encoding="utf-8"))
             self.assertEqual(contract["runner_kind"], "opencode-run")
-            self.assertEqual(contract["request_path"], repo_rel(out_root / "harness" / "assignments" / "worker-a-request.json"))
+            self.assertEqual(
+                contract["request_path"],
+                repo_rel(out_root / "workers" / "worker-a" / "harness" / "worker-a-request-attempt-1.json"),
+            )
+            self.assertEqual(
+                contract["assignment_request_path"],
+                repo_rel(out_root / "harness" / "assignments" / "worker-a-request.json"),
+            )
             self.assertEqual(
                 contract["expected_summary_path"],
                 repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
@@ -3811,12 +3836,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
             call_count = 0
+            seen_requests: list[dict[str, object]] = []
+            repair_trace = {"mode": "baseline_repair_gate"}
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 nonlocal call_count
                 call_count += 1
                 request_path = REPO_ROOT / argv[argv.index("--input") + 1]
                 request = json.loads(request_path.read_text(encoding="utf-8"))
+                seen_requests.append({"path": request_path, "request": request})
                 summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
                 if call_count == 1:
                     write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
@@ -3830,6 +3858,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 worker_id="worker-a",
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
+                repair_trace=repair_trace,
             )
             self.assertEqual(first["exit_code"], 1)
             hint_id = fetch_rows(db_path, "select hint_id from repair_hints")[0][0]
@@ -3841,9 +3870,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 hint_id=hint_id,
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
+                repair_trace=repair_trace,
             )
 
             self.assertEqual(retry["exit_code"], 0)
+            self.assertEqual([item["request"]["harness_attempt_number"] for item in seen_requests], [1, 2])
+            self.assertEqual(seen_requests[0]["request"]["harness_repair_trace"], repair_trace)
+            self.assertNotIn("harness_repair_hint_id", seen_requests[0]["request"])
+            self.assertEqual(seen_requests[1]["request"]["harness_repair_hint_id"], hint_id)
+            self.assertEqual(seen_requests[1]["request"]["harness_retry_of"], hint_id)
+            self.assertEqual(seen_requests[0]["path"].name, "worker-a-request-attempt-1.json")
+            self.assertEqual(seen_requests[1]["path"].name, "worker-a-request-attempt-2.json")
             payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints where hint_id=?", (hint_id,))[0][0])
             self.assertEqual(payload["status"], "revalidated_passed")
             self.assertEqual([attempt["attempt"] for attempt in payload["attempts"]], [1, 2])

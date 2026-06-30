@@ -870,6 +870,9 @@ def run_batch_profile(
     acceptance_boundary = profile.get("acceptance_boundary")
     if acceptance_boundary is not None and not isinstance(acceptance_boundary, dict):
         raise SystemExit("batch profile field must be an object: acceptance_boundary")
+    attempt_evidence_policy = profile.get("attempt_evidence_policy")
+    if attempt_evidence_policy is not None and not isinstance(attempt_evidence_policy, dict):
+        raise SystemExit("batch profile field must be an object: attempt_evidence_policy")
     if profile.get("schema_version") != SCHEMA_VERSION:
         raise SystemExit(f"unsupported batch profile schema_version: {profile.get('schema_version')}")
     profile_id = profile_required_string(profile, "profile_id")
@@ -930,6 +933,7 @@ def run_batch_profile(
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         auto_retry=profile_bool(profile, "auto_retry", default=False),
         max_workers=profile_int(profile, "max_workers", default=1),
+        repair_trace=attempt_evidence_policy,
         command_runner=command_runner,
         repo_root=repo_root,
     )
@@ -969,6 +973,8 @@ def run_batch_profile(
     }
     if acceptance_boundary is not None:
         result["acceptance_boundary"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        result["attempt_evidence_policy"] = attempt_evidence_policy
     if route_metrics_artifact is not None:
         result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
     if before_after_exhibit_artifact is not None:
@@ -992,6 +998,7 @@ def run_batch_profile(
         primary_report_path=report_path,
         report_entrypoint="batch_profile_report",
         acceptance_boundary=acceptance_boundary,
+        attempt_evidence_policy=attempt_evidence_policy,
         report_artifacts=report_artifacts,
         repo_root=repo_root,
     )
@@ -1407,6 +1414,7 @@ def write_context_pack_and_agent_index(
     primary_report_path: Path,
     report_entrypoint: str,
     acceptance_boundary: dict[str, Any] | None = None,
+    attempt_evidence_policy: dict[str, Any] | None = None,
     report_artifacts: dict[str, dict[str, Any]] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
@@ -1523,6 +1531,8 @@ def write_context_pack_and_agent_index(
     }
     if acceptance_boundary is not None:
         context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        context_pack["attempt_evidence_policy"] = attempt_evidence_policy
     if report_artifacts:
         context_pack["report_artifacts"] = report_artifacts
     agents_by_worker_id = {
@@ -1551,6 +1561,8 @@ def write_context_pack_and_agent_index(
     }
     if report_artifacts:
         agent_index["reports"] = report_artifacts
+    if attempt_evidence_policy is not None:
+        agent_index["attempt_evidence_policy"] = attempt_evidence_policy
     context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
@@ -2031,6 +2043,7 @@ def run_plan(
     execute_merge: bool = False,
     auto_retry: bool = False,
     max_workers: int = 1,
+    repair_trace: dict[str, Any] | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -2067,6 +2080,7 @@ def run_plan(
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
             opencode_preflight_report=opencode_preflight_report,
+            repair_trace=repair_trace,
             command_runner=command_runner,
             repo_root=repo_root,
         )
@@ -2100,6 +2114,7 @@ def run_plan(
                     opencode_variant=opencode_variant,
                     opencode_skip_permissions=opencode_skip_permissions,
                     opencode_preflight_report=opencode_preflight_report,
+                    repair_trace=repair_trace,
                     command_runner=command_runner,
                     repo_root=repo_root,
                     keep_open_on_failure=True,
@@ -2468,6 +2483,29 @@ def record_artifact(
     return {"path": artifact_rel, "sha256": artifact_sha}
 
 
+def worker_attempt_request(
+    request: dict[str, Any],
+    *,
+    attempt_number: int,
+    retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attempt_request = dict(request)
+    attempt_request["harness_attempt"] = {
+        "attempt": attempt_number,
+        "repair_round": max(0, attempt_number - 1),
+        "repair_round_cap": REPAIR_ROUND_CAP,
+    }
+    attempt_request["harness_attempt_number"] = attempt_number
+    if retry_of:
+        attempt_request["harness_retry_of"] = retry_of
+        attempt_request["harness_repair_hint_id"] = retry_of
+        attempt_request["harness_attempt"]["retry_of"] = retry_of
+    if repair_trace is not None:
+        attempt_request["harness_repair_trace"] = repair_trace
+    return attempt_request
+
+
 def run_worker(
     *,
     db_path: Path,
@@ -2484,6 +2522,7 @@ def run_worker(
     repo_root: Path = REPO_ROOT,
     attempt_number: int = 1,
     retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     started = time.monotonic()
@@ -2509,6 +2548,14 @@ def run_worker(
     logs_dir.mkdir(parents=True, exist_ok=True)
     report_dir = worker_out_root / "harness"
     report_dir.mkdir(parents=True, exist_ok=True)
+    attempt_request = worker_attempt_request(
+        request,
+        attempt_number=attempt_number,
+        retry_of=retry_of,
+        repair_trace=repair_trace,
+    )
+    attempt_request_path = report_dir / f"{worker_id}-request-attempt-{attempt_number}.json"
+    attempt_request_path.write_text(json.dumps(attempt_request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     rollback_evidence = None
     if summary_path.exists():
         if retry_of:
@@ -2528,7 +2575,7 @@ def run_worker(
         "--phase",
         "migrate",
         "--input",
-        repo_relative(request_path, repo_root=repo_root),
+        repo_relative(attempt_request_path, repo_root=repo_root),
     ]
     preflight_binding = None
     if mode == "opencode":
@@ -2549,7 +2596,7 @@ def run_worker(
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
             worker_command=worker_command,
-            request_path=request_path,
+            request_path=attempt_request_path,
             summary_path=summary_path,
             handoff_contract_path=handoff_contract_path,
             repo_root=repo_root,
@@ -2559,7 +2606,8 @@ def run_worker(
             run_id=run_id,
             worker_id=worker_id,
             attempt_number=attempt_number,
-            request_path=request_path,
+            request_path=attempt_request_path,
+            assignment_request_path=request_path,
             summary_path=summary_path,
             contract_path=handoff_contract_path,
             worker_command=worker_command,
@@ -2669,6 +2717,7 @@ def run_worker(
 
     recorded: dict[str, Any] | None = None
     summary_status = "missing-summary"
+    summary_payload: dict[str, Any] | None = None
     if summary_path.exists():
         recorded = record_worker_summary(
             db_path=db_path,
@@ -2677,8 +2726,8 @@ def run_worker(
             summary_path=summary_path,
             repo_root=repo_root,
         )
-        summary = load_json(summary_path)
-        summary_status = str(summary.get("final_gate", {}).get("status", "failed"))
+        summary_payload = load_json(summary_path)
+        summary_status = str(summary_payload.get("final_gate", {}).get("status", "failed"))
 
     effective_exit_code = int(completed.returncode)
     if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
@@ -2687,11 +2736,15 @@ def run_worker(
     report_path = report_dir / "run-worker-report.json"
     repair_hint = None
     if effective_exit_code != 0:
-        root_cause_key = synthetic_failure_root_cause or worker_failure_root_cause(
+        root_cause_key = (
+            synthetic_failure_root_cause
+            or worker_summary_root_cause(summary_payload, summary_path=summary_path, repo_root=repo_root)
+            or worker_failure_root_cause(
             process_returncode=int(completed.returncode),
             recorded=recorded is not None,
             summary_status=summary_status,
             opencode_contract_verification=opencode_contract_verification,
+            )
         )
         diagnostics = worker_repair_diagnostics(
             stdout_path=stdout_path,
@@ -2729,7 +2782,8 @@ def run_worker(
         "attempt": attempt_number,
         "mode": mode,
         "runner_kind": runner_kind,
-        "request_path": repo_relative(request_path, repo_root=repo_root),
+        "request_path": repo_relative(attempt_request_path, repo_root=repo_root),
+        "assignment_request_path": repo_relative(request_path, repo_root=repo_root),
         "summary_path": repo_relative(summary_path, repo_root=repo_root),
         "summary_status": summary_status,
         "recorded": recorded is not None,
@@ -2858,6 +2912,7 @@ def retry_worker(
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
     keep_open_on_failure: bool = False,
+    repair_trace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     with closing(connect(db_path)) as connection:
@@ -2890,6 +2945,7 @@ def retry_worker(
         repo_root=repo_root,
         attempt_number=attempt_number,
         retry_of=str(hint["hint_id"]),
+        repair_trace=repair_trace,
     )
     hint_status = (
         "revalidated_passed"
@@ -3191,6 +3247,37 @@ def worker_failure_root_cause(
     if summary_status != "passed":
         return "final_gate_failed"
     return "worker_failed"
+
+
+def worker_summary_root_cause(
+    summary: dict[str, Any] | None,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> str | None:
+    if not isinstance(summary, dict):
+        return None
+    workflow_ref = summary.get("workflow_metrics")
+    if not isinstance(workflow_ref, dict) or not isinstance(workflow_ref.get("path"), str):
+        return None
+    metrics_path = resolve_summary_artifact(str(workflow_ref["path"]), summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None or not metrics_path.exists():
+        return None
+    try:
+        metrics = load_json(metrics_path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    root_cause_counts = metrics.get("root_cause_counts")
+    if isinstance(root_cause_counts, dict):
+        for key, count in root_cause_counts.items():
+            if isinstance(key, str) and key and isinstance(count, int) and count > 0:
+                return key
+    per_unit_statuses = metrics.get("per_unit_statuses")
+    if isinstance(per_unit_statuses, list):
+        for unit in per_unit_statuses:
+            if isinstance(unit, dict) and isinstance(unit.get("root_cause_key"), str) and unit["root_cause_key"]:
+                return str(unit["root_cause_key"])
+    return None
 
 
 def worker_repair_diagnostics(
@@ -3633,6 +3720,10 @@ def annotate_retry_worker_metrics(
     }
 
     unit = units[0]
+    root_cause_key = hint_payload.get("root_cause_key")
+    if isinstance(root_cause_key, str) and root_cause_key:
+        unit["root_cause_key"] = root_cause_key
+        metrics["root_cause_counts"] = {root_cause_key: 1}
     unit["repair_rounds"] = repair_rounds
     unit["auto_recovered"] = repair_history["verified"] and result.get("summary_status") == "passed"
     unit["repair_history"] = repair_history
@@ -4131,6 +4222,7 @@ def write_opencode_handoff_contract(
     worker_command: list[str],
     opencode_argv: list[str],
     repo_root: Path,
+    assignment_request_path: Path | None = None,
 ) -> dict[str, str]:
     if not opencode_argv:
         raise SystemExit("opencode argv must not be empty")
@@ -4150,6 +4242,8 @@ def write_opencode_handoff_contract(
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
     }
+    if assignment_request_path is not None:
+        contract["assignment_request_path"] = repo_relative(assignment_request_path, repo_root=repo_root)
     contract_path.parent.mkdir(parents=True, exist_ok=True)
     contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}

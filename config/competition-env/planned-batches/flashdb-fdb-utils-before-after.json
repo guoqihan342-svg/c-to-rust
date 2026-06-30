@@ -26,6 +26,25 @@
   "emit_route_governance_metrics_report": true,
   "emit_before_after_exhibit_report": true,
   "require_repair_trace": true,
+  "attempt_evidence_policy": {
+    "mode": "baseline_repair_gate",
+    "translation_before_after": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+      "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17"
+    },
+    "baseline_attempt": {
+      "attempt_number": 1,
+      "expected_final_gate": "failed",
+      "root_cause_key": "unsafe_baseline_requires_repair"
+    },
+    "accepted_attempt": {
+      "min_attempt_number": 2,
+      "source": "accepted_safe_evidence",
+      "reuse_accepted_evidence": true,
+      "accepted_evidence_root": "validation/evidence",
+      "require_hint_id": true
+    }
+  },
   "acceptance_boundary": {
     "semantic_claim_source": "accepted_evidence_binding",
     "translation_before_after": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
