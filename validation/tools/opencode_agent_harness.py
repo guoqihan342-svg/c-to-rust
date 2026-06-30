@@ -798,6 +798,8 @@ def plan_source_file(
         "plan_path": repo_relative(plan_path, repo_root=repo_root),
         "units": units,
     }
+    if require_source_commit:
+        plan["require_source_commit"] = require_source_commit
     if source_repository:
         plan["source_repository"] = source_repository
     if source_branch:
@@ -984,9 +986,22 @@ def run_batch_profile(
         run_result=run_result,
         primary_report_path=report_path,
         report_entrypoint="batch_profile_report",
+        acceptance_boundary=acceptance_boundary,
         repo_root=repo_root,
     )
     result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="run-batch-profile",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=acceptance_boundary,
+        route_metrics_artifact=route_metrics_artifact,
+        before_after_exhibit_artifact=before_after_exhibit_artifact,
+        repo_root=repo_root,
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with closing(connect(db_path)) as connection:
@@ -1159,9 +1174,20 @@ def evaluate(
         run_result=run_result,
         primary_report_path=report_path,
         report_entrypoint="evaluate_report",
+        acceptance_boundary=None,
         repo_root=repo_root,
     )
     result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="evaluate",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=None,
+        repo_root=repo_root,
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with closing(connect(db_path)) as connection:
@@ -1182,6 +1208,136 @@ def evaluate(
     return result
 
 
+def build_judge_summary(
+    *,
+    entrypoint: str,
+    proof_class: str,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    context_refs: dict[str, dict[str, str]],
+    acceptance_boundary: dict[str, Any] | None = None,
+    route_metrics_artifact: dict[str, Any] | None = None,
+    before_after_exhibit_artifact: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    merge_execution = (
+        run_result.get("merge_execution")
+        if isinstance(run_result.get("merge_execution"), dict)
+        else {}
+    )
+    final_summary = load_merge_summary(merge_execution, repo_root=repo_root)
+    slices = final_summary.get("slices") if isinstance(final_summary.get("slices"), dict) else {}
+    final_gate = final_summary.get("final_gate") if isinstance(final_summary.get("final_gate"), dict) else {}
+    final_gate_status = merge_execution.get("final_gate_status") or final_gate.get("status")
+    workers = [
+        {
+            "worker_id": worker.get("worker_id"),
+            "slice_id": worker.get("slice_id"),
+            "function": worker.get("function"),
+            "summary_status": worker.get("summary_status"),
+            "exit_code": int(worker.get("exit_code", 1)),
+            "recorded": bool(worker.get("recorded")),
+            "final_decision": worker.get("final_decision"),
+        }
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict)
+    ]
+    semantic_claim_source = "final_gate_and_worker_summaries"
+    generated_draft_semantic_pass = None
+    if isinstance(acceptance_boundary, dict):
+        semantic_claim_source = str(acceptance_boundary.get("semantic_claim_source", semantic_claim_source))
+        if "generated_draft_semantic_pass" in acceptance_boundary:
+            generated_draft_semantic_pass = bool(acceptance_boundary["generated_draft_semantic_pass"])
+
+    core_translation_quality: dict[str, Any] = {
+        "final_gate_status": final_gate_status,
+        "semantic_claim_source": semantic_claim_source,
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "semantic_pass_count": int(slices.get("semantic_pass", 0) or 0),
+        "compiled_count": int(slices.get("compiled", 0) or 0),
+        "failed_count": int(slices.get("failed", 0) or 0),
+        "workers": workers,
+    }
+    if route_metrics_artifact is not None:
+        core_translation_quality["route_governance_metrics"] = route_metrics_artifact.get("binding", {})
+    if before_after_exhibit_artifact is not None:
+        binding = before_after_exhibit_artifact.get("binding", {})
+        payload = before_after_exhibit_artifact.get("payload", {})
+        core_translation_quality["before_after_exhibit"] = binding
+        if isinstance(payload, dict):
+            translation_before_after = payload.get("translation_before_after")
+            if isinstance(translation_before_after, dict):
+                core_translation_quality["translation_before_after"] = translation_before_after
+            unsafe_reduction = summarize_before_after_unsafe_reduction(payload)
+            if unsafe_reduction is not None:
+                core_translation_quality["unsafe_reduction"] = unsafe_reduction
+
+    return {
+        "report_kind": "judge-summary",
+        "entrypoint": entrypoint,
+        "proof_class": proof_class,
+        "mode": mode,
+        "harness_architecture": {
+            "entrypoint": entrypoint,
+            "pipeline": ["init-run", "plan-source-file", "run-plan", "merge", "report"],
+            "graph_runtime": graph.get("runtime"),
+            "graph_nodes": graph.get("nodes", []),
+            "parallelism": run_result.get("parallelism"),
+            "auto_retry": run_result.get("auto_retry"),
+            "retry_policy": graph.get("retry_policy"),
+            "context_pack": context_refs.get("context_pack"),
+            "agent_index": context_refs.get("agent_index"),
+            "worker_count": len(plan.get("units", [])) if isinstance(plan.get("units"), list) else 0,
+        },
+        "core_translation_quality": core_translation_quality,
+        "claim_boundary": (
+            "This summary is an index over verified on-disk reports; semantic acceptance remains owned by "
+            "competition-run-summary.json, workflow metrics, before/after evidence, and validators."
+        ),
+    }
+
+
+def load_merge_summary(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    return load_json(summary_path)
+
+
+def summarize_before_after_unsafe_reduction(payload: dict[str, Any]) -> dict[str, Any] | None:
+    units = payload.get("units")
+    if not isinstance(units, list):
+        return None
+    baseline_total = 0
+    current_total = 0
+    reduced_by_total = 0
+    measured = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        unsafe_reduction = unit.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            continue
+        baseline_total += int(unsafe_reduction.get("baseline_total_unsafe", 0) or 0)
+        current_total += int(unsafe_reduction.get("current_total_unsafe", 0) or 0)
+        reduced_by_total += int(unsafe_reduction.get("reduced_by", 0) or 0)
+        measured += 1
+    if measured == 0:
+        return None
+    return {
+        "status": "measured",
+        "unit_count": measured,
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": reduced_by_total,
+    }
+
+
 def write_context_pack_and_agent_index(
     *,
     db_path: Path,
@@ -1194,6 +1350,7 @@ def write_context_pack_and_agent_index(
     run_result: dict[str, Any],
     primary_report_path: Path,
     report_entrypoint: str,
+    acceptance_boundary: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     db_path = repo_path(db_path, repo_root=repo_root)
@@ -1228,6 +1385,10 @@ def write_context_pack_and_agent_index(
             "exit_code": int(worker_result.get("exit_code", 1)),
             "recorded": bool(worker_result.get("recorded")),
         }
+        if isinstance(worker_result.get("attempts"), list):
+            worker_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            worker_entry["final_decision"] = worker_result["final_decision"]
         agent_entry = {
             "worker_id": worker_id,
             "role": "slice-worker",
@@ -1243,6 +1404,10 @@ def write_context_pack_and_agent_index(
             "exit_code": worker_entry["exit_code"],
             "recorded": worker_entry["recorded"],
         }
+        if isinstance(worker_result.get("attempts"), list):
+            agent_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            agent_entry["final_decision"] = worker_result["final_decision"]
         if isinstance(worker_result.get("auto_retry"), dict):
             worker_entry["auto_retry"] = worker_result["auto_retry"]
             agent_entry["auto_retry"] = worker_result["auto_retry"]
@@ -1267,6 +1432,7 @@ def write_context_pack_and_agent_index(
             "repo_root": plan.get("source_repo_root"),
             "source_file": plan.get("source_file"),
             "source_commit": plan.get("source_commit"),
+            "require_source_commit": plan.get("require_source_commit"),
             "source_repository": plan.get("source_repository"),
             "source_branch": plan.get("source_branch"),
             "source_sha256": plan.get("source_sha256"),
@@ -1291,6 +1457,13 @@ def write_context_pack_and_agent_index(
             "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
         },
     }
+    if acceptance_boundary is not None:
+        context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
+    agents_by_worker_id = {
+        str(agent["worker_id"]): agent
+        for agent in agents
+        if isinstance(agent, dict) and agent.get("worker_id")
+    }
     agent_index = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "agent-index",
@@ -1303,6 +1476,7 @@ def write_context_pack_and_agent_index(
             "worker_count": len(workers),
         },
         "agents": agents,
+        "agents_by_worker_id": agents_by_worker_id,
         "merge": {
             "status": run_result.get("status"),
             "merge_plan": run_result.get("merge_plan"),
@@ -1733,6 +1907,36 @@ def profile_int(profile: dict[str, Any], field: str, *, default: int | None = No
     return value
 
 
+def run_plan_attempt_from_worker_result(result: dict[str, Any]) -> dict[str, Any]:
+    attempt = repair_attempt_from_result(result)
+    repair_hint = result.get("repair_hint")
+    if isinstance(repair_hint, dict):
+        if isinstance(repair_hint.get("hint_id"), str):
+            attempt["hint_id"] = repair_hint["hint_id"]
+        attempt["hint_status"] = "opened"
+    if isinstance(result.get("hint_id"), str):
+        attempt["hint_id"] = result["hint_id"]
+    if isinstance(result.get("hint_status"), str):
+        attempt["hint_status"] = result["hint_status"]
+    elif int(result.get("exit_code", 1)) == 0 and result.get("summary_status") == "passed":
+        attempt["hint_status"] = "passed"
+    for field in ("repair_round_cap", "repair_rounds", "retry_limit"):
+        if field in result:
+            attempt[field] = result[field]
+    return attempt
+
+
+def run_plan_worker_final_decision(worker_result: dict[str, Any]) -> dict[str, str]:
+    if int(worker_result.get("exit_code", 1)) == 0 and worker_result.get("summary_status") == "passed":
+        return {"status": "accepted", "reason": "worker_summary_passed"}
+    auto_retry = worker_result.get("auto_retry")
+    if isinstance(auto_retry, dict) and auto_retry.get("final_hint_status") == "retry_limit_exceeded":
+        return {"status": "refused", "reason": "retry_limit_exceeded"}
+    if not worker_result.get("recorded"):
+        return {"status": "refused", "reason": "worker_summary_missing"}
+    return {"status": "refused", "reason": "worker_summary_failed"}
+
+
 def run_plan(
     *,
     db_path: Path,
@@ -1799,6 +2003,7 @@ def run_plan(
             "report_path": result.get("report_path"),
             "recorded": bool(result.get("recorded")),
         }
+        attempt_timeline = [run_plan_attempt_from_worker_result(result)]
         retry_results = []
         if auto_retry and worker_result["exit_code"] != 0:
             hint_id = None
@@ -1827,12 +2032,15 @@ def run_plan(
                     "summary_status": retry_result.get("summary_status"),
                     "hint_id": retry_result.get("hint_id", hint_id),
                     "hint_status": retry_result.get("hint_status"),
+                    "summary_path": retry_result.get("summary_path"),
                     "report_path": retry_result.get("report_path"),
                 }
-                for field in ("repair_round_cap", "repair_rounds", "retry_limit"):
+                for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
                     if field in retry_result:
                         retry_entry[field] = retry_result[field]
                 retry_results.append(retry_entry)
+                if retry_result.get("status") != "retry_limit_exceeded":
+                    attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
                 if retry_result.get("hint_id"):
                     hint_id = str(retry_result["hint_id"])
                 if int(retry_result.get("exit_code", 1)) == 0:
@@ -1854,6 +2062,8 @@ def run_plan(
                 "attempts": retry_results,
                 "final_hint_status": retry_results[-1].get("hint_status"),
             }
+        worker_result["attempts"] = attempt_timeline
+        worker_result["final_decision"] = run_plan_worker_final_decision(worker_result)
         return worker_result
 
     if effective_workers == 1:

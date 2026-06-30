@@ -584,6 +584,82 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_rows = fetch_rows(db_path, "select status from repair_hints")
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
+    def test_run_plan_report_preserves_retry_attempt_timeline_rollback_and_final_decision(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int repairable_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-retry-timeline",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-retry-timeline",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="timeline",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            worker_attempts = 0
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal worker_attempts
+                if "scripts/c2rust-migrator.py" in argv:
+                    worker_attempts += 1
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    if worker_attempts == 1:
+                        write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                    else:
+                        write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-retry-timeline", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-retry-timeline",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                execute_merge=True,
+                auto_retry=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            worker = result["workers"][0]
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(worker["final_decision"], {"status": "accepted", "reason": "worker_summary_passed"})
+            self.assertEqual([attempt["attempt"] for attempt in worker["attempts"]], [1, 2])
+            self.assertEqual([attempt["summary_status"] for attempt in worker["attempts"]], ["failed", "passed"])
+            self.assertEqual(worker["attempts"][0]["hint_status"], "opened")
+            self.assertEqual(worker["attempts"][1]["hint_status"], "revalidated_passed")
+            rollback = worker["attempts"][1]["rollback_evidence"]
+            self.assertRegex(rollback["sha256"], r"^[0-9a-f]{64}$")
+            self.assertTrue((REPO_ROOT / rollback["path"]).exists())
+            persisted = json.loads((out_root / "harness" / "run-plan-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(persisted["workers"][0]["attempts"], worker["attempts"])
+            self.assertEqual(persisted["workers"][0]["final_decision"], worker["final_decision"])
+
     def test_evaluate_context_pack_records_auto_retry_success(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -644,8 +720,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(worker["auto_retry"]["attempt_count"], 2)
             self.assertEqual(worker["auto_retry"]["final_hint_status"], "revalidated_passed")
             self.assertEqual([attempt["hint_status"] for attempt in worker["auto_retry"]["attempts"]], ["revalidated_failed", "revalidated_passed"])
+            self.assertEqual(worker["final_decision"], {"status": "accepted", "reason": "worker_summary_passed"})
+            self.assertEqual([attempt["summary_status"] for attempt in worker["attempts"]], ["failed", "failed", "passed"])
+            self.assertEqual([attempt["hint_status"] for attempt in worker["attempts"]], ["opened", "revalidated_failed", "revalidated_passed"])
             self.assertEqual(agent["status"], "passed")
             self.assertTrue(agent["recorded"])
+            self.assertEqual(agent["final_decision"], worker["final_decision"])
+            self.assertEqual(agent["attempts"], worker["attempts"])
             hint_rows = fetch_rows(Path(REPO_ROOT / result["db_path"]), "select status from repair_hints")
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
@@ -1091,8 +1172,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["primary_report"], result["report_path"])
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], result["report_path"])
             self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
+            self.assertEqual(context_pack["source"]["require_source_commit"], "abc123")
+            self.assertEqual(context_pack["acceptance_boundary"]["profile"], result["acceptance_boundary"])
             self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], [unit["worker_id"] for unit in result["plan"]["units"]])
             self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], [unit["worker_id"] for unit in result["plan"]["units"]])
+            self.assertEqual(sorted(agent_index["agents_by_worker_id"]), [unit["worker_id"] for unit in result["plan"]["units"]])
+            for unit in result["plan"]["units"]:
+                indexed_agent = agent_index["agents_by_worker_id"][unit["worker_id"]]
+                self.assertEqual(indexed_agent["assignment_path"], unit["assignment_path"])
+                self.assertEqual(indexed_agent["request_path"], unit["request_path"])
+                self.assertIn("summary_path", indexed_agent)
+                self.assertIn("report_path", indexed_agent)
             context_rows = fetch_rows(
                 Path(REPO_ROOT / result["db_path"]),
                 "select context_pack_id, artifact_path, artifact_sha256 from context_packs",
@@ -1245,6 +1335,22 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["run_plan"]["graph"]["runtime"], "opencode-harness-langgraph-inspired")
             self.assertEqual(len(worker_run_ids), 2)
             self.assertTrue((out_root / "summary" / "competition-run-summary.json").exists())
+            judge_summary = result["judge_summary"]
+            self.assertEqual(judge_summary["harness_architecture"]["entrypoint"], "evaluate")
+            self.assertEqual(judge_summary["harness_architecture"]["graph_runtime"], "opencode-harness-langgraph-inspired")
+            self.assertEqual(judge_summary["harness_architecture"]["parallelism"], {"max_workers": 2, "effective_workers": 2})
+            self.assertEqual(judge_summary["harness_architecture"]["context_pack"]["path"], result["context_pack"]["path"])
+            self.assertEqual(judge_summary["harness_architecture"]["agent_index"]["path"], result["agent_index"]["path"])
+            self.assertEqual(judge_summary["core_translation_quality"]["final_gate_status"], "passed")
+            self.assertEqual(judge_summary["core_translation_quality"]["semantic_pass_count"], 2)
+            self.assertEqual(
+                [worker["summary_status"] for worker in judge_summary["core_translation_quality"]["workers"]],
+                ["passed", "passed"],
+            )
+            self.assertEqual(
+                [worker["final_decision"]["status"] for worker in judge_summary["core_translation_quality"]["workers"]],
+                ["accepted", "accepted"],
+            )
             context_pack_path = REPO_ROOT / result["context_pack"]["path"]
             agent_index_path = REPO_ROOT / result["agent_index"]["path"]
             context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
@@ -1259,6 +1365,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             planned_worker_ids = [unit["worker_id"] for unit in result["plan"]["units"]]
             self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], planned_worker_ids)
             self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], planned_worker_ids)
+            self.assertEqual(sorted(agent_index["agents_by_worker_id"]), planned_worker_ids)
+            for unit in result["plan"]["units"]:
+                indexed_agent = agent_index["agents_by_worker_id"][unit["worker_id"]]
+                self.assertEqual(indexed_agent["assignment_path"], unit["assignment_path"])
+                self.assertEqual(indexed_agent["request_path"], unit["request_path"])
+                self.assertIn("summary_path", indexed_agent)
+                self.assertIn("report_path", indexed_agent)
             db_path = Path(REPO_ROOT / result["db_path"])
             context_rows = fetch_rows(
                 db_path,
@@ -1535,6 +1648,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(exhibit["units"][0]["unsafe_reduction"]["reduced_by"], 3)
             self.assertIn("run-batch-profile", exhibit["reproduction"]["run_command"])
             self.assertIn("validate_competition_run_summary.py", exhibit["reproduction"]["verify_command"])
+            judge_summary = result["judge_summary"]
+            self.assertEqual(judge_summary["harness_architecture"]["entrypoint"], "run-batch-profile")
+            self.assertEqual(judge_summary["harness_architecture"]["context_pack"]["path"], result["context_pack"]["path"])
+            self.assertEqual(judge_summary["core_translation_quality"]["final_gate_status"], "passed")
+            self.assertEqual(judge_summary["core_translation_quality"]["semantic_claim_source"], "accepted_evidence_binding")
+            self.assertFalse(judge_summary["core_translation_quality"]["generated_draft_semantic_pass"])
+            self.assertEqual(judge_summary["core_translation_quality"]["before_after_exhibit"]["status"], "passed")
+            self.assertEqual(judge_summary["core_translation_quality"]["before_after_exhibit"]["unit_count"], 1)
+            self.assertEqual(judge_summary["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)
+            persisted_report = json.loads((out_root / "harness" / "batch-profile-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(persisted_report["judge_summary"], judge_summary)
             artifact_rows = fetch_rows(
                 result["db_path"],
                 "select kind, repo_rel_path, semantic_role from artifacts where kind='before-after-exhibit-report'",
