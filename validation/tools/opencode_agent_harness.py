@@ -14,6 +14,7 @@ from contextlib import closing
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -701,6 +702,14 @@ def run_worker(
             stderr_path=stderr_path,
             repo_root=repo_root,
         )
+    opencode_contract_verification = None
+    if opencode_session_evidence is not None:
+        opencode_contract_verification = verify_opencode_contract_execution(
+            session_evidence=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+            worker_command=worker_command,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
 
     recorded: dict[str, Any] | None = None
     summary_status = "missing-summary"
@@ -731,6 +740,7 @@ def run_worker(
                 process_returncode=int(completed.returncode),
                 recorded=recorded is not None,
                 summary_status=summary_status,
+                opencode_contract_verification=opencode_contract_verification,
             ),
             summary_status=summary_status,
             process_returncode=int(completed.returncode),
@@ -745,6 +755,7 @@ def run_worker(
             rollback_evidence=rollback_evidence,
             handoff_contract=handoff_contract,
             opencode_session_evidence=opencode_session_evidence,
+            opencode_contract_verification=opencode_contract_verification,
         )
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -769,6 +780,8 @@ def run_worker(
         report["handoff_contract"] = handoff_contract
     if opencode_session_evidence is not None:
         report["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        report["opencode_contract_verification"] = opencode_contract_verification
     if retry_of:
         report["retry_of"] = retry_of
     if rollback_evidence is not None:
@@ -830,6 +843,8 @@ def run_worker(
                 payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
                 repo_root=repo_root,
             )
+        if opencode_contract_verification is not None:
+            event_payload["opencode_contract_verification"] = opencode_contract_verification
         record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
         if repair_hint is not None:
             record_repair_hint(connection, hint=repair_hint)
@@ -900,9 +915,21 @@ def retry_worker(
     return retry_result
 
 
-def worker_failure_root_cause(*, process_returncode: int, recorded: bool, summary_status: str) -> str:
+def worker_failure_root_cause(
+    *,
+    process_returncode: int,
+    recorded: bool,
+    summary_status: str,
+    opencode_contract_verification: dict[str, Any] | None = None,
+) -> str:
     if process_returncode != 0:
         return "worker_process_failed"
+    if (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") == "not-executed"
+        and not recorded
+    ):
+        return "opencode_contract_not_executed"
     if not recorded:
         return "missing_summary"
     if summary_status != "passed":
@@ -930,6 +957,7 @@ def worker_repair_hint_payload(
     rollback_evidence: dict[str, Any] | None = None,
     handoff_contract: dict[str, Any] | None = None,
     opencode_session_evidence: dict[str, Any] | None = None,
+    opencode_contract_verification: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     target_id = str(request.get("target_id", "unknown"))
     slice_id = str(request.get("slice_id", "unknown"))
@@ -988,6 +1016,8 @@ def worker_repair_hint_payload(
         hint["handoff_contract"] = handoff_contract
     if opencode_session_evidence is not None:
         hint["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        hint["opencode_contract_verification"] = opencode_contract_verification
     return hint
 
 
@@ -1212,9 +1242,12 @@ def build_opencode_run_argv(
     command_line = subprocess.list2cmdline(worker_command)
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
+        "Use the shell/bash tool to run exactly the Command line string below.",
+        "Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.",
         "Do not inspect an existing summary before running the command.",
         "Delete the expected summary file if it already exists, then execute the command exactly once.",
         "Run the repo-local deterministic command below, then stop.",
+        "Do not explore files, spawn subagents, or infer a different slice before executing the command.",
         "Do not run substitute diagnostics instead of the command.",
         "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
         f"Command: {json.dumps(worker_command)}",
@@ -1230,8 +1263,9 @@ def build_opencode_run_argv(
             ]
         )
     prompt = "\n".join(prompt_lines)
+    resolved_opencode_command = resolve_subprocess_command(opencode_command)
     argv = [
-        opencode_command,
+        resolved_opencode_command,
         "run",
         "--dir",
         str(repo_root),
@@ -1248,6 +1282,90 @@ def build_opencode_run_argv(
         argv.append("--dangerously-skip-permissions")
     argv.append(prompt)
     return argv
+
+
+def resolve_subprocess_command(command: str) -> str:
+    if not command:
+        raise SystemExit("opencode command must not be empty")
+    if "/" in command or "\\" in command or Path(command).is_absolute():
+        return command
+    return shutil.which(command) or command
+
+
+def verify_opencode_contract_execution(
+    *,
+    session_evidence: dict[str, Any],
+    worker_command: list[str],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_worker_command_line = subprocess.list2cmdline(worker_command)
+    executed_shell_commands = extract_opencode_shell_commands(session_evidence)
+    normalized_expected = normalize_command_for_contract(expected_worker_command_line)
+    exact_worker_command_seen = any(
+        normalize_command_for_contract(command) == normalized_expected for command in executed_shell_commands
+    )
+    status = "not-observed"
+    if executed_shell_commands:
+        status = "executed" if exact_worker_command_seen else "not-executed"
+    return {
+        "expected_worker_command_line": expected_worker_command_line,
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
+        "executed_shell_command_count": len(executed_shell_commands),
+        "executed_shell_commands": executed_shell_commands[:20],
+        "worker_command_seen": exact_worker_command_seen,
+        "summary_exists": summary_path.exists(),
+        "status": status,
+    }
+
+
+def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:
+    events = opencode_session_events(session_evidence)
+    commands: list[str] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower()
+        if tool not in {"bash", "shell", "cmd", "powershell"}:
+            continue
+        state = part.get("state")
+        if not isinstance(state, dict):
+            continue
+        tool_input = state.get("input")
+        if not isinstance(tool_input, dict):
+            continue
+        command = tool_input.get("command") or tool_input.get("cmd")
+        if isinstance(command, str) and command.strip():
+            commands.append(command.strip())
+    return commands
+
+
+def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
+    events = session_evidence.get("session_events")
+    if isinstance(events, list):
+        return events
+    session = session_evidence.get("session")
+    if isinstance(session, list):
+        return session
+    if isinstance(session, dict):
+        if "part" in session or "type" in session:
+            return [session]
+        events = session.get("events")
+        if isinstance(events, list):
+            return events
+    return []
+
+
+def normalize_command_for_contract(command: str) -> str:
+    return " ".join(command.strip().split())
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def write_opencode_handoff_contract(
@@ -1274,6 +1392,7 @@ def write_opencode_handoff_contract(
         "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
         "worker_command": worker_command,
         "worker_command_line": subprocess.list2cmdline(worker_command),
+        "worker_command_sha256": sha256_text(subprocess.list2cmdline(worker_command)),
         "opencode_argv": opencode_argv,
         "opencode_command_line": subprocess.list2cmdline(opencode_argv),
         "prompt": str(opencode_argv[-1]),
