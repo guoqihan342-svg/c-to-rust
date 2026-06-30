@@ -833,8 +833,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
-            self.assertEqual(result["summary_status"], "missing-summary")
+            self.assertEqual(result["summary_status"], "blocked")
+            self.assertTrue(result["recorded"])
+            self.assertEqual(result["repair_hint"]["root_cause_key"], "opencode_contract_not_executed")
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["opencode_contract_verification"]["status"], "not-observed")
             contract_binding = report["handoff_contract"]
             contract_path = REPO_ROOT / contract_binding["path"]
             self.assertTrue(contract_path.exists())
@@ -859,6 +862,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertIs(session["parsed"], False)
             self.assertEqual(session["process_returncode"], 0)
             self.assertIn("opencode did not write summary", session["raw_output"])
+            summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "blocked")
             hint_payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints")[0][0])
             self.assertEqual(hint_payload["handoff_contract"], contract_binding)
             self.assertEqual(hint_payload["opencode_session_evidence"], session_binding)
@@ -996,6 +1002,96 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(metrics["per_unit_statuses"][0]["root_cause_key"], "opencode_contract_not_executed")
             self.assertEqual(metrics["per_unit_statuses"][0]["opencode_contract_verification"]["status"], "not-executed")
 
+    def test_opencode_contract_failure_overrides_passing_summary(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            request_path = out_root / "harness" / "assignments" / "worker-a-request.json"
+            expected_command = subprocess.list2cmdline(
+                [
+                    sys.executable,
+                    "scripts/c2rust-migrator.py",
+                    "--phase",
+                    "migrate",
+                    "--input",
+                    repo_rel(request_path),
+                ]
+            )
+            wrong_command = "python -m validation.tools.opencode_agent_harness init-run --run-id wrong"
+            stdout = "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "tool_use",
+                            "part": {
+                                "tool": "bash",
+                                "state": {"input": {"command": wrong_command}, "status": "completed"},
+                            },
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "type": "tool_use",
+                            "part": {
+                                "tool": "bash",
+                                "state": {"input": {"command": expected_command}, "status": "completed"},
+                            },
+                        }
+                    ),
+                ]
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-test", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["summary_status"], "blocked")
+            self.assertEqual(result["repair_hint"]["root_cause_key"], "opencode_contract_not_executed")
+            summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "blocked")
+            self.assertEqual(summary["slices"]["semantic_pass"], 0)
+            self.assertEqual(summary["slices"]["blocked"], 1)
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["opencode_contract_verification"]["status"], "not-executed")
+            rejected = report["rejected_summary_evidence"]
+            rejected_path = REPO_ROOT / rejected["path"]
+            self.assertTrue(rejected_path.exists())
+            rejected_payload = json.loads(rejected_path.read_text(encoding="utf-8"))
+            self.assertEqual(rejected_payload["action"], "rejected_summary_due_to_opencode_contract")
+            self.assertEqual(rejected_payload["rejected_summary"]["path"], repo_rel(summary_path))
+            hint_payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints")[0][0])
+            self.assertEqual(hint_payload["rejected_summary_evidence"], rejected)
+
     def test_opencode_session_evidence_parses_json_lines_stdout(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -1048,12 +1144,49 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
         prompt = argv[-1]
         self.assertIn("Use the shell/bash tool to run exactly the Command line string below.", prompt)
+        self.assertIn("The first shell/bash/powershell/cmd tool call must be exactly the Command line string.", prompt)
         self.assertIn("Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.", prompt)
         self.assertIn("Do not inspect an existing summary before running the command.", prompt)
         self.assertIn("Delete the expected summary file if it already exists, then execute the command exactly once.", prompt)
         self.assertIn("Do not explore files, spawn subagents, or infer a different slice before executing the command.", prompt)
         self.assertIn("Do not run substitute diagnostics instead of the command.", prompt)
         self.assertIn("scripts/c2rust-migrator.py", prompt)
+
+    def test_opencode_contract_requires_first_shell_command_to_match_worker_command(self) -> None:
+        worker_command = [
+            sys.executable,
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/harness/assignments/worker-a-request.json",
+        ]
+        expected_command = subprocess.list2cmdline(worker_command)
+        wrong_command = "python -m validation.tools.opencode_agent_harness init-run --run-id wrong"
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": wrong_command}}},
+                },
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": expected_command}}},
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertEqual(verification["first_shell_command"], wrong_command)
+        self.assertFalse(verification["first_shell_command_matches_worker_command"])
 
     def test_opencode_worker_argv_resolves_path_command_before_launch(self) -> None:
         with tempfile.TemporaryDirectory(prefix="opencode-command-shim-") as tmp:

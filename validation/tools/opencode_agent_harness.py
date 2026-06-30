@@ -877,7 +877,40 @@ def run_worker(
         )
 
     synthetic_failure_root_cause = None
-    if not summary_path.exists():
+    rejected_summary_evidence = None
+    opencode_contract_failed = (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") != "executed"
+        and int(completed.returncode) == 0
+    )
+    if opencode_contract_failed:
+        synthetic_failure_root_cause = "opencode_contract_not_executed"
+        if summary_path.exists():
+            rejected_summary_evidence = write_rejected_worker_summary_evidence(
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+        write_blocked_worker_summary(
+            run_id=run_id,
+            proof_class=run_proof_class(db_path, run_id),
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=synthetic_failure_root_cause,
+            process_returncode=int(completed.returncode),
+            exit_code=1,
+            elapsed_seconds=int(time.monotonic() - started),
+            summary_path=summary_path,
+            metrics_path=summary_path.parent / "workflow-metrics.json",
+            opencode_contract_verification=opencode_contract_verification,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            repo_root=repo_root,
+        )
+    elif not summary_path.exists():
         provisional_root_cause = worker_failure_root_cause(
             process_returncode=int(completed.returncode),
             recorded=False,
@@ -946,6 +979,7 @@ def run_worker(
             attempt_number=attempt_number,
             retry_of=retry_of,
             rollback_evidence=rollback_evidence,
+            rejected_summary_evidence=rejected_summary_evidence,
             handoff_contract=handoff_contract,
             opencode_session_evidence=opencode_session_evidence,
             opencode_contract_verification=opencode_contract_verification,
@@ -979,6 +1013,8 @@ def run_worker(
         report["retry_of"] = retry_of
     if rollback_evidence is not None:
         report["rollback_evidence"] = rollback_evidence
+    if rejected_summary_evidence is not None:
+        report["rejected_summary_evidence"] = rejected_summary_evidence
     if repair_hint is not None:
         report["repair_hint"] = {
             "hint_id": repair_hint["hint_id"],
@@ -1010,6 +1046,8 @@ def run_worker(
             event_payload["retry_of"] = retry_of
         if rollback_evidence is not None:
             event_payload["rollback_evidence"] = rollback_evidence
+        if rejected_summary_evidence is not None:
+            event_payload["rejected_summary_evidence"] = rejected_summary_evidence
         if handoff_contract is not None:
             event_payload["handoff_contract"] = handoff_contract
             record_artifact(
@@ -1148,6 +1186,7 @@ def worker_repair_hint_payload(
     attempt_number: int,
     retry_of: str | None = None,
     rollback_evidence: dict[str, Any] | None = None,
+    rejected_summary_evidence: dict[str, Any] | None = None,
     handoff_contract: dict[str, Any] | None = None,
     opencode_session_evidence: dict[str, Any] | None = None,
     opencode_contract_verification: dict[str, Any] | None = None,
@@ -1205,6 +1244,8 @@ def worker_repair_hint_payload(
         "retry_command": retry_command,
         "revalidate_gate": "competition-run-summary.final_gate.status == passed",
     }
+    if rejected_summary_evidence is not None:
+        hint["rejected_summary_evidence"] = rejected_summary_evidence
     if handoff_contract is not None:
         hint["handoff_contract"] = handoff_contract
     if opencode_session_evidence is not None:
@@ -1297,6 +1338,35 @@ def write_worker_rollback_evidence(
         "last_good": {
             "status": "not_available",
             "reason": "opencode harness has no accepted last-good worker summary for this failed retry",
+        },
+    }
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
+def write_rejected_worker_summary_evidence(
+    *,
+    run_id: str,
+    worker_id: str,
+    summary_path: Path,
+    report_dir: Path,
+    opencode_contract_verification: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    evidence_path = report_dir / "rejected-summary-opencode-contract.json"
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "action": "rejected_summary_due_to_opencode_contract",
+        "rejected_summary": {
+            "path": repo_relative(summary_path, repo_root=repo_root),
+            "sha256": sha256_file(summary_path),
+        },
+        "opencode_contract_verification": opencode_contract_verification,
+        "replacement": {
+            "status": "blocked",
+            "reason": "OpenCode did not execute the assigned worker command as the first shell command",
         },
     }
     evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1436,6 +1506,7 @@ def build_opencode_run_argv(
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
         "Use the shell/bash tool to run exactly the Command line string below.",
+        "The first shell/bash/powershell/cmd tool call must be exactly the Command line string.",
         "Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.",
         "Do not inspect an existing summary before running the command.",
         "Delete the expected summary file if it already exists, then execute the command exactly once.",
@@ -1498,15 +1569,21 @@ def verify_opencode_contract_execution(
     exact_worker_command_seen = any(
         normalize_command_for_contract(command) == normalized_expected for command in executed_shell_commands
     )
+    first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
+    first_shell_command_matches_worker_command = (
+        bool(first_shell_command) and normalize_command_for_contract(first_shell_command) == normalized_expected
+    )
     status = "not-observed"
     if executed_shell_commands:
-        status = "executed" if exact_worker_command_seen else "not-executed"
+        status = "executed" if first_shell_command_matches_worker_command else "not-executed"
     return {
         "expected_worker_command_line": expected_worker_command_line,
         "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
         "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
         "executed_shell_command_count": len(executed_shell_commands),
         "executed_shell_commands": executed_shell_commands[:20],
+        "first_shell_command": first_shell_command,
+        "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
         "worker_command_seen": exact_worker_command_seen,
         "summary_exists": summary_path.exists(),
         "status": status,
