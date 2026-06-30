@@ -11,8 +11,8 @@
       "source_span": "return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))"
     },
     {
-      "kind": "legacy_fallback_retired",
-      "reason": "legacy string translator fallback is retained only as diagnostic compatibility evidence when clang-lowered typed IR is unavailable; it no longer produces a generated candidate",
+      "kind": "legacy_direct_retired",
+      "reason": "legacy string translator direct artifact generation is retained only as diagnostic compatibility evidence; it no longer produces a generated candidate",
       "source_span": null
     }
   ],

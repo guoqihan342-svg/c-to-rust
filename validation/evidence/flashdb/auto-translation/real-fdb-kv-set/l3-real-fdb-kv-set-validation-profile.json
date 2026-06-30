@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+        "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -22,9 +22,6 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
         "kind": "legacy-string-translator",
         "role": "compatibility_rust_draft",
         "semantic_pass": false,
@@ -41,7 +38,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+          "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -60,9 +57,7 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "fallback": false,
         "selected": "legacy-string-translator",
         "semantic_pass": false
       }
@@ -79,9 +74,7 @@
       "fallback_summary": {
         "legacy_string_translator": {
           "candidate_id": "compat:legacy-string-translator",
-          "fallback": true,
-          "fallback_from": "clang-lowered-typed-ir",
-          "fallback_reason": "clang_lowered_typed_ir_unavailable",
+          "fallback": false,
           "selected_as_primary": false,
           "status": "compatibility_only"
         }

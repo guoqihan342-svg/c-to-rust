@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <flashdb.h>
 
 /* slice: flashdb/real-fdb-kv-set */
 /* function: fdb_kv_set */

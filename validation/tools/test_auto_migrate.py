@@ -3548,6 +3548,27 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertNotIn("accepted_named_slice_evidence", declared[name])
 
+    def test_real_fdb_kv_set_oracle_harness_includes_flashdb_public_header_before_typedefs(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+
+            module.generate_oracle_harness_draft(spec, evidence_dir, skip=True)
+
+            harness = (evidence_dir / "l3-real-fdb-kv-set-c-oracle-harness-draft.c").read_text(
+                encoding="utf-8"
+            )
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            prototype = module.c_function_prototype(spec)
+            self.assertIn("#include <flashdb.h>\n", harness)
+            self.assertLess(harness.index("#include <flashdb.h>"), harness.index(prototype))
+            self.assertEqual(oracle["harness_contract"]["oracle_harness_includes"], ["flashdb.h"])
+
     def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-stdlib-stub-") as tmp:

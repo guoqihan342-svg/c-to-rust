@@ -1729,6 +1729,10 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         if isinstance(item, dict)
     )
     prototype = c_function_prototype(spec)
+    oracle_harness_includes = c_oracle_harness_includes(spec)
+    oracle_harness_include_lines = "".join(
+        f"#include <{header}>\n" for header in oracle_harness_includes
+    )
     fixture_path_text = fixture_path(spec)
     fixture_binding = oracle_fixture_binding(spec)
     fixture_comments = oracle_fixture_comments(fixture_binding)
@@ -1747,7 +1751,8 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         "/* Draft only: fixture values and oracle assertions must be reviewed before acceptance. */\n"
         "#include <stdint.h>\n"
         "#include <stddef.h>\n"
-        "#include <stdio.h>\n\n"
+        "#include <stdio.h>\n"
+        f"{oracle_harness_include_lines}\n"
         f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
         f"/* function: {function_name} */\n"
         f"/* fixture input: {fixture_path_text} */\n"
@@ -1783,6 +1788,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
             "fixture": fixture_binding,
             "source_files": source_files,
             "global_dependencies": global_requirements,
+            "oracle_harness_includes": oracle_harness_includes,
             "oracle_source_mode": c_oracle_source_mode(spec),
             "status": "draft_requires_review",
         },
@@ -2184,6 +2190,18 @@ def c_function_prototype(spec: dict[str, Any]) -> str:
     else:
         parameter_text = ", ".join(c_parameter_declaration(item) for item in parameters if isinstance(item, dict))
     return f"{return_type} {function_name}({parameter_text});"
+
+
+def c_oracle_harness_includes(spec: dict[str, Any]) -> list[str]:
+    headers = []
+    for item in spec.get("build_profile", {}).get("oracle_harness_includes", []):
+        header = str(item.get("header") if isinstance(item, dict) else item).strip()
+        if not header:
+            continue
+        if any(ch in header for ch in '\r\n<>"'):
+            raise SystemExit(f"invalid oracle harness include header: {header!r}")
+        headers.append(header)
+    return list(dict.fromkeys(headers))
 
 
 def c_parameter_declaration(parameter: dict[str, Any]) -> str:

@@ -10,8 +10,6 @@
     "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
     "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-ai-candidate-manifest.json",
     "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-blocked-repairs.json",
-    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-dry-run.json",
-    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json"
+    "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs"
   ]
 }

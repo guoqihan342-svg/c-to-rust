@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+        "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -21,9 +21,6 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
         "kind": "legacy-string-translator",
         "role": "compatibility_rust_draft",
         "semantic_pass": false,
@@ -40,7 +37,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+          "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -59,9 +56,7 @@
         "candidate_id": "compat:legacy-string-translator",
         "compatibility_only": true,
         "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+        "fallback": false,
         "selected": "legacy-string-translator",
         "semantic_pass": false
       }
@@ -78,9 +73,7 @@
       "fallback_summary": {
         "legacy_string_translator": {
           "candidate_id": "compat:legacy-string-translator",
-          "fallback": true,
-          "fallback_from": "clang-lowered-typed-ir",
-          "fallback_reason": "clang_lowered_typed_ir_unavailable",
+          "fallback": false,
           "selected_as_primary": false,
           "status": "compatibility_only"
         }
@@ -213,12 +206,12 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+      "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-cfg.json",
-      "sha256": "ee1f5d51ecb9d200314b30da8a05cfdf2edaade8fdc48c537334e598def2e9f0",
+      "sha256": "a112ee1cde0d401d5459133a623d164db42c4a22113be76cacf1a052eefe3b14",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -228,7 +221,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "sha256": "e58faf02d87d9634440cb8eae111eba6c6ed10cc1db7aabb22cd4f0b29d5f8b0",
+      "sha256": "d45e05d5982f76fa0fb33affb17efd362125c0d9c3b27655a8f7a3a63167c058",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -237,7 +230,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-type-map.json",
-      "sha256": "3a767838e6d612978cb9c9d94a82a84375347d38724108e42fb3038a95d847ec",
+      "sha256": "1d9d15f422fb4a278cdac034f1618ae3ec997f94124dde007aa2cebd126b6480",
       "status": "recorded"
     }
   },

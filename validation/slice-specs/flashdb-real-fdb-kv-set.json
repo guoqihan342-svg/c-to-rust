@@ -264,6 +264,9 @@
       "inc",
       "tests"
     ],
+    "oracle_harness_includes": [
+      "flashdb.h"
+    ],
     "defines": [],
     "target": {
       "triple_or_abi": "x86_64-unknown-linux-gnu",

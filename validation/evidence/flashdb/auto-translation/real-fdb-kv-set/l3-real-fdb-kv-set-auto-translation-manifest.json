@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+    "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
     "status": "skipped"
   },
   "cache": {
@@ -15,14 +15,14 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
+    "build_profile_hash": "3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
     "c2rust_baseline_identity": {
-      "sha256": "4f3ab8d4c96bf71fe028777d42870087073c1c5fa72f225a1b589fde9b4a9803",
+      "sha256": "11e743e1919d6ab657d0b3c51dd4bead497e8314028c0a571f2e2c5ade188d13",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "91087903a896311661cc590e3140919b5bc0a19d37f6bd33186f76b61d3e39d9",
+      "sha256": "ac7ab01c9293590f73b77d58fcf0adc02140added3fafc75d0fa1ae79c2f7464",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -46,37 +46,13 @@
       "route_decision_identity",
       "validation_profile_identity",
       "global_dependency_identity",
-      "c_oracle_harness_identity",
-      "translator_feature_set",
-      "clang_lowering_identity"
+      "c_oracle_harness_identity"
     ],
     "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
-    "clang_lowering_identity": {
-      "clang_path": "",
-      "clang_path_status": "not_configured",
-      "clang_version": "not_configured",
-      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
-      "enabled": true,
-      "features": [
-        "clang-lowering-report"
-      ],
-      "frontend": "clang_ast_dump_json",
-      "ignored_env_for_ast_dump": {
-        "LIBCLANG_PATH": {
-          "reason": "ignored_for_ast_dump",
-          "status": "not_configured",
-          "value": ""
-        }
-      },
-      "requires_env": [
-        "CLANG_PATH"
-      ]
-    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
-      "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "--emit-clang-lowering-report"
+      "validation/slice-specs/flashdb-real-fdb-kv-set.json"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
@@ -86,19 +62,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
+        "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "76d72b80db9ab44bf794bb1485f1238fd59f87ec0a9c3809c34fa84cd9a8c39e",
+        "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "61af4b66c743d9d2aceb75cb0d599b6471022be715c2c5451bbe2d437f145a9b",
+        "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
         "status": "blocked"
       }
     },
@@ -143,7 +119,7 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "b2908e653589032d05d3f9dfe43d2e13df7796a2eec0e5286338ba3c9ed63b65",
+      "sha256": "b34d572bcb5c25e102ac3e5960ec17a9ee1bcc946d2630e017797f5e721e80de",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -160,7 +136,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "872afff310059a8067fdc48b7412413046a78156bb1c85b272df3bc841cec0ac",
+    "slice_spec_sha256": "0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -172,13 +148,10 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_feature_set": [
-      "clang-lowering-report"
-    ],
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "8deec53f25c18bf1c6e893721d170b47f138fdeb3d96c3db9e0b0d1448e60943",
+      "sha256": "81841bcee6cc2130dc59b39fbf5dd8e00c8b58275533951c02818caf9e2e62f1",
       "status": "blocked"
     }
   },
@@ -300,7 +273,7 @@
       "returncode": 1,
       "semantic_pass": false,
       "status": "compile_failed",
-      "stderr": "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:1: error: unknown type name \u2018fdb_err_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      | ^~~~~~~~~\n/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c:14:22: error: unknown type name \u2018fdb_kvdb_t\u2019\n   14 | fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);\n      |                      ^~~~~~~~~~\nIn file included from /mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/flashdb.h:22,\n                 from /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:16:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018read_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:18: warning: field precision specifier \u2018.*\u2019 expects argument of type \u2018int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                   ~~~~~~~~\n      |                                                                                     |\n      |                                                                                     size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:9: note: in expansion of macro \u2018FDB_INFO\u2019\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |         ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:41: note: format string is defined here\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                                       ~~^~\n      |                                         |\n      |                                         int\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018new_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:22: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~                                              ~~~~~~~\n      |                                                                                                |\n      |                                                                                                size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:13: note: in expansion of macro \u2018FDB_INFO\u2019\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |             ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:49: note: format string is defined here\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                                                ~^\n      |                                                 |\n      |                                              \n...[truncated]",
+      "stderr": "In file included from /mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/flashdb.h:22,\n                 from /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:16:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018read_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:18: warning: field precision specifier \u2018.*\u2019 expects argument of type \u2018int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                   ~~~~~~~~\n      |                                                                                     |\n      |                                                                                     size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:9: note: in expansion of macro \u2018FDB_INFO\u2019\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |         ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:41: note: format string is defined here\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                                       ~~^~\n      |                                         |\n      |                                         int\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018new_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:22: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~                                              ~~~~~~~\n      |                                                                                                |\n      |                                                                                                size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:13: note: in expansion of macro \u2018FDB_INFO\u2019\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |             ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:49: note: format string is defined here\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                                                ~^\n      |                                                 |\n      |                                                 unsigned int\n      |                                                %lu\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018fdb_kv_print\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1502:15: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018long unsigned int\u2019 [-Wformat=]\n 1502 |     FDB_PRINT(\"size: %\" PRIu32 \"/%\" PRIu32 \" bytes.\\n\", (uint32_t)using_size + ((SECTOR_NUM - FDB_GC_EMPTY_SEC_THRESHOLD) * SECTOR_HDR_DATA_SIZE),\n      |               ^~~~~~~~~                                 ~~~~~~\n...[truncated]",
       "stdout": "",
       "toolchain_adapter": "wsl",
       "toolchain_status_after_attempt": "COMPILE_FAILED",
@@ -337,6 +310,9 @@
       },
       "function_prototype": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);",
       "global_dependencies": [],
+      "oracle_harness_includes": [
+        "flashdb.h"
+      ],
       "oracle_source_mode": "declared_c_boundary_sources",
       "source_files": [
         {
@@ -350,7 +326,7 @@
     "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "91087903a896311661cc590e3140919b5bc0a19d37f6bd33186f76b61d3e39d9",
+      "sha256": "ac7ab01c9293590f73b77d58fcf0adc02140added3fafc75d0fa1ae79c2f7464",
       "status": "draft"
     },
     "required_final_status": "C_ORACLE_GENERATED",
@@ -428,9 +404,9 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec_sha256=872afff310059a8067fdc48b7412413046a78156bb1c85b272df3bc841cec0ac",
+      "slice_spec_sha256=0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
       "fixture_hash=real-fdb-kv-set-fixture",
-      "build_profile_hash=c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
+      "build_profile_hash=3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
       "translator_version=0.1.0",
       "schema_version=1"
     ],
@@ -459,7 +435,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "e6421a885a004751cab48dfd5fde18072571c4dc",
+    "repo_commit": "8955d6271e2e8ca71bcbc030cfb53de6f3b9e77c",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
@@ -515,11 +491,11 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "76d72b80db9ab44bf794bb1485f1238fd59f87ec0a9c3809c34fa84cd9a8c39e",
+    "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-4melut21 validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-v5tu5r0_ validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {
@@ -584,9 +560,7 @@
       "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
       "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-ai-candidate-manifest.json",
       "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-blocked-repairs.json",
-      "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-      "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-dry-run.json",
-      "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json"
+      "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs"
     ],
     "slice_id": "real-fdb-kv-set",
     "status": "blocked",
@@ -595,7 +569,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "61af4b66c743d9d2aceb75cb0d599b6471022be715c2c5451bbe2d437f145a9b",
+    "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
     "status": "blocked"
   }
 }
