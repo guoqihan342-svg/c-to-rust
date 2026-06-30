@@ -100,6 +100,12 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             self.assertEqual(s2["root_cause_counts"], {"rustc_compile_error": 1})
             self.assertEqual(report["release_note_inputs"]["s2_workflow_metrics"], s2)
             self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["harness_architecture"]["entrypoint"], "milestone-release-report")
+            self.assertEqual(report["harness_architecture"]["workflow_run_count"], 1)
+            self.assertEqual(report["harness_architecture"]["before_after_report_count"], 0)
+            self.assertEqual(report["core_translation_quality"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(report["core_translation_quality"]["translation_before_after"]["status"], "not_provided")
             self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
 
     def test_report_binds_before_after_exhibit_from_batch_profile_report(self) -> None:
@@ -135,8 +141,18 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 "target/competition-out/summary/before-after-exhibit.json",
             )
             self.assertEqual(exhibits["input_reports"][0]["status"], "passed")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["unit_id"], "demo/store-add-one")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["baseline"]["path"], "evidence/before-after/baseline-unsafe.rs")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["final"]["path"], "evidence/before-after/final-safe.rs")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["oracle_evidence"]["path"], "evidence/before-after/oracle-diff.json")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["accepted_patch"]["path"], "evidence/before-after/accepted.patch")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["patch_log"]["path"], "evidence/before-after/step-log.jsonl")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["unsafe_reduction"]["reduced_by"], 3)
             self.assertEqual(report["release_note_inputs"]["before_after_exhibits"], exhibits)
             self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["harness_architecture"]["before_after_report_count"], 1)
+            self.assertEqual(report["core_translation_quality"]["before_after_exhibits"], exhibits)
+            self.assertEqual(report["core_translation_quality"]["translation_before_after"]["status"], "bound")
 
     def test_report_rejects_before_after_exhibit_hash_drift(self) -> None:
         with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
@@ -487,6 +503,11 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 {
                     "unit_id": "demo/store-add-one",
                     "status": "converged",
+                    "baseline": {"path": "evidence/before-after/baseline-unsafe.rs", "sha256": "0" * 64},
+                    "final": {"path": "evidence/before-after/final-safe.rs", "sha256": "0" * 64},
+                    "oracle_evidence": {"path": "evidence/before-after/oracle-diff.json", "sha256": "0" * 64},
+                    "accepted_patch": {"path": "evidence/before-after/accepted.patch", "sha256": "0" * 64},
+                    "patch_log": {"path": "evidence/before-after/step-log.jsonl", "sha256": "0" * 64},
                     "unsafe_reduction": {
                         "status": "measured",
                         "baseline_total_unsafe": 3,

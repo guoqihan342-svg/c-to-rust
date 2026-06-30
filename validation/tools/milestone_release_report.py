@@ -109,6 +109,32 @@ def build_report(
     blockers.append("external_review_not_recorded")
 
     report_status = "release_candidate" if not blockers else "internal_preview"
+    harness_architecture = {
+        "entrypoint": "milestone-release-report",
+        "pipeline": [
+            "translator-coverage-matrix",
+            "competition-summary",
+            "workflow-metrics",
+            "before-after-exhibit",
+            "release-report",
+        ],
+        "workflow_run_count": int(s2_workflow_metrics.get("run_count", 0)),
+        "before_after_report_count": int(before_after_exhibits.get("report_count", 0)),
+        "input_summaries": s2_workflow_metrics.get("input_summaries", []),
+        "before_after_inputs": before_after_exhibits.get("input_reports", []),
+    }
+    core_translation_quality = {
+        "translation_coverage_numerator": translator_generated_semantic_pass_count,
+        "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+        "unsafe_reduction": s2_workflow_metrics.get("unsafe_reduction", {"status": "not_measured"}),
+        "translation_before_after": s2_workflow_metrics.get(
+            "translation_before_after",
+            {"status": "not_provided", "unit_count": 0},
+        ),
+        "before_after_exhibits": before_after_exhibits,
+        "readiness_status": report_status,
+        "readiness_blockers": blockers,
+    }
     return {
         "schema_version": 1,
         "status": report_status,
@@ -121,6 +147,8 @@ def build_report(
                 "claim_boundary": coverage_report.get("claim_boundary"),
             }
         },
+        "harness_architecture": harness_architecture,
+        "core_translation_quality": core_translation_quality,
         "metrics": {
             "translation_coverage_numerator": translator_generated_semantic_pass_count,
             "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
@@ -425,6 +453,7 @@ def summarize_before_after_exhibits(exhibit_inputs: list[dict[str, Any]]) -> dic
         if status == "passed":
             passed_report_count += 1
         stage_contracts = exhibit.get("stage_contracts") if isinstance(exhibit.get("stage_contracts"), dict) else {}
+        units = compact_before_after_units(exhibit)
         input_reports.append(
             {
                 "batch_profile_report_path": item["batch_profile_report_path"],
@@ -443,6 +472,7 @@ def summarize_before_after_exhibits(exhibit_inputs: list[dict[str, Any]]) -> dic
                     for stage, contract in stage_contracts.items()
                     if isinstance(contract, dict)
                 },
+                "units": units,
             }
         )
     return {
@@ -458,6 +488,32 @@ def summarize_before_after_exhibits(exhibit_inputs: list[dict[str, Any]]) -> dic
             "references and unsafe deltas, but do not expand the translation coverage numerator."
         ),
     }
+
+
+def compact_before_after_units(exhibit: dict[str, Any]) -> list[dict[str, Any]]:
+    units = exhibit.get("units")
+    if not isinstance(units, list):
+        return []
+    compacted = []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        detail = {}
+        for key in [
+            "unit_id",
+            "status",
+            "baseline",
+            "final",
+            "oracle_evidence",
+            "accepted_patch",
+            "patch_log",
+            "unsafe_reduction",
+            "repair_history",
+        ]:
+            if key in unit:
+                detail[key] = unit[key]
+        compacted.append(detail)
+    return compacted
 
 
 def summarize_translation_before_after(metrics: list[dict[str, Any]]) -> dict[str, Any]:

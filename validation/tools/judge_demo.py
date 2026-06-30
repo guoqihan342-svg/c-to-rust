@@ -203,6 +203,7 @@ def build_report(
     milestone_report = load_json_if_exists(milestone_report_path)
     command_status = "passed" if commands and all(command["exit_code"] == 0 for command in commands) else "failed"
     final_gate_status = str(summary.get("final_gate", {}).get("status", "missing"))
+    semantic_pass_count = summary_semantic_pass_count(summary)
     exhibit_status = str(before_after_exhibit.get("status", "missing"))
     milestone_status = str(milestone_report.get("status", "missing"))
     status = (
@@ -213,6 +214,56 @@ def build_report(
         and milestone_status in {"internal_preview", "release_candidate", "passed"}
         else "failed"
     )
+    repair_summary = build_repair_summary(
+        workflow_metrics=workflow_metrics,
+        before_after_exhibit=before_after_exhibit,
+    )
+    batch_judge_summary = (
+        batch_profile_report.get("judge_summary")
+        if isinstance(batch_profile_report.get("judge_summary"), dict)
+        else {}
+    )
+    batch_harness_architecture = (
+        batch_judge_summary.get("harness_architecture")
+        if isinstance(batch_judge_summary.get("harness_architecture"), dict)
+        else {}
+    )
+    batch_core_translation_quality = (
+        batch_judge_summary.get("core_translation_quality")
+        if isinstance(batch_judge_summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    harness_architecture = {
+        "entrypoint": "judge_demo",
+        "pipeline": ["run-batch-profile", "validate-summary", "milestone-release-report", "judge-demo-report"],
+        "command_status": command_status,
+        "command_stages": [str(command.get("stage", "unknown")) for command in commands],
+        "delegated_harness": batch_harness_architecture,
+        "context_pack": batch_profile_report.get("context_pack"),
+        "agent_index": batch_profile_report.get("agent_index"),
+    }
+    core_translation_quality = {
+        "final_gate_status": final_gate_status,
+        "semantic_pass_count": semantic_pass_count,
+        "unsafe_reduction": workflow_metrics.get("unsafe_reduction", {"status": "not_measured"}),
+        "translation_before_after": workflow_metrics.get(
+            "translation_before_after",
+            {"status": "not_provided", "unit_count": 0},
+        ),
+        "before_after_exhibit": {
+            "status": exhibit_status,
+            "path": artifact_ref(before_after_path, repo_root=repo_root).get("path"),
+        },
+        "before_after_units": compact_before_after_units(before_after_exhibit),
+        "translation_coverage_numerator": (
+            milestone_report.get("metrics", {}).get("translation_coverage_numerator")
+            if isinstance(milestone_report.get("metrics"), dict)
+            else None
+        ),
+        "milestone_status": milestone_status,
+        "repair_summary": repair_summary,
+        "delegated_core_translation_quality": batch_core_translation_quality,
+    }
 
     return {
         "schema_version": 1,
@@ -231,9 +282,11 @@ def build_report(
             "before_after_exhibit": artifact_ref(before_after_path, repo_root=repo_root),
             "milestone_release_report": artifact_ref(milestone_report_path, repo_root=repo_root),
         },
+        "harness_architecture": harness_architecture,
+        "core_translation_quality": core_translation_quality,
         "metrics": {
             "final_gate": final_gate_status,
-            "semantic_pass": nonnegative_int(summary.get("semantic_pass")),
+            "semantic_pass": semantic_pass_count,
             "units_total": nonnegative_int(workflow_metrics.get("units_total")),
             "units_converged": nonnegative_int(workflow_metrics.get("units_converged")),
             "unsafe_reduction": workflow_metrics.get("unsafe_reduction", {"status": "not_measured"}),
@@ -249,10 +302,7 @@ def build_report(
             ),
             "milestone_status": milestone_status,
         },
-        "repair_summary": build_repair_summary(
-            workflow_metrics=workflow_metrics,
-            before_after_exhibit=before_after_exhibit,
-        ),
+        "repair_summary": repair_summary,
         "claim_boundary": {
             "semantic_claim_source": "competition-run-summary.final_gate",
             "before_after_exhibit_role": (
@@ -328,6 +378,32 @@ def repair_histories_from_workflow_metrics(workflow_metrics: dict[str, Any]) -> 
     return histories
 
 
+def compact_before_after_units(exhibit: dict[str, Any]) -> list[dict[str, Any]]:
+    units = exhibit.get("units")
+    if not isinstance(units, list):
+        return []
+    compacted = []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        detail = {}
+        for key in [
+            "unit_id",
+            "status",
+            "baseline",
+            "final",
+            "oracle_evidence",
+            "accepted_patch",
+            "patch_log",
+            "unsafe_reduction",
+            "repair_history",
+        ]:
+            if key in unit:
+                detail[key] = unit[key]
+        compacted.append(detail)
+    return compacted
+
+
 def repair_history_rollback_count(history: dict[str, Any]) -> int:
     repair_history = history.get("repair_history")
     if not isinstance(repair_history, dict):
@@ -387,6 +463,13 @@ def nonnegative_int(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, parsed)
+
+
+def summary_semantic_pass_count(summary: dict[str, Any]) -> int:
+    slices = summary.get("slices")
+    if isinstance(slices, dict):
+        return nonnegative_int(slices.get("semantic_pass"))
+    return nonnegative_int(summary.get("semantic_pass"))
 
 
 if __name__ == "__main__":

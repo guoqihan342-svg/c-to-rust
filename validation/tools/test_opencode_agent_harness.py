@@ -1316,7 +1316,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
                     return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
                 summary_path = out_root / "summary" / "competition-run-summary.json"
-                write_worker_summary(summary_path, "run-evaluate", status="passed", failed=0, semantic_pass=2)
+                write_worker_summary(
+                    summary_path,
+                    "run-evaluate",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=2,
+                    workflow_metrics=before_after_worker_metrics(out_root, "run-evaluate"),
+                )
                 return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
 
             result = harness.evaluate(
@@ -1352,6 +1359,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(judge_summary["harness_architecture"]["agent_index"]["path"], result["agent_index"]["path"])
             self.assertEqual(judge_summary["core_translation_quality"]["final_gate_status"], "passed")
             self.assertEqual(judge_summary["core_translation_quality"]["semantic_pass_count"], 2)
+            self.assertEqual(judge_summary["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(judge_summary["core_translation_quality"]["translation_before_after"]["status"], "bound")
+            self.assertEqual(judge_summary["core_translation_quality"]["translation_before_after"]["unit_count"], 1)
+            self.assertEqual(judge_summary["core_translation_quality"]["repair_summary"]["repair_history_unit_count"], 0)
             self.assertEqual(
                 [worker["summary_status"] for worker in judge_summary["core_translation_quality"]["workers"]],
                 ["passed", "passed"],

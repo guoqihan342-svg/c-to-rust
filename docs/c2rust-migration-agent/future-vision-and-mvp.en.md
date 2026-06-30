@@ -48,7 +48,7 @@ Active items:
 - [ ] H3 Precise repair self-healing: failed workers must write `repair_hints` and retry the same assignment automatically for at most 5 rounds; every failed attempt, rollback, and final accept/refuse decision must be report-visible.
 - [ ] H4 Before/after scoring exhibit: the preferred FlashDB path must show the raw unsafe baseline, agent safety patch, oracle pass, unsafe reduction, repair/retry trace, reproduction command, and artifact hashes.
 - [x] H5 Context management: both `evaluate` and `run-batch-profile` must emit `context-pack.json` as the next-agent and judge entrypoint, including the source pin, graph, entrypoints, worker summaries, merge summary, and acceptance boundary; `agent-index.json` must index assignment/request/summary/report by `worker_id`. Acceptance: both `evaluate` and `run-batch-profile` write SQLite `context_packs`, `agent-index.json` indexes workers by worker_id, and batch contexts also index route-governance and before/after exhibit reports.
-- [ ] H6 Evaluation reports: `judge_demo`, `run-batch-profile`, `milestone-release-report`, and `evaluate-report` must explain both harness architecture and core translation quality, not only governance percentages.
+- [x] H6 Evaluation reports: `judge_demo`, `run-batch-profile`, `milestone-release-report`, and `evaluate-report` must explain both harness architecture and core translation quality, not only governance percentages. Acceptance: all four report families now expose `harness_architecture` / `core_translation_quality` or an equivalent top-level view; the `harness-h6-judge-demo-verify-2` judge_demo smoke wrote unit-level before/after details, unsafe 2 -> 0, and semantic pass 1.
 
 Frozen/deferred items:
 

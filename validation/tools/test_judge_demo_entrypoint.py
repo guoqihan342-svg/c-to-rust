@@ -145,6 +145,28 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(persisted["metrics"]["translation_before_after"]["status"], "bound")
         self.assertEqual(persisted["metrics"]["translation_coverage_numerator"], 0)
         self.assertEqual(set(persisted["metrics"]["stage_contracts"]), {"planner", "worker", "verifier", "repairer", "reporter"})
+        self.assertEqual(persisted["harness_architecture"]["entrypoint"], "judge_demo")
+        self.assertEqual(
+            persisted["harness_architecture"]["pipeline"],
+            ["run-batch-profile", "validate-summary", "milestone-release-report", "judge-demo-report"],
+        )
+        self.assertEqual(
+            persisted["harness_architecture"]["command_stages"],
+            ["run_batch_profile", "validate_summary", "milestone_release_report"],
+        )
+        self.assertEqual(persisted["core_translation_quality"]["final_gate_status"], "passed")
+        self.assertEqual(persisted["core_translation_quality"]["semantic_pass_count"], 1)
+        self.assertEqual(persisted["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 2)
+        self.assertEqual(persisted["core_translation_quality"]["translation_before_after"]["status"], "bound")
+        self.assertEqual(persisted["core_translation_quality"]["translation_coverage_numerator"], 0)
+        self.assertEqual(persisted["core_translation_quality"]["repair_summary"], persisted["repair_summary"])
+        self.assertEqual(persisted["core_translation_quality"]["before_after_units"][0]["unit_id"], "flashdb/real-fdb-calc-crc32")
+        self.assertEqual(persisted["core_translation_quality"]["before_after_units"][0]["unsafe_reduction"]["reduced_by"], 2)
+        self.assertEqual(persisted["harness_architecture"]["delegated_harness"]["entrypoint"], "run-batch-profile")
+        self.assertEqual(
+            persisted["core_translation_quality"]["delegated_core_translation_quality"]["unsafe_reduction"]["reduced_by"],
+            2,
+        )
         self.assertEqual(persisted["repair_summary"]["status"], "verified")
         self.assertEqual(persisted["repair_summary"]["repair_round_cap"], 5)
         self.assertEqual(persisted["repair_summary"]["observed_repair_unit_count"], 1)
@@ -292,9 +314,10 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
         "schema_version": 1,
         "status": "passed",
         "proof_class": "local-simulation",
-        "semantic_pass": 1,
+        "semantic_pass": 0,
         "failed": 0,
         "blocked": 0,
+        "slices": {"semantic_pass": 1},
         "final_gate": {"status": "passed"},
         "workflow_metrics": {
             "path": "workflow-metrics.json",
@@ -335,6 +358,19 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
             },
             "reporter": {"status": "passed"},
         },
+        "units": [
+            {
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "status": "bound",
+                "baseline": {"path": "validation/evidence/flashdb/before-after/baseline-unsafe.rs", "sha256": "0" * 64},
+                "final": {"path": "validation/evidence/flashdb/before-after/final-safe.rs", "sha256": "0" * 64},
+                "oracle_evidence": {"path": "validation/evidence/flashdb/before-after/oracle-diff.json", "sha256": "0" * 64},
+                "accepted_patch": {"path": "validation/evidence/flashdb/before-after/accepted.patch", "sha256": "0" * 64},
+                "patch_log": {"path": "validation/evidence/flashdb/before-after/step-log.jsonl", "sha256": "0" * 64},
+                "unsafe_reduction": workflow_metrics["unsafe_reduction"],
+                "repair_history": workflow_metrics["per_unit_statuses"][0]["repair_history"],
+            }
+        ],
     }
     before_after_path = summary_dir / "before-after-exhibit.json"
     before_after_path.write_text(json.dumps(before_after, sort_keys=True) + "\n", encoding="utf-8")
@@ -350,6 +386,17 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
             "unit_count": 1,
             "measured_unsafe_unit_count": 1,
             "accepted_patch_unit_count": 1,
+        },
+        "judge_summary": {
+            "harness_architecture": {
+                "entrypoint": "run-batch-profile",
+                "graph_runtime": "opencode-harness-langgraph-inspired",
+            },
+            "core_translation_quality": {
+                "final_gate_status": "passed",
+                "unsafe_reduction": workflow_metrics["unsafe_reduction"],
+                "translation_before_after": workflow_metrics["translation_before_after"],
+            },
         },
     }
     (harness_dir / "batch-profile-report.json").write_text(

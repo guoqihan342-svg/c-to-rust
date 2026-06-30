@@ -1234,6 +1234,7 @@ def build_judge_summary(
         else {}
     )
     final_summary = load_merge_summary(merge_execution, repo_root=repo_root)
+    workflow_metrics = load_merge_workflow_metrics(merge_execution, repo_root=repo_root)
     slices = final_summary.get("slices") if isinstance(final_summary.get("slices"), dict) else {}
     final_gate = final_summary.get("final_gate") if isinstance(final_summary.get("final_gate"), dict) else {}
     final_gate_status = merge_execution.get("final_gate_status") or final_gate.get("status")
@@ -1266,6 +1267,14 @@ def build_judge_summary(
         "failed_count": int(slices.get("failed", 0) or 0),
         "workers": workers,
     }
+    if workflow_metrics:
+        unsafe_reduction = workflow_metrics.get("unsafe_reduction")
+        if isinstance(unsafe_reduction, dict):
+            core_translation_quality["unsafe_reduction"] = unsafe_reduction
+        translation_before_after = workflow_metrics.get("translation_before_after")
+        if isinstance(translation_before_after, dict):
+            core_translation_quality["translation_before_after"] = translation_before_after
+        core_translation_quality["repair_summary"] = summarize_workflow_repair_metrics(workflow_metrics)
     if route_metrics_artifact is not None:
         core_translation_quality["route_governance_metrics"] = route_metrics_artifact.get("binding", {})
     if before_after_exhibit_artifact is not None:
@@ -1313,6 +1322,47 @@ def load_merge_summary(merge_execution: dict[str, Any], *, repo_root: Path = REP
     if not summary_path.exists():
         return {}
     return load_json(summary_path)
+
+
+def load_merge_workflow_metrics(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return {}
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        return {}
+    metrics_path = validate_competition_run_summary.resolve_summary_artifact(
+        metrics_ref,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if metrics_path is None or sha256_file(metrics_path) != expected_sha:
+        return {}
+    metrics = load_json(metrics_path)
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def summarize_workflow_repair_metrics(workflow_metrics: dict[str, Any]) -> dict[str, Any]:
+    per_unit_statuses = workflow_metrics.get("per_unit_statuses")
+    units = [unit for unit in per_unit_statuses if isinstance(unit, dict)] if isinstance(per_unit_statuses, list) else []
+    histories = [unit for unit in units if isinstance(unit.get("repair_history"), dict)]
+    root_cause_counts = workflow_metrics.get("root_cause_counts")
+    return {
+        "avg_repair_rounds": float(workflow_metrics.get("avg_repair_rounds", 0.0) or 0.0),
+        "auto_recovery_rate": float(workflow_metrics.get("auto_recovery_rate", 0.0) or 0.0),
+        "human_interventions": int(workflow_metrics.get("human_interventions", 0) or 0),
+        "repair_history_unit_count": len(histories),
+        "auto_recovered_units": sum(1 for unit in units if unit.get("auto_recovered") is True),
+        "root_cause_counts": root_cause_counts if isinstance(root_cause_counts, dict) else {},
+    }
 
 
 def summarize_before_after_unsafe_reduction(payload: dict[str, Any]) -> dict[str, Any] | None:
