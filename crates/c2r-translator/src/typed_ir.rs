@@ -376,6 +376,7 @@ struct EmitContext {
     mutable_record_pointer_write_params: HashSet<String>,
     opaque_record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+    zero_initialized_record_locals: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -519,6 +520,8 @@ impl EmitContext {
                 &function.params,
                 &mutable_record_pointer_write_params,
             )?;
+        let zero_initialized_record_locals =
+            collect_zero_initialized_record_locals(&function.body)?;
         let mut readonly_globals = HashMap::new();
         for global in globals {
             if readonly_globals
@@ -542,6 +545,7 @@ impl EmitContext {
             mutable_record_pointer_write_params,
             opaque_record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
+            zero_initialized_record_locals,
             readonly_globals,
         })
     }
@@ -576,6 +580,10 @@ impl EmitContext {
 
     fn is_opaque_record_pointer_field_value_param(&self, name: &str) -> bool {
         self.opaque_record_pointer_field_value_params.contains(name)
+    }
+
+    fn is_zero_initialized_record_local(&self, name: &str) -> bool {
+        self.zero_initialized_record_locals.contains(name)
     }
 
     fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {
@@ -880,6 +888,48 @@ fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     emit_scalar_type(ty)
 }
 
+fn emit_record_zero_initializer(ty: &IrType) -> Result<String, String> {
+    let IrTypeKind::Record {
+        name,
+        fields: Some(fields),
+    } = &ty.kind
+    else {
+        return Err(format!(
+            "record type {} requires complete field inventory for local zero initializer",
+            type_label(ty)
+        ));
+    };
+    if fields.is_empty() {
+        return Err(format!("record {name} has no modeled fields"));
+    }
+    let rust_name = emit_record_type_name(name)?;
+    let fields = fields
+        .iter()
+        .map(|field| {
+            let field_name = emit_identifier(&field.name, "record zero initializer field")?;
+            let value = emit_record_zero_field_value(&field.ty).map_err(|detail| {
+                format!(
+                    "record {name} field {} zero initializer {detail}",
+                    field.name
+                )
+            })?;
+            Ok(format!("{field_name}: {value}"))
+        })
+        .collect::<Result<Vec<_>, String>>()?
+        .join(", ");
+    Ok(format!("{rust_name} {{ {fields} }}"))
+}
+
+fn emit_record_zero_field_value(ty: &IrType) -> Result<String, String> {
+    if let Some(value) = emit_opaque_void_pointer_zero_value(ty) {
+        return Ok(value.to_string());
+    }
+    if is_integer_type(ty) {
+        return emit_integer_literal(0, ty);
+    }
+    Err(format!("type {} is unsupported", type_label(ty)))
+}
+
 fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
     let IrTypeKind::Pointer { pointee } = &ty.kind else {
         return None;
@@ -889,6 +939,20 @@ fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
     }
     let mutability = if pointee.is_const { "const" } else { "mut" };
     Some(format!("*{mutability} core::ffi::c_void"))
+}
+
+fn emit_opaque_void_pointer_zero_value(ty: &IrType) -> Option<&'static str> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    if !matches!(pointee.kind, IrTypeKind::Void) {
+        return None;
+    }
+    if pointee.is_const {
+        Some("core::ptr::null()")
+    } else {
+        Some("core::ptr::null_mut()")
+    }
 }
 
 fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
@@ -1030,7 +1094,8 @@ fn collect_record_field_uses_from_stmt<'a>(
     records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
 ) -> Result<(), String> {
     match stmt {
-        IrStmt::Decl { init, .. } => {
+        IrStmt::Decl { ty, init, .. } => {
+            add_record_type_inventory(records, ty)?;
             if let Some(init) = init {
                 collect_record_field_uses_from_expr(init, records)?;
             }
@@ -1392,14 +1457,18 @@ fn emit_stmt(
             if matches!(ty.kind, IrTypeKind::Record { .. }) {
                 let decl_ty =
                     emit_value_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
-                let Some(init) = init else {
+                let (init, zero_initialized) = if let Some(init) = init {
+                    validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
+                    let init = emit_expr(init, symbols, context)
+                        .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+                    (init, false)
+                } else if context.is_zero_initialized_record_local(name) {
+                    (emit_record_zero_initializer(ty)?, true)
+                } else {
                     return Err(format!("decl {name} record initializer is required"));
                 };
-                validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
-                let init = emit_expr(init, symbols, context)
-                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
                 symbols.insert(name.clone());
-                let mut_prefix = if context.is_assigned_var(name) {
+                let mut_prefix = if zero_initialized || context.is_assigned_var(name) {
                     "mut "
                 } else {
                     ""
@@ -3047,8 +3116,24 @@ fn emit_call_arg_expr(
         IrExpr::FunctionToPointerDecay { target, expr, .. } => {
             emit_function_pointer_decay_call_arg(target, expr)
         }
+        IrExpr::AddrOf { operand, ty, .. } => {
+            emit_local_record_address_call_arg(operand, ty, symbols)
+        }
         _ => emit_expr(arg, symbols, context),
     }
+}
+
+fn emit_local_record_address_call_arg(
+    operand: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    let name = validate_local_record_address_call_arg(operand, ty)?;
+    if !symbols.contains(name) {
+        return Err(format!("address-of call argument {name} is not declared"));
+    }
+    let name = emit_identifier(name, "address-of call argument")?;
+    Ok(format!("&mut {name}"))
 }
 
 fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
@@ -3676,13 +3761,48 @@ fn validate_bounded_call_arg(
         IrExpr::Deref { .. } => {
             Err("call arguments cannot use dereference value semantics".to_string())
         }
-        IrExpr::AddrOf { .. } => {
-            Err("call arguments cannot use address-of value semantics".to_string())
+        IrExpr::AddrOf { operand, ty, .. } => {
+            validate_local_record_address_call_arg(operand, ty).map(|_| ())
         }
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+fn validate_local_record_address_call_arg<'a>(
+    operand: &'a IrExpr,
+    ty: &IrType,
+) -> Result<&'a str, String> {
+    let pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+        format!(
+            "address-of call argument target {} must be a mutable record pointer",
+            type_label(ty)
+        )
+    })?;
+    let IrExpr::Var {
+        name,
+        ty: operand_ty,
+        ..
+    } = operand
+    else {
+        return Err(
+            "address-of call argument operand must be a direct record variable".to_string(),
+        );
+    };
+    let IrTypeKind::Record { fields, .. } = &operand_ty.kind else {
+        return Err(format!(
+            "address-of call argument {name} has unsupported operand type {}",
+            type_label(operand_ty)
+        ));
+    };
+    if !matches!(fields, Some(fields) if !fields.is_empty()) {
+        return Err(format!(
+            "address-of call argument {name} requires complete record field inventory"
+        ));
+    }
+    validate_record_value_type_matches(operand_ty, pointee, "address-of call argument")?;
+    Ok(name)
 }
 
 fn validate_bounded_nested_call_arg(
@@ -5475,6 +5595,348 @@ fn collect_assigned_vars(body: &[IrStmt]) -> HashSet<String> {
     let mut assigned_vars = HashSet::new();
     collect_assigned_vars_from_body(body, &mut assigned_vars);
     assigned_vars
+}
+
+fn collect_zero_initialized_record_locals(body: &[IrStmt]) -> Result<HashSet<String>, String> {
+    let mut declarations = HashSet::new();
+    collect_uninitialized_record_local_decls(body, &mut declarations)?;
+    if declarations.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let mut allowed_address_args = HashSet::new();
+    let mut disallowed_uses = HashSet::new();
+    collect_zero_init_record_local_uses_from_body(
+        body,
+        &declarations,
+        &mut allowed_address_args,
+        &mut disallowed_uses,
+    );
+
+    Ok(allowed_address_args
+        .difference(&disallowed_uses)
+        .cloned()
+        .collect())
+}
+
+fn collect_uninitialized_record_local_decls(
+    body: &[IrStmt],
+    declarations: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { name, ty, init, .. } => {
+                if init.is_none() && matches!(ty.kind, IrTypeKind::Record { .. }) {
+                    declarations.insert(name.clone());
+                }
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_uninitialized_record_local_decls(then_body, declarations)?;
+                collect_uninitialized_record_local_decls(else_body, declarations)?;
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_uninitialized_record_local_decls(body, declarations)?;
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_uninitialized_record_local_decls(init, declarations)?;
+                if let Some(step) = step.as_deref() {
+                    collect_uninitialized_record_local_decls(
+                        std::slice::from_ref(step),
+                        declarations,
+                    )?;
+                }
+                collect_uninitialized_record_local_decls(body, declarations)?;
+            }
+            IrStmt::Assign { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_zero_init_record_local_uses_from_body(
+    body: &[IrStmt],
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    for stmt in body {
+        collect_zero_init_record_local_uses_from_stmt(
+            stmt,
+            declarations,
+            allowed_address_args,
+            disallowed_uses,
+        );
+    }
+}
+
+fn collect_zero_init_record_local_uses_from_stmt(
+    stmt: &IrStmt,
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                collect_zero_init_record_local_uses_from_expr(
+                    init,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                target,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                value,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                then_body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                else_body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_body(
+                init,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            if let Some(condition) = condition {
+                collect_zero_init_record_local_uses_from_expr(
+                    condition,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+            if let Some(step) = step.as_deref() {
+                collect_zero_init_record_local_uses_from_stmt(
+                    step,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                collect_zero_init_record_local_uses_from_expr(
+                    value,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrStmt::Expr { expr, .. } => collect_zero_init_record_local_uses_from_expr(
+            expr,
+            declarations,
+            allowed_address_args,
+            disallowed_uses,
+        ),
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+}
+
+fn collect_zero_init_record_local_uses_from_expr(
+    expr: &IrExpr,
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Var { name, .. } => {
+            if declarations.contains(name) {
+                disallowed_uses.insert(name.clone());
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::AddrOf { operand, ty, .. } = arg {
+                    if let Ok(name) = validate_local_record_address_call_arg(operand, ty) {
+                        if declarations.contains(name) {
+                            allowed_address_args.insert(name.to_string());
+                            continue;
+                        }
+                    }
+                }
+                collect_zero_init_record_local_uses_from_expr(
+                    arg,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                lhs,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                rhs,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                operand,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                then_expr,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                else_expr,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                base,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                index,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_zero_init_record_local_uses_from_expr(
+                    element,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => {}
+    }
 }
 
 fn collect_byte_cursor_sources(body: &[IrStmt]) -> HashMap<String, String> {

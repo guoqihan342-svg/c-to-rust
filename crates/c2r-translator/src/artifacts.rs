@@ -550,6 +550,9 @@ fn collect_expr_runtime_preconditions(
         typed_ir::IrExpr::Cast { expr, .. } => {
             collect_expr_runtime_preconditions(expr, preconditions);
         }
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
         typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
             collect_expr_runtime_preconditions(expr, preconditions);
         }

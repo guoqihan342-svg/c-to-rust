@@ -1461,6 +1461,7 @@
         "opaque void pointer field assignment cast",
         "mutable record pointer identity return after field write",
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
+        "local complete record zero initializer for address-taken direct-call candidates",
         "embedded slice source C oracle harness diagnostic execution"
       ],
       "dimension_status": {
@@ -1524,6 +1525,10 @@
             {
               "name": "clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1544,6 +1549,10 @@
             },
             {
               "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_uninitialized_record_local_address_when_field_is_read",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1575,12 +1584,39 @@
               "name": "clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled",
               "path": "crates/c2r-translator/tests/bounded_translation.rs",
               "proof_class": "optional_real_clang_smoke"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "real-fdb-blob-make now has committed Rust compile, Rust replay fixture evidence, and a fixture-bound C oracle harness that compiles/runs under WSL/local-simulation with matched_not_oracle, but no accepted C oracle/diff/negative-diff/final semantic acceptance"
+          "status": "covered",
+          "scope_note": "real-fdb-blob-make has L4 accepted-evidence-authoritative semantic pass evidence; generated_draft_semantic_pass remains false and this does not count as translator-generated semantic acceptance.",
+          "evidence": [
+            {
+              "name": "real-fdb-blob-make final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+              "proof_class": "accepted_evidence_authoritative_not_generated_draft"
+            },
+            {
+              "name": "real-fdb-blob-make C/Rust diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-diff.json"
+            },
+            {
+              "name": "real-fdb-blob-make negative diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-blob-make Rust report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-report.json"
+            },
+            {
+              "name": "real-fdb-blob-make unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -1665,6 +1701,10 @@
         {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1692,6 +1732,11 @@
           "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "integer-to-pointer casts are not admitted for opaque pointer field writes"
+        },
+        {
+          "name": "typed_ir_rejects_uninitialized_record_local_address_when_field_is_read",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "uninitialized local records are only zero-initialized when every use is a direct-call address argument; field reads still require an initializer"
         }
       ]
     },
@@ -1717,6 +1762,7 @@
         "direct function-name decay as simple function pointer call argument",
         "ordinary FunctionToPointerDecay outside direct callees and direct function-name call arguments lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "pointer value call argument/return fail-closed",
+        "local complete record address-of direct-call argument candidate",
         "route candidate evidence"
       ],
       "dimension_status": {
@@ -1797,6 +1843,14 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "expr_skeleton_from_ast_lowers_direct_call_with_record_address_arg",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_assert_int_direct_call_as_rust_assert_macro",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1838,6 +1892,10 @@
             },
             {
               "name": "typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -2019,6 +2077,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "expr_skeleton_from_ast_lowers_direct_call_with_record_address_arg",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "clang_ast_fixture_replays_function_pointer_parameter_call_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -2088,6 +2150,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_memcpy_statement_void_pointer_return_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],

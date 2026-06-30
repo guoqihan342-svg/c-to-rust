@@ -383,6 +383,10 @@ pub enum ClangExprSkeleton {
         ptr: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    AddrOf {
+        operand: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     Cast {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
@@ -1543,6 +1547,10 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(ptr, inventory)?;
             rewrite_supported_enum_type(ty, inventory)?;
         }
+        ClangExprSkeleton::AddrOf { operand, ty } => {
+            rewrite_supported_enum_types_in_expr(operand, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
         ClangExprSkeleton::ArrayToPointerDecay { expr, target } => {
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;
@@ -2693,6 +2701,19 @@ fn expr_skeleton_from_ast_with_options(
                     ty: expr_type(expr)?,
                 });
             }
+            if opcode == "&" {
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_unary_operator".to_string(),
+                    message: "UnaryOperator is missing operand".to_string(),
+                })?;
+                return Ok(ClangExprSkeleton::AddrOf {
+                    operand: Box::new(expr_skeleton_from_ast_with_options(
+                        operand,
+                        preserve_integral_casts,
+                    )?),
+                    ty: expr_type(expr)?,
+                });
+            }
             if opcode == "+" {
                 let result_ty = expr_type(expr)?;
                 if !matches!(&result_ty.kind, ClangTypeKind::Integer { .. }) {
@@ -3469,6 +3490,7 @@ fn bounded_call_arg_rejection_reason(
         ClangExprSkeleton::Deref { .. } => {
             Some("call arguments cannot use dereference value semantics".to_string())
         }
+        ClangExprSkeleton::AddrOf { .. } => None,
         ClangExprSkeleton::Unsupported { node, reason } => {
             Some(format!("unsupported argument expression {node}: {reason}"))
         }
@@ -4099,6 +4121,7 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         | ClangExprSkeleton::Conditional { ty, .. }
         | ClangExprSkeleton::IncDec { ty, .. }
         | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::AddrOf { ty, .. }
         | ClangExprSkeleton::Index { ty, .. }
         | ClangExprSkeleton::ArrayLiteral { ty, .. }
         | ClangExprSkeleton::Call { ty, .. }
@@ -4137,6 +4160,9 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         }
         ClangExprSkeleton::Deref { ptr, .. } => {
             bind_target_abi_to_expr(ptr, target_abi);
+        }
+        ClangExprSkeleton::AddrOf { operand, .. } => {
+            bind_target_abi_to_expr(operand, target_abi);
         }
         ClangExprSkeleton::Cast { expr, .. } | ClangExprSkeleton::LValueToRValue { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
@@ -4645,6 +4671,11 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
                 source_span: None,
             })
         }
+        ClangExprSkeleton::AddrOf { operand, ty } => Ok(IrExpr::AddrOf {
+            operand: Box::new(lower_expr(operand)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
         ClangExprSkeleton::Cast {
             target,
             expr,
@@ -4805,6 +4836,7 @@ fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkelet
         | ClangExprSkeleton::Conditional { ty, .. }
         | ClangExprSkeleton::IncDec { ty, .. }
         | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::AddrOf { ty, .. }
         | ClangExprSkeleton::Index { ty, .. }
         | ClangExprSkeleton::ArrayLiteral { ty, .. }
         | ClangExprSkeleton::Call { ty, .. }
@@ -6456,6 +6488,111 @@ mod tests {
             panic!("expected one direct call argument, got {args:?}");
         };
         assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_record_address_of() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "&",
+            "type": { "qualType": "struct fdb_blob *" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "struct fdb_blob" },
+                    "referencedDecl": { "name": "blob" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("address-of skeleton");
+        let ClangExprSkeleton::AddrOf { operand, ty } = &skeleton else {
+            panic!("expected address-of skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "blob"
+        ));
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+
+        let ir = lower_expr(&skeleton).expect("lower address-of skeleton");
+        let IrExpr::AddrOf { operand, ty, .. } = ir else {
+            panic!("expected IR address-of expression, got {ir:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "blob"
+        ));
+        let IrTypeKind::Pointer { pointee } = ty.kind else {
+            panic!("expected address-of pointer type, got {ty:?}");
+        };
+        assert!(matches!(
+            &pointee.kind,
+            IrTypeKind::Record { name, .. } if name == "fdb_blob"
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_direct_call_with_record_address_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(struct fdb_blob *)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (struct fdb_blob *)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "consume_blob"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "&",
+                    "type": { "qualType": "struct fdb_blob *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob" },
+                            "referencedDecl": { "name": "blob" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("direct address call skeleton");
+        let ClangExprSkeleton::Call { callee, args, .. } = &skeleton else {
+            panic!("expected direct call skeleton, got {skeleton:?}");
+        };
+        assert_eq!(callee, "consume_blob");
+        let [ClangExprSkeleton::AddrOf { operand, .. }] = args.as_slice() else {
+            panic!("expected address-of call arg, got {args:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "blob"
+        ));
+
+        let ir = lower_expr(&skeleton).expect("lower direct address call skeleton");
+        let IrExpr::Call { callee, args, .. } = ir else {
+            panic!("expected IR direct call, got {ir:?}");
+        };
+        assert_eq!(callee, "consume_blob");
+        let [IrExpr::AddrOf { operand, .. }] = args.as_slice() else {
+            panic!("expected IR address-of call arg, got {args:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "blob"
+        ));
     }
 
     #[test]

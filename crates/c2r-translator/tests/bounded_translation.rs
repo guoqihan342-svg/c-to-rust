@@ -1106,8 +1106,23 @@ fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
             width: 32
         }
     ));
-    let IrExpr::Var { name, ty, .. } = expr.as_ref() else {
-        panic!("expected promoted unary plus operand to be the original parameter, got {expr:?}");
+    let IrExpr::LValueToRValue {
+        target: read_ty,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected promoted unary plus operand to preserve LValueToRValue, got {expr:?}");
+    };
+    assert!(matches!(
+        read_ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 8
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected promoted unary plus read operand to be the original parameter, got {read_expr:?}");
     };
     assert_eq!(name, "value");
     assert!(matches!(
@@ -3704,8 +3719,8 @@ fn typed_ir_emits_record_local_assignment_value_copy() {
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_uninitialized_record_local_decl() {
-    let point_ty = ir_record("point");
     let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
     let ir = IrFunction {
         name: "bad_record_local".to_string(),
         return_type: i32_ty.clone(),
@@ -3737,6 +3752,120 @@ fn typed_ir_rejects_uninitialized_record_local_decl() {
     assert!(error
         .reason
         .contains("decl q record initializer is required"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_uninitialized_record_local_address_when_field_is_read() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_record_address_and_read".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "touch_point".to_string(),
+                    args: vec![IrExpr::AddrOf {
+                        operand: Box::new(ir_var("q", point_ty.clone())),
+                        ty: point_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: ir_void(),
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("address-taken record locals cannot also be read without an initializer");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("decl q record initializer is required"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_record_address_passed_to_direct_call() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_with_local_blob".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "observe_blob".to_string(),
+                    args: vec![IrExpr::AddrOf {
+                        operand: Box::new(ir_var("blob", blob_ty)),
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit address-of local record call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("let mut blob: FdbBlob = FdbBlob {"), "{rust}");
+    assert!(rust.contains("buf: core::ptr::null_mut()"), "{rust}");
+    assert!(rust.contains("size: 0usize"), "{rust}");
+    assert!(rust.contains("return observe_blob(&mut blob);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-local-record-address-call-arg",
+        &format!(
+            "fn observe_blob(blob: &mut FdbBlob) -> i32 {{ blob.size = 7usize; 7i32 }}\n{rust}"
+        ),
+    );
 }
 
 #[cfg(feature = "typed-ir")]
