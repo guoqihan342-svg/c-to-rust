@@ -36,6 +36,7 @@ Key FlashDB artifacts:
 - accepted safety patch: `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch`
 - safety step log: `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl`
 - before/after manifest: `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json`
+- H4 run manifest: `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json`, a tracked record for `harness-h4-flashdb-context-index-20260701` with reproduction commands, target run artifact hashes, the attempt 1/2 repair trace, and the `translation_coverage_numerator=0` boundary.
 
 The bound real slice is `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32` at commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe`. The core per-unit unsafe number is `real-fdb-calc-crc32`: baseline unsafe count `2`, final unsafe count `0`, `reduced_by=2`.
 

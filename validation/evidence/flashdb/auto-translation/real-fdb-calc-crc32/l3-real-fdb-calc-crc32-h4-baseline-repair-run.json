@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "manifest_kind": "h4-baseline-repair-run",
+  "status": "passed",
+  "run_id": "harness-h4-flashdb-context-index-20260701",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "function": "fdb_calc_crc32",
+  "proof_class": "local-simulation",
+  "tracked_artifact_root": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32",
+  "target_run_root": {
+    "path": "target/competition-out-h4-flashdb-context-index-20260701",
+    "status": "recorded_not_tracked",
+    "reason": "target outputs are reproducible run artifacts and are ignored by git"
+  },
+  "source": {
+    "path": "sources/FlashDB/src/fdb_utils.c",
+    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe"
+  },
+  "competition_profile": {
+    "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+    "sha256": "0f1bd2182edcfc8932ef84bec8dff8025c1e0e11d6955fb11d2c6da9aa710bfe"
+  },
+  "environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+  },
+  "attempt_evidence_policy": {
+    "mode": "baseline_repair_gate",
+    "baseline_attempt": {
+      "attempt_number": 1,
+      "expected_final_gate": "failed",
+      "root_cause_key": "unsafe_baseline_requires_repair"
+    },
+    "accepted_attempt": {
+      "min_attempt_number": 2,
+      "require_hint_id": true,
+      "reuse_accepted_evidence": true,
+      "accepted_evidence_root": "validation/evidence",
+      "source": "accepted_safe_evidence"
+    },
+    "translation_before_after": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+      "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17"
+    }
+  },
+  "claim_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "translation_coverage_numerator": 0,
+    "boundary": "This manifest records the H4 before/after safety exhibit. It does not claim a C2Rust-generated semantic pass or whole-project FlashDB migration.",
+    "non_goals": [
+      "C2Rust-generated baseline claim",
+      "translator-generated semantic pass",
+      "whole-project FlashDB migration",
+      "general pointer alias model"
+    ]
+  },
+  "reproduction": {
+    "run_batch_profile_command": "python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id harness-h4-flashdb-context-index-20260701 --out-root target/competition-out-h4-flashdb-context-index-20260701",
+    "summary_validation_command": "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-h4-flashdb-context-index-20260701/summary/competition-run-summary.json",
+    "judge_demo_command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit"
+  },
+  "tracked_artifacts": {
+    "translation_before_after": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+      "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17"
+    },
+    "raw_unsafe_baseline": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
+      "sha256": "e22aff0680395c2f1e9089f749baff18581e661524d1149655e65747a2c27ef1"
+    },
+    "final_safe_rust": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-safe.rs",
+      "sha256": "5720f15bcf2969abca55b5fb6ab781bd626bb9a54eaedac0769365578aa29b40"
+    },
+    "oracle_evidence": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
+      "sha256": "4ed8aa57f4b048a48f65e153b04b070a151e551971113e7f4d703185e14a1c91"
+    },
+    "accepted_safety_patch": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
+      "sha256": "aec420af155515907b5f16d7d8b430916f87288859f489d60ae905f660eddda3"
+    },
+    "safety_step_log": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
+      "sha256": "aef4c8f50199c324c72802430312fb8f14ba4be3f7294931035b81048c0b1904"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",
+      "sha256": "6e43419dd07f8e1243999c58252b98cb6965d2ff7e6a0038feb6c749c84f3141"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
+      "sha256": "ada37e7330eb10d1013d11ba9ef67d3fa0f30b46456cd693ddae94a9b6827862"
+    },
+    "final_source_snapshot": {
+      "path": "validation/l2_slices/src/fdb_calc_crc32.rs",
+      "sha256": "2d12af2971c732180eb64bc1c68a88888b7b442a2fdc4b3b7fa4e5edbce0c4ac"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+      "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435"
+    }
+  },
+  "translation_before_after_summary": {
+    "status": "bound",
+    "semantic_pass": true,
+    "unsafe_reduction": {
+      "status": "measured",
+      "baseline_total_unsafe": 2,
+      "current_total_unsafe": 0,
+      "reduced_by": 2,
+      "ratio": 0.0
+    }
+  },
+  "repair_trace": {
+    "repair_round_cap": 5,
+    "auto_recovered": true,
+    "repair_rounds": 1,
+    "root_cause_counts": {
+      "unsafe_baseline_requires_repair": 1
+    },
+    "attempts": [
+      {
+        "attempt": 1,
+        "summary_status": "failed",
+        "exit_code": 1,
+        "process_returncode": 0,
+        "root_cause_key": "unsafe_baseline_requires_repair",
+        "hint_id": "repair:harness-h4-flashdb-context-index-20260701:flashdb-worker-001-fdb-calc-crc32:unsafe_baseline_requires_repair",
+        "hint_status": "opened",
+        "request": {
+          "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/flashdb-worker-001-fdb-calc-crc32-request-attempt-1.json",
+          "sha256": "8c608cabb8bbd28d0e494245a7cea05a820429dc7dc0d4616c7d1005db1c5b36"
+        }
+      },
+      {
+        "attempt": 2,
+        "summary_status": "passed",
+        "exit_code": 0,
+        "process_returncode": 0,
+        "hint_id": "repair:harness-h4-flashdb-context-index-20260701:flashdb-worker-001-fdb-calc-crc32:unsafe_baseline_requires_repair",
+        "hint_status": "revalidated_passed",
+        "retry_of": "repair:harness-h4-flashdb-context-index-20260701:flashdb-worker-001-fdb-calc-crc32:unsafe_baseline_requires_repair",
+        "request": {
+          "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/flashdb-worker-001-fdb-calc-crc32-request-attempt-2.json",
+          "sha256": "1c18e7a5bb083b80d5ee487de530aa63821aaddae6ef66b06e76e5a0854575b6"
+        },
+        "rollback_evidence": {
+          "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/rollback-before-retry-repair-harness-h4-flashdb-context-index-20260701-flashdb-worker-001-fdb-calc-crc32-unsafe_baseline_requires_repair.json",
+          "sha256": "3892a06c15f81d5c091e97e40bf34233b2277f31f8fd5daa1c4dd47ed3a2e57e"
+        }
+      }
+    ],
+    "repair_history": {
+      "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/summary/retry-repair-history-repair-harness-h4-flashdb-context-index-20260701-flashdb-worker-001-fdb-calc-crc32-unsafe_baseline_requires_repair.jsonl",
+      "sha256": "87af01fb63c7c4bb8f622b2c7e67f134cd891f8ca9e0df5c0558f7257a006ce2",
+      "statuses": [
+        "failed",
+        "passed",
+        "verified"
+      ],
+      "verified": true
+    }
+  },
+  "target_run_artifacts": {
+    "status": "recorded_not_tracked",
+    "artifacts": {
+      "competition_summary": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/summary/competition-run-summary.json",
+        "sha256": "ce3920dcd311808394a96c4934858bc6e44c43356d02dabc7f2bdfbd5a04822f"
+      },
+      "workflow_metrics": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/summary/workflow-metrics.json",
+        "sha256": "12073868ba26a6006cb3d2205003de9deefa73853005663420b69f180b27332f"
+      },
+      "before_after_exhibit": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/summary/before-after-exhibit.json",
+        "sha256": "9bc717f2cac7d60abb020f3c9c49e11c3c7e2f0d566acc30c2762cf5bf0e5cf7"
+      },
+      "route_governance_metrics_report": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/summary/route-governance-metrics-report.json",
+        "sha256": "0aa8bd11291b5b334d1e591fffd141954a10e03834164aa68e8a116f78a12430"
+      },
+      "context_pack": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/context-pack.json",
+        "sha256": "5a3e078d76f2b0574d72ac802072041dce4160b5c527ae593f8418181f8c0c7d"
+      },
+      "agent_index": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/agent-index.json",
+        "sha256": "cc869a93dd75f719adf413a0f20c04c0a113bd544e6de2199040274e444ed032"
+      },
+      "batch_profile_report": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/batch-profile-report.json",
+        "sha256": "ab113f3be74a1f849b1fc612619decef69079606e46b9eb3e79eebcdb5e8f150"
+      },
+      "run_plan_report": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/run-plan-report.json",
+        "sha256": "eca02646b80ea74bcb0fdbc1eeaa91639c59617512e0c772c9418100d20fff20"
+      },
+      "plan": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/plans/flashdb-fdb-utils-workers.json",
+        "sha256": "99ca297cc321946154b1c15c608d0f342b1fd98acee809c4b3879f40b8603c67"
+      },
+      "assignment": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/assignments/flashdb-worker-001-fdb-calc-crc32.json",
+        "sha256": "7b071ddd176354dcb2d57a47017b190a3910c69ae44ef1eeb807d72d1739c5a0"
+      },
+      "assignment_request": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/harness/assignments/flashdb-worker-001-fdb-calc-crc32-request.json",
+        "sha256": "e618b0f48fe0ac5d26434739b78df14fcc2e15ceb68ea2a51879c4a28d30d43b"
+      },
+      "worker_summary": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/summary/competition-run-summary.json",
+        "sha256": "e0e8d01d488afe0aaa8b8a27494edf90bbd19d028cd691b3e434763eddda7c86"
+      },
+      "worker_workflow_metrics": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/summary/workflow-metrics.json",
+        "sha256": "e7024b860e37a987189c55b5e86faf01919ad24905e1f1adbf176f8f35d5afa5"
+      },
+      "run_worker_report": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
+        "sha256": "69776788596153f6a83a3be9cce3a7a064c45eeb195f693afda7cac860aba674"
+      },
+      "commands_log": {
+        "path": "target/competition-out-h4-flashdb-context-index-20260701/logs/commands.jsonl",
+        "sha256": "a3d6962ebd4394bdabf3cf71cf282816fc90416782d13addf1358b72ce30c8cf"
+      }
+    }
+  }
+}

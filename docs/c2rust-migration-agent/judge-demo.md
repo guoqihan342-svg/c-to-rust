@@ -36,6 +36,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - accepted safety patch：`validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch`
 - safety step log：`validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl`
 - before/after manifest：`validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json`
+- H4 run manifest：`validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json`，入库记录 `harness-h4-flashdb-context-index-20260701` 的复现命令、target run artifact hash、attempt 1/2 repair trace 和 `translation_coverage_numerator=0` 边界。
 
 绑定的真实 slice 是 `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32`，commit 为 `f9d0421315c564fb890a1b14eee77b290e0d7bbe`。核心 per-unit unsafe 数字是 `real-fdb-calc-crc32`：baseline unsafe count `2`，final unsafe count `0`，`reduced_by=2`。
 
