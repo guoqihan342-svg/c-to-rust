@@ -50,6 +50,16 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - For batch work, split independent units first, then run workers concurrently; do not parallelize edits to the same source, schema, or evidence file.
 - Aggregate only machine-readable worker summaries and bound workflow metrics; treat worker prose as diagnostic context, not evidence.
 
+## OpenCode Worker Out-Root Contract
+
+- `assign-slice` must allocate a unique repo-relative `isolated_out_root` per worker in the run; prefer `target/competition-out/workers/<worker-id>`.
+- Assignment requests must include `out_root`, and `run-worker` must reject the request before executing anything if `request.out_root` differs from the SQLite ledger's `agents.isolated_out_root`.
+- `run-worker` must delete any stale expected summary before execution and then accept only the assigned `<isolated_out_root>/summary/competition-run-summary.json`.
+- `record-worker-summary` must reject summaries outside that assigned expected summary path, even when the path stays inside the repository.
+- If an OpenCode process exits 0 but does not write the expected summary, record `missing-summary` repair evidence; do not treat process success or chat text as acceptance.
+- `retry-worker` must reuse the same worker, ledger assignment, out-root, and repair hint; the revalidation result comes only from the newly written final gate.
+- The SQLite ledger is scheduling, lease, recovery, and artifact index state. Semantic evidence still comes only from on-disk summaries, evidence, workflow metrics, and validators.
+
 ## Handoff Checklist
 
 Before handing work back or starting another slice, leave these facts current:
@@ -102,6 +112,12 @@ Run focused competition runner contract tests after editing `run_competition.py`
 
 ```bash
 python -B -m unittest validation.tools.test_run_competition validation.tools.test_validate_competition_run_summary
+```
+
+Run focused OpenCode harness contract tests after editing `opencode_agent_harness.py` or its worker assignment/run/summary ledger behavior:
+
+```bash
+python -B -m unittest validation.tools.test_opencode_agent_harness
 ```
 
 ## Thin MCP / Stdio Server

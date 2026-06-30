@@ -127,6 +127,44 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 )
             self.assertIn("active lease already exists", str(raised.exception))
 
+    def test_assign_slice_rejects_duplicate_isolated_out_root_for_different_workers_in_run(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "shared",
+                repo_root=REPO_ROOT,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "isolated out_root already assigned"):
+                harness.assign_slice(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-b",
+                    target_id="demo",
+                    slice_id="demo-add-two",
+                    source_repo_root=Path("external/demo"),
+                    source_file="src/demo.c",
+                    function="add_two",
+                    source_commit="abc123",
+                    out_root=out_root / "workers" / "shared",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_assign_slice_cli_dispatches_source_pin_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -183,6 +221,19 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 proof_class="local-simulation",
                 repo_root=REPO_ROOT,
             )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
             summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
             summary_path.parent.mkdir(parents=True, exist_ok=True)
             summary_path.write_text(
@@ -226,6 +277,40 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(merge_plan["argv"][run_id_idx + 1], "run-test")
             artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
             self.assertEqual(artifact_rows, [("competition-run-summary", repo_rel(summary_path), "run-summary")])
+
+    def test_record_worker_summary_rejects_unassigned_summary_path(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            summary_path = out_root / "workers" / "worker-b" / "summary" / "competition-run-summary.json"
+            write_worker_summary(summary_path, "run-worker-b", status="passed", failed=0, semantic_pass=1)
+
+            with self.assertRaisesRegex(SystemExit, "worker summary path .* does not match assigned"):
+                harness.record_worker_summary(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    summary_path=summary_path,
+                    repo_root=REPO_ROOT,
+                )
 
     def test_run_worker_executes_assignment_and_records_summary(self) -> None:
         with temp_repo_dir() as tmp:
@@ -709,6 +794,45 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     db_path=db_path,
                     run_id="run-test",
                     worker_id="worker-a",
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_run_worker_rejects_request_out_root_mismatch_with_ledger(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            request_path = harness.assignment_file_path(db_path, "worker-a").with_name("worker-a-request.json")
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            request["out_root"] = repo_rel(out_root / "workers" / "worker-b")
+            request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            def runner_should_not_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError("worker command should not run when request out_root mismatches ledger")
+
+            with self.assertRaisesRegex(SystemExit, "worker request out_root .* does not match ledger"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    command_runner=runner_should_not_run,
                     repo_root=REPO_ROOT,
                 )
 

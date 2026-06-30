@@ -284,6 +284,7 @@ def assign_slice(
     )
     slice_spec_rel = checked_relative_path(slice_spec).as_posix() if slice_spec else None
     slice_spec_sha256 = sha256_file(repo_path(Path(slice_spec_rel), repo_root=repo_root)) if slice_spec_rel else None
+    out_root_rel = repo_relative(out_root, repo_root=repo_root)
     resource_key = f"slice:{target_id}/{slice_id}"
     task_id = f"{run_id}:{worker_id}:{target_id}:{slice_id}"
     now = now_text()
@@ -293,7 +294,7 @@ def assign_slice(
         "run_id": run_id,
         "worker_id": worker_id,
         "role": "slice-worker",
-        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "out_root": out_root_rel,
         "lease": {
             "resource_key": resource_key,
             "ttl_seconds": lease_ttl_seconds,
@@ -309,7 +310,7 @@ def assign_slice(
         },
         "runner": {
             "command": "python validation/tools/run_competition.py",
-            "out_root": repo_relative(out_root, repo_root=repo_root),
+            "out_root": out_root_rel,
             "reuse_accepted_evidence": reuse_accepted_evidence,
         },
     }
@@ -338,7 +339,7 @@ def assign_slice(
         "slice_id": slice_id,
         "source_commit": source_commit,
         "proof_class": run_proof_class(db_path, run_id),
-        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "out_root": out_root_rel,
         "run_id": f"{run_id}-{worker_id}",
     }
     if source_repository:
@@ -368,6 +369,15 @@ def assign_slice(
         ).fetchone()
         if active_owner is not None and active_owner[0] != worker_id:
             raise SystemExit(f"active lease already exists for {resource_key}: {active_owner[0]}")
+        out_root_owner = connection.execute(
+            """
+            select agent_id from agents
+            where run_id=? and isolated_out_root=? and agent_id<>?
+            """,
+            (run_id, out_root_rel, worker_id),
+        ).fetchone()
+        if out_root_owner is not None:
+            raise SystemExit(f"isolated out_root already assigned for run {run_id}: {out_root_rel} by {out_root_owner[0]}")
 
         connection.execute(
             """
@@ -384,7 +394,7 @@ def assign_slice(
                 "opencode",
                 worker_id,
                 "slice-worker",
-                repo_relative(out_root, repo_root=repo_root),
+                out_root_rel,
                 "assigned",
                 now,
             ),
@@ -436,7 +446,7 @@ def assign_slice(
                 "migrate",
                 "assigned",
                 1,
-                json.dumps([repo_relative(out_root, repo_root=repo_root)], sort_keys=True),
+                json.dumps([out_root_rel], sort_keys=True),
                 now,
             ),
         )
@@ -474,13 +484,24 @@ def record_worker_summary(
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     summary_path = repo_path(summary_path, repo_root=repo_root)
-    summary = load_json(summary_path)
-    status = str(summary.get("final_gate", {}).get("status", "failed"))
-    summary_hash = sha256_file(summary_path)
-    summary_rel = repo_relative(summary_path, repo_root=repo_root)
     now = now_text()
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
+        expected_summary_path = assigned_worker_summary_path(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            repo_root=repo_root,
+        )
+        summary_rel = repo_relative(summary_path, repo_root=repo_root)
+        expected_summary_rel = repo_relative(expected_summary_path, repo_root=repo_root)
+        if summary_rel != expected_summary_rel:
+            raise SystemExit(
+                f"worker summary path {summary_rel} does not match assigned out_root summary {expected_summary_rel}"
+            )
+        summary = load_json(summary_path)
+        status = str(summary.get("final_gate", {}).get("status", "failed"))
+        summary_hash = sha256_file(summary_path)
         connection.execute(
             """
             insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
@@ -542,7 +563,16 @@ def run_worker(
     request = load_json(request_path)
     if not request.get("out_root"):
         raise SystemExit("worker out_root is required in request")
-    worker_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
+    request_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        assigned_out_root_rel = assigned_worker_out_root_rel(connection, run_id=run_id, worker_id=worker_id)
+    request_out_root_rel = repo_relative(request_out_root, repo_root=repo_root)
+    if request_out_root_rel != assigned_out_root_rel:
+        raise SystemExit(
+            f"worker request out_root {request_out_root_rel} does not match ledger assignment {assigned_out_root_rel}"
+        )
+    worker_out_root = repo_path(Path(assigned_out_root_rel), repo_root=repo_root)
     summary_path = worker_out_root / "summary" / "competition-run-summary.json"
     logs_dir = worker_out_root / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -1221,6 +1251,27 @@ def run_proof_class(db_path: Path, run_id: str) -> str:
     if row is None:
         raise SystemExit(f"unknown run_id: {run_id}")
     return str(row[0])
+
+
+def assigned_worker_out_root_rel(connection: sqlite3.Connection, *, run_id: str, worker_id: str) -> str:
+    row = connection.execute(
+        "select isolated_out_root from agents where run_id=? and agent_id=?",
+        (run_id, worker_id),
+    ).fetchone()
+    if row is None:
+        raise SystemExit(f"worker is not assigned in run {run_id}: {worker_id}")
+    return str(row[0])
+
+
+def assigned_worker_summary_path(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    repo_root: Path,
+) -> Path:
+    out_root_rel = assigned_worker_out_root_rel(connection, run_id=run_id, worker_id=worker_id)
+    return repo_path(Path(out_root_rel), repo_root=repo_root) / "summary" / "competition-run-summary.json"
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
