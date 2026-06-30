@@ -37,6 +37,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
+        "--out",
+        type=Path,
+        help="Optional repo-relative or local output path for a judge entrypoints readiness report.",
+    )
+    parser.add_argument(
         "--require-local-artifacts",
         action="store_true",
         help="Fail when expected target artifacts listed by the entrypoint index are not present locally.",
@@ -48,8 +53,42 @@ def main() -> int:
         require_local_artifacts=args.require_local_artifacts,
         repo_root=REPO_ROOT,
     )
+    if args.out is not None:
+        write_readiness_report(result, args.out, repo_root=REPO_ROOT)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "passed" else 1
+
+
+def write_readiness_report(result: dict[str, Any], out_path: Path, *, repo_root: Path) -> dict[str, Any]:
+    if out_path.is_absolute():
+        resolved = out_path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        path = resolved
+        path_text = repo_relative(path, repo_root)
+    else:
+        path_text = out_path.as_posix()
+        assert_repo_relative_posix(path_text)
+        path = repo_path(path_text, repo_root=repo_root)
+    report = {
+        "schema_version": 1,
+        "report_kind": "judge-entrypoints-readiness",
+        "status": result.get("status"),
+        "semantic_gate": False,
+        "evidence_boundary": (
+            "This readiness report persists judge entrypoint validation results. "
+            "Semantic acceptance remains owned by competition summaries, workflow metrics, and validators."
+        ),
+        "readiness_report_path": path_text,
+        "claim_boundary": result.get("claim_boundary", {}),
+        "entrypoint_count": result.get("entrypoint_count", 0),
+        "proof_class_contract": result.get("proof_class_contract", {}),
+        "source_pin_contract": result.get("source_pin_contract", {}),
+        "test_contract": result.get("test_contract", {}),
+        "validation": result,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return report
 
 
 def load_json(path: Path) -> dict[str, Any]:

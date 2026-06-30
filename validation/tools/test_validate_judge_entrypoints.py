@@ -1,6 +1,8 @@
 from contextlib import closing
 import json
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -273,6 +275,39 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             self.assertEqual(entry["profile"]["status"], "present")
             self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
+
+    def test_cli_writes_judge_entrypoints_readiness_report(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-readiness-", dir=target_dir))
+        report_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "validation.tools.validate_judge_entrypoints",
+                "--config",
+                validator.DEFAULT_CONFIG.relative_to(REPO_ROOT).as_posix(),
+                "--require-local-artifacts",
+                "--out",
+                repo_relative(report_path),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertTrue(report_path.is_file())
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["report_kind"], "judge-entrypoints-readiness")
+        self.assertEqual(report["status"], "passed")
+        self.assertFalse(report["semantic_gate"])
+        self.assertEqual(report["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertEqual(report["entrypoint_count"], 3)
 
     def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:
         payload = {
