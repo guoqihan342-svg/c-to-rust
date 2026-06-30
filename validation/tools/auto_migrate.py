@@ -805,6 +805,7 @@ def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
                 "name": callee["name"],
                 "signature_ref": callee["signature_ref"],
                 "stub_kind": callee["stub_kind"],
+                "binding_status": rust_check_binding_status(callee),
                 "semantics_verified": False,
             }
             for callee in context.get("declared", [])
@@ -821,6 +822,96 @@ def load_plan_call_expressions(evidence_dir: Path, slice_id: str) -> list[dict[s
     return plan.get("translation_summary", {}).get("call_expressions", [])
 
 
+def rust_check_binding_status(callee: dict[str, Any]) -> str:
+    binding = callee.get("rust_check_binding")
+    if isinstance(binding, dict) and binding.get("status"):
+        return str(binding["status"])
+    if callee.get("stub_generation") == "generated_compile_only":
+        return "generated_compile_only"
+    if str(callee.get("stub_generation") or "").startswith("not_emitted_"):
+        return "not_emitted"
+    return "unknown"
+
+
+def mark_rust_check_binding(callee: dict[str, Any], status: str, signature: str) -> None:
+    callee["rust_check_binding"] = {
+        "status": status,
+        "allowed_use": "rustc_compile_only",
+        "signature": signature,
+        "semantics_verified": False,
+    }
+
+
+def rust_check_harness_only_external_stub(callee: dict[str, Any], text: str) -> str | None:
+    name = rust_identifier(callee["name"])
+    if "FdbBlob" not in text:
+        return None
+    signatures = {
+        "fdb_blob_make": (
+            "pub fn fdb_blob_make("
+            "blob: &mut FdbBlob, "
+            "value_buf: *const core::ffi::c_void, "
+            "buf_len: usize"
+            ") -> &mut FdbBlob"
+        ),
+        "fdb_kv_set_blob": (
+            "pub fn fdb_kv_set_blob("
+            "db: *mut core::ffi::c_void, "
+            "key: *const core::ffi::c_void, "
+            "blob: &mut FdbBlob"
+            ") -> i32"
+        ),
+        "fdb_kv_del": (
+            "pub fn fdb_kv_del("
+            "db: *mut core::ffi::c_void, "
+            "key: *const core::ffi::c_void"
+            ") -> i32"
+        ),
+    }
+    signature = signatures.get(name)
+    if signature is None:
+        return None
+    if f"fn {name}(" in text:
+        mark_rust_check_binding(callee, "already_present", signature)
+        return None
+    body_lines = {
+        "fdb_blob_make": [
+            "    let _ = (value_buf, buf_len);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_blob_make")',
+        ],
+        "fdb_kv_set_blob": [
+            "    let _ = (db, key, blob);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_kv_set_blob")',
+        ],
+        "fdb_kv_del": [
+            "    let _ = (db, key);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_kv_del")',
+        ],
+    }[name]
+    mark_rust_check_binding(callee, "harness_only", signature)
+    return signature + " {\n" + "\n".join(body_lines) + "\n}"
+
+
+def rust_check_external_binding_report(context: dict[str, Any]) -> dict[str, Any]:
+    bindings = [
+        {
+            "name": callee["name"],
+            "status": callee["rust_check_binding"]["status"],
+            "allowed_use": callee["rust_check_binding"]["allowed_use"],
+            "signature": callee["rust_check_binding"]["signature"],
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+        if isinstance(callee.get("rust_check_binding"), dict)
+    ]
+    return {
+        "status": "emitted" if any(item["status"] == "harness_only" for item in bindings) else "none",
+        "allowed_use": "rustc_compile_only",
+        "semantics_verified": False,
+        "bindings": bindings,
+    }
+
+
 def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> bool:
     callees = context.get("declared", [])
     if not callees:
@@ -828,11 +919,15 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        if callee.get("stub_generation") == "not_emitted_modeled_stdlib":
+            continue
         if callee.get("stub_generation") in {
-            "not_emitted_modeled_stdlib",
             "not_emitted_named_slice_evidence",
             "not_emitted_flashdb_signature_context",
         }:
+            stub = rust_check_harness_only_external_stub(callee, text)
+            if stub is not None:
+                stubs.append(stub)
             continue
         name = rust_identifier(callee["name"])
         params = []
@@ -852,6 +947,7 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
         signature = f"fn {name}({', '.join(params)}) -> {return_type}"
         if signature in text:
             continue
+        mark_rust_check_binding(callee, "generated_compile_only", signature)
         stubs.append(
             f'{signature} {{ unimplemented!("external callee context stub: {callee["name"]}") }}'
         )
@@ -3326,6 +3422,17 @@ def run_generated_rust_replay(
     draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
     if rust_check.get("status") != "passed":
         return replay
+    if rust_check_has_harness_only_external_bindings(rust_check):
+        replay["status"] = "not_applicable"
+        replay["skip_reason"] = "compile_only_external_bindings_not_executable"
+        replay["not_applicable_reason"] = "compile_only_external_bindings_not_executable"
+        replay["generated_draft_replay_pass"] = False
+        replay["generated_draft_semantic_pass"] = False
+        replay["known_gaps"] = [
+            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof."
+        ]
+        write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+        return replay
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
     result = run_generated_rust_replay_once(draft_path, replay_path)
@@ -3355,6 +3462,16 @@ def run_generated_rust_replay(
             mapping["status"] = "passed" if passed else "failed"
     write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
     return replay
+
+
+def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) -> bool:
+    report = rust_check.get("rust_check_harness_only_bindings")
+    if not isinstance(report, dict):
+        return False
+    return any(
+        isinstance(binding, dict) and binding.get("status") == "harness_only"
+        for binding in report.get("bindings", [])
+    )
 
 
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
@@ -3456,6 +3573,7 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             "errors": [],
             "command": None,
             "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
         }
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
@@ -3479,6 +3597,7 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             "error_count": len(final["errors"]),
             "errors": final["errors"],
             "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
             "self_healing": {
                 "status": patch["status"],
                 "patch_events": patch["patch_events"],

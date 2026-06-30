@@ -3548,6 +3548,91 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertNotIn("accepted_named_slice_evidence", declared[name])
 
+    def test_real_fdb_kv_set_rust_check_uses_harness_only_external_bindings(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        real_draft = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-kv-set"
+            / "l3-real-fdb-kv-set-rust-draft.rs"
+        ).read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-set-rust-check-") as tmp:
+            draft_path = Path(tmp) / "l3-real-fdb-kv-set-rust-draft.rs"
+            draft_path.write_text(real_draft, encoding="utf-8")
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context)
+            rust_check = module.rust_check_once(draft_path)
+            claim_scope = module.external_callee_claim_scope(context)
+            reported_context = module.rust_check_external_context(context)
+
+            self.assertTrue(changed)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            draft = draft_path.read_text(encoding="utf-8")
+            self.assertIn("rust-check harness-only external callee binding: fdb_blob_make", draft)
+            self.assertIn(
+                "pub fn fdb_blob_make(blob: &mut FdbBlob, value_buf: *const core::ffi::c_void, buf_len: usize) -> &mut FdbBlob",
+                draft,
+            )
+            self.assertIn(
+                "pub fn fdb_kv_set_blob(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, blob: &mut FdbBlob) -> i32",
+                draft,
+            )
+            self.assertIn(
+                "pub fn fdb_kv_del(db: *mut core::ffi::c_void, key: *const core::ffi::c_void) -> i32",
+                draft,
+            )
+            self.assertNotIn("fn strlen", draft)
+            self.assertEqual(claim_scope["status"], "compile_context_only")
+            self.assertFalse(claim_scope["semantics_verified"])
+            self.assertFalse(
+                module.semantic_pass_for_run(
+                    None,
+                    {"status": "passed"},
+                    {"status": "blocked", "generated_draft_semantic_pass": False},
+                )
+            )
+            bindings = {
+                item["name"]: item
+                for item in reported_context["declared_callees"]
+            }
+            self.assertEqual(bindings["fdb_blob_make"]["binding_status"], "harness_only")
+            self.assertEqual(bindings["fdb_kv_set_blob"]["binding_status"], "harness_only")
+            self.assertEqual(bindings["fdb_kv_del"]["binding_status"], "harness_only")
+            self.assertFalse(bindings["fdb_blob_make"]["semantics_verified"])
+            self.assertFalse(bindings["fdb_kv_set_blob"]["semantics_verified"])
+            self.assertFalse(bindings["fdb_kv_del"]["semantics_verified"])
+            replay = {
+                "schema_version": 1,
+                "status": "skipped",
+                "generated_draft_replay_pass": False,
+                "generated_draft_semantic_pass": False,
+            }
+            skipped_replay = module.run_generated_rust_replay(
+                spec,
+                Path(tmp),
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": module.rust_check_external_binding_report(context),
+                },
+            )
+            self.assertEqual(skipped_replay["status"], "not_applicable")
+            self.assertEqual(
+                skipped_replay["skip_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertEqual(
+                skipped_replay["not_applicable_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertFalse(skipped_replay["generated_draft_semantic_pass"])
+
     def test_call_edge_binding_includes_accepted_named_slice_external_callee(self) -> None:
         module = load_auto_migrate_module()
         context = {
