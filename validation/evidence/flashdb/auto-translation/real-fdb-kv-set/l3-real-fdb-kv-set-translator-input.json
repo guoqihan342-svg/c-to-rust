@@ -33,7 +33,7 @@
     "sha256": "c71859844c82437b87ee6d52739f623d82771252a0eb2b29dc373d6a8ce4dd95"
   },
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "source_file": "src/fdb_kvdb.c",
   "source_file_hashes": {
     "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -45,6 +45,6 @@
       "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
     }
   ],
-  "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_root": "sources/FlashDB",
   "target_id": "flashdb"
 }

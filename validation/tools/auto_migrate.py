@@ -3881,6 +3881,8 @@ def emit_capability_delta_ledger(
         "schema_version": 1,
         "target_id": target_id,
         "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
         "status": "recorded",
         "route_level": route_decision.get("level"),
         "route_status": route_decision.get("status"),
@@ -4227,6 +4229,8 @@ def emit_route_decision(
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
         "status": route_status,
         "level": level,
         "translator": translator,
@@ -4829,6 +4833,8 @@ def emit_validation_profile(
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
         "status": result,
         "profile": profile,
         "route_level": level,
@@ -6833,6 +6839,21 @@ def global_dependency_requirements(spec: dict[str, Any]) -> list[dict[str, Any]]
 
 def source_commit(spec: dict[str, Any]) -> str:
     return spec.get("source_commit") or spec.get("source", {}).get("source_commit") or "UNKNOWN0"
+
+
+def source_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    source = spec.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+    identity: dict[str, Any] = {"source_commit": source_commit(spec)}
+    for key in ["repo_commit", "source_root", "source_repository", "source_branch"]:
+        value = source.get(key, spec.get(key))
+        if value:
+            identity[key] = value
+    source_file_hashes = source.get("source_file_hashes", spec.get("source_file_hashes"))
+    if isinstance(source_file_hashes, dict) and source_file_hashes:
+        identity["source_file_hashes"] = source_file_hashes
+    return identity
 
 
 def fixture_hash(spec: dict[str, Any]) -> str:

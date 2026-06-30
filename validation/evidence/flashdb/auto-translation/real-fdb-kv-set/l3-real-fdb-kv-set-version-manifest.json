@@ -11,7 +11,7 @@
     },
     "build_profile_hash": "c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
     "c2rust_baseline_identity": {
-      "sha256": "c1ceb5c9f558d2834b1547ab51a2b8838368e2b0eb4ade825d1278567d29d60f",
+      "sha256": "4f3ab8d4c96bf71fe028777d42870087073c1c5fa72f225a1b589fde9b4a9803",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -70,7 +70,6 @@
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "--emit-clang-dry-run",
       "--emit-clang-lowering-report"
     ],
     "competition_environment_identity": {
@@ -81,19 +80,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4b308a62585ed089c8a0e58a09ea6a2153a91cf2bc7a7cd591c216e56e0024a8",
+        "sha256": "9d1743168145716dd03875844c6350a5b35867a35c6ab0ddde71a170474c5c53",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "a3b571ab5f200a9840a0a14c91cbc2bacff82bfb5e1e8a7fb5a50a8c79df5972",
+        "sha256": "76d72b80db9ab44bf794bb1485f1238fd59f87ec0a9c3809c34fa84cd9a8c39e",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "32a1b0ff1a8bf4b66b85d46b6532b492bd7dba503918a2f6ec2ad54cae3db351",
+        "sha256": "61af4b66c743d9d2aceb75cb0d599b6471022be715c2c5451bbe2d437f145a9b",
         "status": "blocked"
       }
     },
@@ -138,7 +137,7 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "9f3558e3f7cb77397ee76b987f83991cca8e71f2c960cd4d9340971dfd20dc5b",
+      "sha256": "b2908e653589032d05d3f9dfe43d2e13df7796a2eec0e5286338ba3c9ed63b65",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -155,8 +154,8 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "slice_spec_sha256": "872afff310059a8067fdc48b7412413046a78156bb1c85b272df3bc841cec0ac",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
     },
@@ -168,21 +167,20 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_feature_set": [
-      "clang-frontend",
       "clang-lowering-report"
     ],
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "8b0b400ce6dbdd6178580bd9f5644dca2cdeb291fad5ab7db46311295cfe5d63",
+      "sha256": "8deec53f25c18bf1c6e893721d170b47f138fdeb3d96c3db9e0b0d1448e60943",
       "status": "blocked"
     }
   },
-  "repo_commit": "d0833e6148d06c71459898694d5ef31b0503d57a",
+  "repo_commit": "e6421a885a004751cab48dfd5fde18072571c4dc",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "target_id": "flashdb",
   "translator_version": "0.1.0"

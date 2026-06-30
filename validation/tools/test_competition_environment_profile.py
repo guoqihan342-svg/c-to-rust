@@ -160,6 +160,39 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
                 self.assertIn(commit, text)
 
+    def test_flashdb_kv_set_slice_and_evidence_follow_competition_source_pin(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        commit = flashdb["commit"]
+
+        slice_spec = load_json(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json")
+        self.assertEqual(slice_spec["source_commit"], commit)
+        self.assertEqual(slice_spec["source"]["source_commit"], commit)
+        self.assertEqual(slice_spec["source"]["source_root"], "sources/FlashDB")
+        self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, json.dumps(slice_spec, sort_keys=True))
+
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-kv-set"
+        )
+        evidence_files = [
+            evidence_dir / "l3-real-fdb-kv-set-translator-input.json",
+            evidence_dir / "l3-real-fdb-kv-set-clang-lowering-report.json",
+            evidence_dir / "l3-real-fdb-kv-set-route-decision.json",
+            evidence_dir / "l3-real-fdb-kv-set-validation-profile.json",
+            evidence_dir / "l3-real-fdb-kv-set-capability-delta.json",
+        ]
+        for evidence_file in evidence_files:
+            payload = load_json(evidence_file)
+            with self.subTest(evidence_file=evidence_file.relative_to(REPO_ROOT).as_posix()):
+                serialized = json.dumps(payload, sort_keys=True)
+                self.assertIn(commit, serialized)
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, serialized)
+
     def test_quickstart_runbook_documents_competition_commands_and_outputs(self) -> None:
         quickstarts = [
             REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",

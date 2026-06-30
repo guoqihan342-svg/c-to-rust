@@ -23,9 +23,9 @@
       "-Xclang",
       "-ast-dump=json",
       "-fsyntax-only",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829\\src/fdb_kvdb.c"
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
+      "sources/FlashDB\\src/fdb_kvdb.c"
     ],
     "clang_path": null,
     "diagnostics": [
@@ -50,7 +50,7 @@
     "function_ir": null,
     "function_name": "fdb_kv_set",
     "globals": [],
-    "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+    "source_file": "sources/FlashDB/src/fdb_kvdb.c",
     "status": "unavailable"
   },
   "metadata": {
@@ -68,12 +68,12 @@
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
     },
-    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829"
+    "source_root": "sources/FlashDB"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_kvdb.c",
   "status": "unavailable",
   "target_id": "flashdb",
   "typed_ir_candidate": {

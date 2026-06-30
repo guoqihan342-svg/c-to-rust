@@ -14,8 +14,8 @@
       "return_code"
     ],
     "cache_invalidation_keys": [
-      "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec_sha256=0fcddde5b4825919ee794b041f6cc161348f4d554a293e02c76f40751f7bd11e",
+      "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "slice_spec_sha256=872afff310059a8067fdc48b7412413046a78156bb1c85b272df3bc841cec0ac",
       "fixture_hash=real-fdb-kv-set-fixture",
       "build_profile_hash=c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
       "translator_version=0.1.0",
@@ -46,7 +46,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "d0833e6148d06c71459898694d5ef31b0503d57a",
+    "repo_commit": "e6421a885a004751cab48dfd5fde18072571c4dc",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
@@ -60,7 +60,7 @@
     ],
     "schema_version": 1,
     "slice_id": "real-fdb-kv-set",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_test_inputs": {
       "fixtures": [
         {

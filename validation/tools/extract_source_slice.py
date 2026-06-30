@@ -126,7 +126,7 @@ def generate_slice_spec(
     dependencies.extend(same_file_global_dependencies(text, extracted, relative_source, parameters))
 
     source_identity: dict[str, Any] = {
-        "source_root": str(root),
+        "source_root": source_root_for_spec(repo_root, root),
         "source_commit": commit,
         "repo_commit": commit,
         "source_file_hashes": {relative_source: file_hash},
@@ -827,6 +827,12 @@ def normalize_relative_path(path: Path) -> str:
     if path.is_absolute():
         raise SystemExit("--source-file must be relative to --repo-root")
     return path.as_posix()
+
+
+def source_root_for_spec(repo_root: Path, resolved_root: Path) -> str:
+    if repo_root.is_absolute():
+        return str(resolved_root)
+    return repo_root.as_posix().rstrip("/") or "."
 
 
 def ensure_inside_root(root: Path, path: Path) -> None:

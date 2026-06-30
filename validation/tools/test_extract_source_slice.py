@@ -133,6 +133,39 @@ class ExtractSourceSliceTests(unittest.TestCase):
             self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_end"], 1)
             self.assertEqual(spec["source"]["source_file_hashes"]["math.c"], hashlib.sha256(src.read_bytes()).hexdigest())
 
+    def test_cli_preserves_relative_repo_root_in_generated_spec(self) -> None:
+        source_root = REPO_ROOT / "target" / "source-slice-relative-root-test" / "source"
+        out = REPO_ROOT / "target" / "source-slice-relative-root-test" / "slice.json"
+        src = source_root / "src" / "sample.c"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text("int add_one(int value) { return value + 1; }\n", encoding="utf-8")
+
+        subprocess.run(
+            [
+                "python",
+                str(EXTRACTOR),
+                "--repo-root",
+                "target/source-slice-relative-root-test/source",
+                "--source-file",
+                "src/sample.c",
+                "--function",
+                "add_one",
+                "--target-id",
+                "unit",
+                "--slice-id",
+                "real-add-one",
+                "--out",
+                str(out),
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        spec = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(spec["source"]["source_root"], "target/source-slice-relative-root-test/source")
+
     def test_records_and_validates_source_identity_pin(self) -> None:
         with tempfile.TemporaryDirectory(prefix="source-slice-pin-test-") as tmp:
             root = Path(tmp)

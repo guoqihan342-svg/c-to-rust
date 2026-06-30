@@ -813,6 +813,7 @@ class AutoMigrateTests(unittest.TestCase):
         spec = {
             "target_id": "flashdb",
             "slice_id": "real-fdb-blob-make",
+            "source_commit": "1234567",
         }
         route_decision = {
             "level": "L1",
@@ -851,6 +852,8 @@ class AutoMigrateTests(unittest.TestCase):
                 for item in payload["capability_delta"]
                 if item["construct_id"] == "c_oracle_harness_matched_not_oracle"
             )
+            self.assertEqual(payload["source_commit"], "1234567")
+            self.assertEqual(payload["source_identity"]["source_commit"], "1234567")
             self.assertEqual(c_oracle_delta["kind"], "candidate_verification")
             self.assertEqual(c_oracle_delta["generated_candidate_status"], "candidate")
             self.assertFalse(c_oracle_delta["semantic_pass"])
@@ -1503,6 +1506,10 @@ class AutoMigrateTests(unittest.TestCase):
             )
 
             typed_ir = route["candidate_generation"]["typed_ir"]
+            self.assertEqual(route["source_commit"], "93d1755")
+            self.assertEqual(profile["source_commit"], "93d1755")
+            self.assertEqual(route["source_identity"]["source_commit"], "93d1755")
+            self.assertEqual(profile["source_identity"], route["source_identity"])
             self.assertEqual(typed_ir["status"], "generated")
             self.assertEqual(
                 Path(route["source_artifacts"]["clang_lowering_report"]["path"]).name,

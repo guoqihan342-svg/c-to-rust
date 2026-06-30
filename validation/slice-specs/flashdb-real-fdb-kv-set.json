@@ -6,7 +6,7 @@
   "status": "draft",
   "function_name": "fdb_kv_set",
   "c_source": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)\n{\n    struct fdb_blob blob;\n\n    if (value) {\n        return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)));\n    } else {\n        return fdb_kv_del(db, key);\n    }\n}",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "fixture_hash": "real-fdb-kv-set-fixture",
   "l1_evidence": {
     "path": "validation/evidence/flashdb/l1-native-build.json",
@@ -14,16 +14,17 @@
     "accepted": false
   },
   "source": {
-    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
-    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_root": "sources/FlashDB",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
       "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
       "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
       "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320"
-    }
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_branch": "competition"
   },
   "c_boundary": {
     "files": [
@@ -38,7 +39,6 @@
     ],
     "signatures": [
       {
-        "id": "sig-fdb-kv-set",
         "function": "fdb_kv_set",
         "return_type": "fdb_err_t",
         "parameters": [
@@ -67,7 +67,8 @@
           "byte_end": 49710,
           "sha256": "c71859844c82437b87ee6d52739f623d82771252a0eb2b29dc373d6a8ce4dd95"
         },
-        "definition_status": "real_source_bound"
+        "definition_status": "real_source_bound",
+        "id": "sig-fdb-kv-set"
       },
       {
         "id": "sig-stdlib-strlen",
@@ -159,6 +160,48 @@
         "c_source": "fdb_err_t fdb_kv_del(fdb_kvdb_t db, const char *key);"
       }
     ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "fdb_err_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "fdb_kvdb_t",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "type",
+        "name": "char",
+        "source": "extracted_signature"
+      },
+      {
+        "kind": "callee",
+        "name": "strlen",
+        "source": "stdlib_model_pending_named_slice_evidence"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_blob_make",
+        "source": "src/fdb_utils.c#fdb_blob_make"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_kv_set_blob",
+        "source": "src/fdb_kvdb.c#fdb_kv_set_blob"
+      },
+      {
+        "kind": "callee",
+        "name": "fdb_kv_del",
+        "source": "src/fdb_kvdb.c#fdb_kv_del"
+      }
+    ],
+    "extraction": {
+      "extractor": "validation/tools/extract_source_slice.py",
+      "frontend": "bounded-c-source-scanner",
+      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    },
     "external_direct_callees": [
       {
         "name": "strlen",
@@ -212,49 +255,7 @@
         "definition_status": "real_source_bound",
         "stub_boundary": "blocked_until_callee_semantics_verified"
       }
-    ],
-    "direct_dependencies": [
-      {
-        "kind": "type",
-        "name": "fdb_err_t",
-        "source": "extracted_signature"
-      },
-      {
-        "kind": "type",
-        "name": "fdb_kvdb_t",
-        "source": "extracted_signature"
-      },
-      {
-        "kind": "type",
-        "name": "char",
-        "source": "extracted_signature"
-      },
-      {
-        "kind": "callee",
-        "name": "strlen",
-        "source": "stdlib_model_pending_named_slice_evidence"
-      },
-      {
-        "kind": "callee",
-        "name": "fdb_blob_make",
-        "source": "src/fdb_utils.c#fdb_blob_make"
-      },
-      {
-        "kind": "callee",
-        "name": "fdb_kv_set_blob",
-        "source": "src/fdb_kvdb.c#fdb_kv_set_blob"
-      },
-      {
-        "kind": "callee",
-        "name": "fdb_kv_del",
-        "source": "src/fdb_kvdb.c#fdb_kv_del"
-      }
-    ],
-    "extraction": {
-      "extractor": "validation/tools/extract_source_slice.py",
-      "frontend": "bounded-c-source-scanner",
-      "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
-    }
+    ]
   },
   "build_profile": {
     "profile_id": "flashdb-real-fdb-kv-set-real-source",
@@ -339,6 +340,8 @@
     "source.source_file_hashes",
     "c_boundary.signatures[0].source_span.sha256",
     "build_profile.profile_id",
-    "translator_version"
+    "translator_version",
+    "source.source_repository",
+    "source.source_branch"
   ]
 }
