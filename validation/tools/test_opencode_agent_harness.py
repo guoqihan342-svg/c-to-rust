@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import os
 import sqlite3
@@ -751,6 +752,110 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["report_path"], result["report_path"])
             self.assertEqual(report["acceptance_boundary"], result["acceptance_boundary"])
             self.assertEqual(report["route_governance_metrics_report"], route_report_ref)
+
+    def test_run_batch_profile_binds_before_after_exhibit_report(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "demo-source"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int store_add_one(int value, int* out) {
+                    out[0] = value + 1;
+                    return 0;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_path = write_slice_spec(
+                Path(tmp) / "slice-specs" / "store-add-one.json",
+                "demo",
+                "store-add-one",
+                "store_add_one",
+                "abc123",
+            )
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-before-after",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["store_add_one"],
+                        "slice_specs": [repo_rel(spec_path)],
+                        "reuse_accepted_evidence": True,
+                        "accepted_evidence_root": "validation/evidence",
+                        "slice_id_prefix": "demo",
+                        "worker_prefix": "worker",
+                        "mode": "deterministic",
+                        "execute_merge": True,
+                        "emit_before_after_exhibit_report": True,
+                        "acceptance_boundary": {
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "claim": "test before/after exhibit",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" in argv:
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(
+                    summary_path,
+                    "run-before-after",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=1,
+                    workflow_metrics=before_after_worker_metrics(out_root, "run-before-after"),
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-before-after",
+                out_root=out_root,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            exhibit_ref = result["before_after_exhibit_report"]
+            exhibit_path = REPO_ROOT / exhibit_ref["path"]
+            self.assertTrue(exhibit_path.exists())
+            self.assertEqual(exhibit_ref["sha256"], harness.sha256_file(exhibit_path))
+            self.assertEqual(exhibit_ref["status"], "passed")
+            self.assertEqual(exhibit_ref["unit_count"], 1)
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            self.assertEqual(exhibit["report_kind"], "before-after-exhibit")
+            self.assertEqual(exhibit["status"], "passed")
+            self.assertEqual(set(exhibit["stage_contracts"]), {"planner", "worker", "verifier", "repairer", "reporter"})
+            self.assertEqual(exhibit["stage_contracts"]["planner"]["status"], "planned")
+            self.assertEqual(exhibit["stage_contracts"]["planner"]["units"][0]["slice_id"], "store-add-one")
+            self.assertEqual(exhibit["translation_before_after"]["status"], "bound")
+            self.assertEqual(exhibit["translation_before_after"]["unit_count"], 1)
+            self.assertEqual(exhibit["units"][0]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertIn("run-batch-profile", exhibit["reproduction"]["run_command"])
+            self.assertIn("validate_competition_run_summary.py", exhibit["reproduction"]["verify_command"])
+            artifact_rows = fetch_rows(
+                result["db_path"],
+                "select kind, repo_rel_path, semantic_role from artifacts where kind='before-after-exhibit-report'",
+            )
+            self.assertEqual(
+                artifact_rows,
+                [("before-after-exhibit-report", exhibit_ref["path"], "before-after-exhibit")],
+            )
 
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
@@ -2741,6 +2846,92 @@ def measured_unsafe_worker_metrics(run_id: str) -> dict:
                 "refused": False,
                 "blocked": False,
                 "failed": False,
+            }
+        ],
+    }
+
+
+def before_after_worker_metrics(out_root: Path, run_id: str) -> dict:
+    evidence_dir = out_root / "evidence" / "before-after"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = {
+        "baseline": evidence_dir / "baseline-unsafe.rs",
+        "final": evidence_dir / "final-safe.rs",
+        "oracle_evidence": evidence_dir / "oracle-diff.json",
+        "accepted_patch": evidence_dir / "accepted.patch",
+        "patch_log": evidence_dir / "step-log.jsonl",
+    }
+    for name, path in artifacts.items():
+        path.write_text(f"{name}\n", encoding="utf-8")
+    before_after = {
+        "schema_version": 1,
+        "status": "bound",
+        **{
+            name: {
+                "path": f"evidence/before-after/{path.name}",
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+            for name, path in artifacts.items()
+        },
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 3,
+            "current_total_unsafe": 0,
+            "reduced_by": 3,
+            "ratio": 0.0,
+        },
+        "claim_boundary": {
+            "function": "store_add_one",
+            "non_goals": ["whole-program translation"],
+        },
+    }
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "proof_class": "local-simulation",
+        "units_total": 1,
+        "units_converged": 1,
+        "units_baseline_only": 0,
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": 0,
+            "reduced_by": None,
+            "ratio": 0,
+        },
+        "translation_before_after": {
+            "status": "bound",
+            "unit_count": 1,
+            "measured_unsafe_unit_count": 1,
+            "accepted_patch_unit_count": 1,
+            "units": [
+                {
+                    "unit_id": "demo/store-add-one",
+                    "status": "bound",
+                    "unsafe_reduction": before_after["unsafe_reduction"],
+                }
+            ],
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": True,
+        "always_equivalent": True,
+        "fail_closed_count": 0,
+        "root_cause_counts": {},
+        "wall_clock_seconds": 0,
+        "llm_calls": 0,
+        "per_unit_statuses": [
+            {
+                "unit_id": "demo/store-add-one",
+                "source": "opencode-worker",
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+                "translation_before_after": before_after,
             }
         ],
     }

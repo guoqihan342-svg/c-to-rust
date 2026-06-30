@@ -27,7 +27,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools.extract_source_slice import find_matching, mask_comments_and_strings
-from validation.tools import route_governance_metrics_report
+from validation.tools import route_governance_metrics_report, validate_competition_run_summary
 
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 DB_REL_PATH = Path("state") / "opencode-agent-harness.sqlite3"
@@ -858,6 +858,18 @@ def run_batch_profile(
         out_root=out_root,
         repo_root=repo_root,
     )
+    before_after_exhibit_artifact = write_before_after_exhibit_profile_report(
+        profile=profile,
+        profile_path=profile_path,
+        run_id=run_id,
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        route_metrics_artifact=route_metrics_artifact,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
     result = {
         "schema_version": SCHEMA_VERSION,
         "status": run_result["status"],
@@ -879,6 +891,8 @@ def run_batch_profile(
         result["acceptance_boundary"] = acceptance_boundary
     if route_metrics_artifact is not None:
         result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
     report_path = out_root / "harness" / "batch-profile-report.json"
     result["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -907,6 +921,19 @@ def run_batch_profile(
                 status=str(binding["status"]),
                 semantic_role="route-governance-metrics",
                 payload=route_metrics_artifact["payload"],
+                repo_root=repo_root,
+            )
+        if before_after_exhibit_artifact is not None:
+            binding = before_after_exhibit_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="before-after-exhibit-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="before-after-exhibit",
+                payload=before_after_exhibit_artifact["payload"],
                 repo_root=repo_root,
             )
         record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
@@ -970,6 +997,215 @@ def write_route_governance_metrics_profile_report(
         "claim_boundary": str(payload.get("claim_boundary", "")),
     }
     return {"binding": binding, "payload": payload}
+
+
+def write_before_after_exhibit_profile_report(
+    *,
+    profile: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    proof_class: str,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    route_metrics_artifact: dict[str, Any] | None,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    if not profile_bool(profile, "emit_before_after_exhibit_report", default=False):
+        return None
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    report_path = out_root / "summary" / "before-after-exhibit.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    summary_validation = validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+    summary = load_json(summary_path)
+    workflow_ref = summary["workflow_metrics"]
+    workflow_path = validate_competition_run_summary.resolve_summary_artifact(
+        str(workflow_ref["path"]),
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if workflow_path is None:
+        raise SystemExit("before-after exhibit requires an existing workflow metrics artifact")
+    workflow_metrics = load_json(workflow_path)
+    translation_before_after = (
+        workflow_metrics.get("translation_before_after")
+        if isinstance(workflow_metrics.get("translation_before_after"), dict)
+        else {"status": "not_provided", "unit_count": 0}
+    )
+    units = before_after_exhibit_units(workflow_metrics)
+    status = "passed" if units and translation_before_after.get("status") == "bound" else "not_provided"
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "before-after-exhibit",
+        "status": status,
+        "run_id": run_id,
+        "profile_id": profile_required_string(profile, "profile_id"),
+        "proof_class": proof_class,
+        "mode": mode,
+        "claim_boundary": {
+            "source": "batch_profile_acceptance_boundary",
+            "value": profile.get("acceptance_boundary", {}),
+            "boundary": (
+                "This exhibit binds before/after artifacts from a validated competition summary. "
+                "It does not convert accepted-evidence-authoritative runs into translator-generated semantic pass."
+            ),
+        },
+        "inputs": {
+            "profile": artifact_ref(profile_path, repo_root=repo_root),
+            "competition_summary": artifact_ref(summary_path, repo_root=repo_root),
+            "workflow_metrics": artifact_ref(workflow_path, repo_root=repo_root),
+            "summary_validation": summary_validation,
+        },
+        "translation_before_after": {
+            "status": str(translation_before_after.get("status", "not_provided")),
+            "unit_count": int(translation_before_after.get("unit_count", 0)),
+            "measured_unsafe_unit_count": int(translation_before_after.get("measured_unsafe_unit_count", 0)),
+            "accepted_patch_unit_count": int(translation_before_after.get("accepted_patch_unit_count", 0)),
+        },
+        "units": units,
+        "stage_contracts": before_after_stage_contracts(
+            mode=mode,
+            plan=plan,
+            run_result=run_result,
+            route_metrics_artifact=route_metrics_artifact,
+            summary=summary,
+            summary_path=summary_path,
+            workflow_path=workflow_path,
+            repo_root=repo_root,
+        ),
+        "reproduction": {
+            "run_command": (
+                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
+                f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
+            ),
+            "verify_command": (
+                "python -B validation/tools/validate_competition_run_summary.py "
+                f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
+            ),
+        },
+    }
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    binding = {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": status,
+        "report_kind": "before-after-exhibit",
+        "unit_count": len(units),
+        "measured_unsafe_unit_count": int(payload["translation_before_after"]["measured_unsafe_unit_count"]),
+        "accepted_patch_unit_count": int(payload["translation_before_after"]["accepted_patch_unit_count"]),
+    }
+    return {"binding": binding, "payload": payload}
+
+
+def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    units = []
+    for unit in workflow_metrics.get("per_unit_statuses", []):
+        if not isinstance(unit, dict):
+            continue
+        evidence = unit.get("translation_before_after")
+        if not isinstance(evidence, dict) or evidence.get("status") != "bound":
+            continue
+        exhibit_unit = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "baseline": evidence.get("baseline", {}),
+            "final": evidence.get("final", {}),
+            "oracle_evidence": evidence.get("oracle_evidence", {}),
+            "accepted_patch": evidence.get("accepted_patch", {}),
+            "unsafe_reduction": evidence.get("unsafe_reduction", {}),
+        }
+        if isinstance(evidence.get("patch_log"), dict):
+            exhibit_unit["patch_log"] = evidence["patch_log"]
+        if isinstance(evidence.get("claim_boundary"), dict):
+            exhibit_unit["claim_boundary"] = evidence["claim_boundary"]
+        units.append(exhibit_unit)
+    return units
+
+
+def before_after_stage_contracts(
+    *,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    route_metrics_artifact: dict[str, Any] | None,
+    summary: dict[str, Any],
+    summary_path: Path,
+    workflow_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    run_plan = run_result
+    workers = run_plan.get("workers") if isinstance(run_plan.get("workers"), list) else []
+    merge_execution = (
+        run_plan.get("merge_execution") if isinstance(run_plan.get("merge_execution"), dict) else {}
+    )
+    workflow_metrics_ref = summary.get("workflow_metrics") if isinstance(summary.get("workflow_metrics"), dict) else {}
+    return {
+        "planner": {
+            "stage": "planner",
+            "status": str(plan.get("status", "unknown")),
+            "plan": path_ref_from_text(plan.get("plan_path"), repo_root=repo_root),
+            "source_sha256": plan.get("source_sha256"),
+            "slice_id_prefix": plan.get("slice_id_prefix"),
+            "worker_prefix": plan.get("worker_prefix"),
+            "units": plan.get("units", []),
+        },
+        "worker": {
+            "stage": "worker",
+            "status": "passed" if workers and all(worker.get("exit_code") == 0 for worker in workers) else "unknown",
+            "mode": mode,
+            "workers": workers,
+        },
+        "verifier": {
+            "stage": "verifier",
+            "status": str(summary.get("final_gate", {}).get("status", "unknown")),
+            "summary": artifact_ref(summary_path, repo_root=repo_root),
+            "workflow_metrics": {
+                "path": str(workflow_metrics_ref.get("path", repo_relative(workflow_path, repo_root=repo_root))),
+                "sha256": str(workflow_metrics_ref.get("sha256", sha256_file(workflow_path))),
+            },
+            "semantic_pass": int(summary.get("slices", {}).get("semantic_pass", 0)),
+            "generated_draft_semantic_pass": False,
+            "semantic_claim_source": "accepted_evidence_binding",
+        },
+        "repairer": {
+            "stage": "repairer",
+            "status": "not_exercised",
+            "repair_round_cap": 5,
+            "evidence_boundary": (
+                "Repair history is shown only when workflow metrics bind measured repair or retry evidence."
+            ),
+        },
+        "reporter": {
+            "stage": "reporter",
+            "status": "passed",
+            "report_path": run_plan.get("report_path"),
+            "merge_execution": merge_execution,
+            "route_governance_metrics_report": (
+                route_metrics_artifact["binding"] if route_metrics_artifact is not None else None
+            ),
+            "workflow_metrics": artifact_ref(workflow_path, repo_root=repo_root),
+        },
+    }
+
+
+def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, str]:
+    return {
+        "path": repo_relative(path, repo_root=repo_root),
+        "sha256": sha256_file(path),
+    }
+
+
+def path_ref_from_text(value: Any, *, repo_root: Path) -> dict[str, str] | None:
+    if not isinstance(value, str) or not value:
+        return None
+    path = repo_path(Path(value), repo_root=repo_root)
+    if not path.exists():
+        return {"path": value, "sha256": ""}
+    return artifact_ref(path, repo_root=repo_root)
 
 
 def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:
