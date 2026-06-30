@@ -86,6 +86,7 @@ jobs:
           python -m unittest validation.tools.test_milestone_release_report
           python -m unittest validation.tools.test_route_governance_metrics_report
           python -m unittest validation.tools.test_judge_demo_entrypoint
+          python -m unittest validation.tools.test_validate_judge_entrypoints
 
       - name: Run competition CI smoke gate
         run: python validation/tools/run_competition_smoke.py --proof-class ci-approximation --run-id core-ci-smoke --out-root target/competition-smoke
